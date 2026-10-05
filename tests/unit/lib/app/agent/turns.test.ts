@@ -1609,7 +1609,16 @@ describe('the monthly ceiling (f-safety t-59)', () => {
     expect(modelCalls).toBe(1);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('at the ceiling, ends with the figures and reset date — nothing claimed, no model call', async () => {
+    // The last second of a year, so the reset the seam names is a literal that
+    // only the right arithmetic reaches: the 1st of January, a year on. Only
+    // `Date` is faked; the seam's deadlines run on real timers as always.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-12-31T23:59:59.000Z'));
     // The population: a turn under the ceiling reaches the model and is billed.
     costing(5);
     await take(turnFor({ clientTurnId: 'turn-under' }));
@@ -1625,10 +1634,10 @@ describe('the monthly ceiling (f-safety t-59)', () => {
       ceiling: { spentUsd: 5, ceilingUsd: 5 },
     });
     const { resetsAt } = (over[0] as unknown as { ceiling: { resetsAt: string } }).ceiling;
-    const now = new Date();
-    expect(resetsAt).toBe(
-      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString()
-    );
+    expect(resetsAt).toBe('2027-01-01T00:00:00.000Z');
+    // …and the words a person reads say the same, from the spend the meter read.
+    expect((over[0] as { message: string }).message).toContain('$5.00 of $5.00');
+    expect((over[0] as { message: string }).message).toContain('resets on 1 January');
     // No claim — the check stands before it — and no `streamChat` call.
     expect(db.turns.map((t) => t.turnId)).toEqual(['turn-under']);
     expect(modelCalls).toBe(1);
@@ -1660,6 +1669,20 @@ describe('the monthly ceiling (f-safety t-59)', () => {
 
     db.budgets.set('user-1', 10);
     expect((await take(turnFor({ clientTurnId: 'turn-b' }))).at(-1)?.type).toBe('done');
+  });
+
+  it('a limit of nothing refuses the first turn of the month, and names no reset', async () => {
+    // Set to $0 from the admin page: nothing spent yet, and nothing may be.
+    db.budgets.set('user-1', 0);
+    const events = await take(turnFor());
+
+    expect(events).toMatchObject([
+      { type: 'error', code: 'ceiling_reached', ceiling: { spentUsd: 0, ceilingUsd: 0 } },
+    ]);
+    expect((events[0] as { message: string }).message).toMatch(/set to nothing/);
+    expect((events[0] as { message: string }).message).not.toMatch(/resets/);
+    expect(modelCalls).toBe(0);
+    expect(db.turns).toHaveLength(0);
   });
 
   it('still serves a replay of a completed turn: it costs nothing', async () => {

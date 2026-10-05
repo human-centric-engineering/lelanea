@@ -11,7 +11,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import {
   ENDING_CEILING_REACHED,
@@ -204,11 +204,24 @@ describe('the ceiling frame on a limit of nothing (t-96)', () => {
       ceilingUsd: 0,
       resetsAt: new Date('2026-10-01T00:00:00.000Z'),
     });
-    expect(frame.message).not.toContain('October');
-    expect(frame.message).not.toContain('resets');
-    expect(frame.message).toContain('still works');
+    // Whole, so no date can creep in under another spelling ("on the 1st",
+    // "next month") that a `not.toContain('October')` would wave through.
+    expect(frame.message).toBe(
+      'Your conversation budget is set to nothing, so there are no replies for now. ' +
+        'Everything you can read and write in the app still works.'
+    );
     // The figures still ride on the frame, as they are.
     expect(frame.ceiling.ceilingUsd).toBe(0);
+  });
+
+  it('reads a negative limit as nothing too, as the gate does', () => {
+    const frame = ceilingReachedFrame({
+      spentUsd: 0,
+      ceilingUsd: -1,
+      resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+    });
+    expect(frame.message).toMatch(/^Your conversation budget is set to nothing/);
+    expect(frame.message).not.toContain('resets');
   });
 
   it.each([0.004, 0.01])(
@@ -244,6 +257,25 @@ describe('the ceiling ending (f-safety t-59)', () => {
     expect(frame.message).toContain('1 October');
     expect(frame.message).toContain('read and write');
     expect(frame.message).not.toMatch(/ask|request|contact|upgrade/i);
+  });
+
+  describe('on a machine whose clock is not in UTC', () => {
+    const zone = process.env.TZ;
+    afterEach(() => {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    });
+
+    // The reset is midnight UTC on the 1st. West of UTC that instant is still
+    // the last day of the month before, so a formatter on local time names
+    // the wrong day; on a UTC runner it would pass. The formatter takes its
+    // zone when the module loads, so the module is loaded after the zone is set.
+    it('names the UTC day of the reset in Los Angeles', async () => {
+      process.env.TZ = 'America/Los_Angeles';
+      vi.resetModules();
+      const fresh = await import('@/lib/app/agent/endings');
+      expect(fresh.formatResetDay(new Date('2026-11-01T00:00:00.000Z'))).toBe('1 November');
+    });
   });
 
   it('is never mapped from a platform frame', () => {
