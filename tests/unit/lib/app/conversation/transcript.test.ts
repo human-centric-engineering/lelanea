@@ -459,6 +459,49 @@ describe('assembleTranscript', () => {
     });
   });
 
+  it('rebuilds a leaning change from its trace, and nothing from a refused or unreadable one (t-137)', () => {
+    const change = { leaning: 'length', from: 0, to: 1, how: 'agreed' };
+    const entries = assemble(
+      [
+        user('u1', 'Yes, please.', 1, 't1'),
+        assistant('a1', 'Shorter, then.', 2, {
+          provenance: {
+            citations: [],
+            capabilityCalls: [
+              {
+                slug: 'set_leaning',
+                arguments: { leaning: 'imagery', toward: 'Literal', how: 'agreed' },
+                latencyMs: 1,
+                success: false,
+                resultPreview: JSON.stringify({ success: false, error: { code: 'no_proposal' } }),
+              },
+              {
+                slug: 'set_leaning',
+                arguments: {},
+                latencyMs: 1,
+                success: true,
+                resultPreview: '{"success":true,"data":{"leaning":"len…',
+              },
+              {
+                slug: 'set_leaning',
+                arguments: { leaning: 'length', toward: 'Concise and spare', how: 'agreed' },
+                latencyMs: 1,
+                success: true,
+                resultPreview: JSON.stringify({ success: true, data: change }),
+              },
+            ],
+          },
+        }),
+      ],
+      [turn('t1', { userMessageId: 'u1', assistantMessageId: 'a1' })]
+    );
+    expect(entries[1]).toMatchObject({
+      kind: 'reply',
+      capabilities: ['set_leaning', 'set_leaning'],
+      leaningChanges: [change],
+    });
+  });
+
   it('a turn that called nothing says so, and a failed turn’s tool row never leaks into the next reply', () => {
     const entries = assemble(
       [

@@ -68,7 +68,8 @@ import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
 import { openingWindowStart, REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
 import { isOpeningTurnId, OPENING_TURN_ID_PREFIX } from '@/lib/app/conversation/opening-id';
-import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
+import { answeredCalls, answeredCapabilities } from '@/lib/app/agent/capability-answers';
+import { leaningChangeForCall, type LeaningChange } from '@/lib/app/voice/leaning-change';
 import { loadLibraryForChips, suggestionsFromProvenance } from '@/lib/app/resources/suggest';
 import type { ResourcesLibrary } from '@/lib/app/content/resources';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
@@ -130,6 +131,8 @@ export interface TranscriptReplyEntry {
    * `capability_result` frames.
    */
   suggestions: ResourceSuggestion[];
+  /** The leanings the turn changed, from the same traces (f-leanings t-137). */
+  leaningChanges: LeaningChange[];
   /** The turn row, when there is one; null for rows written before the seam. */
   turn: TurnAccount | null;
 }
@@ -287,6 +290,10 @@ export function assembleTranscript(
       citations: citationsOf(terminal.provenance),
       capabilities: answeredCapabilities(terminal.provenance),
       suggestions: suggestionsFromProvenance(terminal.provenance, library),
+      leaningChanges: answeredCalls(terminal.provenance).flatMap((call) => {
+        const change = leaningChangeForCall(call);
+        return change ? [change] : [];
+      }),
       turn: turn ? accountOf(turn) : null,
     });
     pendingReply = null;

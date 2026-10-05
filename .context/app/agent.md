@@ -295,16 +295,19 @@ Sunrise's, and a row with no grant is a tool nobody holds. 023 does the same
 for `set_register` (f-registers t-126), with its own migration,
 `20261007100200_app_set_register_capability`, and 024 for
 `search_person_memory` (f-memory t-130), with
-`20261009100000_app_search_person_memory_capability`.
+`20261009100000_app_search_person_memory_capability`, and 025 for
+`set_leaning` (f-leanings t-137), with
+`20261012100000_app_set_leaning_capability`.
 
-| Tool                    | Seed | Does                                                                                                                                                                                                |
-| ----------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_knowledge_base` | 007  | looks in Lelañea Fulton's material, each result labelled by whose it is                                                                                                                             |
-| `get_state`             | 013  | reads back what is already understood about this person                                                                                                                                             |
-| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                                                                                                                                              |
-| `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's videos, audio or articles, by id (t-77)                                                                                                                    |
-| `set_register`          | 023  | remembers, for a sitting, how the person asked to be spoken to (t-126); a sanctioned self-write, see [`voice.md`](./voice.md#guiding-and-teaching-the-facilitator-seats-register-f-registers-t-125) |
-| `search_person_memory`  | 024  | looks back, by meaning, through what this person has said before and the notes kept about them, each result labelled (t-130, t-107); see [`memory.md`](./memory.md)                                 |
+| Tool                    | Seed | Does                                                                                                                                                                                                       |
+| ----------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_knowledge_base` | 007  | looks in Lelañea Fulton's material, each result labelled by whose it is                                                                                                                                    |
+| `get_state`             | 013  | reads back what is already understood about this person                                                                                                                                                    |
+| `fill_slot`             | 013  | writes what the agent has newly learned, once per turn                                                                                                                                                     |
+| `suggest_resource`      | 014  | hands the person one of Lelañea Fulton's videos, audio or articles, by id (t-77)                                                                                                                           |
+| `set_register`          | 023  | remembers, for a sitting, how the person asked to be spoken to (t-126); a sanctioned self-write, see [`voice.md`](./voice.md#guiding-and-teaching-the-facilitator-seats-register-f-registers-t-125)        |
+| `search_person_memory`  | 024  | looks back, by meaning, through what this person has said before and the notes kept about them, each result labelled (t-130, t-107); see [`memory.md`](./memory.md)                                        |
+| `set_leaning`           | 025  | moves one of the person's lasting leanings a stop, when they ask or say yes to a recorded proposal (t-137); a sanctioned self-write, see [`voice.md`](./voice.md#changing-a-leaning-in-conversation-t-137) |
 
 **014 reaches a fresh database; a migration reaches every existing one.** The
 seeder is opt-in in production (`docker-compose.prod.yml`, `profiles: ['seed']`)

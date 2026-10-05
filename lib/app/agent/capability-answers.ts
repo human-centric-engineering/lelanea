@@ -33,19 +33,23 @@ export function capabilityAnswered(result: unknown): boolean {
 
 /**
  * One call's trace, read as far as this needs: the slug, whether it answered,
- * and the redacted arguments — which a capability that resolves a suggestion
- * from its own `{ id }` reads back (`lib/app/resources/suggest.ts`).
+ * the redacted arguments — which a capability that resolves a suggestion
+ * from its own `{ id }` reads back (`lib/app/resources/suggest.ts`) — and the
+ * result preview, which `set_leaning` reads its change back from
+ * (`lib/app/voice/leaning-change.ts`).
  */
 const callSchema = z.object({
   slug: z.string(),
   success: z.boolean(),
   arguments: z.unknown().optional(),
+  resultPreview: z.unknown().optional(),
 });
 
-/** An answered call: its slug and whatever the trace kept of its arguments. */
+/** An answered call: its slug and whatever the trace kept of its arguments and result. */
 export interface AnsweredCall {
   slug: string;
   arguments: unknown;
+  resultPreview?: unknown;
 }
 const provenanceSchema = z.object({
   // Each entry on its own, so one trace this cannot read costs that trace, not the list.
@@ -72,7 +76,13 @@ export function answeredCalls(provenance: unknown): AnsweredCall[] {
   return parsed.data.capabilityCalls.flatMap((raw) => {
     const call = callSchema.safeParse(raw);
     return call.success && call.data.success
-      ? [{ slug: call.data.slug, arguments: call.data.arguments }]
+      ? [
+          {
+            slug: call.data.slug,
+            arguments: call.data.arguments,
+            resultPreview: call.data.resultPreview,
+          },
+        ]
       : [];
   });
 }

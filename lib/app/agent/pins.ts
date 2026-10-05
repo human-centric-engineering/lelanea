@@ -195,6 +195,18 @@ export const REGISTER_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['set_reg
 export const MEMORY_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['search_person_memory'];
 
 /**
+ * What the leaning seed grants: the agent may move one of a person's lasting
+ * voice leanings, when they ask or say yes to its suggestion (f-leanings
+ * t-137).
+ *
+ * Its own list because its own seed grants it
+ * (`prisma/seeds/app-lelanea/025-set-leaning.ts`) and its own migration brings
+ * existing databases the row and the grant. The tool's description and the
+ * per-turn leanings block say when: on a request, or after a yes.
+ */
+export const LEANING_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['set_leaning'];
+
+/**
  * The capabilities the agent holds that only read (f-safety t-60).
  *
  * `search_knowledge_base` reads chunks. It is mounted in this leaf as
@@ -274,6 +286,26 @@ export const SELF_WRITE_CAPABILITY_SLUGS = [
   //   (`selectRegister`), so talking the agent into "teach me harder" never
   //   steers teaching onto a person who has just been shown a crisis line.
   'set_register',
+  // Moves one of the person's lasting voice leanings a stop (f-leanings
+  // t-137, `lib/app/voice/leaning-capability.ts`). Admitted under the same
+  // rule, argued the same way (security review, t-137):
+  //
+  // - **Own setting only.** It writes `context.userId`'s own leaning slot
+  //   through `setLeaning`, the service Settings writes through. Its arguments
+  //   are a dial, a direction and how the change came about; the schema is
+  //   strict, so no user, slot or value can be named by the model.
+  // - **Never deletes, never overwrites.** Each change is a new version of an
+  //   insert-only slot; the history, including the Settings value before it,
+  //   stays readable.
+  // - **Held to the bounds.** A locked dial is refused, a stop is clamped to
+  //   the bounds before it is stored, and a suggestion the bounds rule out is
+  //   refused even after a yes. Under a crisis the harder poles are held at
+  //   rest whatever is stored (`selectLeanings`), so it cannot be used to make
+  //   the voice harder on someone who is struggling.
+  // - **Never on inference.** It is called on the person's request or after
+  //   they agree, and every change is named under the reply.
+  // - **Sends and spends nothing.** No message, no cost.
+  'set_leaning',
 ] as const;
 
 /**

@@ -142,11 +142,14 @@ export const LEANING_CONFIDENCE = 10;
 /**
  * How a version came to be, one fixed sentence per way. The reader accepts
  * only these, so a version the AI wrote through `fill_slot` (which writes its
- * own sentence) is skipped. `asked` is written by `set_leaning` (t-137).
+ * own sentence) is skipped. `asked` and `agreed` are written by `set_leaning`
+ * (t-137): the person asked in their own words, or said yes when the AI
+ * suggested it. The history keeps which.
  */
 export const LEANING_REASONING_NOTES = {
   settings: 'The person set this leaning in Settings.',
   asked: 'The person asked for this leaning in conversation.',
+  agreed: 'The person agreed to this leaning when it was suggested in conversation.',
 } as const;
 
 export type LeaningSetVia = keyof typeof LEANING_REASONING_NOTES;

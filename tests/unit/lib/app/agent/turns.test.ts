@@ -145,6 +145,12 @@ const { readLeaningInputs, leaningsFrom } = vi.hoisted(() => ({
   ),
 }));
 vi.mock('@/lib/app/voice/leanings-store', () => ({ readLeaningInputs, leaningsFrom }));
+// f-leanings t-137: whether a recent reply proposed a leaning change. Its read
+// is `leaning-proposals.test.ts`'s; here it is what the claim does with it.
+const { proposedRecently } = vi.hoisted(() => ({
+  proposedRecently: vi.fn(async (_userId: string, _seat: string) => false),
+}));
+vi.mock('@/lib/app/voice/leaning-proposals', () => ({ proposedRecently }));
 const { invalidate } = vi.hoisted(() => ({ invalidate: vi.fn() }));
 vi.mock('@/lib/orchestration/chat/context-builder', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/orchestration/chat/context-builder')>()),
@@ -1089,6 +1095,18 @@ describe('a replay of a turn that used a tool', () => {
                 latencyMs: 1,
                 success: true,
               },
+              // f-leanings t-137: a leaning change rides on its own call's frame too,
+              // read back from the stored preview.
+              {
+                slug: 'set_leaning',
+                arguments: { leaning: 'length', toward: 'Concise and spare', how: 'asked' },
+                latencyMs: 1,
+                success: true,
+                resultPreview: JSON.stringify({
+                  success: true,
+                  data: { leaning: 'length', from: 0, to: 1, how: 'asked' },
+                }),
+              },
             ],
           },
           createdAt: new Date(at + 1),
@@ -1124,6 +1142,10 @@ describe('a replay of a turn that used a tool', () => {
               length: '5:04',
             },
           },
+        },
+        {
+          capabilitySlug: 'set_leaning',
+          result: { success: true, data: { leaning: 'length', from: 0, to: 1, how: 'asked' } },
         },
       ],
     });
@@ -1774,6 +1796,24 @@ describe('the leanings a turn applies (f-leanings t-136)', () => {
     await take(facilitator({ clientTurnId: 'turn-c', message: 'Plainer, please.' }));
     expect(invalidate).toHaveBeenCalledTimes(2);
     expect(db.turns.at(-1)).toMatchObject({ register: 'guiding', leanings: spare });
+  });
+
+  it('drops the cached context while a recent reply proposed a leaning change (t-137)', async () => {
+    await take(facilitator({ clientTurnId: 'turn-a' }));
+    await take(facilitator({ clientTurnId: 'turn-b', message: 'And then?' }));
+    expect(invalidate).toHaveBeenCalledTimes(1);
+
+    // Same register, same leanings: only the proposal can be why.
+    proposedRecently.mockResolvedValueOnce(true);
+    await take(facilitator({ clientTurnId: 'turn-c', message: 'No, thanks.' }));
+    expect(invalidate).toHaveBeenCalledTimes(2);
+    expect(proposedRecently).toHaveBeenLastCalledWith('user-1', 'facilitator');
+  });
+
+  it('never asks about proposals on a seat with no leanings', async () => {
+    await take(turnFor());
+
+    expect(proposedRecently).not.toHaveBeenCalled();
   });
 
   it('leaves a seat with none as it was: no stamp, no field on done', async () => {

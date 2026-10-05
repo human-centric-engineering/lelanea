@@ -727,8 +727,8 @@ it: `fill_slot` takes any source type, and restricting its writes would stop the
 AI inventing slots, which the owner needs it to keep doing. So
 `lib/app/voice/leanings-store.ts` walks each dial's history newest-first and
 takes the newest version in the exact shape it writes: a stop as `valueJson`,
-`sourceType: user_confirmed`, and one of two fixed reasoning notes (settings, or
-asked). Anything else is skipped, and the person's last real setting holds.
+`sourceType: user_confirmed`, and one of three fixed reasoning notes (settings,
+asked, or agreed to a suggestion). Anything else is skipped, and the person's last real setting holds.
 Until Daybreak can mark a slot capture may not write, that rests on the AI never
 being shown the slots, not on anything the database enforces.
 
@@ -806,8 +806,8 @@ neither applied nor reported as set aside.
 
 **Shown to the person.** The `done` frame carries `leanings`, and the replay,
 the transcript read and the client schema all read it, so the account says the
-same under a live reply, a retry and a reload: "Leaned the way you set it in
-your settings: strongly toward concise and spare." A held leaning is named too,
+same under a live reply, a retry and a reload: "Leaned the way you’ve set it:
+strongly toward concise and spare." A held leaning is named too,
 with the crisis as its reason only when one was read (`leaningsSentences`).
 
 **What it does to the pinned model.** `npm run smoke:app-leanings` sets every
@@ -816,6 +816,77 @@ after a recorded crisis, and asks the register smoke's question and the golden
 set's refusal and decline prompts, each in a fresh conversation. It asserts the
 block, the turn row, the `done` frame and the transcript agree, and prints every
 reply for judgement. The lines are a draft awaiting her review (idea #46).
+
+### Changing a leaning in conversation (t-137)
+
+"Be plainer with me" works as a sentence. `set_leaning`
+(`lib/app/voice/leaning-capability.ts`) moves one dial one stop toward a pole,
+or back to rest, through `setLeaning`, the same write Settings makes, so the dial
+there moves and the history keeps a new version. It is the facilitator seat's
+alone, as `set_register` is, and it is a **lasting** setting: `set_register` is
+today's lean ("be gentle with me today"). Its description says so.
+
+**Three ways to call it, and only one moves on a suggestion.**
+
+| `how`      | When                                         | Writes                                                                       |
+| ---------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
+| `asked`    | the person asked, in their own words         | the new stop                                                                 |
+| `proposed` | the AI noticed a pattern they have not named | nothing; the call's answered trace is the record                             |
+| `agreed`   | the person said yes                          | the new stop, but only if their **previous** turn carried that same proposal |
+
+The owner ruled (4 Oct 2026) that the AI may suggest a change and makes it only
+on a yes. Words alone did not hold it: in the smoke the pinned model moved a
+dial on a pattern turn and called it `agreed`, so the account would have told
+the person they agreed to something never put to them. So it is held in code
+(ruling, 5 Oct 2026): `agreed` is refused (`no_proposal`) unless the last
+completed turn on the seat proposed the same leaning and stop
+(`lib/app/voice/leaning-proposals.ts`). The person's own message always comes
+between the proposal and the change. Whether that message was really a yes is
+still the AI's reading.
+
+**A pole by its words, not left or right.** `toward` takes the pole's own label
+("Concise and spare") or `rest`, and a label that is not that leaning's is
+refused with the two that are. With `left`/`right` the model said "more
+concise" and sent `left`, which on `length` is "Verbose and exploratory".
+
+**Refused, with a reason the AI can say:** a locked dial (`leaning_locked`),
+unreadable bounds (`leanings_unavailable`), a proposal or agreement on a dial
+the bounds say not to suggest (`not_suggestable`; the person can still ask), a
+proposal that would move nothing (`nothing_to_propose`), and any seat but the
+facilitator's (`wrong_seat`). A stop is clamped to the bounds; an ask already
+at the edge writes nothing and says so.
+
+**What the AI is told each turn.** On the facilitator seat the voice block is
+followed by the leanings block (`lib/app/voice/leaning-context.ts`): each dial's
+poles, where it is, how far it goes, whether it may be suggested, then the rule.
+The AI's `preferences` notes are named as its evidence for a suggestion and
+never a reason to move a dial itself; they are never read as a filter. A
+proposal from the last reply is named with the one call that makes it on a
+yes. The proposal's own result tells the AI that nothing has changed and to ask.
+
+**The next reply changes.** A move drops the person's cached block, and the
+next claim stamps the new stop (the claim also drops the cache when the stamp
+differs).
+
+**The account says it, and how it came about**, live, on reload and on replay:
+"Moved your leaning a step toward concise and spare, as you asked", "…when you
+agreed to the suggestion", "Suggested moving your leaning a step toward literal",
+or that it was already as far as it goes. Said by the way it moved, never by
+the side it landed on: strongly verbose to verbose is a step toward concise. The change rides on the call's result
+(`lib/app/voice/leaning-change.ts`), read off the live frame, and off the
+stored trace's `resultPreview` on reload and replay.
+
+**A write under the ceiling.** Argued in `SELF_WRITE_CAPABILITY_SLUGS`
+(`lib/app/agent/pins.ts`): the caller's own setting only (strict arguments name
+no person), insert-only, held to the bounds, its harder poles still held at
+rest under a crisis, and it spends nothing. Its row and grant are seed 025 and
+`20261012100000_app_set_leaning_capability`.
+
+**What proves it.** `leaning-capability.test.ts` covers a step, a reset, the
+clamp, a locked dial, the wrong seat, a cross-person argument, the proposal
+guard, and that the next claim's leanings carry the change.
+`npm run smoke:app-leanings` runs an ask and a pattern-then-yes against the
+real model first (`--asking-only` runs just those).
 
 ## The overlays are her words too, and are a DRAFT
 

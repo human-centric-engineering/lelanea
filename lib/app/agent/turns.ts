@@ -104,6 +104,7 @@ import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
 import { hasRegister, resolveRegister } from '@/lib/app/voice/register-store';
 import { parseRegister, parseRegisterSource } from '@/lib/app/voice/register';
 import { leaningsFrom, readLeaningInputs } from '@/lib/app/voice/leanings-store';
+import { proposedRecently } from '@/lib/app/voice/leaning-proposals';
 import {
   parseLeaningsStamp,
   sameLeanings,
@@ -178,13 +179,14 @@ async function* replay(turn: AppTurn): ChatStream {
   if (reply.capabilities.length > 0) {
     yield {
       type: 'capability_results',
-      // A suggestion rides on its own call's frame as `data`, the shape the
-      // live frame carries, so the pane reads a replay and a live turn alike.
+      // A suggestion or a leaning change rides on its own call's frame as
+      // `data`, the shape the live frame carries, so the pane reads a replay
+      // and a live turn alike.
       results: reply.capabilities.map((capabilitySlug, index) => {
-        const suggestion = reply.suggestions[index] ?? null;
+        const data = reply.suggestions[index] ?? reply.leaningChanges[index] ?? null;
         return {
           capabilitySlug,
-          result: suggestion ? { success: true, data: suggestion } : { success: true },
+          result: data ? { success: true, data } : { success: true },
         };
       }),
     };
@@ -480,13 +482,16 @@ async function runGeneratedTurn(
     return only(held);
   }
 
-  const [deadlines, fingerprintVersion, register, last, leaningInputs] = await Promise.all([
-    getAgentDeadlines(),
-    readAgentFingerprintVersion(turn.agentSlug),
-    resolveRegister(turn.userId, turn.role, { crisisNow: options.crisisNow }),
-    readLastStamp(turn.userId, turn.role),
-    readLeaningInputs(turn.userId, turn.role),
-  ]);
+  const [deadlines, fingerprintVersion, register, last, leaningInputs, proposed] =
+    await Promise.all([
+      getAgentDeadlines(),
+      readAgentFingerprintVersion(turn.agentSlug),
+      resolveRegister(turn.userId, turn.role, { crisisNow: options.crisisNow }),
+      readLastStamp(turn.userId, turn.role),
+      readLeaningInputs(turn.userId, turn.role),
+      // Only the seat with leanings has a proposal to carry (f-leanings t-137).
+      hasRegister(turn.role) ? proposedRecently(turn.userId, turn.role) : false,
+    ]);
   // Against the register's source: under a crisis hold the harder poles are held at rest.
   const leanings = leaningsFrom(leaningInputs, register?.source ?? null);
   const claim = await claimTurn(
@@ -505,9 +510,12 @@ async function runGeneratedTurn(
   // turn's register and leanings. A turn claimed with either different drops
   // it, so the prompt reads this turn's (`register-store.ts`, "Decided once, at
   // the claim"). A leaning changed in settings reaches the next reply this way.
+  // A recent leaning proposal drops it too, so a block naming one as awaiting
+  // an answer is never served past the turn that answered it.
   if (
     claim.kind === 'claimed' &&
     (last === null ||
+      proposed ||
       (register !== null && register.register !== last.register) ||
       !sameLeanings(leanings, last.leanings))
   ) {

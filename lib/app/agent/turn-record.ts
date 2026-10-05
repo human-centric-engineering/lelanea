@@ -32,7 +32,8 @@ import type { AppTurn, AppTurnPricing } from '@prisma/client';
 
 import { z } from 'zod';
 
-import { answeredCapabilities } from '@/lib/app/agent/capability-answers';
+import { answeredCalls, answeredCapabilities } from '@/lib/app/agent/capability-answers';
+import { leaningChangeForCall, type LeaningChange } from '@/lib/app/voice/leaning-change';
 import { loadLibraryForChips, suggestionsByCall } from '@/lib/app/resources/suggest';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 
@@ -440,6 +441,8 @@ export interface TurnReply {
    * replayed reply's chip says what a reload's does.
    */
   suggestions: (ResourceSuggestion | null)[];
+  /** Aligned the same way: the leaning that call changed, or `null` (f-leanings t-137). */
+  leaningChanges: (LeaningChange | null)[];
 }
 
 /**
@@ -489,6 +492,7 @@ export async function readTurnReply(
       terminal.provenance,
       await loadLibraryForChips([terminal.provenance])
     ),
+    leaningChanges: answeredCalls(terminal.provenance).map(leaningChangeForCall),
   };
 }
 

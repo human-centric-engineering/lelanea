@@ -269,6 +269,33 @@ describe('fetchTranscript', () => {
     expect(transcript.conversationId).toBe('c1');
   });
 
+  it('reads the leanings a reply changed one by one, and none from a body before them (t-137)', async () => {
+    const change = { leaning: 'length', from: 0, to: 1, how: 'asked' };
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              seat: 'facilitator',
+              conversationId: 'c1',
+              entries: [
+                { ...entry, id: 'a1', leaningChanges: [change, { leaning: 'nope' }] },
+                { ...entry, id: 'a2' },
+              ],
+            },
+          }),
+          { status: 200 }
+        )
+    );
+
+    const transcript = await fetchTranscript('facilitator', { fetchImpl });
+
+    // The unreadable change is dropped, not the reply.
+    expect(transcript.entries[0]).toMatchObject({ id: 'a1', leaningChanges: [change] });
+    expect(transcript.entries[1]).toMatchObject({ id: 'a2', leaningChanges: [] });
+  });
+
   it('reads a turn’s register leniently: absent or unreadable says nothing (t-125)', async () => {
     const account = {
       turnId: 't1',
