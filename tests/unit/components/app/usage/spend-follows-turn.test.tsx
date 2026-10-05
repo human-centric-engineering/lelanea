@@ -15,15 +15,16 @@
  * reads in both places afterwards — the shape `notes-panel.test.tsx` uses for
  * the notes' own signal.
  *
- * Real timers, because the settle window is `COST_SETTLE_MS` of wall clock and
- * the pane's stream reads are promise chains fake timers do not drive. The
- * window's exact length is pinned in `spend-meter.test.tsx`.
+ * The settle window runs on fake timers, switched on just before the message
+ * is sent, so "not yet" and "now" are each one exact instant rather than a race
+ * against wall clock. Only `setTimeout`/`clearTimeout` are faked: the stream's
+ * reads are promise chains, and `flush()` lets them run.
  *
  * @see components/app/shell/conversation-pane.tsx — `onTurnSettled`
  * @see components/app/shell/use-shell-layout.tsx — `noteTurnSettled`
  */
 
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -152,6 +153,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -173,16 +175,39 @@ const pill = () => screen.getByRole('link', { name: /^Usage and billing/ });
 const usedThisMonth = () => screen.getByText('used this month').parentElement?.textContent ?? '';
 const composer = () => screen.getByRole('textbox', { name: CONVERSATION_COPY.composerLabel });
 
+/**
+ * Type on real timers, then fake the clock and press send, so the settle
+ * timer the turn starts is one the test controls.
+ */
 async function send(words: string) {
   await userEvent.type(composer(), words);
-  await userEvent.keyboard('{Enter}');
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  // `fireEvent`, not user-event: user-event waits on timers between key
+  // events, and the clock is no longer running on its own.
+  await act(async () => {
+    fireEvent.keyDown(composer(), { key: 'Enter' });
+  });
 }
 
-/** Wait out the provider's settle window on real timers, with a margin. */
-async function settle() {
+/** Let the stream's promise chains and React's updates run, without moving the clock. */
+async function flush() {
+  for (let pass = 0; pass < 10; pass += 1) {
+    await act(async () => {});
+  }
+}
+
+/** Move the clock to one millisecond short of the settle window, then through it. */
+async function throughTheWindow(beforeIt: () => void) {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, COST_SETTLE_MS + 100));
+    vi.advanceTimersByTime(COST_SETTLE_MS - 1);
   });
+  await flush();
+  beforeIt();
+  await act(async () => {
+    vi.advanceTimersByTime(1);
+  });
+  await flush();
+  vi.useRealTimers();
 }
 
 describe('a turn taken in the conversation', () => {
@@ -194,7 +219,8 @@ describe('a turn taken in the conversation', () => {
     expect(readsBefore).toBe(2);
 
     await send('a hard week');
-    await waitFor(() => expect(world.turn).not.toBeNull());
+    await flush();
+    expect(world.turn).not.toBeNull();
     await act(async () => {
       world.turn!.push('start', { conversationId: 'c1' });
       world.turn!.push('content', { delta: 'That sounds like a lot.' });
@@ -203,13 +229,14 @@ describe('a turn taken in the conversation', () => {
       world.turn!.push('done', {});
       world.turn!.close();
     });
-    await screen.findByText('That sounds like a lot.');
+    await flush();
+    expect(screen.getByText('That sounds like a lot.')).toBeInTheDocument();
 
-    // Not yet: the readers wait for the cost row to have been written.
-    expect(world.summaryReads).toBe(readsBefore);
-    expect(pill().textContent).toBe('$10.65 left');
-
-    await settle();
+    await throughTheWindow(() => {
+      // Not yet: the readers wait for the cost row to have been written.
+      expect(world.summaryReads).toBe(readsBefore);
+      expect(pill().textContent).toBe('$10.65 left');
+    });
 
     await waitFor(() => expect(pill().textContent).toBe('$10.20 left'));
     await waitFor(() => expect(usedThisMonth()).toContain('$9.80'));
@@ -226,8 +253,12 @@ describe('a turn taken in the conversation', () => {
     world.refuse = 429;
 
     await send('a hard week');
-    await screen.findByRole('article', { name: CONVERSATION_COPY.endingLabel });
-    await settle();
+    await flush();
+    expect(
+      screen.getByRole('article', { name: CONVERSATION_COPY.endingLabel })
+    ).toBeInTheDocument();
+
+    await throughTheWindow(() => expect(world.summaryReads).toBe(readsBefore));
 
     await waitFor(() => expect(world.summaryReads).toBe(readsBefore + 2));
   });

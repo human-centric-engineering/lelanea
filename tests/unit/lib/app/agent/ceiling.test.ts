@@ -52,7 +52,8 @@ describe('mayStartGeneratedTurn', () => {
 
   it('treats a negative ceiling the same way, rather than as no limit', async () => {
     // The budget route refuses one, but the gate is the last word on spend: a
-    // `=== 0` test here would let a corrupt row allow every turn.
+    // rewrite that read a ceiling at or below zero as "no limit set" would let
+    // a corrupt row allow every turn.
     spent(0, -1);
     expect(await mayStartGeneratedTurn('user-1', NOW)).toMatchObject({
       allowed: false,

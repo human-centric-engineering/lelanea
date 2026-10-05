@@ -250,6 +250,14 @@ describe('SpendMeter — when it reads', () => {
     expect(callsTo(fetchImpl)).toHaveLength(2);
   });
 
+  it("waits a second and a half for the turn's cost row", () => {
+    // Every timing case here moves the clock by the constant itself, so they
+    // hold whatever it is set to — 0 included, which would read before the
+    // fire-and-forget cost row lands. The value is a judgement about a slow
+    // database (its docblock); changing it should be a decision, made here.
+    expect(COST_SETTLE_MS).toBe(1500);
+  });
+
   it('reads COST_SETTLE_MS after the turn, and not a moment sooner', async () => {
     // The wait is the point: the turn's cost row is written without the
     // platform waiting for it, so a read at the turn's end could sum the month

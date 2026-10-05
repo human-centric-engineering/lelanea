@@ -77,9 +77,9 @@ function at(day: number): Date {
   return new Date(Date.UTC(2001, 0, day, 12));
 }
 
-/** A day in the drill-down fixture: `month` is 1 for February, 2 for March. */
-function inMonth(month: number, day: number): Date {
-  return new Date(Date.UTC(2001, month, day, 12));
+/** Noon UTC on a day of the drill-down fixture, written as the date it is. */
+function noon(day: string): Date {
+  return new Date(`${day}T12:00:00Z`);
 }
 
 async function main(): Promise<void> {
@@ -326,22 +326,31 @@ async function main(): Promise<void> {
 
     // ── The drill-down (f-budget t-97, proved here at t-98) ──────────────────
     //
-    // March: one conversation D, three turns of ours in it, and a decoy.
+    // March: one conversation D, three turns of ours in it, one of the other
+    // person's, and an unrelated turn of theirs that reuses one of our ids.
     //
-    // | Turn  | Whose | How it is tied to D                         | Rows                                   | $     |
-    // | ----- | ----- | ------------------------------------------- | -------------------------------------- | ----- |
-    // | BIG   | ours  | turn table                                  | reply 0.05 + tool 0.002                | 0.052 |
-    // | RETRY | ours  | only its tagged row in D — the retry reset  | 27 Feb attempt 0.02 + 1 Mar attempt    | 0.05  |
-    // |       |       | `conversationId` to null on 5 Mar           | 0.03                                   |       |
-    // | SMALL | ours  | turn table                                  | reply 0.01                             | 0.01  |
-    // | RETRY | other | none — the same turn id, another person     | 0.07, no conversation                  | 0.07  |
+    // | Turn  | Whose | How it is tied to D                        | Rows                                 | $     |
+    // | ----- | ----- | ------------------------------------------ | ------------------------------------ | ----- |
+    // | BIG   | ours  | turn table                                 | reply 0.05 + tool 0.002              | 0.052 |
+    // | RETRY | ours  | only its tagged rows in D — the retry      | 27 Feb attempt 0.02 + 1 Mar attempt  | 0.05  |
+    // |       |       | reset `conversationId` to null on 5 Mar    | 0.03                                 |       |
+    // | SMALL | ours  | turn table                                 | reply 0.01                           | 0.01  |
+    // | GUEST | other | only its tagged row in D                   | reply 0.005                          | 0.005 |
+    // | RETRY | other | none — the same id as ours, outside D      | 0.07, no conversation                | 0.07  |
     //
-    // Costliest first is BIG, RETRY, SMALL: the order the turn rows were made
-    // in is neither that nor its reverse, so a missing sort cannot pass.
+    // The last two are what make the per-(person, turn id) matching do work:
+    // with both people tagged in D, a lookup by person and by id separately
+    // would also find the other person's RETRY, and rows grouped by id alone
+    // would add its 0.07 to ours.
+    //
+    // Costliest first is BIG, RETRY, SMALL, GUEST. The turn rows are created
+    // RETRY, SMALL, BIG, then the other person's, which is neither that order
+    // nor its reverse, so a sort by anything that follows creation cannot pass.
     const turnIds = {
       big: `${PREFIX}-big`,
       retry: `${PREFIX}-retry`,
       small: `${PREFIX}-small`,
+      guest: `${PREFIX}-guest`,
     };
     const d = await prisma.aiConversation.create({
       data: {
@@ -377,25 +386,30 @@ async function main(): Promise<void> {
     });
     await prisma.appTurn.createMany({
       data: [
-        turnRow(ours.id, turnIds.small, {
-          conversationId: d.id,
-          startedAt: inMonth(2, 4),
-          status: 'completed',
-        }),
         turnRow(ours.id, turnIds.retry, {
           conversationId: null,
-          startedAt: inMonth(2, 5),
+          startedAt: noon('2001-03-05'),
           status: 'running',
           attempts: 3,
         }),
+        turnRow(ours.id, turnIds.small, {
+          conversationId: d.id,
+          startedAt: noon('2001-03-04'),
+          status: 'completed',
+        }),
         turnRow(ours.id, turnIds.big, {
           conversationId: d.id,
-          startedAt: inMonth(2, 3),
+          startedAt: noon('2001-03-03'),
           status: 'completed',
         }),
         turnRow(other.id, turnIds.retry, {
           conversationId: null,
-          startedAt: inMonth(2, 2),
+          startedAt: noon('2001-03-02'),
+          status: 'completed',
+        }),
+        turnRow(other.id, turnIds.guest, {
+          conversationId: null,
+          startedAt: noon('2001-03-02'),
           status: 'completed',
         }),
       ],
@@ -421,32 +435,36 @@ async function main(): Promise<void> {
     });
     await prisma.aiCostLog.createMany({
       data: [
-        row(ours.id, d.id, turnIds.big, 'tool_call', 0.002, inMonth(2, 3)),
-        row(ours.id, d.id, turnIds.big, 'chat', 0.05, new Date(inMonth(2, 3).getTime() - 60_000)),
-        row(ours.id, d.id, turnIds.retry, 'chat', 0.02, inMonth(1, 27)),
-        row(ours.id, d.id, turnIds.retry, 'chat', 0.03, inMonth(2, 1)),
-        row(ours.id, d.id, turnIds.small, 'chat', 0.01, inMonth(2, 4)),
-        row(other.id, null, turnIds.retry, 'chat', 0.07, inMonth(2, 2)),
+        row(ours.id, d.id, turnIds.big, 'tool_call', 0.002, noon('2001-03-03')),
+        row(ours.id, d.id, turnIds.big, 'chat', 0.05, new Date('2001-03-03T11:59:00Z')),
+        row(ours.id, d.id, turnIds.retry, 'chat', 0.02, noon('2001-02-27')),
+        row(ours.id, d.id, turnIds.retry, 'chat', 0.03, noon('2001-03-01')),
+        row(ours.id, d.id, turnIds.small, 'chat', 0.01, noon('2001-03-04')),
+        row(other.id, d.id, turnIds.guest, 'chat', 0.005, noon('2001-03-02')),
+        row(other.id, null, turnIds.retry, 'chat', 0.07, noon('2001-03-02')),
       ],
     });
     const OURS_MARCH = 0.092; // 0.05 + 0.002 + 0.03 + 0.01 — the 27 Feb attempt is February's
+    const D_MARCH = 0.097; // ours, and the other person's 0.005 in D
 
     console.log('\n6. A conversation opens to its turns, costliest first, each at its whole cost');
     const listed = await getConversationTurns({ conversationId: d.id, window: MARCH, limit: 100 });
-    const order = listed.turns.map((entry) => entry.turnId);
-    check(
-      order.join(',') === [turnIds.big, turnIds.retry, turnIds.small].join(','),
-      `in order of cost (${order.map((id) => id.replace(`${PREFIX}-`, '')).join(', ')})`
+    const whose = (userId: string) => (userId === ours.id ? 'ours' : 'other');
+    const order = listed.turns.map(
+      (entry) => `${whose(entry.userId)}:${entry.turnId.replace(`${PREFIX}-`, '')}`
     );
     check(
-      listed.turns.every((entry) => entry.userId === ours.id),
-      'every turn listed is ours — the other person’s turn of the same id is not among them'
+      order.join(',') === 'ours:big,ours:retry,ours:small,other:guest',
+      `in order of cost, each under the person who took it (${order.join(', ')})`
     );
     check(!listed.truncated, 'and nothing was cut');
     const retried = listed.turns.find((entry) => entry.turnId === turnIds.retry);
     check(
-      retried !== undefined && near(retried.costUsd, 0.05) && retried.costRows === 2,
-      `the retried turn is still listed, though the retry cleared its link — $${retried?.costUsd} over ${retried?.costRows} rows, both attempts, February's included`
+      retried !== undefined &&
+        retried.userId === ours.id &&
+        near(retried.costUsd, 0.05) &&
+        retried.costRows === 2,
+      `the retried turn is still listed, though the retry cleared its link — $${retried?.costUsd} over ${retried?.costRows} rows, both attempts, February's included, none of the other person's`
     );
     for (const entry of listed.turns) {
       const detail = await getTurnMeter(entry.userId, entry.turnId);
@@ -502,7 +520,7 @@ async function main(): Promise<void> {
     });
     const top = conversations.groups[0];
     check(
-      top?.key === d.id && near(top.costUsd, OURS_MARCH),
+      top?.key === d.id && near(top.costUsd, D_MARCH),
       `the costliest conversation leads, at $${top?.costUsd}`
     );
     check(
