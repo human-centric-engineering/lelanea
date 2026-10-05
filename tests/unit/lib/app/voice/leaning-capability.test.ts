@@ -30,13 +30,22 @@ interface ValueRow {
   supersededAt: Date | null;
 }
 
-const world = vi.hoisted(() => ({
-  bounds: null,
-  values: [] as ValueRow[],
-  appendFails: false,
+interface World {
+  /** The overlay set's stored `leanings`, as the column would hold them. */
+  bounds: unknown;
+  values: ValueRow[];
+  appendFails: boolean;
   /** The person's turn before this one, and the tool calls its reply's trace kept. */
-  previous: null as null | { status: string; assistantMessageId: string | null },
-  previousCalls: [] as unknown[],
+  previous: null | { status: string; assistantMessageId: string | null };
+  previousCalls: unknown[];
+}
+
+const world = vi.hoisted((): World => ({
+  bounds: null,
+  values: [],
+  appendFails: false,
+  previous: null,
+  previousCalls: [],
 }));
 
 vi.mock('@/lib/db/client', () => ({
@@ -270,7 +279,7 @@ describe('set_leaning: a proposal, then a yes', () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.code).toBe('no_proposal');
-    expect(result.error?.message).toMatch(/Propose it first with how: proposed/);
+    expect(result.error?.message).toMatch(/call again now with how: asked/);
     expect(appendSlotValue).not.toHaveBeenCalled();
   });
 });

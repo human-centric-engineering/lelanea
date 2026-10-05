@@ -1089,6 +1089,18 @@ describe('a replay of a turn that used a tool', () => {
                 latencyMs: 1,
                 success: true,
               },
+              // f-leanings t-137: a leaning change rides on its own call's frame too,
+              // read back from the stored preview.
+              {
+                slug: 'set_leaning',
+                arguments: { leaning: 'length', toward: 'Concise and spare', how: 'asked' },
+                latencyMs: 1,
+                success: true,
+                resultPreview: JSON.stringify({
+                  success: true,
+                  data: { leaning: 'length', from: 0, to: 1, how: 'asked' },
+                }),
+              },
             ],
           },
           createdAt: new Date(at + 1),
@@ -1124,6 +1136,10 @@ describe('a replay of a turn that used a tool', () => {
               length: '5:04',
             },
           },
+        },
+        {
+          capabilitySlug: 'set_leaning',
+          result: { success: true, data: { leaning: 'length', from: 0, to: 1, how: 'asked' } },
         },
       ],
     });

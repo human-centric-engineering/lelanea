@@ -100,7 +100,7 @@ export { SET_LEANING_SLUG } from '@/lib/app/voice/leaning-change';
  * exploratory". A pole's words cannot be read backwards.
  */
 const POLES = LEANING_DIMENSIONS.flatMap((dimension) => [dimension.left, dimension.right]);
-const TOWARD = [...POLES, 'rest'] as [string, ...string[]];
+const TOWARD: readonly string[] = [...POLES, 'rest'];
 
 /**
  * What the model is told the tool is. Kept in step with the seed's literal by
@@ -141,7 +141,7 @@ export const SET_LEANING_DEFINITION: CapabilityFunctionDefinition = {
 // Strict: the arguments name a dial and a direction, never a person.
 const argsSchema = z.strictObject({
   leaning: z.enum(LEANING_KEYS),
-  toward: z.enum(TOWARD),
+  toward: z.string().refine((value) => TOWARD.includes(value), 'not a pole, or rest'),
   how: z.enum(LEANING_CHANGE_HOWS),
 });
 type SetLeaningArgs = z.infer<typeof argsSchema>;
@@ -272,7 +272,7 @@ export class SetLeaningCapability extends BaseCapability<SetLeaningArgs, SetLean
         );
         if (!matching) {
           return this.error(
-            'Nothing was changed: your last reply did not propose this change. Propose it first with how: proposed, put it to them, and change it only if they say yes. If they asked for it themselves, use how: asked.',
+            'Nothing was changed: agreed is only for a yes to a change your last reply proposed, and it did not propose this one. If the person’s own words ask for this change, call again now with how: asked. If you are suggesting it, use how: proposed and ask them.',
             'no_proposal'
           );
         }
