@@ -33,13 +33,14 @@ import type { LeaningChange } from '@/lib/app/voice/leaning-change';
 const HEADING =
   'The person’s leanings: lasting settings for how your voice leans for them, which they can also change in Settings. Each is its two poles, where it is now, and what may change:';
 
+/** The asking route, which both forms of the rule open with. */
+const ASKED =
+  'If they ask for a lasting change in how you speak with them, use set_leaning with how: asked.';
+
 /**
  * The rule. Pinned by `tests/unit/lib/app/voice/leaning-context.test.ts`
  * beside the tool's description, which says the same.
  */
-const ASKED =
-  'If they ask for a lasting change in how you speak with them, use set_leaning with how: asked.';
-
 export const LEANING_RULE = [
   ASKED,
   'If you notice a pattern they have not named, you may propose one change, to a leaning that says you may suggest one: call set_leaning with how: proposed, which changes nothing, and in one sentence say what you noticed and what you would change, and ask. What you have noted about how they like to be met is your evidence; it is never a reason to change a leaning yourself.',
