@@ -23,6 +23,11 @@
  *
  * U used tokens and cost $0 on a non-local provider: unpriced.
  *
+ * The admin drill-down (sections 6–8, t-98) has a fixture of its own in March —
+ * a conversation of three turns, one of them retried across the month's start,
+ * and another person's turn under the same id — tabled where it is built, so
+ * January's figures above stay as they are.
+ *
  * Safety: every row is created by this run and marked with the `smoke-test-meter`
  * prefix, and removed on every path, including a sweep at startup. Never touches
  * seed data.
@@ -33,7 +38,9 @@
 import { prisma } from '@/lib/db/client';
 import {
   getAdminBreakdown,
+  getConversationTurns,
   getMemberBreakdown,
+  getMonthToDate,
   getTurnMeter,
   type MeterBreakdown,
   type MeterGroup,
@@ -46,6 +53,8 @@ const WINDOW = { from: new Date('2001-01-01T00:00:00Z'), to: new Date('2001-02-0
 const TURN_ID = `${PREFIX}-turn`;
 const REPLY_MESSAGE_ID = `${PREFIX}-reply`;
 const EPSILON = 1e-9;
+/** The drill-down's month: March, so January's totals above are untouched. */
+const MARCH = { from: new Date('2001-03-01T00:00:00Z'), to: new Date('2001-04-01T00:00:00Z') };
 
 let failures = 0;
 function check(cond: boolean, msg: string): void {
@@ -66,6 +75,11 @@ async function sweep(): Promise<void> {
 
 function at(day: number): Date {
   return new Date(Date.UTC(2001, 0, day, 12));
+}
+
+/** A day in the drill-down fixture: `month` is 1 for February, 2 for March. */
+function inMonth(month: number, day: number): Date {
+  return new Date(Date.UTC(2001, month, day, 12));
 }
 
 async function main(): Promise<void> {
@@ -309,6 +323,197 @@ async function main(): Promise<void> {
       (await getTurnMeter(other.id, TURN_ID)) === null,
       'another person asking for the same turn id gets nothing'
     );
+
+    // ── The drill-down (f-budget t-97, proved here at t-98) ──────────────────
+    //
+    // March: one conversation D, three turns of ours in it, and a decoy.
+    //
+    // | Turn  | Whose | How it is tied to D                         | Rows                                   | $     |
+    // | ----- | ----- | ------------------------------------------- | -------------------------------------- | ----- |
+    // | BIG   | ours  | turn table                                  | reply 0.05 + tool 0.002                | 0.052 |
+    // | RETRY | ours  | only its tagged row in D — the retry reset  | 27 Feb attempt 0.02 + 1 Mar attempt    | 0.05  |
+    // |       |       | `conversationId` to null on 5 Mar           | 0.03                                   |       |
+    // | SMALL | ours  | turn table                                  | reply 0.01                             | 0.01  |
+    // | RETRY | other | none — the same turn id, another person     | 0.07, no conversation                  | 0.07  |
+    //
+    // Costliest first is BIG, RETRY, SMALL: the order the turn rows were made
+    // in is neither that nor its reverse, so a missing sort cannot pass.
+    const turnIds = {
+      big: `${PREFIX}-big`,
+      retry: `${PREFIX}-retry`,
+      small: `${PREFIX}-small`,
+    };
+    const d = await prisma.aiConversation.create({
+      data: {
+        agentId: agent.id,
+        userId: ours.id,
+        contextType: 'facilitation',
+        contextId: 'onboarding',
+        title: `${PREFIX} conversation D`,
+      },
+      select: { id: true },
+    });
+    const turnRow = (
+      userId: string,
+      turnId: string,
+      extra: {
+        conversationId: string | null;
+        startedAt: Date;
+        status: 'completed' | 'running';
+        attempts?: number;
+      }
+    ) => ({
+      userId,
+      turnId,
+      clientSupplied: true,
+      requestHash: PREFIX,
+      seat: 'facilitator',
+      agentSlug: VOICE_AGENT_SLUG,
+      fingerprintVersion: '1',
+      modelId: 'gpt-4o-mini',
+      providerSlug: 'openai',
+      completedAt: extra.status === 'completed' ? extra.startedAt : null,
+      ...extra,
+    });
+    await prisma.appTurn.createMany({
+      data: [
+        turnRow(ours.id, turnIds.small, {
+          conversationId: d.id,
+          startedAt: inMonth(2, 4),
+          status: 'completed',
+        }),
+        turnRow(ours.id, turnIds.retry, {
+          conversationId: null,
+          startedAt: inMonth(2, 5),
+          status: 'running',
+          attempts: 3,
+        }),
+        turnRow(ours.id, turnIds.big, {
+          conversationId: d.id,
+          startedAt: inMonth(2, 3),
+          status: 'completed',
+        }),
+        turnRow(other.id, turnIds.retry, {
+          conversationId: null,
+          startedAt: inMonth(2, 2),
+          status: 'completed',
+        }),
+      ],
+    });
+    const tag = (turnId: string) => ({ ...MARK, turnId, seat: 'facilitator' });
+    const row = (
+      userId: string,
+      conversationId: string | null,
+      turnId: string,
+      operation: string,
+      costUsd: number,
+      createdAt: Date
+    ) => ({
+      ...base,
+      userId,
+      conversationId,
+      operation,
+      inputTokens: 10,
+      outputTokens: 1,
+      totalCostUsd: costUsd,
+      metadata: tag(turnId),
+      createdAt,
+    });
+    await prisma.aiCostLog.createMany({
+      data: [
+        row(ours.id, d.id, turnIds.big, 'tool_call', 0.002, inMonth(2, 3)),
+        row(ours.id, d.id, turnIds.big, 'chat', 0.05, new Date(inMonth(2, 3).getTime() - 60_000)),
+        row(ours.id, d.id, turnIds.retry, 'chat', 0.02, inMonth(1, 27)),
+        row(ours.id, d.id, turnIds.retry, 'chat', 0.03, inMonth(2, 1)),
+        row(ours.id, d.id, turnIds.small, 'chat', 0.01, inMonth(2, 4)),
+        row(other.id, null, turnIds.retry, 'chat', 0.07, inMonth(2, 2)),
+      ],
+    });
+    const OURS_MARCH = 0.092; // 0.05 + 0.002 + 0.03 + 0.01 — the 27 Feb attempt is February's
+
+    console.log('\n6. A conversation opens to its turns, costliest first, each at its whole cost');
+    const listed = await getConversationTurns({ conversationId: d.id, window: MARCH, limit: 100 });
+    const order = listed.turns.map((entry) => entry.turnId);
+    check(
+      order.join(',') === [turnIds.big, turnIds.retry, turnIds.small].join(','),
+      `in order of cost (${order.map((id) => id.replace(`${PREFIX}-`, '')).join(', ')})`
+    );
+    check(
+      listed.turns.every((entry) => entry.userId === ours.id),
+      'every turn listed is ours — the other person’s turn of the same id is not among them'
+    );
+    check(!listed.truncated, 'and nothing was cut');
+    const retried = listed.turns.find((entry) => entry.turnId === turnIds.retry);
+    check(
+      retried !== undefined && near(retried.costUsd, 0.05) && retried.costRows === 2,
+      `the retried turn is still listed, though the retry cleared its link — $${retried?.costUsd} over ${retried?.costRows} rows, both attempts, February's included`
+    );
+    for (const entry of listed.turns) {
+      const detail = await getTurnMeter(entry.userId, entry.turnId);
+      check(
+        detail !== null &&
+          near(detail.costUsd, entry.costUsd) &&
+          detail.costRows === entry.costRows,
+        `${entry.turnId.replace(`${PREFIX}-`, '')}: the figure listed is the figure its own page shows ($${detail?.costUsd.toFixed(3)})`
+      );
+    }
+    const cut = await getConversationTurns({ conversationId: d.id, window: MARCH, limit: 2 });
+    check(
+      cut.truncated &&
+        cut.turns.map((entry) => entry.turnId).join(',') === [turnIds.big, turnIds.retry].join(','),
+      'cut to two, it keeps the two costliest and says it was cut'
+    );
+
+    console.log('\n7. A turn opens to its rows, the reply apart from what it caused');
+    const big = await getTurnMeter(ours.id, turnIds.big);
+    check(
+      big !== null && near(big.replyCostUsd, 0.05) && near(big.sideCostUsd, 0.002),
+      `reply $${big?.replyCostUsd.toFixed(3)}, on the side $${big?.sideCostUsd.toFixed(3)}`
+    );
+    check(
+      big?.rows.map((entry) => entry.part).join(',') === 'reply,tool',
+      `its rows in the order they were written (${big?.rows.map((entry) => entry.part).join(', ')})`
+    );
+
+    console.log(
+      '\n8. One person can say what their month cost, and the admin page who and what cost most'
+    );
+    const month = await getMonthToDate(ours.id, new Date('2001-03-20T00:00:00Z'));
+    const theirMarch = await getMemberBreakdown(ours.id, { by: 'day', window: MARCH, limit: 100 });
+    const people = await getAdminBreakdown({ by: 'user', window: MARCH, limit: 100 });
+    const oursMarch = people.groups.find((entry) => entry.key === ours.id);
+    check(
+      near(month.costUsd, OURS_MARCH),
+      `their month to date is $${month.costUsd}, from the rows themselves`
+    );
+    check(
+      near(theirMarch.totals.costUsd, month.costUsd) &&
+        near(oursMarch?.costUsd ?? -1, month.costUsd),
+      'and the usage page, the admin page and the limit all read the same figure'
+    );
+    check(
+      people.groups.map((entry) => entry.key).join(',') === [ours.id, other.id].join(','),
+      'people are listed costliest first'
+    );
+    const conversations = await getAdminBreakdown({
+      by: 'conversation',
+      window: MARCH,
+      limit: 100,
+    });
+    const top = conversations.groups[0];
+    check(
+      top?.key === d.id && near(top.costUsd, OURS_MARCH),
+      `the costliest conversation leads, at $${top?.costUsd}`
+    );
+    check(
+      top !== undefined &&
+        'conversation' in top &&
+        top.conversation?.title === `${PREFIX} conversation D` &&
+        top.conversation.userId === ours.id,
+      'with its title and its owner, so the view needs no second fetch'
+    );
+    const january = await getAdminBreakdown({ by: 'user', window: WINDOW, limit: 1 });
+    check(january.groups[0]?.key === other.id, 'and a list cut to one keeps the costliest person');
 
     if (failures > 0) throw new Error(`${failures} check(s) failed`);
     console.log('\n✓ smoke:app-metering passed\n');
