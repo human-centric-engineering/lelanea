@@ -146,12 +146,28 @@ const leanings = vi.hoisted(() => ({
     held: 'warmth'[];
   } | null,
 }));
+/**
+ * The person's dials and the last reply's proposals, for the leanings block
+ * (t-137). Its composition is `leaning-context.test.ts`'s; here it is whether
+ * the block rides, where, and that a failed read costs only it.
+ */
+const dials = vi.hoisted(() => ({
+  view: null as null | { configured: boolean; dials: unknown[] },
+  fails: false,
+}));
 vi.mock('@/lib/app/voice/leanings-store', () => ({
   promptStampFor: vi.fn(async (_userId: string, seat: string) =>
     seat === 'facilitator'
       ? { register: registers.value, leanings: leanings.value }
       : { register: null, leanings: null }
   ),
+  getLeanings: vi.fn(async () => {
+    if (dials.fails) throw new Error('slot table unreadable');
+    return dials.view ?? { configured: false, dials: [] };
+  }),
+}));
+vi.mock('@/lib/app/voice/leaning-proposals', () => ({
+  previousProposals: vi.fn(async () => []),
 }));
 
 vi.mock('@/lib/logging', () => ({
@@ -889,6 +905,58 @@ describe('a facilitation seat turn', () => {
     // A held dial selects nothing, and retrieval still runs the register's query.
     expect(prompt).not.toContain(rowOf('leaning-warmth-right').heading);
     expect(searchKnowledgeMock.mock.calls[0]?.[0]).toBe(teaching.exemplarQuery);
+  });
+
+  describe('where the leanings stand, and how they may change (t-137)', () => {
+    const dial = {
+      key: 'length',
+      left: 'Verbose and exploratory',
+      right: 'Concise and spare',
+      stored: 0,
+      position: 0,
+      min: -2,
+      max: 2,
+      locked: false,
+      suggest: true,
+    };
+    beforeEach(() => {
+      registers.value = 'teaching';
+      dials.view = { configured: true, dials: [dial] };
+      dials.fails = false;
+    });
+
+    it('rides on the facilitator seat, after the voice block, with the rule', async () => {
+      const teaching = CONTENT.overlays.find((o) => o.situation === 'teaching')!;
+
+      const prompt = await systemPromptFor('facilitator');
+
+      expect(prompt).toContain(
+        '- length: Verbose and exploratory ↔ Concise and spare. Now at rest.'
+      );
+      expect(prompt).toContain('Only if they say yes in their next message');
+      expect(prompt.indexOf(teaching.heading)).toBeLessThan(prompt.indexOf('- length:'));
+    });
+
+    it('is not on the onboarding seat', async () => {
+      const prompt = await systemPromptFor('onboarding');
+
+      expect(prompt).not.toContain('- length:');
+    });
+
+    it('costs only itself when the dials cannot be read, and says so', async () => {
+      dials.fails = true;
+      const { logger } = await import('@/lib/logging');
+      const teaching = CONTENT.overlays.find((o) => o.situation === 'teaching')!;
+
+      const prompt = await systemPromptFor('facilitator');
+
+      expect(prompt).toContain(teaching.heading);
+      expect(prompt).not.toContain('- length:');
+      expect(logger.error).toHaveBeenCalledWith(
+        'leaningsContext: could not read them; this turn cannot change one',
+        expect.objectContaining({ seat: 'facilitator', error: 'slot table unreadable' })
+      );
+    });
   });
 
   it('the onboarding seat and the admin chat carry no leanings', async () => {
