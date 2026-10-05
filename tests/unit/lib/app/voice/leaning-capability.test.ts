@@ -282,6 +282,17 @@ describe('set_leaning: a proposal, then a yes', () => {
     expect(result.error?.message).toMatch(/call again now with how: asked/);
     expect(appendSlotValue).not.toHaveBeenCalled();
   });
+  it('refuses "agreed" when the dial has moved since, even onto the proposed stop from the other side', async () => {
+    // Proposed 0 → 1 toward literal; the person then set 2 in Settings. A step
+    // toward story and metaphor lands on 1, the proposed stop, the other way.
+    previouslyProposed({ leaning: 'imagery', from: 0, to: 1 });
+    set('leaning_imagery', 2);
+
+    const result = await call({ leaning: 'imagery', toward: 'Story and metaphor', how: 'agreed' });
+
+    expect(result.error?.code).toBe('no_proposal');
+    expect(appendSlotValue).not.toHaveBeenCalled();
+  });
 });
 
 describe('set_leaning: which way', () => {

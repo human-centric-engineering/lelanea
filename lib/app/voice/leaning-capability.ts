@@ -268,7 +268,10 @@ export class SetLeaningCapability extends BaseCapability<SetLeaningArgs, SetLean
       if (args.how === 'agreed') {
         const proposals = await previousProposals(userId, turn.seat, turn.turnId);
         const matching = proposals.some(
-          (proposal) => proposal.leaning === args.leaning && proposal.to === to
+          // From where it was proposed, too: a dial moved in Settings since
+          // could otherwise reach the same stop from the other side.
+          (proposal) =>
+            proposal.leaning === args.leaning && proposal.from === from && proposal.to === to
         );
         if (!matching) {
           return this.error(

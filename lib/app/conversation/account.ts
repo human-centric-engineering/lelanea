@@ -269,7 +269,10 @@ function leaningChangeWords(change: LeaningChange): { line: string; detail: stri
     return { line: what, detail: `${what}. Nothing has changed unless you say yes.` };
   }
   if (change.from === change.to) {
-    const at = 'That leaning was already as far as it goes';
+    const at =
+      change.to === 0
+        ? 'That leaning was already at rest'
+        : 'That leaning was already as far as it goes';
     return { line: at, detail: `${at}, so nothing changed.` };
   }
   const why = change.how === 'agreed' ? 'when you agreed to the suggestion' : 'as you asked';

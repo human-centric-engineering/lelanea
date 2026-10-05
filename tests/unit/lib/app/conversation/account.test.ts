@@ -426,6 +426,12 @@ describe('the register (f-registers t-125)', () => {
       );
     });
 
+    it('says a dial asked back to rest was already there', () => {
+      const parts = changed([{ leaning: 'directness', from: 0, to: 0, how: 'asked' }]);
+
+      expect(accountLine(parts)).toBe('That leaning was already at rest');
+    });
+
     it('says nothing moved when the dial was already as far as it goes, rather than claiming a change', () => {
       const parts = changed([{ leaning: 'questions', from: 1, to: 1, how: 'asked' }]);
 
