@@ -13,6 +13,10 @@
  *
  * Only the turn immediately before: a yes answers the reply it follows.
  *
+ * And a third: the turn seam asks {@link proposedRecently} at the claim, so the
+ * cached block never carries an awaiting proposal past the turn that answered
+ * it (/code-review).
+ *
  * @see lib/app/voice/leaning-capability.ts
  */
 
@@ -47,8 +51,45 @@ export async function previousProposals(
     where: { id: previous.assistantMessageId, conversation: { userId } },
     select: { provenance: true },
   });
-  return answeredCalls(reply?.provenance).flatMap((call) => {
+  return proposalsIn(reply?.provenance);
+}
+
+function proposalsIn(provenance: unknown): LeaningChange[] {
+  return answeredCalls(provenance).flatMap((call) => {
     const change = leaningChangeForCall(call);
     return change?.how === 'proposed' ? [change] : [];
   });
+}
+
+/**
+ * Whether either of the person's last two finished turns on the seat made a
+ * proposal. Never throws; an unreadable answer is `true`.
+ *
+ * The context block is cached for a minute and names a proposal from the last
+ * reply as awaiting an answer. A block built in the turn that ANSWERED it
+ * still names it, so the turn after that must not be served it from the
+ * cache: the proposal is then two replies back, and may have been declined.
+ * Those are exactly the two turns whose block could carry the line, so a claim
+ * that finds a proposal in either drops the cache. Unknown is "proposed", for
+ * the reason the turn seam's own stamp read gives: a rebuild costs less than a
+ * stale instruction.
+ */
+export async function proposedRecently(userId: string, seat: string): Promise<boolean> {
+  try {
+    const turns = await prisma.appTurn.findMany({
+      where: { userId, seat, status: 'completed', assistantMessageId: { not: null } },
+      orderBy: { startedAt: 'desc' },
+      take: 2,
+      select: { assistantMessageId: true },
+    });
+    const ids = turns.flatMap((turn) => (turn.assistantMessageId ? [turn.assistantMessageId] : []));
+    if (ids.length === 0) return false;
+    const replies = await prisma.aiMessage.findMany({
+      where: { id: { in: ids }, conversation: { userId } },
+      select: { provenance: true },
+    });
+    return replies.some((reply) => proposalsIn(reply.provenance).length > 0);
+  } catch {
+    return true;
+  }
 }

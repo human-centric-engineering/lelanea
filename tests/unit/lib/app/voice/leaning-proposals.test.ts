@@ -8,20 +8,37 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const db = vi.hoisted(() => ({
-  turn: null as null | { status: string; assistantMessageId: string | null },
-  calls: [] as unknown[],
-}));
+interface Db {
+  turn: null | { status: string; assistantMessageId: string | null };
+  calls: unknown[];
+  /** For `proposedRecently`: the last finished turns' replies, newest first. */
+  recent: { id: string; calls: unknown[] }[];
+  fails: boolean;
+}
+const db = vi.hoisted((): Db => ({ turn: null, calls: [], recent: [], fails: false }));
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    appTurn: { findFirst: vi.fn(async () => db.turn) },
-    aiMessage: { findFirst: vi.fn(async () => ({ provenance: { capabilityCalls: db.calls } })) },
+    appTurn: {
+      findFirst: vi.fn(async () => db.turn),
+      findMany: vi.fn(async () => {
+        if (db.fails) throw new Error('turn table unreadable');
+        return db.recent.slice(0, 2).map((r) => ({ assistantMessageId: r.id }));
+      }),
+    },
+    aiMessage: {
+      findFirst: vi.fn(async () => ({ provenance: { capabilityCalls: db.calls } })),
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+        db.recent
+          .filter((r) => where.id.in.includes(r.id))
+          .map((r) => ({ provenance: { capabilityCalls: r.calls } }))
+      ),
+    },
   },
 }));
 
 const { prisma } = await import('@/lib/db/client');
-const { previousProposals } = await import('@/lib/app/voice/leaning-proposals');
+const { previousProposals, proposedRecently } = await import('@/lib/app/voice/leaning-proposals');
 
 const call = (data: Record<string, unknown>, success = true) => ({
   slug: 'set_leaning',
@@ -35,6 +52,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.turn = { status: 'completed', assistantMessageId: 'msg-1' };
   db.calls = [];
+  db.recent = [];
+  db.fails = false;
 });
 
 describe('previousProposals', () => {
@@ -82,5 +101,45 @@ describe('previousProposals', () => {
     db.calls = [call(PROPOSED, false)];
 
     await expect(previousProposals('u1', 'facilitator')).resolves.toEqual([]);
+  });
+});
+
+describe('proposedRecently', () => {
+  it('is true while either of the last two finished replies proposed, and false after', async () => {
+    db.recent = [
+      { id: 'n2', calls: [] },
+      { id: 'n1', calls: [call(PROPOSED)] },
+    ];
+    await expect(proposedRecently('u1', 'facilitator')).resolves.toBe(true);
+
+    db.recent = [{ id: 'n3', calls: [] }, ...db.recent];
+    await expect(proposedRecently('u1', 'facilitator')).resolves.toBe(false);
+  });
+
+  it('reads only the person’s own finished turns and replies', async () => {
+    db.recent = [{ id: 'n1', calls: [] }];
+    await proposedRecently('u1', 'facilitator');
+
+    expect(vi.mocked(prisma.appTurn.findMany)).toHaveBeenCalledWith({
+      where: {
+        userId: 'u1',
+        seat: 'facilitator',
+        status: 'completed',
+        assistantMessageId: { not: null },
+      },
+      orderBy: { startedAt: 'desc' },
+      take: 2,
+      select: { assistantMessageId: true },
+    });
+    expect(vi.mocked(prisma.aiMessage.findMany)).toHaveBeenCalledWith({
+      where: { id: { in: ['n1'] }, conversation: { userId: 'u1' } },
+      select: { provenance: true },
+    });
+  });
+
+  it('is false with no finished turn, and true when it cannot tell', async () => {
+    await expect(proposedRecently('u1', 'facilitator')).resolves.toBe(false);
+    db.fails = true;
+    await expect(proposedRecently('u1', 'facilitator')).resolves.toBe(true);
   });
 });
