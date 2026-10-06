@@ -50,6 +50,7 @@
  * @see .context/app/agent.md — "When the agent can't answer"
  */
 
+import { floorLabel, money, roundsToNoCents, spendFloor } from '@/lib/app/usage/usage-view';
 import type { ChatEvent } from '@/types/orchestration';
 
 /** The four ways a turn ends without the agent's answer. */
@@ -130,6 +131,8 @@ export function endingFrame(ending: TurnEnding): Extract<ChatEvent, { type: 'err
 /** The figures a `ceiling_reached` frame carries. `resetsAt` is an ISO instant, UTC. */
 export interface CeilingReached {
   spentUsd: number;
+  /** Rows in `spentUsd` with no price on file; above zero, the spend is a floor. */
+  unpricedRows: number;
   ceilingUsd: number;
   resetsAt: string;
 }
@@ -139,7 +142,6 @@ export type CeilingReachedFrame = Extract<ChatEvent, { type: 'error' }> & {
   ceiling: CeilingReached;
 };
 
-const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const resetDay = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'long',
@@ -176,34 +178,94 @@ export function isNothingLimit(ceilingUsd: number): boolean {
 }
 
 /**
+ * The amounts a limit ending can state truthfully, as words — or `null` when
+ * the spend is unknown or cannot be stated in cents.
+ *
+ * **One answer for both sets of words**, as {@link formatResetDay} is, so the
+ * neutral frame and the copy in Lelañea Fulton's register cannot disagree about
+ * what a figure says (t-140):
+ *
+ * - **The spend says "at least"** when some of it had no price on file, as
+ *   every other figure of spend does (budget.md, ruling 4) — **and when the
+ *   count is unknown**: "at least" is true of an exact figure too, and stating
+ *   a figure as exact that may be short is not (/code-review round 2).
+ * - **A limit under half a cent is `limit: null`**: it prints as `$0.00`, and
+ *   "$0.12 of $0.00" is false. The gate still lets a reply through under it,
+ *   so it is not {@link isNothingLimit} and the reset date stands.
+ * - **A spend under half a cent is no amounts at all.** The gate refused, so
+ *   the limit is under it and under half a cent too: neither can be said.
+ */
+export function ceilingAmounts(figures: {
+  spentUsd?: number;
+  unpricedRows?: number;
+  ceilingUsd: number;
+}): { spent: string; limit: string | null } | null {
+  const { spentUsd, ceilingUsd } = figures;
+  if (spentUsd === undefined || roundsToNoCents(spentUsd)) return null;
+  return {
+    spent: floorLabel(
+      money(spentUsd),
+      figures.unpricedRows === undefined || spendFloor({ unpricedRows: figures.unpricedRows })
+    ),
+    limit: roundsToNoCents(ceilingUsd) ? null : money(ceilingUsd),
+  };
+}
+
+/**
  * The frame a turn ends on when the person has used their month's budget.
  *
  * The default copy says why, and what they can do that exists: keep reading
  * and writing, or wait for the reset (`HB10`). It offers no "ask for more" —
  * there is no mechanism behind one (`B31`). On a limit of nothing it names no
  * reset: waiting for one would not bring replies back ({@link isNothingLimit}).
+ *
+ * What the amounts say — "at least", a limit under a cent — is
+ * {@link ceilingAmounts}, shared with the copy in her register.
  */
 export function ceilingReachedFrame(figures: {
   spentUsd: number;
+  unpricedRows: number;
   ceilingUsd: number;
   resetsAt: Date;
 }): CeilingReachedFrame {
-  const message = isNothingLimit(figures.ceilingUsd)
-    ? 'Your conversation budget is set to nothing, so there are no replies for now. ' +
-      'Everything you can read and write in the app still works.'
-    : `You've used this month's conversation budget (${usd.format(figures.spentUsd)} of ` +
-      `${usd.format(figures.ceilingUsd)}), so there are no more replies until it resets on ` +
-      `${formatResetDay(figures.resetsAt)}. Everything you can read and write in the app still works.`;
   return {
     type: 'error',
     code: ENDING_CEILING_REACHED,
-    message,
+    message: ceilingMessage(figures),
     ceiling: {
       spentUsd: figures.spentUsd,
+      unpricedRows: figures.unpricedRows,
       ceilingUsd: figures.ceilingUsd,
       resetsAt: figures.resetsAt.toISOString(),
     },
   };
+}
+
+/** The frame's own words: the fallback for a pane that cannot read the figures. */
+function ceilingMessage(figures: {
+  spentUsd: number;
+  unpricedRows: number;
+  ceilingUsd: number;
+  resetsAt: Date;
+}): string {
+  if (isNothingLimit(figures.ceilingUsd)) {
+    return (
+      'Your conversation budget is set to nothing, so there are no replies for now. ' +
+      'Everything you can read and write in the app still works.'
+    );
+  }
+  const said = ceilingAmounts(figures);
+  const amounts =
+    said === null
+      ? ''
+      : said.limit === null
+        ? ` (${said.spent}, against a limit of less than a cent)`
+        : ` (${said.spent} of ${said.limit})`;
+  return (
+    `You've used this month's conversation budget${amounts}, so there are no more replies ` +
+    `until it resets on ${formatResetDay(figures.resetsAt)}. ` +
+    'Everything you can read and write in the app still works.'
+  );
 }
 
 /** Sent once, when no words have come by the first-words deadline. The turn carries on. */

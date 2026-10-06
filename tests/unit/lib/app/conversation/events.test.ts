@@ -90,8 +90,15 @@ describe('the ceiling frame keeps its figures', () => {
     ['a negative spend', { spentUsd: -1 }, 'spentUsd'],
     ['a negative limit', { ceilingUsd: -4 }, 'ceilingUsd'],
     ['a reset that is not an instant', { resetsAt: 'soon' }, 'resetsAt'],
+    ['a negative unpriced count', { unpricedRows: -1 }, 'unpricedRows'],
+    ['a fractional unpriced count', { unpricedRows: 1.5 }, 'unpricedRows'],
   ])('treats %s as unknown', (_case, bad, field) => {
-    const good = { spentUsd: 4, ceilingUsd: 4, resetsAt: '2026-10-01T00:00:00.000Z' };
+    const good = {
+      spentUsd: 4,
+      unpricedRows: 2,
+      ceilingUsd: 4,
+      resetsAt: '2026-10-01T00:00:00.000Z',
+    };
     const parsed = parseConversationEvent(
       block('error', { code: 'ceiling_reached', message: 'x', ceiling: { ...good, ...bad } })
     );

@@ -35,6 +35,7 @@
  */
 
 import type { TurnAccount } from '@/lib/app/conversation/transcript';
+import { roundsToNoCents } from '@/lib/app/usage/usage-view';
 import type { ResourceSuggestion } from '@/lib/app/resources/suggestion';
 import type { Citation } from '@/types/orchestration';
 import { leaningDimension, type LeaningKey } from '@/lib/app/voice/leanings';
@@ -391,7 +392,7 @@ export function costSentence(turn: TurnAccount | null): string | null {
     cost = 'cost nothing to run';
   } else if (turn.costUsd === null) {
     cost = null;
-  } else if (turn.costUsd > 0 && turn.costUsd < 0.005) {
+  } else if (roundsToNoCents(turn.costUsd)) {
     cost = 'cost less than a cent';
   } else {
     cost = `cost ${usd.format(turn.costUsd)}`;

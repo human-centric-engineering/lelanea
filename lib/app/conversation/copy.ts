@@ -1,6 +1,10 @@
-import { formatResetDay, isNothingLimit, type TurnEnding } from '@/lib/app/agent/endings';
+import {
+  ceilingAmounts,
+  formatResetDay,
+  isNothingLimit,
+  type TurnEnding,
+} from '@/lib/app/agent/endings';
 import type { CeilingFigures } from '@/lib/app/conversation/events';
-import { money } from '@/lib/app/usage/usage-view';
 
 /**
  * Every word the conversation pane says of its own (§10 t-64, t-65).
@@ -135,6 +139,10 @@ const STILL_WORKS =
  * amounts and keeps the date; an unknown reset falls back to "the start of next
  * month". Never `$undefined`, never `Invalid Date`.
  *
+ * **What the amounts say is `ceilingAmounts`**, shared with the frame's own
+ * words (t-140): "at least" when some replies had no price on file, and no
+ * figure for a limit or a spend that would print as `$0.00`.
+ *
  * A proposal in her register until she has read it, like everything above.
  */
 export function ceilingEnding(figures: CeilingFigures | undefined): string | null {
@@ -147,10 +155,17 @@ export function ceilingEnding(figures: CeilingFigures | undefined): string | nul
     return `Your limit for conversations is set to nothing at the moment, so I can't reply.\n${STILL_WORKS}`;
   }
 
+  const said = ceilingAmounts({
+    spentUsd: spent,
+    unpricedRows: figures?.unpricedRows,
+    ceilingUsd: limit,
+  });
   const used =
-    spent === undefined
+    said === null
       ? "That's this month's conversations used up."
-      : `That's this month's conversations used up — ${money(spent)} of your ${money(limit)} limit.`;
+      : said.limit === null
+        ? `That's this month's conversations used up — ${said.spent}, against a limit of less than a cent.`
+        : `That's this month's conversations used up — ${said.spent} of your ${said.limit} limit.`;
   const back = resetsAt
     ? `I can reply again from ${formatResetDay(new Date(resetsAt))}.`
     : 'I can reply again from the start of next month.';

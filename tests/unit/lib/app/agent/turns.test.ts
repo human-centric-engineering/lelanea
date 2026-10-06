@@ -68,6 +68,9 @@ interface CostRow {
   userId: string;
   model: string;
   costUsd: number;
+  /** What the real meter's unpriced filter reads, besides the cost. */
+  tokens: number;
+  isLocal: boolean;
   metadata: Record<string, unknown> | undefined;
 }
 
@@ -358,7 +361,8 @@ vi.mock('@/lib/db/client', () => {
       },
       // The month-to-date read: every cost row the fake model wrote is this
       // month's, so it sums the person's rows. Its only value that is a user id
-      // is the first interpolation.
+      // is the first interpolation. Unpriced is the real query's own test: $0,
+      // not local, and tokens used.
       $queryRaw: vi.fn(async (_sql: TemplateStringsArray, userId: string) => {
         const rows = db.costs.filter((c) => c.userId === userId);
         return [
@@ -367,7 +371,7 @@ vi.mock('@/lib/db/client', () => {
             input_tokens: 0,
             output_tokens: 0,
             cost_rows: rows.length,
-            unpriced_rows: 0,
+            unpriced_rows: rows.filter((c) => c.costUsd === 0 && !c.isLocal && c.tokens > 0).length,
           },
         ];
       }),
@@ -490,6 +494,8 @@ function fakeRun(
         userId: turn.userId,
         model: behaviour.model,
         costUsd: behaviour.costUsd,
+        tokens: 3300,
+        isLocal: db.providers.some((p) => p.slug === behaviour.provider && p.isLocal),
         metadata: extras.costLogMetadata,
       });
       const reply = `The answer to: ${turn.message}`;
@@ -1756,6 +1762,20 @@ describe('the monthly ceiling (f-safety t-59)', () => {
 
     db.budgets.set('user-1', 10);
     expect((await take(turnFor({ clientTurnId: 'turn-b' }))).at(-1)?.type).toBe('done');
+  });
+
+  it("says the spend is at least the figure when one of the month's replies had no price (t-140)", async () => {
+    // From the meter, through the gate and the seam, to the frame and its words.
+    costing(0);
+    await take(turnFor({ clientTurnId: 'turn-unpriced' }));
+    costing(5);
+    await take(turnFor({ clientTurnId: 'turn-priced' }));
+
+    const over = await take(turnFor({ clientTurnId: 'turn-over' }));
+    expect(over).toMatchObject([
+      { code: 'ceiling_reached', ceiling: { spentUsd: 5, unpricedRows: 1, ceilingUsd: 5 } },
+    ]);
+    expect((over[0] as { message: string }).message).toContain('(at least $5.00 of $5.00)');
   });
 
   it('a limit of nothing refuses the first turn of the month, and names no reset', async () => {

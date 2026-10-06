@@ -19,6 +19,12 @@
  * well past a ceiling in the admin cost view — then count the person's running
  * turns here before allowing another.
  *
+ * **It compares a floor as if it were exact.** Replies with no price on file
+ * count $0 here, so a month of them can run past the limit unrefused. Nothing
+ * can close that — the price is missing, not wrong (budget.md, "Where the
+ * figures come from"); what this module can do is carry the count, so the
+ * words say "at least" once it does refuse (t-140).
+ *
  * **Fails open.** A read that errors counts as under the ceiling, as the pause
  * switch does: a database that cannot be read fails the turn by itself a moment
  * later, as `unavailable`, and a meter hiccup should not read as "you have used
@@ -38,6 +44,11 @@ export type TurnAllowance =
       reason: 'ceiling_reached';
       /** Spent this UTC month — may exceed the ceiling by the turn that crossed it. */
       spentUsd: number;
+      /**
+       * Rows in that spend with no price on file. Above zero, `spentUsd` is a
+       * floor and the real spend is higher (budget.md, ruling 4).
+       */
+      unpricedRows: number;
       ceilingUsd: number;
       /** When the month resets: the first instant of the next UTC month. */
       resetsAt: Date;
@@ -64,6 +75,7 @@ export async function mayStartGeneratedTurn(
       allowed: false,
       reason: 'ceiling_reached',
       spentUsd: usage.costUsd,
+      unpricedRows: usage.unpricedRows,
       ceilingUsd: usage.ceiling.ceilingUsd,
       resetsAt: nextMonthlyReset(now),
     };

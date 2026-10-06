@@ -201,6 +201,7 @@ describe('the ceiling frame on a limit of nothing (t-96)', () => {
   it('names no reset for a limit of zero — waiting would not bring replies back', () => {
     const frame = ceilingReachedFrame({
       spentUsd: 0,
+      unpricedRows: 0,
       ceilingUsd: 0,
       resetsAt: new Date('2026-10-01T00:00:00.000Z'),
     });
@@ -217,6 +218,7 @@ describe('the ceiling frame on a limit of nothing (t-96)', () => {
   it('reads a negative limit as nothing too, as the gate does', () => {
     const frame = ceilingReachedFrame({
       spentUsd: 0,
+      unpricedRows: 0,
       ceilingUsd: -1,
       resetsAt: new Date('2026-10-01T00:00:00.000Z'),
     });
@@ -229,17 +231,45 @@ describe('the ceiling frame on a limit of nothing (t-96)', () => {
     (limit) => {
       const frame = ceilingReachedFrame({
         spentUsd: limit,
+        unpricedRows: 0,
         ceilingUsd: limit,
         resetsAt: new Date('2026-10-01T00:00:00.000Z'),
       });
       expect(frame.message).toContain('resets on 1 October');
     }
   );
+
+  it('states no amounts for a limit under half a cent, rather than "$0.00 of $0.00" (t-140)', () => {
+    const frame = ceilingReachedFrame({
+      spentUsd: 0.004,
+      unpricedRows: 0,
+      ceilingUsd: 0.004,
+      resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+    });
+    expect(frame.message).toBe(
+      "You've used this month's conversation budget, so there are no more replies until it " +
+        'resets on 1 October. Everything you can read and write in the app still works.'
+    );
+  });
+
+  it('still states a spend it can say in cents when only the limit is under half a cent', () => {
+    // The crossing turn completes, so spend can sit well past a tiny limit;
+    // that figure is true and is not dropped with the limit's.
+    const frame = ceilingReachedFrame({
+      spentUsd: 0.124,
+      unpricedRows: 0,
+      ceilingUsd: 0.004,
+      resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+    });
+    expect(frame.message).toContain('($0.12, against a limit of less than a cent)');
+    expect(frame.message).not.toContain('$0.00');
+  });
 });
 
 describe('the ceiling ending (f-safety t-59)', () => {
   const frame = ceilingReachedFrame({
     spentUsd: 5.2,
+    unpricedRows: 0,
     ceilingUsd: 5,
     resetsAt: new Date('2026-10-01T00:00:00Z'),
   });
@@ -248,8 +278,29 @@ describe('the ceiling ending (f-safety t-59)', () => {
     expect(frame).toMatchObject({
       type: 'error',
       code: ENDING_CEILING_REACHED,
-      ceiling: { spentUsd: 5.2, ceilingUsd: 5, resetsAt: '2026-10-01T00:00:00.000Z' },
+      ceiling: {
+        spentUsd: 5.2,
+        unpricedRows: 0,
+        ceilingUsd: 5,
+        resetsAt: '2026-10-01T00:00:00.000Z',
+      },
     });
+  });
+
+  it('states the spend as exact when every row had a price', () => {
+    expect(frame.message).not.toContain('at least');
+  });
+
+  it('says the spend is at least the figure when some rows had no price (t-140)', () => {
+    const floor = ceilingReachedFrame({
+      spentUsd: 5.2,
+      unpricedRows: 3,
+      ceilingUsd: 5,
+      resetsAt: new Date('2026-10-01T00:00:00Z'),
+    });
+    expect(floor.message).toContain('(at least $5.20 of $5.00)');
+    // The count rides on the frame, so the copy in her register can say it too.
+    expect(floor.ceiling.unpricedRows).toBe(3);
   });
 
   it('says why, and what the person can do — without offering more', () => {

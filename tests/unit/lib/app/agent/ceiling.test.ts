@@ -17,8 +17,12 @@ vi.mock('@/lib/app/agent/metering', () => ({ getMonthToDate }));
 
 import { mayStartGeneratedTurn, nextMonthlyReset } from '@/lib/app/agent/ceiling';
 
-function spent(costUsd: number, ceilingUsd: number): void {
-  getMonthToDate.mockResolvedValue({ costUsd, ceiling: { ceilingUsd, source: 'default' } });
+function spent(costUsd: number, ceilingUsd: number, unpricedRows = 0): void {
+  getMonthToDate.mockResolvedValue({
+    costUsd,
+    unpricedRows,
+    ceiling: { ceilingUsd, source: 'default' },
+  });
 }
 
 const NOW = new Date('2026-09-19T15:00:00Z');
@@ -40,8 +44,18 @@ describe('mayStartGeneratedTurn', () => {
       allowed: false,
       reason: 'ceiling_reached',
       spentUsd: 5,
+      unpricedRows: 0,
       ceilingUsd: 5,
       resetsAt: new Date('2026-10-01T00:00:00Z'),
+    });
+  });
+
+  it('carries how many of the rows had no price, so the words can say "at least" (t-140)', async () => {
+    spent(5.2, 5, 3);
+    expect(await mayStartGeneratedTurn('user-1', NOW)).toMatchObject({
+      allowed: false,
+      spentUsd: 5.2,
+      unpricedRows: 3,
     });
   });
 

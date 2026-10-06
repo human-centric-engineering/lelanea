@@ -25,7 +25,7 @@ const STILL_WORKS =
 
 describe('ceilingEnding', () => {
   it('says what was spent, the limit, the date, and that nothing else stopped', () => {
-    expect(ceilingEnding({ spentUsd: 4, ceilingUsd: 4, resetsAt: RESET })).toBe(
+    expect(ceilingEnding({ spentUsd: 4, unpricedRows: 0, ceilingUsd: 4, resetsAt: RESET })).toBe(
       "That's this month's conversations used up — $4.00 of your $4.00 limit.\n" +
         'I can reply again from 1 October.\n' +
         STILL_WORKS
@@ -34,9 +34,9 @@ describe('ceilingEnding', () => {
 
   it('states spend past the limit as it is, not clamped to the limit', () => {
     // The turn that crosses the line completes (t-59), so this is reachable.
-    expect(ceilingEnding({ spentUsd: 4.07, ceilingUsd: 4, resetsAt: RESET })).toContain(
-      '$4.07 of your $4.00 limit'
-    );
+    expect(
+      ceilingEnding({ spentUsd: 4.07, unpricedRows: 0, ceilingUsd: 4, resetsAt: RESET })
+    ).toContain('$4.07 of your $4.00 limit');
   });
 
   it('reads the reset in UTC, so the 1st is the 1st wherever the reader is', () => {
@@ -58,6 +58,36 @@ describe('ceilingEnding', () => {
     // NOT nothing: on the 1st one reply runs. "Set to nothing" would deny it.
     expect(ceilingEnding({ spentUsd: 0.004, ceilingUsd: 0.004, resetsAt: RESET })).toContain(
       'I can reply again from 1 October.'
+    );
+  });
+
+  it('states no amounts for a limit under half a cent — both would print as $0.00 (t-140)', () => {
+    expect(ceilingEnding({ spentUsd: 0.004, ceilingUsd: 0.004, resetsAt: RESET })).toBe(
+      "That's this month's conversations used up.\n" +
+        'I can reply again from 1 October.\n' +
+        STILL_WORKS
+    );
+    // A spend that can be said in cents is said, though the limit cannot be.
+    expect(
+      ceilingEnding({ spentUsd: 0.124, unpricedRows: 0, ceilingUsd: 0.004, resetsAt: RESET })
+    ).toContain('— $0.12, against a limit of less than a cent.');
+    // Half a cent prints as a cent, so from there the amounts say something true.
+    expect(
+      ceilingEnding({ spentUsd: 0.005, unpricedRows: 0, ceilingUsd: 0.005, resetsAt: RESET })
+    ).toContain('$0.01 of your $0.01 limit');
+  });
+
+  it('says the spend is at least the figure when some replies had no price (t-140)', () => {
+    expect(
+      ceilingEnding({ spentUsd: 4.07, unpricedRows: 2, ceilingUsd: 4, resetsAt: RESET })
+    ).toContain('— at least $4.07 of your $4.00 limit.');
+    // None unpriced is exact. A count that did not parse is unknown, and reads
+    // as a floor: "at least" is true either way, an exact figure may not be.
+    expect(
+      ceilingEnding({ spentUsd: 4.07, unpricedRows: 0, ceilingUsd: 4, resetsAt: RESET })
+    ).toContain('— $4.07 of your $4.00 limit.');
+    expect(ceilingEnding({ spentUsd: 4.07, ceilingUsd: 4, resetsAt: RESET })).toContain(
+      '— at least $4.07 of your $4.00 limit.'
     );
   });
 
