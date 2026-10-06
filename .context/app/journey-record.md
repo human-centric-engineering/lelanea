@@ -324,8 +324,10 @@ report of a draft quoting something deleted.
 ### Asked of Daybreak
 
 The re-read stands in for a "re-read this text against these slots" element
-Daybreak doesn't have. It has been asked for, with `reread.ts` as the
-reference implementation (link below once filed).
+Daybreak doesn't have:
+[`daybreak#295`](https://github.com/human-centric-engineering/daybreak/issues/295),
+with `reread.ts` as the reference implementation. When it lands, delete
+`reread.ts` and call Daybreak's.
 
 ## Not yet
 

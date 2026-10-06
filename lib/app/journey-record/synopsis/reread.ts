@@ -15,7 +15,9 @@
  * value for one slot already chosen. So this is our own call, in that file's
  * shape: one structured completion, a reply checked here, refused rather than
  * guessed at. A "re-read this text against these slots" element is asked of
- * Daybreak, with this as the reference implementation.
+ * Daybreak, with this as the reference implementation
+ * ([`daybreak#295`](https://github.com/human-centric-engineering/daybreak/issues/295)).
+ * Delete this and call Daybreak's when it lands.
  *
  * **Through the synopsis seat** (`seat.ts`), so it is gated and charged as a
  * draft is, and the person's words go to the provider their account was
