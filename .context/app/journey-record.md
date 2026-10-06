@@ -91,7 +91,7 @@ the CHECK are drift-probed in `lib/app/leaf-db-drift.ts`.
 | `POST /api/v1/app/journey-record`                | `{ body, summary?, withheldFromAgent? }`: an own entry.                                                                                                                                   |
 | `PATCH /api/v1/app/journey-record/:id`           | Change an own entry's words, summary or `withheldFromAgent`.                                                                                                                              |
 | `DELETE /api/v1/app/journey-record/:id`          | Remove any entry, words and all. Removing a synopsis does not redraft it. This is how a draft is discarded.                                                                               |
-| `POST /api/v1/app/journey-record/:id/keep`       | `{ confirm, edit? }`: keep a synopsis, as written or changed, or change one already kept. Returns the entry and what it did to each listed note.                                          |
+| `POST /api/v1/app/journey-record/:id/keep`       | `{ seen, confirm, edit? }`: keep a synopsis, as written or changed, or change one already kept. Returns the entry and what it did to each listed note.                                    |
 | `POST /api/v1/app/journey-record/:id/regenerate` | `{ steer? }`: another draft in place of this one. Returns the new draft.                                                                                                                  |
 | `GET /api/v1/app/journey-record/export`          | The kept record as a Markdown download, oldest first.                                                                                                                                     |
 
@@ -227,6 +227,8 @@ A confirmation or correction is written through `correctNote` (`lib/app/slots/no
 
 - **Only a note still at the version the session wrote is touched.** One that
   has moved on since (a later session, a correction, a removal) is left alone.
+  It is checked again just before each write, since a re-read can take
+  minutes and a turn may write meanwhile.
   Confirming the newer reading would confirm something the account never
   listed.
 - **Hidden, special-category, withheld, removed and retired notes are never
@@ -272,9 +274,12 @@ still a draft.
   the writing, never as a fact about the session.
 - **Modules and notes are not drafted again.** They were derived from the
   session, and a different wording changes neither.
-- **Capped at three per draft** (`MAX_SYNOPSIS_REGENERATIONS`). A try is taken
-  before the model is called, so a double submit drafts once. The second
-  submit gets 409 `regenerating`. A call that fails gives its try back.
+- **Capped at three per draft** (`MAX_SYNOPSIS_REGENERATIONS`). The cap counts
+  calls to the model: a try is taken, with the lease, before the model is
+  called, so a double submit drafts once and the second gets 409
+  `regenerating`. A try is given back only when the model was never asked; a
+  call that fails still spends it, or a steer that always fails could call
+  the model without end.
 - **Refusals come back as 409**, with a `reason`: `not_a_draft`,
   `no_more_drafts`, `paused`, `ceiling_reached`, `no_agent`, `regenerating`
   or `changed_meanwhile`. A failed call
@@ -289,9 +294,13 @@ redrafted.
 
 The keep is one conditional write (`claimSynopsisKeep`, on the row's
 `updatedAt`), made before any note is touched. It takes a lease on the
-synopsis (`workingSince`, three minutes) and records what its notes are owed
+synopsis (`workingSince`, five minutes) and records what its notes are owed
 (`notesPending`: `confirm`, or `reread` when the text changed).
 
+- **What the person saw is what is kept.** The keep carries `seen`, the
+  entry's `updatedAt` on the page, and is conditional on it, so a stale page
+  (one showing a draft since redrafted in another tab) keeps nothing and gets
+  409 `changed_meanwhile`.
 - **A double submit keeps once.** Of two submits, one matches and keeps; the
   other finds the synopsis already kept with that text and answers with it,
   having written nothing.
@@ -302,7 +311,7 @@ synopsis (`workingSince`, three minutes) and records what its notes are owed
   writes of their own. If that fails, the synopsis is kept with its notes still
   owed and the lease given back, and the next keep of it, even one changing
   nothing, finishes the work. So does the next keep after a re-read that could
-  not run. A lease left by a crash is taken over once it is three minutes old.
+  not run. A lease left by a crash is taken over once it is five minutes old.
 - **Regenerating takes the same lease**, so a second redraft, at once or while
   the first is being written, calls nothing and gets 409 `regenerating`.
 
@@ -333,9 +342,9 @@ within the same few milliseconds.
 ### What it costs
 
 - The re-read and each redraft are charged to the person, as a draft is
-  (`lib/app/journey-record/synopsis/seat.ts`). Approving never calls a model.
-- Keeping with an edit and regenerating share a per-person sub-cap of 10 a
-  minute (`lib/app/journey-record/rate-limit.ts`), on top of the
+  (`lib/app/journey-record/synopsis/seat.ts`). Approving calls no model,
+  unless it finishes a re-read an earlier keep could not run.
+- Keeping and regenerating share a per-person sub-cap of 10 a minute (`lib/app/journey-record/rate-limit.ts`), on top of the
   `/api/v1/**` section cap.
 
 ### Asked of Daybreak

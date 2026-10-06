@@ -26,6 +26,9 @@ import {
 const ME = 'cmjbv4i3x00003wsloputgwul';
 const THEM = 'cmu7other0000000000000000';
 const MY_DRAFT = 'cmmine00000000000000000000';
+/** The entry's `updatedAt` as the page showed it. */
+const SEEN = '2026-10-06T12:00:00.000Z';
+const SEEN_AT = new Date(SEEN);
 const THEIR_DRAFT = 'cmtheirs000000000000000000';
 
 const { owners, keep, regenerate, routeLog } = vi.hoisted(() => {
@@ -132,7 +135,10 @@ beforeEach(() => {
 
 describe('POST /api/v1/app/journey-record/:id/keep', () => {
   it('keeps the caller’s own draft as written, and answers what it did to the notes', async () => {
-    const response = await KEEP(request(keepUrl(MY_DRAFT), { confirm: CONFIRM }), params(MY_DRAFT));
+    const response = await KEEP(
+      request(keepUrl(MY_DRAFT), { seen: SEEN, confirm: CONFIRM }),
+      params(MY_DRAFT)
+    );
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -142,17 +148,24 @@ describe('POST /api/v1/app/journey-record/:id/keep', () => {
     expect(body.success).toBe(true);
     expect(body.data.entry).toMatchObject({ id: MY_DRAFT, state: 'kept' });
     expect(body.data.notes).toEqual([{ slotSlug: 'life_work', outcome: 'confirmed' }]);
-    expect(keep.keepSynopsis).toHaveBeenCalledWith(ME, MY_DRAFT, { confirm: CONFIRM });
+    expect(keep.keepSynopsis).toHaveBeenCalledWith(ME, MY_DRAFT, {
+      seen: SEEN_AT,
+      confirm: CONFIRM,
+    });
   });
 
   it('passes an edit on, and never logs its words or a note’s slot', async () => {
     const response = await KEEP(
-      request(keepUrl(MY_DRAFT), { confirm: CONFIRM, edit: EDIT }),
+      request(keepUrl(MY_DRAFT), { seen: SEEN, confirm: CONFIRM, edit: EDIT }),
       params(MY_DRAFT)
     );
 
     expect(response.status).toBe(200);
-    expect(keep.keepSynopsis).toHaveBeenCalledWith(ME, MY_DRAFT, { confirm: CONFIRM, edit: EDIT });
+    expect(keep.keepSynopsis).toHaveBeenCalledWith(ME, MY_DRAFT, {
+      seen: SEEN_AT,
+      confirm: CONFIRM,
+      edit: EDIT,
+    });
     expect(routeLog.info).toHaveBeenCalledWith(
       'Synopsis kept by the person it is about',
       expect.objectContaining({ edited: true, notes: ['confirmed'] })
@@ -163,8 +176,15 @@ describe('POST /api/v1/app/journey-record/:id/keep', () => {
     expect(log).not.toContain('life_work');
   });
 
+  it('refuses a keep that does not say which version it was shown', async () => {
+    const response = await KEEP(request(keepUrl(MY_DRAFT), { confirm: [] }), params(MY_DRAFT));
+
+    expect(response.status).toBe(400);
+    expect(keep.keepSynopsis).not.toHaveBeenCalled();
+  });
+
   it('refuses a body with no confirm list, without reaching the store', async () => {
-    const response = await KEEP(request(keepUrl(MY_DRAFT), {}), params(MY_DRAFT));
+    const response = await KEEP(request(keepUrl(MY_DRAFT), { seen: SEEN }), params(MY_DRAFT));
 
     expect(response.status).toBe(400);
     expect(keep.keepSynopsis).not.toHaveBeenCalled();
@@ -178,7 +198,7 @@ describe('POST /api/v1/app/journey-record/:id/keep', () => {
     ['an outcome of an unknown kind', { ...EDIT, outcomes: [{ kind: 'decision', text: 'x' }] }],
   ])('refuses an edit with %s', async (_label, edit) => {
     const response = await KEEP(
-      request(keepUrl(MY_DRAFT), { confirm: [], edit }),
+      request(keepUrl(MY_DRAFT), { seen: SEEN, confirm: [], edit }),
       params(MY_DRAFT)
     );
 
@@ -188,7 +208,7 @@ describe('POST /api/v1/app/journey-record/:id/keep', () => {
 
   it('refuses a malformed entry id', async () => {
     const response = await KEEP(
-      request(keepUrl('not-an-id'), { confirm: [] }),
+      request(keepUrl('not-an-id'), { seen: SEEN, confirm: [] }),
       params('not-an-id')
     );
 
@@ -199,7 +219,10 @@ describe('POST /api/v1/app/journey-record/:id/keep', () => {
   it('refuses someone who is not signed in', async () => {
     vi.mocked(auth.api.getSession).mockResolvedValue(mockUnauthenticatedUser());
 
-    const response = await KEEP(request(keepUrl(MY_DRAFT), { confirm: [] }), params(MY_DRAFT));
+    const response = await KEEP(
+      request(keepUrl(MY_DRAFT), { seen: SEEN, confirm: [] }),
+      params(MY_DRAFT)
+    );
 
     expect(response.status).toBe(401);
     expect(keep.keepSynopsis).not.toHaveBeenCalled();
@@ -208,49 +231,57 @@ describe('POST /api/v1/app/journey-record/:id/keep', () => {
   it('answers another person’s draft as not found, kept or edited, asked as the caller', async () => {
     // The population is real: the other person's draft keeps for them.
     signInAs(THEM);
-    const theirs = await KEEP(request(keepUrl(THEIR_DRAFT), { confirm: [] }), params(THEIR_DRAFT));
+    const theirs = await KEEP(
+      request(keepUrl(THEIR_DRAFT), { seen: SEEN, confirm: [] }),
+      params(THEIR_DRAFT)
+    );
     expect(theirs.status).toBe(200);
 
     signInAs(ME);
-    const approve = await KEEP(request(keepUrl(THEIR_DRAFT), { confirm: [] }), params(THEIR_DRAFT));
+    const approve = await KEEP(
+      request(keepUrl(THEIR_DRAFT), { seen: SEEN, confirm: [] }),
+      params(THEIR_DRAFT)
+    );
     const edit = await KEEP(
-      request(keepUrl(THEIR_DRAFT), { confirm: [], edit: EDIT }),
+      request(keepUrl(THEIR_DRAFT), { seen: SEEN, confirm: [], edit: EDIT }),
       params(THEIR_DRAFT)
     );
 
     expect(approve.status).toBe(404);
     expect(edit.status).toBe(404);
     expect(keep.keepSynopsis).toHaveBeenLastCalledWith(ME, THEIR_DRAFT, {
+      seen: SEEN_AT,
       confirm: [],
       edit: EDIT,
     });
   });
 
-  it('never spends the sub-cap on an approve, even when it is exhausted', async () => {
-    const check = vi.spyOn(synopsisCallLimiter, 'check');
+  it('holds a plain keep to the sub-cap too: it may finish a re-read', async () => {
     for (let i = 0; i < SYNOPSIS_CALLS_PER_MINUTE; i++) {
       synopsisCallLimiter.check(synopsisCallKey(ME));
     }
-    check.mockClear();
 
-    const response = await KEEP(request(keepUrl(MY_DRAFT), { confirm: [] }), params(MY_DRAFT));
+    const response = await KEEP(
+      request(keepUrl(MY_DRAFT), { seen: SEEN, confirm: [] }),
+      params(MY_DRAFT)
+    );
 
-    expect(response.status).toBe(200);
-    expect(check).not.toHaveBeenCalled();
+    expect(response.status).toBe(429);
+    expect(keep.keepSynopsis).not.toHaveBeenCalled();
   });
 
   it('holds an edit to the person’s sub-cap, and answers 429 once it is spent', async () => {
     const check = vi.spyOn(synopsisCallLimiter, 'check');
     for (let i = 0; i < SYNOPSIS_CALLS_PER_MINUTE; i++) {
       const ok = await KEEP(
-        request(keepUrl(MY_DRAFT), { confirm: [], edit: EDIT }),
+        request(keepUrl(MY_DRAFT), { seen: SEEN, confirm: [], edit: EDIT }),
         params(MY_DRAFT)
       );
       expect(ok.status).toBe(200);
     }
 
     const refused = await KEEP(
-      request(keepUrl(MY_DRAFT), { confirm: [], edit: EDIT }),
+      request(keepUrl(MY_DRAFT), { seen: SEEN, confirm: [], edit: EDIT }),
       params(MY_DRAFT)
     );
 
@@ -338,7 +369,10 @@ describe('POST /api/v1/app/journey-record/:id/regenerate', () => {
   it('shares the person’s sub-cap with an edit, and answers 429 before reaching the store', async () => {
     const check = vi.spyOn(synopsisCallLimiter, 'check');
     for (let i = 0; i < SYNOPSIS_CALLS_PER_MINUTE - 1; i++) {
-      await KEEP(request(keepUrl(MY_DRAFT), { confirm: [], edit: EDIT }), params(MY_DRAFT));
+      await KEEP(
+        request(keepUrl(MY_DRAFT), { seen: SEEN, confirm: [], edit: EDIT }),
+        params(MY_DRAFT)
+      );
     }
     const last = await REGENERATE(request(regenerateUrl(MY_DRAFT), {}), params(MY_DRAFT));
     expect(last.status).toBe(200);

@@ -35,6 +35,7 @@
 import { z } from 'zod';
 
 import { tryParseJson } from '@/lib/orchestration/evaluations/parse-structured';
+import { quoteMaterial } from '@/lib/app/journey-record/synopsis/fence';
 import type { LlmMessage } from '@/lib/orchestration/llm/types';
 import type { JourneyOutcome } from '@/lib/app/journey-record/entry';
 import { MAX_NOTE_LENGTH } from '@/lib/app/slots/validation';
@@ -129,14 +130,9 @@ const NOTES_START = '[The notes begin]';
 const NOTES_END = '[The notes end]';
 const FENCES = [ACCOUNT_START, ACCOUNT_END, NOTES_START, NOTES_END];
 
-/** Fences stripped, every line quoted, so nothing inside can close one or pass for a label. */
+/** Material, fenced against every fence this prompt draws (`fence.ts`). */
 function quoted(text: string): string {
-  let clean = text;
-  for (const fence of FENCES) clean = clean.replaceAll(fence, '');
-  return clean
-    .split(/\r?\n/)
-    .map((line) => `> ${line}`)
-    .join('\n');
+  return quoteMaterial(text, FENCES);
 }
 
 export function rereadMessages(account: RereadAccount, notes: readonly RereadNote[]): LlmMessage[] {

@@ -249,11 +249,12 @@ export async function writeSynopsisDraft(
 }
 
 /**
- * How long a keep or a redraft holds its synopsis. Longer than the model's two
- * attempts (`seat.ts`), so a live one is never taken over; short enough that a
- * crashed one does not hold the person up for long.
+ * How long a keep or a redraft holds its synopsis. Well past the model's two
+ * attempts (`seat.ts`, a minute each) and the notes' writes after them, so a
+ * live one is not taken over; short enough that a crashed one does not hold
+ * the person up for long.
  */
-export const SYNOPSIS_LEASE_MS = 3 * 60_000;
+export const SYNOPSIS_LEASE_MS = 5 * 60_000;
 
 /** What keeping still owes a synopsis's notes. Null once they are settled. */
 export type NotesPending = 'confirm' | 'reread';
@@ -378,11 +379,12 @@ export async function finishSynopsisKeep(
   userId: string,
   id: string,
   finish: { lease: Date; notes: JourneyNoteRef[]; pending: NotesPending | null }
-): Promise<void> {
-  await prisma.appJourneyEntry.updateMany({
+): Promise<boolean> {
+  const { count } = await prisma.appJourneyEntry.updateMany({
     where: { id, userId, kind: 'synopsis', state: 'kept', workingSince: finish.lease },
     data: { notes: finish.notes, notesPending: finish.pending, workingSince: null },
   });
+  return count === 1;
 }
 
 /**
@@ -426,6 +428,14 @@ export async function refundRegeneration(userId: string, id: string, lease: Date
   await prisma.appJourneyEntry.updateMany({
     where: { id, userId, kind: 'synopsis', state: 'draft', workingSince: lease },
     data: { regenerations: { decrement: 1 }, workingSince: null },
+  });
+}
+
+/** Give back a redraft's lease without its try: the model was asked, and the call counts. */
+export async function releaseRegeneration(userId: string, id: string, lease: Date): Promise<void> {
+  await prisma.appJourneyEntry.updateMany({
+    where: { id, userId, kind: 'synopsis', workingSince: lease },
+    data: { workingSince: null },
   });
 }
 

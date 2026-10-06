@@ -61,11 +61,13 @@ const synopsisTextSchema = z.object({
 });
 
 /**
- * Keeping a synopsis (t-147): the listed notes still ticked, and the person's
- * changes, if any. `confirm` is required, so an empty list (nothing ticked)
+ * Keeping a synopsis (t-147): which version of it the person was shown, the
+ * listed notes still ticked, and their changes, if any. `confirm` is required, so an empty list (nothing ticked)
  * is said rather than assumed.
  */
 export const synopsisKeepSchema = z.object({
+  /** The entry's `updatedAt` as the person was shown it: keeping is conditional on it. */
+  seen: z.iso.datetime().transform((seen) => new Date(seen)),
   confirm: z.array(journeyNoteRefSchema).max(200),
   edit: synopsisTextSchema.optional(),
 });

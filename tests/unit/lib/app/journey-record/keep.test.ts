@@ -57,8 +57,22 @@ vi.mock('@/lib/app/slots/notes', async (importOriginal) => {
   };
 });
 
-const { keepSynopsis, KEPT_CONFIRMATION_NOTE, KEPT_CORRECTION_NOTE } =
-  await import('@/lib/app/journey-record/keep');
+const {
+  keepSynopsis: keepWithSeen,
+  KEPT_CONFIRMATION_NOTE,
+  KEPT_CORRECTION_NOTE,
+} = await import('@/lib/app/journey-record/keep');
+
+type KeepInput = Omit<Parameters<typeof keepWithSeen>[2], 'seen'> & { seen?: Date };
+
+/**
+ * Keep as a page showing the entry as it stands would: `seen` is the row's
+ * `updatedAt` at the moment of the call, unless a test says otherwise.
+ */
+function keepSynopsis(userId: string, id: string, input: KeepInput, now: Date) {
+  const seen = input.seen ?? world.entries.find((row) => row.id === id)?.updatedAt ?? new Date(0);
+  return keepWithSeen(userId, id, { ...input, seen }, now);
+}
 const { removeJourneyEntry } = await import('@/lib/app/journey-record/record');
 const { NotFoundError, ConflictError } = await import('@/lib/api/errors');
 const { redactedString } = await import('@/lib/security/redact');
@@ -504,6 +518,65 @@ describe('a keep that fails half way', () => {
       )
     ).rejects.toMatchObject({ details: { reason: 'busy' } });
     expect(entry(draft.id).state).toBe('draft');
+  });
+});
+
+describe('what the person was shown', () => {
+  it('keeps nothing from a page showing an older draft than the one stored', async () => {
+    // Shown the first draft; another tab has since redrafted it.
+    const shown = draft.updatedAt;
+    Object.assign(draft, {
+      body: 'A redraft they never read.',
+      updatedAt: new Date(NOW.getTime() - 1),
+    });
+    const before = world.values.length;
+
+    await expect(
+      keepSynopsis(ME, draft.id, { seen: shown, confirm: [LISTED[0]] }, NOW)
+    ).rejects.toMatchObject({ details: { reason: 'changed_meanwhile' } });
+    expect(entry(draft.id).state).toBe('draft');
+    expect(world.values).toHaveLength(before);
+  });
+});
+
+describe('a note written to while keeping', () => {
+  it('does not bury a reading a turn wrote while the re-read ran', async () => {
+    reread.rereadNotes.mockImplementation(async () => {
+      // A live turn writes a newer reading while the model reads the edit.
+      const head = versions(ME, 'life_work')[0];
+      head.supersededAt = NOW;
+      world.values.push(value(ME, 'life_work', { version: 2, value: 'the newest reading' }));
+      return new Map([['life_work', { verdict: 'differs', value: 'From the edit' }]]);
+    });
+
+    const kept = await keepSynopsis(
+      ME,
+      draft.id,
+      { confirm: [LISTED[0]], edit: { summary: 'S', body: 'B.', outcomes: [] } },
+      NOW
+    );
+
+    expect(kept.notes[0]).toEqual({ slotSlug: 'life_work', outcome: 'moved_on' });
+    expect(versions(ME, 'life_work')).toHaveLength(2);
+    expect(versions(ME, 'life_work')[1].value).toBe('the newest reading');
+  });
+
+  it('fails the keep, owing its notes, when a confirmation fails for a reason that is not a refusal', async () => {
+    const { prismaFake } = await import('@/tests/unit/lib/app/slots/notes-fake');
+    // At the supersede, before anything changed: the fake has no transaction to roll back.
+    vi.mocked(prismaFake.slotValue.update).mockRejectedValueOnce(new Error('connection reset'));
+
+    await expect(keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW)).rejects.toThrow(
+      'connection reset'
+    );
+    expect(entry(draft.id)).toMatchObject({
+      state: 'kept',
+      notesPending: 'confirm',
+      workingSince: null,
+    });
+
+    const retried = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+    expect(retried.notes[0]).toEqual({ slotSlug: 'life_work', outcome: 'confirmed' });
   });
 });
 

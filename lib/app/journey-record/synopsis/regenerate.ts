@@ -16,11 +16,13 @@
  * **Capped**, at {@link MAX_SYNOPSIS_REGENERATIONS} per draft. A try is taken
  * with a lease before the model is called (`claimRegeneration`), so a second
  * submit, at once or while the first is being written, calls nothing and is
- * told one is already being written. A call that fails gives its try back.
+ * told one is already being written. The cap counts calls to the model, so a
+ * try is given back only when the model was never asked; a call that fails
+ * still spends it, or a steer that always fails could call it without end.
  *
- * **What was deleted stays deleted.** An exchange deleted while the model was
- * writing removes the draft it was written from (`lostExchanges`), as deleting
- * one removes a stored draft.
+ * **What was deleted stays deleted.** The draft's row exists throughout, so
+ * deleting an exchange meanwhile removes it in the deletion's own transaction,
+ * and this finds nothing to replace.
  *
  * @see .context/app/journey-record.md — "Keeping a synopsis"
  */
@@ -32,16 +34,15 @@ import {
   claimRegeneration,
   readOwnSynopsis,
   refundRegeneration,
-  removeSynopsisDraft,
+  releaseRegeneration,
   replaceSynopsisDraft,
 } from '@/lib/app/journey-record/record';
 import { askForDraft } from '@/lib/app/journey-record/synopsis/draft';
 import {
-  lostExchanges,
   MIN_SYNOPSIS_EXCHANGES,
   readSessionLines,
   readSessionTurns,
-  type SessionTurn,
+  type SessionLine,
 } from '@/lib/app/journey-record/synopsis/material';
 import type { SynopsisReply } from '@/lib/app/journey-record/synopsis/prompt';
 import { openSeat, type SeatRefusal } from '@/lib/app/journey-record/synopsis/seat';
@@ -93,26 +94,35 @@ export async function regenerateSynopsis(
   // The lease this redraft holds: every later write is conditional on it.
   const lease = now;
 
-  let reply: SynopsisReply;
-  let turns: SessionTurn[];
+  // Read before the model is asked: a failure here gives the try back.
+  let lines: SessionLine[];
   try {
-    turns = await readSessionTurns(userId, stored.sessionId);
-    const { readable, lines } = await readSessionLines(userId, turns);
+    const turns = await readSessionTurns(userId, stored.sessionId);
+    const read = await readSessionLines(userId, turns);
+    lines = read.lines;
     // Deleting an exchange removes a draft (`settleSynopsesOfDeletedExchanges`),
     // so this is a session thinned some other way: nothing to write from.
-    if (readable < MIN_SYNOPSIS_EXCHANGES) {
-      await refundRegeneration(userId, id, lease);
+    if (read.readable < MIN_SYNOPSIS_EXCHANGES) {
       throw new ConflictError('There’s too little of this session left to write it again.', {
         reason: 'not_substantial',
       });
     }
+  } catch (err) {
+    await refundRegeneration(userId, id, lease);
+    throw err;
+  }
+
+  let reply: SynopsisReply;
+  try {
     reply = await askForDraft(userId, seat.agent, lines, {
       previous: { summary: entry.summary ?? '', body: entry.body },
       steer,
     });
   } catch (err) {
-    if (err instanceof APIError) throw err;
-    await refundRegeneration(userId, id, lease);
+    // The model was asked, so the try is spent, as the cap counts calls; only
+    // the lease is given back. A refund here would let a steer that always
+    // fails call the model without end.
+    await releaseRegeneration(userId, id, lease);
     // Never the steer or the reply: they are the person's words, and an account of them.
     logger.warn('Synopsis regeneration failed; the draft is unchanged', {
       userId,
@@ -133,14 +143,7 @@ export async function regenerateSynopsis(
       reason: 'changed_meanwhile',
     });
   }
-  // An exchange deleted while the model was writing: the draft may quote it.
-  if (await lostExchanges(userId, stored.sessionId, turns)) {
-    await removeSynopsisDraft(userId, stored.sessionId);
-    throw new ConflictError(
-      'Part of this session was deleted while the new draft was written, so it was not kept.',
-      { reason: 'changed_meanwhile' }
-    );
-  }
+
   logger.info('Synopsis regenerated', { userId, entryId: id, steered: steer !== null });
   return (await readOwnSynopsis(userId, id)).entry;
 }

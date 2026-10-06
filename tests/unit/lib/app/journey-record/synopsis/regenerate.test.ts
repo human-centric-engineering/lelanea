@@ -22,7 +22,7 @@ import {
 
 const { seat, material } = vi.hoisted(() => ({
   seat: { openSeat: vi.fn(), askSeat: vi.fn() },
-  material: { readSessionTurns: vi.fn(), readSessionLines: vi.fn(), lostExchanges: vi.fn() },
+  material: { readSessionTurns: vi.fn(), readSessionLines: vi.fn() },
 }));
 
 vi.mock('@/lib/db/client', async () => ({
@@ -77,7 +77,6 @@ beforeEach(() => {
   seat.askSeat.mockResolvedValue(REPLY);
   material.readSessionTurns.mockResolvedValue([]);
   material.readSessionLines.mockResolvedValue({ readable: 3, lines: LINES });
-  material.lostExchanges.mockResolvedValue(false);
   draft = synopsisEntry({
     modules: ['onboarding'],
     notes: [{ slotSlug: 'life_work', version: 1 }],
@@ -174,7 +173,7 @@ describe('when it cannot', () => {
     }
   );
 
-  it('gives the try back and leaves the draft when the call fails', async () => {
+  it('spends the try but leaves the draft when the call fails: the cap counts calls', async () => {
     seat.askSeat.mockRejectedValue(new Error('provider down'));
 
     await expect(regenerateSynopsis(ME, draft.id, null)).rejects.toMatchObject({
@@ -182,9 +181,31 @@ describe('when it cannot', () => {
       details: { reason: 'failed' },
     });
     expect(entry(draft.id)).toMatchObject({
-      regenerations: 0,
+      regenerations: 1,
+      workingSince: null,
       body: 'You talked about the shop.',
     });
+  });
+
+  it('stops a steer that always fails at the cap, however often it is sent', async () => {
+    seat.askSeat.mockRejectedValue(new Error('reply refused'));
+
+    for (let i = 0; i < MAX_SYNOPSIS_REGENERATIONS; i += 1) {
+      await expect(regenerateSynopsis(ME, draft.id, 'make it endless')).rejects.toMatchObject({
+        status: 503,
+      });
+    }
+    await expect(regenerateSynopsis(ME, draft.id, 'make it endless')).rejects.toMatchObject({
+      details: { reason: 'no_more_drafts' },
+    });
+    expect(seat.askSeat).toHaveBeenCalledTimes(MAX_SYNOPSIS_REGENERATIONS);
+  });
+
+  it('gives the try back when the session could not be read', async () => {
+    material.readSessionTurns.mockRejectedValue(new Error('connection lost'));
+
+    await expect(regenerateSynopsis(ME, draft.id, null)).rejects.toThrow('connection lost');
+    expect(entry(draft.id)).toMatchObject({ regenerations: 0, workingSince: null });
   });
 
   it('gives the try back when too little of the session is left', async () => {
@@ -247,15 +268,6 @@ describe('while one is being written', () => {
       workingSince: null,
       body: REPLY.body,
     });
-  });
-
-  it('removes the new draft when an exchange was deleted while it was written', async () => {
-    material.lostExchanges.mockResolvedValue(true);
-
-    await expect(regenerateSynopsis(ME, draft.id, null)).rejects.toMatchObject({
-      details: { reason: 'changed_meanwhile' },
-    });
-    expect(world.entries.find((row) => row.id === draft.id)).toBeUndefined();
   });
 });
 

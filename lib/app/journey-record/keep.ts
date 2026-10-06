@@ -65,9 +65,9 @@
  * @see .context/app/journey-record.md — "Keeping a synopsis"
  */
 
-import { ConflictError } from '@/lib/api/errors';
+import { APIError, ConflictError } from '@/lib/api/errors';
 import { logger } from '@/lib/logging';
-import { SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots';
+import { getSlotHeads, SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots';
 import type { Note } from '@/lib/app/slots/notes-view';
 import { CORRECTION_CONFIDENCE, correctNote, getNotes } from '@/lib/app/slots/notes';
 import type { JourneyEntry, JourneyNoteRef } from '@/lib/app/journey-record/entry';
@@ -91,6 +91,12 @@ export const KEPT_CORRECTION_NOTE =
 
 /** What the person sends to keep a synopsis. */
 export interface SynopsisKeep {
+  /**
+   * The entry's `updatedAt` as the person was shown it. Keeping is
+   * conditional on it, so a stale page can never keep a draft the person did
+   * not read (one redrafted since in another tab, say).
+   */
+  seen: Date;
   /** The listed notes still ticked. Anything here the synopsis does not list is ignored. */
   confirm: JourneyNoteRef[];
   /** Their changes to the account. Absent: kept as written. */
@@ -246,6 +252,10 @@ async function settleNote(
 
   const differs = at.reading?.verdict === 'differs' ? at.reading.value : null;
   if (differs === null && alreadyConfirmed(note)) return { outcome: 'already_confirmed', ref };
+  // Read again just before writing: a re-read can take minutes, and a turn
+  // may have written a newer reading meanwhile, which this must not bury.
+  const [head] = await getSlotHeads(userId, { slotSlugs: [note.slotSlug] });
+  if (head?.version !== ref.version) return { outcome: 'moved_on', ref: null };
   try {
     const written = await correctNote({
       userId,
@@ -258,8 +268,10 @@ async function settleNote(
       ref: { slotSlug: written.slotSlug, version: written.version },
     };
   } catch (err) {
-    // `correctNote` refuses on its own terms (gone, retired, special category)
-    // between our read and its write. The keep stands; this note is untouched.
+    // Anything but `correctNote`'s own refusals (gone, retired, special
+    // category) is a failure, not a verdict: it fails the keep, which leaves
+    // the notes owed for the next one rather than dropping this one's tick.
+    if (!(err instanceof APIError)) throw err;
     logger.warn('A note could not be confirmed on keeping', {
       userId,
       slotSlug: note.slotSlug,
@@ -297,7 +309,9 @@ export async function keepSynopsis(
 
   const claimed = await claimSynopsisKeep(userId, id, {
     from: entry.state,
-    updatedAt: stored.updatedAt,
+    // What the person was shown, not what this request read: a page that is
+    // out of date matches nothing.
+    updatedAt: input.seen,
     now,
     text: edit,
     // What it lists until its notes are settled: what was ticked, as listed.
@@ -335,12 +349,24 @@ export async function keepSynopsis(
     await releaseSynopsisKeep(userId, id, now).catch(() => undefined);
     throw err;
   }
-  await finishSynopsisKeep(userId, id, {
-    lease: now,
-    notes: settled.kept,
-    // An edit that could not be read is still owed its re-read.
-    pending: settled.notesUnread ? 'reread' : null,
-  });
+  let finished: boolean;
+  try {
+    finished = await finishSynopsisKeep(userId, id, {
+      lease: now,
+      notes: settled.kept,
+      // An edit that could not be read is still owed its re-read.
+      pending: settled.notesUnread ? 'reread' : null,
+    });
+  } catch (err) {
+    await releaseSynopsisKeep(userId, id, now).catch(() => undefined);
+    throw err;
+  }
+  if (!finished) {
+    // Outlived its lease and was taken over: the keep that took it settles the
+    // notes from what this one left them, so nothing is lost, but it is worth
+    // knowing a keep ran that long.
+    logger.warn('A synopsis keep outlived its lease', { userId, entryId: id });
+  }
   const { entry: after } = await readOwnSynopsis(userId, id);
   return { entry: after, notes: settled.outcomes, notesUnread: settled.notesUnread };
 }

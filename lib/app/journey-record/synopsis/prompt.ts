@@ -15,6 +15,7 @@
 import { z } from 'zod';
 
 import { tryParseJson } from '@/lib/orchestration/evaluations/parse-structured';
+import { quoteMaterial } from '@/lib/app/journey-record/synopsis/fence';
 import type { LlmMessage } from '@/lib/orchestration/llm/types';
 import {
   JOURNEY_BODY_MAX,
@@ -87,18 +88,9 @@ const FENCES = [
   STEER_END,
 ];
 
-/**
- * One piece of material, every fence stripped from it and every line of it
- * quoted with "> ", so nothing inside it can close a fence or pass for a
- * speaker's label: those are the only unquoted lines.
- */
+/** Material, fenced against every fence this prompt draws (`fence.ts`). */
 function quoted(text: string): string {
-  let clean = text;
-  for (const fence of FENCES) clean = clean.replaceAll(fence, '');
-  return clean
-    .split(/\r?\n/)
-    .map((line) => `> ${line}`)
-    .join('\n');
+  return quoteMaterial(text, FENCES);
 }
 
 /** The conversation as one fenced block: who spoke, then what they said, quoted. */

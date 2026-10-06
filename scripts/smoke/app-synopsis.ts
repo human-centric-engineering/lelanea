@@ -268,7 +268,9 @@ async function main(): Promise<void> {
       prisma.appTurnSlotWrite.upsert({
         where: { turnId_slotSlug: { turnId: firstTurn.id, slotSlug: NOTE_SLUG } },
         create: { turnId: firstTurn.id, slotSlug: NOTE_SLUG, version: note.version, minted: false },
-        update: {},
+        // Her turn may have written the slot itself; the ledger then points at
+        // the version written here, the head the draft must list.
+        update: { version: note.version },
       })
     );
 
@@ -352,6 +354,7 @@ async function main(): Promise<void> {
     const ticked = redraft.notes.filter((ref) => ref.slotSlug === NOTE_SLUG);
     const kept = await runAsOrg(INSTALL_ORG_ID, () =>
       keepSynopsis(user.id, row.id, {
+        seen: new Date(redraft.updatedAt),
         confirm: ticked,
         edit: { summary: 'Staying in nursing', body: EDITED_BODY, outcomes: [] },
       })
