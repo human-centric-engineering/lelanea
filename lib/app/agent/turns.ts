@@ -547,7 +547,9 @@ async function runGeneratedTurn(
           recorded(
             claim.turn,
             run({
-              costLogMetadata: { turnId, seat: turn.role },
+              // `attempt` lets the meter tell this attempt's reply from a
+              // retried one's, however late either's cost row lands (t-139).
+              costLogMetadata: { turnId, seat: turn.role, attempt: claim.turn.attempts },
               messageMetadata: { turnId, seat: turn.role, fingerprintVersion },
               signal,
             }),

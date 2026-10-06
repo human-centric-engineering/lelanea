@@ -624,6 +624,9 @@ describe('a turn id', () => {
     expect(retry.at(-1)?.type).toBe('done');
     expect(db.turns).toHaveLength(1);
     expect(db.turns[0]).toMatchObject({ status: 'completed', attempts: 2, errorCode: null });
+    // The retry's cost row says which attempt wrote it, so the meter can tell
+    // its reply from the failed attempt's however late either lands (t-139).
+    expect(db.costs.at(-1)?.metadata).toMatchObject({ attempt: 2 });
     // Hypothesis (c), confirmed: the platform wrote the person's message on BOTH
     // attempts. There is no way to avoid it from here — recorded for f-conversation.
     expect(db.messages.filter((m) => m.role === 'user')).toHaveLength(2);
@@ -731,10 +734,10 @@ describe('a turn id', () => {
 });
 
 describe('what a turn records', () => {
-  it('tags the cost row with turn id and seat, and the message with the fingerprint version', async () => {
+  it('tags the cost row with turn id, seat and attempt, and the message with the fingerprint version', async () => {
     await take(turnFor({ role: 'facilitator' }));
 
-    expect(db.costs[0].metadata).toEqual({ turnId: 'turn-1', seat: 'facilitator' });
+    expect(db.costs[0].metadata).toEqual({ turnId: 'turn-1', seat: 'facilitator', attempt: 1 });
     const userMessage = db.messages.find((m) => m.role === 'user');
     expect(userMessage?.metadata).toEqual({
       app: { turnId: 'turn-1', seat: 'facilitator', fingerprintVersion: '1.0' },

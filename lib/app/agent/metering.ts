@@ -423,10 +423,11 @@ export async function getMonthToDate(userId: string, now: Date = new Date()): Pr
  * What a cost row was for, within a turn.
  *
  * `reply` is the agent's answer (every tool-loop pass) on the turn's current
- * attempt; the rest are side costs the turn caused, including
- * `earlier_attempt` — a model call from an attempt that was retried, which
- * {@link classifyCostRow} cannot see and `turnCostRows` decides by time. Read from the row's own `operation` and the `kind` / `slug`
- * the platform stamps last, which a caller cannot overwrite.
+ * attempt; the rest are side costs the turn caused. {@link classifyCostRow}
+ * reads them from the row's own `operation` and the `kind` / `slug` the
+ * platform stamps last, which a caller cannot overwrite. `earlier_attempt` is
+ * the one it cannot see: a reply pass from an attempt that was retried, which
+ * `turnCostRows` decides from the row's `attempt` tag (t-139).
  */
 export type TurnCostPart =
   | 'reply'
@@ -480,7 +481,11 @@ export interface TurnMeter extends MeterTotals {
   completedAt: Date | null;
   /** The agent's answer's own cost — the `reply` rows. */
   replyCostUsd: number;
-  /** Everything else the turn caused: summary, tools, searches, embedding. */
+  /**
+   * Everything else the turn caused: summary, tools, searches, memory, the
+   * reply's embedding — and an earlier attempt's reply passes, so on a retried
+   * turn this can hold a whole model reply that did not reach the person.
+   */
   sideCostUsd: number;
   /** Every cost row, oldest first. `costRows` (inherited) is how many. */
   rows: TurnCostRow[];
@@ -490,6 +495,12 @@ function metadataString(metadata: unknown, key: string): string | null {
   if (!isRecord(metadata)) return null;
   const value = metadata[key];
   return typeof value === 'string' ? value : null;
+}
+
+function metadataInteger(metadata: unknown, key: string): number | null {
+  if (!isRecord(metadata)) return null;
+  const value = metadata[key];
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
 }
 
 /**
@@ -508,9 +519,23 @@ export function isUnpricedRow(row: {
   return row.totalCostUsd === 0 && !row.isLocal && row.inputTokens + row.outputTokens > 0;
 }
 
-/** A reply from before the current attempt started was an earlier attempt's. */
-function attemptOf(part: TurnCostPart, createdAt: Date, startedAt: Date): TurnCostPart {
-  return part === 'reply' && createdAt < startedAt ? 'earlier_attempt' : part;
+/**
+ * A reply pass from an attempt other than the turn's current one is
+ * `earlier_attempt`. Only `reply` moves: a failed attempt's search or summary
+ * is already a side cost, and keeps the name that says what it was.
+ */
+function attemptOf(
+  part: TurnCostPart,
+  row: { metadata: unknown; createdAt: Date },
+  turn: Pick<AppTurn, 'attempts' | 'startedAt'>
+): TurnCostPart {
+  if (part !== 'reply') return part;
+  const attempt = metadataInteger(row.metadata, 'attempt');
+  if (attempt !== null) return attempt === turn.attempts ? 'reply' : 'earlier_attempt';
+  // Written before rows carried the tag: the retry reset `startedAt`, so a
+  // reply paid for before it was an earlier attempt's. Only on a turn that
+  // was retried, so clock skew can never move a first attempt's reply.
+  return turn.attempts > 1 && row.createdAt < turn.startedAt ? 'earlier_attempt' : 'reply';
 }
 
 /**
@@ -520,16 +545,16 @@ function attemptOf(part: TurnCostPart, createdAt: Date, startedAt: Date): TurnCo
  * Every attempt's rows are included — a failed first attempt was spent too.
  * Scoped to the turn's person: turn ids are unique per person, not globally.
  *
- * **A reply row written before the turn's `startedAt` is `earlier_attempt`**
- * (owner ruling, 6 Oct 2026, t-139). A retry resets `startedAt` to the instant
- * it claims (`claimTurn`), so anything the model was paid for before then
- * belongs to an attempt that did not produce this reply: a side cost, so an
- * admin can see what the failed attempt cost. The gap between a claim and its
- * first cost row is a model call, seconds, against clock skew of milliseconds
- * between this server and the one that wrote the row.
+ * **An earlier attempt's reply passes are `earlier_attempt`** (owner ruling,
+ * 6 Oct 2026, t-139): a side cost, so an admin can see what the failed
+ * attempt's model calls cost. The turn seam stamps each row with the attempt
+ * that wrote it (`attempt` in `costLogMetadata`), so a failed attempt's row
+ * that lands after the retry has claimed — the platform logs cost without
+ * waiting — is still its own. See {@link attemptOf} for rows from before the
+ * stamp.
  */
 async function turnCostRows(
-  turn: Pick<AppTurn, 'userId' | 'turnId' | 'assistantMessageId' | 'startedAt'>
+  turn: Pick<AppTurn, 'userId' | 'turnId' | 'assistantMessageId' | 'startedAt' | 'attempts'>
 ): Promise<TurnCostRow[]> {
   const rows = await prisma.aiCostLog.findMany({
     where: {
@@ -567,8 +592,8 @@ async function turnCostRows(
     id: row.id,
     part: attemptOf(
       classifyCostRow({ operation: row.operation, kind: metadataString(row.metadata, 'kind') }),
-      row.createdAt,
-      turn.startedAt
+      row,
+      turn
     ),
     operation: row.operation,
     model: row.model,

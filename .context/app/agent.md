@@ -543,10 +543,11 @@ turn](#which-cost-rows-carry-the-turn-hypothesis-b-checked-at-the-call-sites)).
 Each row says its `part`: `reply` · `earlier_attempt` · `summary` · `tool` ·
 `knowledge_search` · `reply_embedding` · `memory` · `attachment` · `other`.
 `replyCostUsd` is the `reply` rows, `sideCostUsd` the rest. **A re-run's rows are
-included** — a failed first attempt was spent too — **and its reply rows are
-`earlier_attempt`, a side cost** (owner ruling, 6 Oct 2026, t-139): a reply row
-written before the turn's current `startedAt`, which a retry resets, belongs to
-an attempt that did not produce this reply. Rows are scoped to the person: turn ids are unique per person, not
+included** — a failed first attempt was spent too — **and its reply rows are `earlier_attempt`, a side cost** (owner ruling, 6 Oct 2026,
+t-139). The turn seam stamps each cost row with the attempt that wrote it
+(`attempt` in `costLogMetadata`), so a failed attempt's row that lands after the
+retry claimed is still placed right; a row from before the stamp falls back to
+time — written before the `startedAt` a retry resets — on a retried turn only. Rows are scoped to the person: turn ids are unique per person, not
 globally.
 
 ### API — what f-budget and f-conversation build on

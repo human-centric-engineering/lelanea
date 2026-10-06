@@ -334,8 +334,8 @@ async function main(): Promise<void> {
     // | BIG   | ours  | turn table                                 | reply 0.05 + tool 0.002              | 0.052 |
     // | RETRY | ours  | only its tagged rows in D — the retry      | 27 Feb attempt 0.02 + 1 Mar attempt  | 0.05  |
     // |       |       | reset `conversationId` to null on 5 Mar    | 0.03                                 |       |
-    // | SMALL | ours  | turn table — retried once on 4 Mar, then   | 11:00 attempt 0.004 + reply 0.01     | 0.014 |
-    // |       |       | answered                                   |                                      |       |
+    // | SMALL | ours  | turn table — retried at noon on 4 Mar,     | attempt 1's 0.004, landing 12:00:30, | 0.014 |
+    // |       |       | then answered                              | + attempt 2's reply 0.01             |       |
     // | GUEST | other | only its tagged row in D                   | reply 0.005                          | 0.005 |
     // | RETRY | other | none — the same id as ours, outside D      | 0.07, no conversation                | 0.07  |
     //
@@ -344,9 +344,11 @@ async function main(): Promise<void> {
     // would also find the other person's RETRY, and rows grouped by id alone
     // would add its 0.07 to ours.
     //
-    // A row a turn's model was paid for before its current `startedAt` is an
-    // earlier attempt's, and a side cost (owner ruling, t-139): SMALL's 11:00
-    // row and both of RETRY's.
+    // An earlier attempt's reply pass is a side cost (owner ruling, t-139).
+    // SMALL's rows carry the attempt that wrote them, and its failed attempt's
+    // row lands after the retry claimed, as a cost logged without waiting can:
+    // only the stamp places it. RETRY's rows predate the stamp, so they are
+    // placed by time — written before the retry reset `startedAt`.
     //
     // Costliest first is BIG, RETRY, SMALL, GUEST. The turn rows are created
     // RETRY, SMALL, BIG, then the other person's, which is neither that order
@@ -421,14 +423,20 @@ async function main(): Promise<void> {
         }),
       ],
     });
-    const tag = (turnId: string) => ({ ...MARK, turnId, seat: 'facilitator' });
+    const tag = (turnId: string, attempt?: number) => ({
+      ...MARK,
+      turnId,
+      seat: 'facilitator',
+      ...(attempt === undefined ? {} : { attempt }),
+    });
     const row = (
       userId: string,
       conversationId: string | null,
       turnId: string,
       operation: string,
       costUsd: number,
-      createdAt: Date
+      createdAt: Date,
+      attempt?: number
     ) => ({
       ...base,
       userId,
@@ -437,7 +445,7 @@ async function main(): Promise<void> {
       inputTokens: 10,
       outputTokens: 1,
       totalCostUsd: costUsd,
-      metadata: tag(turnId),
+      metadata: tag(turnId, attempt),
       createdAt,
     });
     await prisma.aiCostLog.createMany({
@@ -446,8 +454,8 @@ async function main(): Promise<void> {
         row(ours.id, d.id, turnIds.big, 'chat', 0.05, new Date('2001-03-03T11:59:00Z')),
         row(ours.id, d.id, turnIds.retry, 'chat', 0.02, noon('2001-02-27')),
         row(ours.id, d.id, turnIds.retry, 'chat', 0.03, noon('2001-03-01')),
-        row(ours.id, d.id, turnIds.small, 'chat', 0.004, new Date('2001-03-04T11:00:00Z')),
-        row(ours.id, d.id, turnIds.small, 'chat', 0.01, noon('2001-03-04')),
+        row(ours.id, d.id, turnIds.small, 'chat', 0.01, new Date('2001-03-04T12:00:20Z'), 2),
+        row(ours.id, d.id, turnIds.small, 'chat', 0.004, new Date('2001-03-04T12:00:30Z'), 1),
         row(other.id, d.id, turnIds.guest, 'chat', 0.005, noon('2001-03-02')),
         row(other.id, null, turnIds.retry, 'chat', 0.07, noon('2001-03-02')),
       ],
@@ -505,8 +513,8 @@ async function main(): Promise<void> {
       small !== null &&
         near(small.replyCostUsd, 0.01) &&
         near(small.sideCostUsd, 0.004) &&
-        small.rows.map((entry) => entry.part).join(',') === 'earlier_attempt,reply',
-      `a retried turn's earlier attempt is on the side, not in the reply — reply $${small?.replyCostUsd.toFixed(3)}, on the side $${small?.sideCostUsd.toFixed(3)}`
+        small.rows.map((entry) => entry.part).join(',') === 'reply,earlier_attempt',
+      `a retried turn's earlier attempt is on the side by its stamp, though it landed last — reply $${small?.replyCostUsd.toFixed(3)}, on the side $${small?.sideCostUsd.toFixed(3)}`
     );
     const pending = await getTurnMeter(ours.id, turnIds.retry);
     check(
