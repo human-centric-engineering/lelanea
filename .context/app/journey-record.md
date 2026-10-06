@@ -210,7 +210,7 @@ model: a session of three real turns closes, and its stored draft is printed.
 
 A draft is only the app's account of what happened. The person keeps it as
 written, changes it first, asks for another, or discards it
-(`lib/app/journey-record/keep.ts`, `synopsis/regenerate.ts`). Keeping is also
+(`lib/app/journey-record/keep.ts`, `lib/app/journey-record/synopsis/regenerate.ts`). Keeping is also
 their strongest lever over what the app believes about them. The draft lists
 the visible notes its session wrote, and keeping says which of those are right
 (owner rulings 2 and 3 at planning; the t-147 rulings on how).
@@ -248,10 +248,10 @@ Owner ruling 3 assumed Daybreak's slot extraction could run over a passage of
 text. It cannot. Daybreak's notes are written only by the AI calling
 `fill_slot` inside a turn, and its `extract.ts` only turns prose into a typed
 value for a slot already chosen. So the re-read is our own call, in that
-file's shape (`synopsis/reread.ts`), and Daybreak has been asked for the
+file's shape (`lib/app/journey-record/synopsis/reread.ts`), and Daybreak has been asked for the
 element (see below).
 
-- It goes through the synopsis seat (`synopsis/seat.ts`). It is gated and
+- It goes through the synopsis seat (`lib/app/journey-record/synopsis/seat.ts`). It is gated and
   charged exactly as a draft is, tagged `kind: 'journey_synopsis_reread'`.
 - It has instructions of its own rather than her voice, and runs at
   temperature 0. It reads; it doesn't write.
@@ -316,7 +316,7 @@ report of a draft quoting something deleted.
 ### What it costs
 
 - The re-read and each redraft are charged to the person, as a draft is
-  (`synopsis/seat.ts`). Approving never calls a model.
+  (`lib/app/journey-record/synopsis/seat.ts`). Approving never calls a model.
 - Keeping with an edit and regenerating share a per-person sub-cap of 10 a
   minute (`lib/app/journey-record/rate-limit.ts`), on top of the
   `/api/v1/**` section cap.

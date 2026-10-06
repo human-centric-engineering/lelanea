@@ -1183,6 +1183,10 @@ included. The latest turn's window runs to the end of the conversation.
   one from what is left. The cost is that a summary of messages older than the
   200 the platform loads goes with it. The `title` is the first message's
   opening 80 characters, so it is cleared when that message goes.
+- its session's synopsis, if it is still a draft. A kept one is flagged as
+  written from something since deleted, never taken (t-147;
+  [`journey-record.md`](./journey-record.md), "When the person deletes what a
+  synopsis was written from").
 - the person's cached context blocks.
 
 **The response counts exchanges and messages, never note versions.** A turn
@@ -1203,7 +1207,9 @@ messages, Sunrise's reply embeddings and the memory index's vectors cascade.
 None tells the app. `lib/app/memory/delete-conversation.ts` takes, per turn,
 what an exchange deletion takes once its messages are already gone: **the turn
 record and its ledger rows, and only the note versions it wrote**, as
-placeholders, a coined heading moving off once nothing under it is left.
+placeholders, a coined heading moving off once nothing under it is left. Its
+sessions' synopses are settled as an exchange deletion settles them: a draft
+removed, a kept one flagged (t-147).
 
 **Two callers.** The person's own route calls `onConversationsDeleted` once the
 row is gone, so it is immediate (`divergences.md` Row 27,
