@@ -158,6 +158,7 @@ const OVER_CEILING = {
   allowed: false,
   reason: 'ceiling_reached',
   spentUsd: 5.2,
+  unpricedRows: 0,
   ceilingUsd: 5,
   resetsAt: new Date('2026-10-01T00:00:00Z'),
 } as const;

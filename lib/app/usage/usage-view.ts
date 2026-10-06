@@ -99,6 +99,17 @@ export function money(amount: number): string {
 }
 
 /**
+ * True for an amount that exists but `money()` would print as `$0.00`.
+ *
+ * The one place the cut-off lives: every figure that refuses to round a real
+ * amount to nothing asks this, so the rule cannot drift from the formatter's
+ * rounding in one copy and not another.
+ */
+export function roundsToNoCents(amount: number): boolean {
+  return amount > 0 && amount < 0.005;
+}
+
+/**
  * A figure as a person would say it, refusing to round a real cost to nothing.
  *
  * `$0.00` for spend that exists is the lie the account row already refuses
@@ -106,7 +117,7 @@ export function money(amount: number): string {
  * larger and the reader is looking for it.
  */
 export function moneyWords(amount: number): string {
-  if (amount > 0 && amount < 0.005) return 'less than a cent';
+  if (roundsToNoCents(amount)) return 'less than a cent';
   return money(amount);
 }
 
@@ -121,7 +132,7 @@ export function moneyWords(amount: number): string {
  * spent less, which is the defect the track fixed once already (/code-review).
  */
 export function moneyTight(amount: number): string {
-  if (amount > 0 && amount < 0.005) return '<$0.01';
+  if (roundsToNoCents(amount)) return '<$0.01';
   return money(amount);
 }
 

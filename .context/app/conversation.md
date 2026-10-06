@@ -238,14 +238,18 @@ there is no "ask for more" behind either (owner, 22 Sept 2026; `B31`).
   limit is set to nothing. **Not** "prints as `$0.00`": the gate lets a turn
   start under any positive limit, so a $0.004 limit does bring a reply back
   after the reset.
-- **Spend with no price on file reads "at least"** (t-140). The gate carries the
-  month's `unpricedRows` onto the frame, and both the neutral words and
-  `ceilingEnding` say "at least $4.07 of your $4.00 limit" when it is above
-  zero — the same floor rule as every other figure of spend (`budget.md`,
-  ruling 4). An absent or unusable count reads as none.
-- **A limit under half a cent states no amounts** (`isSubCentLimit`, t-140):
-  it and the spend that reached it would both print as `$0.00`. The date stays,
-  for the reason above.
+- **What the amounts say is one function, `ceilingAmounts`** (`endings.ts`,
+  t-140), asked by the neutral words and `ceilingEnding` alike, so the two
+  cannot disagree:
+  - **Spend with no price on file reads "at least".** The gate carries the
+    month's `unpricedRows` onto the frame; above zero, `ceilingEnding` says "at
+    least $4.07 of your $4.00 limit" and the frame "(at least $4.07 of
+    $4.00)" — the same floor rule as every other figure of spend (`budget.md`,
+    ruling 4). An absent or unusable count reads as none.
+  - **A limit under half a cent is not stated**, because it prints as `$0.00`:
+    the spend is, "against a limit of less than a cent". The crossing turn
+    completes, so that spend can be a real $0.12. A spend under half a cent
+    states no amounts at all. The date stays either way, for the reason above.
 - **Without the limit, the frame's own words.** `ceilingEnding` returns `null`
   when the limit did not parse, and the row shows the frame's `message` — built
   by the server from figures it knew, true, and naming them and the date. The
@@ -553,7 +557,7 @@ the chrome's words.
 | `tests/unit/app/api/v1/app/conversation/opening/route.test.ts`     | No body read; `opening_not_due` and no surface; no chat sub-cap charged; API keys and signed-out callers refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `tests/unit/components/app/conversation/transcript.test.tsx`       | A live opening shows the thinking row and no bubble of the person's                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `tests/unit/lib/app/conversation/copy.test.ts`                     | `ceilingEnding`: the three beats; spend past the limit stated as it is; "at least" when some replies had no price; no amounts under half a cent; the reset read in UTC; a $0 limit with no date; no figures at all; each unusable figure dropping only its own clause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `tests/unit/lib/app/agent/endings.test.ts`                         | Each named refusal code maps to `not_sent`; every other platform code does not; no platform text in any frame                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `tests/unit/lib/app/agent/endings.test.ts`                         | Each named refusal code maps to `not_sent`; every other platform code does not; no platform text in any frame; the limit frame's "at least", its amounts under half a cent, and the reset day named in UTC on a machine that is not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `scripts/app/smoke-turn.ts` (steps 3c, 4, 6)                       | After a real turn, `/api/v1/app/conversation` returns that turn joined to its row; the down-and-back turn through the pane's own client — the plain ending as it parses it, then the same id running                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ## See also

@@ -251,6 +251,19 @@ describe('the ceiling frame on a limit of nothing (t-96)', () => {
         'resets on 1 October. Everything you can read and write in the app still works.'
     );
   });
+
+  it('still states a spend it can say in cents when only the limit is under half a cent', () => {
+    // The crossing turn completes, so spend can sit well past a tiny limit;
+    // that figure is true and is not dropped with the limit's.
+    const frame = ceilingReachedFrame({
+      spentUsd: 0.124,
+      unpricedRows: 0,
+      ceilingUsd: 0.004,
+      resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+    });
+    expect(frame.message).toContain('($0.12, against a limit of less than a cent)');
+    expect(frame.message).not.toContain('$0.00');
+  });
 });
 
 describe('the ceiling ending (f-safety t-59)', () => {

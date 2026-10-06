@@ -50,7 +50,7 @@
  * @see .context/app/agent.md — "When the agent can't answer"
  */
 
-import { floorLabel, money, spendFloor } from '@/lib/app/usage/usage-view';
+import { floorLabel, money, roundsToNoCents, spendFloor } from '@/lib/app/usage/usage-view';
 import type { ChatEvent } from '@/types/orchestration';
 
 /** The four ways a turn ends without the agent's answer. */
@@ -178,16 +178,32 @@ export function isNothingLimit(ceilingUsd: number): boolean {
 }
 
 /**
- * A limit too small to state in cents: above nothing, below half a cent.
+ * The amounts a limit ending can state truthfully, as words — or `null` when
+ * the spend is unknown or cannot be stated in cents.
  *
- * The gate lets a turn through under one, so it is not {@link isNothingLimit},
- * and the reset date stands. But both it and the spend that reached it print
- * as `$0.00`, and "$0.00 of $0.00" says something false twice. The words leave
- * the amounts out instead (t-140). Asked by the frame's neutral words and the
- * copy in Lelañea Fulton's register alike.
+ * **One answer for both sets of words**, as {@link formatResetDay} is, so the
+ * neutral frame and the copy in Lelañea Fulton's register cannot disagree about
+ * what a figure says (t-140):
+ *
+ * - **The spend says "at least"** when some of it had no price on file, as
+ *   every other figure of spend does (budget.md, ruling 4).
+ * - **A limit under half a cent is `limit: null`**: it prints as `$0.00`, and
+ *   "$0.12 of $0.00" is false. The gate still lets a reply through under it,
+ *   so it is not {@link isNothingLimit} and the reset date stands.
+ * - **A spend under half a cent is no amounts at all.** The gate refused, so
+ *   the limit is under it and under half a cent too: neither can be said.
  */
-export function isSubCentLimit(ceilingUsd: number): boolean {
-  return ceilingUsd > 0 && ceilingUsd < 0.005;
+export function ceilingAmounts(figures: {
+  spentUsd?: number;
+  unpricedRows?: number;
+  ceilingUsd: number;
+}): { spent: string; limit: string | null } | null {
+  const { spentUsd, ceilingUsd } = figures;
+  if (spentUsd === undefined || roundsToNoCents(spentUsd)) return null;
+  return {
+    spent: floorLabel(money(spentUsd), spendFloor({ unpricedRows: figures.unpricedRows ?? 0 })),
+    limit: roundsToNoCents(ceilingUsd) ? null : money(ceilingUsd),
+  };
 }
 
 /**
@@ -198,10 +214,8 @@ export function isSubCentLimit(ceilingUsd: number): boolean {
  * there is no mechanism behind one (`B31`). On a limit of nothing it names no
  * reset: waiting for one would not bring replies back ({@link isNothingLimit}).
  *
- * The spend says "at least" when some of it had no price on file, as every
- * other figure of spend does (budget.md, ruling 4): the real figure is higher,
- * and the limit was reached all the same. On a limit too small to state in
- * cents the amounts are left out ({@link isSubCentLimit}).
+ * What the amounts say — "at least", a limit under a cent — is
+ * {@link ceilingAmounts}, shared with the copy in her register.
  */
 export function ceilingReachedFrame(figures: {
   spentUsd: number;
@@ -209,10 +223,13 @@ export function ceilingReachedFrame(figures: {
   ceilingUsd: number;
   resetsAt: Date;
 }): CeilingReachedFrame {
-  const spent = floorLabel(money(figures.spentUsd), spendFloor(figures));
-  const amounts = isSubCentLimit(figures.ceilingUsd)
-    ? ''
-    : ` (${spent} of ${money(figures.ceilingUsd)})`;
+  const said = ceilingAmounts(figures);
+  const amounts =
+    said === null
+      ? ''
+      : said.limit === null
+        ? ` (${said.spent}, against a limit of less than a cent)`
+        : ` (${said.spent} of ${said.limit})`;
   const message = isNothingLimit(figures.ceilingUsd)
     ? 'Your conversation budget is set to nothing, so there are no replies for now. ' +
       'Everything you can read and write in the app still works.'

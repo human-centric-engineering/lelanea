@@ -67,6 +67,10 @@ describe('ceilingEnding', () => {
         'I can reply again from 1 October.\n' +
         STILL_WORKS
     );
+    // A spend that can be said in cents is said, though the limit cannot be.
+    expect(ceilingEnding({ spentUsd: 0.124, ceilingUsd: 0.004, resetsAt: RESET })).toContain(
+      '— $0.12, against a limit of less than a cent.'
+    );
     // Half a cent prints as a cent, so from there the amounts say something true.
     expect(ceilingEnding({ spentUsd: 0.005, ceilingUsd: 0.005, resetsAt: RESET })).toContain(
       '$0.01 of your $0.01 limit'

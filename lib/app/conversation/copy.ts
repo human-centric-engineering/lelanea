@@ -1,11 +1,10 @@
 import {
+  ceilingAmounts,
   formatResetDay,
   isNothingLimit,
-  isSubCentLimit,
   type TurnEnding,
 } from '@/lib/app/agent/endings';
 import type { CeilingFigures } from '@/lib/app/conversation/events';
-import { floorLabel, money, spendFloor } from '@/lib/app/usage/usage-view';
 
 /**
  * Every word the conversation pane says of its own (§10 t-64, t-65).
@@ -140,9 +139,9 @@ const STILL_WORKS =
  * amounts and keeps the date; an unknown reset falls back to "the start of next
  * month". Never `$undefined`, never `Invalid Date`.
  *
- * **Spend with no price on file reads "at least"** (`unpricedRows`, t-140), as
- * on the usage page: the real figure is higher. **A limit under half a cent
- * states no amounts** (`isSubCentLimit`), because both would print as `$0.00`.
+ * **What the amounts say is `ceilingAmounts`**, shared with the frame's own
+ * words (t-140): "at least" when some replies had no price on file, and no
+ * figure for a limit or a spend that would print as `$0.00`.
  *
  * A proposal in her register until she has read it, like everything above.
  */
@@ -156,14 +155,17 @@ export function ceilingEnding(figures: CeilingFigures | undefined): string | nul
     return `Your limit for conversations is set to nothing at the moment, so I can't reply.\n${STILL_WORKS}`;
   }
 
-  const spentWords =
-    spent === undefined
-      ? undefined
-      : floorLabel(money(spent), spendFloor({ unpricedRows: figures?.unpricedRows ?? 0 }));
+  const said = ceilingAmounts({
+    spentUsd: spent,
+    unpricedRows: figures.unpricedRows,
+    ceilingUsd: limit,
+  });
   const used =
-    spentWords === undefined || isSubCentLimit(limit)
+    said === null
       ? "That's this month's conversations used up."
-      : `That's this month's conversations used up — ${spentWords} of your ${money(limit)} limit.`;
+      : said.limit === null
+        ? `That's this month's conversations used up — ${said.spent}, against a limit of less than a cent.`
+        : `That's this month's conversations used up — ${said.spent} of your ${said.limit} limit.`;
   const back = resetsAt
     ? `I can reply again from ${formatResetDay(new Date(resetsAt))}.`
     : 'I can reply again from the start of next month.';
