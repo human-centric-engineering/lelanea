@@ -183,20 +183,44 @@ export async function removeJourneyEntry(
 
 const OUTCOME_HEADINGS = { action: 'Actions', insight: 'Insights', tension: 'Tensions' } as const;
 
-function formatDay(iso: string): string {
+/**
+ * The person's own time zone, so an entry written late in the evening is dated
+ * the day they wrote it. `User.timezone` is free text with a `UTC` default, so
+ * a value `Intl` does not recognise falls back to UTC rather than failing the
+ * export.
+ */
+async function readTimeZone(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
+  const zone = user?.timezone;
+  if (!zone) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return zone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+function formatDay(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    timeZone: 'UTC',
+    timeZone,
   });
 }
 
-function entryToMarkdown(entry: JourneyEntry): string {
+function entryToMarkdown(entry: JourneyEntry, timeZone: string): string {
   const kindLabel = entry.kind === 'synopsis' ? 'Session' : 'Your entry';
   const title = entry.summary ? `${kindLabel}: ${entry.summary}` : kindLabel;
-  const lines = [`## ${title}`, '', `_${formatDay(entry.occurredAt)}_`, '', entry.body.trim()];
+  const lines = [
+    `## ${title}`,
+    '',
+    `_${formatDay(entry.occurredAt, timeZone)}_`,
+    '',
+    entry.body.trim(),
+  ];
   for (const kind of ['action', 'insight', 'tension'] as const) {
     const outcomes = entry.outcomes.filter((outcome) => outcome.kind === kind);
     if (outcomes.length === 0) continue;
@@ -214,17 +238,23 @@ function entryToMarkdown(entry: JourneyEntry): string {
  * because this copy is the person's own.
  */
 export async function exportJourneyRecordMarkdown(
-  userId: string
-): Promise<{ markdown: string; entries: number }> {
-  const kept = (await readEntries(userId)).filter((entry) => entry.state === 'kept').reverse();
+  userId: string,
+  now: Date = new Date()
+): Promise<{ markdown: string; entries: number; day: string }> {
+  const [entries, timeZone] = await Promise.all([readEntries(userId), readTimeZone(userId)]);
+  const kept = entries.filter((entry) => entry.state === 'kept').reverse();
   const header = [
     '# Your journey',
     '',
     'Everything you have kept in your journey record with Lelañea.',
   ];
   if (kept.length === 0) header.push('', 'Nothing has been kept yet.');
-  const markdown = [header.join('\n'), ...kept.map(entryToMarkdown)].join('\n\n') + '\n';
-  return { markdown, entries: kept.length };
+  const markdown =
+    [header.join('\n'), ...kept.map((entry) => entryToMarkdown(entry, timeZone))].join('\n\n') +
+    '\n';
+  // `en-CA` writes a date as YYYY-MM-DD: the day it is for the person, for the filename.
+  const day = now.toLocaleDateString('en-CA', { timeZone });
+  return { markdown, entries: kept.length, day };
 }
 
 /** Subject access (Art. 15): every row, drafts included, because we hold them. */

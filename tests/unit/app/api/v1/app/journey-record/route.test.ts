@@ -71,6 +71,7 @@ const { owners, record, routeLog } = vi.hoisted(() => {
       exportJourneyRecordMarkdown: vi.fn(async (userId: string) => ({
         markdown: `# Your journey\n\n${userId}'s words\n`,
         entries: 1,
+        day: '2026-10-05',
       })),
     },
     routeLog: {
@@ -248,8 +249,9 @@ describe('GET /api/v1/app/journey-record/export', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');
-    expect(response.headers.get('Content-Disposition')).toMatch(
-      /^attachment; filename="lelanea-journey-\d{4}-\d{2}-\d{2}\.md"$/
+    // The person's own date, from the store, not the server's.
+    expect(response.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="lelanea-journey-2026-10-05.md"'
     );
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await response.text()).toContain(`${ME}'s words`);

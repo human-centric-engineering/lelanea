@@ -19,8 +19,9 @@ import { JOURNEY_RECORD_OWNERSHIP } from '@/lib/app/journey-record/ownership';
 export const GET = withAuth(
   async (request, session) => {
     const log = await getRouteLogger(request);
-    const { markdown, entries } = await exportJourneyRecordMarkdown(session.user.id);
-    const day = new Date().toISOString().slice(0, 10);
+    // `day` is the person's own date, in their time zone, so the filename agrees
+    // with the dates inside.
+    const { markdown, entries, day } = await exportJourneyRecordMarkdown(session.user.id);
 
     log.info('Own journey record exported', { userId: session.user.id, entries });
 

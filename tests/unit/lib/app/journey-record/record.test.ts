@@ -2,7 +2,7 @@
  * The journey record's store (f-journey-record t-145).
  *
  * Runs the real `record.ts`, and the real `readSessionsById` behind it,
- * against a small STATEFUL in-memory fake of the two tables they touch. Two
+ * against a small STATEFUL in-memory fake of the tables they touch. Two
  * people's rows sit in the same fake throughout, so a read or write that lost
  * its owner key would reach the other person's row rather than find nothing.
  * Every "not theirs" case first establishes that the other person's row exists
@@ -38,7 +38,13 @@ interface EventRow {
   occurredAt: Date;
 }
 
-const db = vi.hoisted(() => ({ entries: [] as EntryRow[], events: [] as EventRow[], seq: 0 }));
+const db = vi.hoisted(() => ({
+  entries: [] as EntryRow[],
+  events: [] as EventRow[],
+  /** User id → `User.timezone`. */
+  zones: new Map<string, string | null>(),
+  seq: 0,
+}));
 
 const { error } = vi.hoisted(() => ({ error: vi.fn() }));
 vi.mock('@/lib/logging', () => ({
@@ -106,6 +112,11 @@ vi.mock('@/lib/db/client', () => {
           db.entries = db.entries.filter((row) => !matches(row, where));
           return { count: before - db.entries.length };
         }),
+      },
+      user: {
+        findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+          db.zones.has(where.id) ? { timezone: db.zones.get(where.id) ?? null } : null
+        ),
       },
       journeyEvent: {
         findMany: vi.fn(
@@ -177,6 +188,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.entries = [];
   db.events = [];
+  db.zones.clear();
   db.seq = 0;
 });
 
@@ -446,6 +458,45 @@ describe('exportJourneyRecordMarkdown', () => {
     expect(markdown).toContain('Modules: values');
     expect(markdown).not.toContain('Not kept yet');
     expect(markdown).not.toContain('Their words.');
+  });
+
+  it('dates entries, and the file, in the person’s own time zone', async () => {
+    // 22:00 on 5 Oct in New York is 02:00 on 6 Oct in UTC.
+    db.zones.set(ME, 'America/New_York');
+    db.entries.push(
+      row({
+        id: 'cmlate00000000000000000000',
+        userId: ME,
+        occurredAt: new Date('2026-10-06T02:00:00Z'),
+      })
+    );
+
+    const { markdown, day } = await exportJourneyRecordMarkdown(
+      ME,
+      new Date('2026-10-06T03:00:00Z')
+    );
+
+    expect(markdown).toContain('_Monday, October 5, 2026_');
+    expect(day).toBe('2026-10-05');
+  });
+
+  it('falls back to UTC for a time zone it does not recognise, rather than failing', async () => {
+    db.zones.set(ME, 'Not/AZone');
+    db.entries.push(
+      row({
+        id: 'cmlate00000000000000000000',
+        userId: ME,
+        occurredAt: new Date('2026-10-06T02:00:00Z'),
+      })
+    );
+
+    const { markdown, day } = await exportJourneyRecordMarkdown(
+      ME,
+      new Date('2026-10-06T03:00:00Z')
+    );
+
+    expect(markdown).toContain('_Tuesday, October 6, 2026_');
+    expect(day).toBe('2026-10-06');
   });
 
   it('says so when nothing has been kept', async () => {
