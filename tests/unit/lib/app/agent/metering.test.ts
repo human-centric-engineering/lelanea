@@ -548,6 +548,21 @@ describe('one turn', () => {
       expect(await parts([early], { attempts: 1 })).toEqual([['early', 'reply']]);
     });
 
+    it('places a stamp that is not a whole number by time, as if it had none', async () => {
+      const at = (id: string, attempt: unknown) =>
+        costRow({
+          id,
+          metadata: { turnId: TURN.turnId, attempt },
+          createdAt: new Date('2026-09-18T09:59:59Z'),
+        });
+      // Each is before the retry claimed, so by time it is an earlier attempt's —
+      // not this attempt's reply, which a lenient read of '2' or 2.5 would say.
+      expect(await parts([at('string', '2'), at('fraction', 2.5)])).toEqual([
+        ['string', 'earlier_attempt'],
+        ['fraction', 'earlier_attempt'],
+      ]);
+    });
+
     it("moves only reply passes: a failed attempt's other rows keep what they were", async () => {
       expect(
         await parts([

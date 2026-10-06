@@ -440,7 +440,10 @@ export type TurnCostPart =
   | 'attachment'
   | 'other';
 
-export function classifyCostRow(row: { operation: string; kind: string | null }): TurnCostPart {
+export function classifyCostRow(row: {
+  operation: string;
+  kind: string | null;
+}): Exclude<TurnCostPart, 'earlier_attempt'> {
   if (row.kind === 'conversation_summary') return 'summary';
   if (row.kind === 'knowledge_search') return 'knowledge_search';
   if (row.kind === 'message_embedding') return 'reply_embedding';
@@ -484,7 +487,8 @@ export interface TurnMeter extends MeterTotals {
   /**
    * Everything else the turn caused: summary, tools, searches, memory, the
    * reply's embedding — and an earlier attempt's reply passes, so on a retried
-   * turn this can hold a whole model reply that did not reach the person.
+   * turn this can hold a whole model reply — one that may still have reached the
+   * person, if its attempt showed it but could not record it.
    */
   sideCostUsd: number;
   /** Every cost row, oldest first. `costRows` (inherited) is how many. */
@@ -534,7 +538,9 @@ function attemptOf(
   if (attempt !== null) return attempt === turn.attempts ? 'reply' : 'earlier_attempt';
   // Written before rows carried the tag: the retry reset `startedAt`, so a
   // reply paid for before it was an earlier attempt's. Only on a turn that
-  // was retried, so clock skew can never move a first attempt's reply.
+  // was retried, so clock skew can never move a first attempt's reply. It
+  // cannot place a failed attempt's row that landed after the retry claimed —
+  // that needs the stamp, and only rows written before it lack one.
   return turn.attempts > 1 && row.createdAt < turn.startedAt ? 'earlier_attempt' : 'reply';
 }
 

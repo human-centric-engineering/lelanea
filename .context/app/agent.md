@@ -547,7 +547,7 @@ included** — a failed first attempt was spent too — **and its reply rows are
 t-139). The turn seam stamps each cost row with the attempt that wrote it
 (`attempt` in `costLogMetadata`), so a failed attempt's row that lands after the
 retry claimed is still placed right; a row from before the stamp falls back to
-time — written before the `startedAt` a retry resets — on a retried turn only. Rows are scoped to the person: turn ids are unique per person, not
+time — written before the `startedAt` a retry resets — on a retried turn only. A late row from before the stamp is the one it cannot place. Rows are scoped to the person: turn ids are unique per person, not
 globally.
 
 ### API — what f-budget and f-conversation build on

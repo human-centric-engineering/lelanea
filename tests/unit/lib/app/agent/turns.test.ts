@@ -662,6 +662,9 @@ describe('a turn id', () => {
 
     thinking.open();
     await dead.finished;
+    // The abandoned attempt's cost lands last, after the takeover's — and is
+    // still stamped as its own, so the meter cannot read it as the reply (t-139).
+    expect(db.costs.map((c) => c.metadata?.attempt)).toEqual([2, 1]);
   });
 
   it("follows the admin's deadline: a shorter one frees a crashed claim sooner", async () => {

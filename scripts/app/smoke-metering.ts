@@ -377,6 +377,7 @@ async function main(): Promise<void> {
         startedAt: Date;
         status: 'completed' | 'running';
         attempts?: number;
+        completedAt?: Date;
       }
     ) => ({
       userId,
@@ -404,6 +405,8 @@ async function main(): Promise<void> {
           startedAt: noon('2001-03-04'),
           status: 'completed',
           attempts: 2,
+          // After its reply was paid for; the failed attempt's row lands later still.
+          completedAt: new Date('2001-03-04T12:00:25Z'),
         }),
         turnRow(ours.id, turnIds.big, {
           conversationId: d.id,
