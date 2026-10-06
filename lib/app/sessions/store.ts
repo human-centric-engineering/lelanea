@@ -78,11 +78,14 @@ export interface Arrival {
 }
 
 const startedPayloadSchema = z.object({ ordinal: z.number().int().positive() });
+const closedPayloadSchema = z.object({ ordinal: z.number().int().positive() });
 
 /**
  * The id of a session's started or closed row: a digest of the person, the
  * ordinal and the kind, so two writers deciding to open the same session write
- * the same id. Hashed rather than spelled out so the id carries no user id.
+ * the same id. Hashed so the row id does not spell out the user id; it is not
+ * a secret, and anyone holding a user id can recompute it. Nothing takes a
+ * session id as input, so nothing needs it to be one.
  */
 export async function sessionEventId(
   userId: string,
@@ -117,6 +120,13 @@ function toSession(row: StartedRow, closedAt: Date | null): Session {
 
 const STARTED_SELECT = { id: true, occurredAt: true, payload: true } as const;
 
+/** The ordinal a close row names. Only this file writes it, so unreadable is corrupt. */
+function closeOrdinal(row: { id: string; payload: unknown }): number {
+  const parsed = closedPayloadSchema.safeParse(row.payload);
+  if (!parsed.success) throw new Error(`Session close ${row.id} has no readable ordinal`);
+  return parsed.data.ordinal;
+}
+
 /** When the person's latest turn, on any seat, finished — or began, while it runs. */
 async function readLastTurnAt(userId: string): Promise<Date | null> {
   const turn = await prisma.appTurn.findFirst({
@@ -136,32 +146,48 @@ async function readLastTurnAt(userId: string): Promise<Date | null> {
  * would be its own last activity, and no sitting would ever end.
  */
 export async function arriveSession(userId: string, now: Date = new Date()): Promise<Arrival> {
-  const [latestRow, lastTurnAt] = await Promise.all([
+  const [latestRow, latestCloseRow, lastTurnAt] = await Promise.all([
     prisma.journeyEvent.findFirst({
       where: { userId, type: SESSION_EVENT_TYPE.started },
       orderBy: { occurredAt: 'desc' },
       select: STARTED_SELECT,
     }),
+    prisma.journeyEvent.findFirst({
+      where: { userId, type: SESSION_EVENT_TYPE.closed },
+      orderBy: { occurredAt: 'desc' },
+      select: { id: true, payload: true },
+    }),
     readLastTurnAt(userId),
   ]);
   const latest = latestRow ? toSession(latestRow, null) : null;
+  const closedOrdinal = latestCloseRow ? closeOrdinal(latestCloseRow) : 0;
 
-  const decision = decideSession(latest, lastTurnAt, now);
+  // The latest session is already closed only when a later one was removed
+  // (f-forget-session): sessions are closed by the arrival that opens the
+  // next. Then open afresh, closing nothing, numbered past every session a
+  // close still names, so no id of a removed session is used again.
+  const decision =
+    latest && closedOrdinal >= latest.ordinal
+      ? ({ kind: 'open' } as const)
+      : decideSession(latest, lastTurnAt, now);
   if (decision.kind === 'resume' && latest) return { session: latest, opened: false };
 
-  const ordinal = (latest?.ordinal ?? 0) + 1;
+  const ordinal = Math.max(latest?.ordinal ?? 0, closedOrdinal) + 1;
   const id = await sessionEventId(userId, ordinal, 'started');
+  const closeId =
+    decision.kind === 'roll' && latest
+      ? await sessionEventId(userId, latest.ordinal, 'closed')
+      : null;
   try {
     await executeTransaction(async (tx) => {
-      if (decision.kind === 'roll' && latest) {
-        // A close that already exists is skipped, not a failure: the started
-        // row below is the only guard. Its session can already be closed when
-        // the session after it was removed (f-forget-session), and a close
-        // that failed here would fail every arrival after it.
+      if (decision.kind === 'roll' && latest && closeId) {
+        // A duplicate close is skipped rather than failing the transaction:
+        // the started row below is the one guard, and the loser of a race
+        // learns it there.
         await tx.journeyEvent.createMany({
           data: [
             {
-              id: await sessionEventId(userId, latest.ordinal, 'closed'),
+              id: closeId,
               userId,
               type: SESSION_EVENT_TYPE.closed,
               occurredAt: decision.closeAt,
@@ -230,10 +256,9 @@ export async function readSessions(
     take: 2,
     select: STARTED_SELECT,
   });
-  const [currentRow, previousRow] = rows;
-  if (!currentRow) return { current: null, previous: null };
-
   const sessions = rows.map((row) => toSession(row, null));
+  if (sessions.length === 0) return { current: null, previous: null };
+
   const closeIds = await Promise.all(
     sessions.map((session) => sessionEventId(userId, session.ordinal, 'closed'))
   );
@@ -246,6 +271,6 @@ export async function readSessions(
 
   return {
     current: { ...sessions[0], closedAt: closedAt(0) },
-    previous: previousRow ? { ...sessions[1], closedAt: closedAt(1) } : null,
+    previous: sessions[1] ? { ...sessions[1], closedAt: closedAt(1) } : null,
   };
 }

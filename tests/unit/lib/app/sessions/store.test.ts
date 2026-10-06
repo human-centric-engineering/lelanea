@@ -261,6 +261,12 @@ const closed = (userId?: string) =>
     (e) => e.type === SESSION_EVENT_TYPE.closed && (userId === undefined || e.userId === userId)
   );
 
+/** How many reads of the latest started session have been made. */
+const startedReads = () =>
+  vi
+    .mocked(prisma.journeyEvent.findFirst)
+    .mock.calls.filter(([args]) => args?.where?.type === SESSION_EVENT_TYPE.started).length;
+
 /** A finished turn, as the turn seam would leave it. */
 function turnDone(userId: string, startedAt: Date, completedAt: Date, sessionId: string | null) {
   db.turns.push({
@@ -398,6 +404,40 @@ describe('arriveSession', () => {
     expect((await arriveSession(ANA, at(61))).session.id).toBe(next.session.id);
   });
 
+  it('never resumes a session already closed, even inside the twelve hours', async () => {
+    // Session 1 closed by session 2's opening; session 2 then removed, while
+    // a turn from it (now unstamped) is recent.
+    const one = await arriveSession(ANA, at(0));
+    turnDone(ANA, at(1), at(2), one.session.id);
+    const two = await arriveSession(ANA, at(30));
+    turnDone(ANA, at(31), at(32), null);
+    db.events = db.events.filter((e) => e.id !== two.session.id);
+
+    const next = await arriveSession(ANA, at(33));
+
+    expect(next.opened).toBe(true);
+    expect(next.session.id).not.toBe(one.session.id);
+    expect(closed(ANA)).toHaveLength(1);
+  });
+
+  it('numbers past a removed session whose close is still there', async () => {
+    // Sessions 1, 2 and 3; then 2 and 3's started rows removed, 2's close kept.
+    await arriveSession(ANA, at(0));
+    const two = await arriveSession(ANA, at(30));
+    const three = await arriveSession(ANA, at(60));
+    db.events = db.events.filter((e) => e.id !== two.session.id && e.id !== three.session.id);
+    expect(closed(ANA).map((e) => (e.payload as { ordinal: number }).ordinal)).toEqual([1, 2]);
+
+    const next = await arriveSession(ANA, at(90));
+
+    // Not 2 again, whose close would make it read as closed before it began.
+    expect(next.session.ordinal).toBe(3);
+    expect((await readSessions(ANA)).current).toMatchObject({
+      id: next.session.id,
+      closedAt: null,
+    });
+  });
+
   it('treats the two seats as one sitting', async () => {
     const first = await takeTurn(ANA, at(0), 'onboarding');
     const second = await takeTurn(ANA, at(6), 'facilitator');
@@ -410,7 +450,7 @@ describe('arriveSession', () => {
     db.readGate = new Promise((resolve) => (release = resolve));
     const both = Promise.all([arriveSession(ANA, at(0)), arriveSession(ANA, at(0))]);
     // Both have asked for the latest session before either writes.
-    await vi.waitFor(() => expect(prisma.journeyEvent.findFirst).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(startedReads()).toBe(2));
     release();
     const [a, b] = await both;
 
@@ -430,7 +470,7 @@ describe('arriveSession', () => {
       arriveSession(ANA, at(48, 5)),
       arriveSession(ANA, at(48, 9)),
     ]);
-    await vi.waitFor(() => expect(prisma.journeyEvent.findFirst).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => expect(startedReads()).toBe(4));
     release();
     const arrivals = await both;
 

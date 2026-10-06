@@ -497,8 +497,10 @@ user and are in Daybreak's export.
 **When it is written.**
 
 - `arriveSession()` runs when the pane is read
-  (`GET /api/v1/app/conversation`, either seat) and in the turn seam before each
-  claim (`lib/app/agent/turns.ts`).
+  (`GET /api/v1/app/conversation`, either seat), and at the start of every turn
+  (`lib/app/agent/turns.ts`), whatever answers it: the crisis resource, a pause
+  or limit, a refusal or the model. The turn does not wait for it except to
+  stamp its claim, and the host keeps it alive past a response that does not.
 - It must run before the turn row exists, otherwise the new turn would count as
   its own last activity and no sitting would ever end.
 - A reload inside the sitting writes nothing.
@@ -506,13 +508,13 @@ user and are in Daybreak's export.
   latest turn's `completedAt`, or the sitting's own start if it had no turn),
   then opens the next. Nothing runs on a timer.
 - The first-ever arrival opens session 1 and closes nothing.
-- A hard-tier crisis turn claims no turn row but still arrives, without waiting:
-  nothing stands between the person and the resource.
 - Every caller uses `arriveSessionQuietly`, so a failed write never fails a read
   or a turn. A new turn is left unstamped; a re-run keeps the session its first
   attempt recorded.
-- A close that already exists is skipped rather than failing, so removing a
-  session (f-forget-session) cannot wedge the arrivals after it.
+- If a later session was removed (f-forget-session), the latest one left is
+  already closed. It is never resumed: the next arrival opens a fresh session,
+  numbered past every session a close row still names, so a removed session's
+  ids are never used again.
 
 **Two tabs at once open one session.** A row's id is a digest of
 `(userId, ordinal, kind)`, and the close and the open are written in one

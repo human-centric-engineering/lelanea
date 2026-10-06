@@ -815,6 +815,22 @@ describe('the session a turn falls in (f-recap t-141)', () => {
     });
   });
 
+  it('arrives on a turn the pause answers, and hands the arrival to the host', async () => {
+    db.flags.set(GENERATION_PAUSED_FLAG, true);
+    const kept: Promise<unknown>[] = [];
+    const result = await runRecordedTurn(
+      { ...turnFor(), keepAlive: (work) => kept.push(work) },
+      fakeRun(turnFor())
+    );
+    if ('refused' in result) throw new Error('refused');
+    await drain(result[Symbol.asyncIterator]());
+
+    expect(modelCalls).toBe(0);
+    expect(arriveSessionQuietly).toHaveBeenCalledTimes(1);
+    expect(arriveSessionQuietly).toHaveBeenCalledWith('user-1');
+    expect(await kept[0]).toMatchObject({ session: { id: 'ses-user-1' } });
+  });
+
   it('still takes the turn, unstamped, when the session could not be written', async () => {
     arriveSessionQuietly.mockResolvedValueOnce(null);
 
