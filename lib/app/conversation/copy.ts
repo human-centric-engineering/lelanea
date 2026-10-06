@@ -157,7 +157,7 @@ export function ceilingEnding(figures: CeilingFigures | undefined): string | nul
 
   const said = ceilingAmounts({
     spentUsd: spent,
-    unpricedRows: figures.unpricedRows,
+    unpricedRows: figures?.unpricedRows,
     ceilingUsd: limit,
   });
   const used =
