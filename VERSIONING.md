@@ -154,6 +154,7 @@ covered by the version contract.
   - `lib/app/conversation/` — the conversation pane's side of a turn: the leaf event schema, the transcript read, the stream client and its copy
   - `lib/app/gateway/` — the acknowledgement gate: kinds, current versions, a member's standing at the gate
   - `lib/app/journey/` — the published journey map, its module registry and path helpers
+  - `lib/app/journey-record/` — the journey record: session synopses and a person's own entries, read, searched, written and exported
   - `lib/app/memory/` — what was said, kept and taken back: the per-person memory index, and deleting an exchange and everything it left behind
   - `lib/app/modules/` — the leaf's module definitions, registered with Daybreak's module registry
   - `lib/app/onboarding/` — the first-run sequence: the discovery questions as data slots, and the set a person is asked

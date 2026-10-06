@@ -69,7 +69,7 @@ beforeEach(() => {
 describe('each source reads its own table', () => {
   it('queries exactly the delegate its model names, once', async () => {
     const { sources } = leafOrgSources();
-    expect(sources).toHaveLength(38);
+    expect(sources).toHaveLength(39);
     for (const source of sources) {
       calls.clear();
       await source.fetch({ orgId: 'install' });

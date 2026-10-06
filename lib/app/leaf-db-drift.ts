@@ -35,6 +35,7 @@ export const APP_ORG_OWNED_TABLES = [
   'app_foundational_document',
   'app_foundational_document_revision',
   'app_journey',
+  'app_journey_entry',
   'app_journey_module',
   'app_journey_module_revision',
   'app_journey_tier',
@@ -300,6 +301,32 @@ export function registerLeafDriftProbes(): void {
     kind: 'HNSW index',
     table: 'app_memory_embedding',
     probe: indexExists('idx_app_memory_embedding', 'hnsw'),
+  });
+
+  // f-journey-record t-145. The record's two hand-written FKs and its shape.
+  registerAppDriftProbe({
+    name: 'app_journey_entry_userId_fkey (hand-written FK → user)',
+    kind: 'FK constraint',
+    table: 'app_journey_entry',
+    // `ON DELETE CASCADE` is the whole Art. 17 disposition for a person's
+    // journey record. Re-created with `NO ACTION`, `eraseUser()` would fail with
+    // `P2003` for anyone who ever kept an entry.
+    probe: constraintExists('app_journey_entry_userId_fkey', 'ON DELETE CASCADE'),
+  });
+  registerAppDriftProbe({
+    name: 'app_journey_entry_sessionId_fkey (hand-written FK → framework_journey_event)',
+    kind: 'FK constraint',
+    table: 'app_journey_entry',
+    // A synopsis goes with its session. Re-created with `NO ACTION`, removing a
+    // session (f-forget-session) would fail with `P2003` for every session that
+    // had a synopsis; with `SET NULL`, on the shape CHECK below.
+    probe: constraintExists('app_journey_entry_sessionId_fkey', 'ON DELETE CASCADE'),
+  });
+  registerAppDriftProbe({
+    name: 'app_journey_entry_shape_check (a synopsis names its session; an own entry is kept)',
+    kind: 'CHECK constraint',
+    table: 'app_journey_entry',
+    probe: constraintExists('app_journey_entry_shape_check', '"keptAt" IS NOT NULL'),
   });
 
   // t-115. Every app_* table refuses a row with no org. A CHECK, because

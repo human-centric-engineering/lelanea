@@ -264,6 +264,12 @@ describe('reserved fork tiers', () => {
       // is about them; every row cascades with its message and its person).
       'enum AppMemorySourceKind {',
       'model AppMemoryEmbedding {',
+      // f-journey-record t-145 — the journey record: session synopses and the
+      // person's own entries (a SOURCE: it is theirs, drafts included; every row
+      // cascades with its person, and a synopsis with its session).
+      'enum AppJourneyEntryKind {',
+      'enum AppJourneyEntryState {',
+      'model AppJourneyEntry {',
       // f-safety t-58 — that the crisis path answered someone, never the words
       // (a SOURCE: it is about the person it happened to).
       'enum AppSafetyEventKind {',

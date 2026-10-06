@@ -46,6 +46,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | [`database-changes.md`](./database-changes.md)             | A change existing databases need ships as a migration, not a seed edit, and how to write one                                  |
 | [`budget.md`](./budget.md)                                 | Usage and cost: where the figures come from, the member's view, and the four states that are not errors                       |
 | [`memory.md`](./memory.md)                                 | The per-person memory index: what is embedded, who can find it, what takes it out, and swapping it for Daybreak's             |
+| [`journey-record.md`](./journey-record.md)                 | The journey record: synopses and own entries in one stream, why it is our table, who may read it, the API                     |
 
 Add a `.context/app/<feature>.md` per feature as they land, and list it here.
 
