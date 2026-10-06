@@ -8,7 +8,8 @@ description: The journey record — a person's session synopses and their own en
 The journey record holds the app's account of the work and the person's own
 writing, together and in time order (product description §3.16). Feature
 `f-journey-record` (§19) builds it in five tasks. **t-145**, the store and its
-API, is the part described here. Later tasks add their sections as they land.
+API, and **t-146**, [drafting a synopsis](#drafting-a-synopsis), are the parts
+described here. Later tasks add their sections as they land.
 
 ## What is in it
 
@@ -31,6 +32,7 @@ Each entry carries:
 - the `body`, which is her account of a synopsis or the person's own words;
 - `outcomes`, each an `action`, `insight` or `tension` (`journeyOutcomesSchema`, `lib/app/journey-record/entry.ts`);
 - the `modules` it touched;
+- the `notes` its session wrote, each `{ slotSlug, version }`: references for keeping to confirm, never a reading (`journeyNoteRefsSchema`);
 - `occurredAt`, which is a synopsis's session start, or when an own entry was written;
 - `withheldFromAgent`, below.
 
@@ -97,9 +99,101 @@ folded. Revisit if one person's record passes a few thousand entries.
 **What never reaches a log:** an entry's words, and a search. The read
 overrides the route logger's URL to the path for exactly this reason.
 
+## Drafting a synopsis
+
+When a session ends, she writes a draft of what it was about
+(`lib/app/journey-record/synopsis/`). It waits for the person to keep, change
+or discard it (t-147), and until then it is not in the record and no agent
+reads it.
+
+### When a draft is written
+
+- **When the session closes.** Sessions close lazily: the arrival that opens
+  the next one writes the close ([`agent.md`](./agent.md) → Sessions). That
+  arrival queues the closed session's draft once its transaction commits.
+- **Off the request path.** The queue returns at once
+  (`queueSynopsisDraft`), so an arrival never waits on a model. A failure is
+  logged and lost: that session gets no draft.
+- **Only a session of substance: three exchanges or more**
+  (`MIN_SYNOPSIS_EXCHANGES`, `material.ts`). An exchange is a completed turn
+  that answered a message of the person's, on either seat. Openings and recaps
+  are hers, not an exchange, and never count. Fewer than three is a look-in,
+  and an account of one would be padding.
+- **Once per session.** A session that already has a synopsis is skipped. A
+  draft already running in this process for the same session is skipped, so
+  two arrivals cannot pay for two calls. The unique index on `sessionId`
+  refuses a second row from anywhere else. A draft the person removes is not
+  redrafted, because the session never closes again.
+
+### What it is written from
+
+| Part                          | From                                                                                                                                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `summary`, `body`, `outcomes` | the model, given both sides of the session's exchanges, oldest first (each message cut to 2,000 characters, the latest 24,000 kept), fenced as material                                                                                          |
+| `modules`                     | the session's window in `framework_journey_event`: `node_*` and `module.*` events, once each, in the order first touched. Usually just `onboarding` in release 1                                                                                 |
+| `notes`                       | what the session's turns wrote (`app_turn_slot_write`), kept only when the notes panel shows it (`getNotes`: no hidden slot, no voice leaning) and it is not removed, withheld or special category; each at the latest version the session wrote |
+| `occurredAt`                  | the session's start                                                                                                                                                                                                                              |
+
+The model is never asked for the modules or the notes. Every read names the
+person: a message is read only through a conversation of theirs, so another
+person's words cannot reach the prompt even through a corrupt link.
+
+The reply is validated with Zod (`synopsisReplySchema`, `prompt.ts`): exactly
+a summary, an account and outcomes, within the record's limits. Anything else
+is asked for once more, then refused, and nothing is stored. The reply's
+words are never logged.
+
+### Who writes it
+
+The agent in Daybreak's `synopsis` seat: `lelanea-synopsis`
+(`synopsis/agent.ts`), seeded with the seat by
+`prisma/seeds/app-lelanea/026-synopsis-seat.ts`. It wears her voice profile
+(`lelanea-voice-core`) with instructions of its own, and its prompt is
+composed from the profile as a turn's is. It is called one-shot through
+Sunrise's `runStructuredCompletion` on its own provider and model, the way
+Daybreak's slot extractor calls its agent. It is not a chat surface: it holds
+no capabilities, stays `internal`, and is not in `SEATED_ROLES`, which lists
+the seats a person speaks through.
+
+- **The seed fills only an empty seat**, as seed 006 does for hers. An agent an
+  operator bound there is reported and left alone.
+- **Its provider and model are operator-owned.** They are seeded empty, so it
+  resolves from the install's default chat model until someone picks one in
+  the admin. Its instructions, profile link and `restricted` knowledge mode are
+  reconciled on every run.
+- **An empty seat drafts nothing.** A database that has not run `db:seed`
+  since this landed has no synopsis agent, so it drafts no synopses.
+
+### What it costs, and who pays
+
+- **The person pays, as for a turn.** Their summary is of their conversation,
+  so the cost row carries their id, tagged
+  `{ seat: 'synopsis', kind: 'journey_synopsis' }`, and their meter counts it.
+- **Refused rather than overdrawn.** Before the call, the draft asks the same
+  question a turn asks (`mayStartGeneratedTurn`). A person at or over their
+  monthly ceiling gets no draft. The comparison is strict, so a ceiling of zero
+  refuses every draft. Generation paused refuses it too.
+- **As for a turn, the check fails open on a read error,** and a draft that
+  starts under the ceiling may cross it by its own cost.
+- **A reply refused after its retry is not charged.** The runner throws
+  without usage when nothing parsed. Those tokens are billed by the provider
+  but never reach the meter: under-charged, never overdrawn. A truncated reply
+  carries its usage and is charged.
+
+**Known limit: a refused session gets no draft, ever.** It is drafted only at
+its close, so one closed while the person was at their limit, while generation
+was paused, or while the provider was down has no synopsis. That is what every
+session before t-146 has. **Trigger to revisit:** people at their limit asking
+where a session's account went. The remedy then is a catch-up pass, which
+needs a marker for "drafting declined" so that a draft the person removed
+stays removed.
+
+`npm run smoke:app-synopsis` proves the wiring on the dev database with a real
+model: a session of three real turns closes, and its stored draft is printed.
+
 ## Not yet
 
-- Drafting (t-146), keeping (t-147), the timeline at `/app/journey` (t-148),
+- Keeping (t-147), the timeline at `/app/journey` (t-148),
   and the recap and memory search reading the record (t-149).
 - Editing a kept synopsis after the fact. §12 says anything in the record can
   be edited. That goes through keeping's path, so the person's notes follow
