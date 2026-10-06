@@ -453,8 +453,9 @@ describe('one turn', () => {
   it('says what produced it and sums every row it caused, reply apart from side costs', async () => {
     findTurn.mockResolvedValue(TURN);
     findCostRows.mockResolvedValue([
-      // Two attempts' replies — a failed first attempt was spent too.
-      costRow({ id: 'r1', totalCostUsd: 0.002 }),
+      // Two attempts' replies — a failed first attempt was spent too, before
+      // the retry reset `startedAt` (10:00:00). It is a side cost (t-139).
+      costRow({ id: 'r1', totalCostUsd: 0.002, createdAt: new Date('2026-09-18T09:59:00Z') }),
       costRow({ id: 'r2', totalCostUsd: 0.003 }),
       costRow({
         id: 's',
@@ -500,10 +501,11 @@ describe('one turn', () => {
       unpricedRows: 1,
     });
     expect(meter!.costUsd).toBeCloseTo(0.0055, 10);
-    expect(meter!.replyCostUsd).toBeCloseTo(0.005, 10);
-    expect(meter!.sideCostUsd).toBeCloseTo(0.0005, 10);
+    // The reply is the attempt that answered; the one before it is on the side.
+    expect(meter!.replyCostUsd).toBeCloseTo(0.003, 10);
+    expect(meter!.sideCostUsd).toBeCloseTo(0.0025, 10);
     expect(meter!.rows.map((row) => [row.id, row.part, row.unpriced])).toEqual([
-      ['r1', 'reply', false],
+      ['r1', 'earlier_attempt', false],
       ['r2', 'reply', false],
       ['s', 'summary', true],
       ['t', 'tool', false],

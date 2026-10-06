@@ -422,12 +422,15 @@ export async function getMonthToDate(userId: string, now: Date = new Date()): Pr
 /**
  * What a cost row was for, within a turn.
  *
- * `reply` is the agent's answer (every tool-loop pass); the rest are side costs
- * the turn caused. Read from the row's own `operation` and the `kind` / `slug`
+ * `reply` is the agent's answer (every tool-loop pass) on the turn's current
+ * attempt; the rest are side costs the turn caused, including
+ * `earlier_attempt` — a model call from an attempt that was retried, which
+ * {@link classifyCostRow} cannot see and `turnCostRows` decides by time. Read from the row's own `operation` and the `kind` / `slug`
  * the platform stamps last, which a caller cannot overwrite.
  */
 export type TurnCostPart =
   | 'reply'
+  | 'earlier_attempt'
   | 'summary'
   | 'tool'
   | 'knowledge_search'
@@ -505,15 +508,28 @@ export function isUnpricedRow(row: {
   return row.totalCostUsd === 0 && !row.isLocal && row.inputTokens + row.outputTokens > 0;
 }
 
+/** A reply from before the current attempt started was an earlier attempt's. */
+function attemptOf(part: TurnCostPart, createdAt: Date, startedAt: Date): TurnCostPart {
+  return part === 'reply' && createdAt < startedAt ? 'earlier_attempt' : part;
+}
+
 /**
  * The cost rows one turn caused: those tagged with its id, and the embedding of
  * its reply, which the platform writes without the tag and joins by message id.
  *
  * Every attempt's rows are included — a failed first attempt was spent too.
  * Scoped to the turn's person: turn ids are unique per person, not globally.
+ *
+ * **A reply row written before the turn's `startedAt` is `earlier_attempt`**
+ * (owner ruling, 6 Oct 2026, t-139). A retry resets `startedAt` to the instant
+ * it claims (`claimTurn`), so anything the model was paid for before then
+ * belongs to an attempt that did not produce this reply: a side cost, so an
+ * admin can see what the failed attempt cost. The gap between a claim and its
+ * first cost row is a model call, seconds, against clock skew of milliseconds
+ * between this server and the one that wrote the row.
  */
 async function turnCostRows(
-  turn: Pick<AppTurn, 'userId' | 'turnId' | 'assistantMessageId'>
+  turn: Pick<AppTurn, 'userId' | 'turnId' | 'assistantMessageId' | 'startedAt'>
 ): Promise<TurnCostRow[]> {
   const rows = await prisma.aiCostLog.findMany({
     where: {
@@ -549,7 +565,11 @@ async function turnCostRows(
 
   return rows.map((row) => ({
     id: row.id,
-    part: classifyCostRow({ operation: row.operation, kind: metadataString(row.metadata, 'kind') }),
+    part: attemptOf(
+      classifyCostRow({ operation: row.operation, kind: metadataString(row.metadata, 'kind') }),
+      row.createdAt,
+      turn.startedAt
+    ),
     operation: row.operation,
     model: row.model,
     provider: row.provider,

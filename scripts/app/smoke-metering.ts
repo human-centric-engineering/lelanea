@@ -334,7 +334,8 @@ async function main(): Promise<void> {
     // | BIG   | ours  | turn table                                 | reply 0.05 + tool 0.002              | 0.052 |
     // | RETRY | ours  | only its tagged rows in D — the retry      | 27 Feb attempt 0.02 + 1 Mar attempt  | 0.05  |
     // |       |       | reset `conversationId` to null on 5 Mar    | 0.03                                 |       |
-    // | SMALL | ours  | turn table                                 | reply 0.01                           | 0.01  |
+    // | SMALL | ours  | turn table — retried once on 4 Mar, then   | 11:00 attempt 0.004 + reply 0.01     | 0.014 |
+    // |       |       | answered                                   |                                      |       |
     // | GUEST | other | only its tagged row in D                   | reply 0.005                          | 0.005 |
     // | RETRY | other | none — the same id as ours, outside D      | 0.07, no conversation                | 0.07  |
     //
@@ -342,6 +343,10 @@ async function main(): Promise<void> {
     // with both people tagged in D, a lookup by person and by id separately
     // would also find the other person's RETRY, and rows grouped by id alone
     // would add its 0.07 to ours.
+    //
+    // A row a turn's model was paid for before its current `startedAt` is an
+    // earlier attempt's, and a side cost (owner ruling, t-139): SMALL's 11:00
+    // row and both of RETRY's.
     //
     // Costliest first is BIG, RETRY, SMALL, GUEST. The turn rows are created
     // RETRY, SMALL, BIG, then the other person's, which is neither that order
@@ -396,10 +401,12 @@ async function main(): Promise<void> {
           conversationId: d.id,
           startedAt: noon('2001-03-04'),
           status: 'completed',
+          attempts: 2,
         }),
         turnRow(ours.id, turnIds.big, {
           conversationId: d.id,
-          startedAt: noon('2001-03-03'),
+          // Claimed before its model call, as every turn is: its reply row is 11:59.
+          startedAt: new Date('2001-03-03T11:00:00Z'),
           status: 'completed',
         }),
         turnRow(other.id, turnIds.retry, {
@@ -439,13 +446,14 @@ async function main(): Promise<void> {
         row(ours.id, d.id, turnIds.big, 'chat', 0.05, new Date('2001-03-03T11:59:00Z')),
         row(ours.id, d.id, turnIds.retry, 'chat', 0.02, noon('2001-02-27')),
         row(ours.id, d.id, turnIds.retry, 'chat', 0.03, noon('2001-03-01')),
+        row(ours.id, d.id, turnIds.small, 'chat', 0.004, new Date('2001-03-04T11:00:00Z')),
         row(ours.id, d.id, turnIds.small, 'chat', 0.01, noon('2001-03-04')),
         row(other.id, d.id, turnIds.guest, 'chat', 0.005, noon('2001-03-02')),
         row(other.id, null, turnIds.retry, 'chat', 0.07, noon('2001-03-02')),
       ],
     });
-    const OURS_MARCH = 0.092; // 0.05 + 0.002 + 0.03 + 0.01 — the 27 Feb attempt is February's
-    const D_MARCH = 0.097; // ours, and the other person's 0.005 in D
+    const OURS_MARCH = 0.096; // 0.052 + 0.03 + 0.014 — the 27 Feb attempt is February's
+    const D_MARCH = 0.101; // ours, and the other person's 0.005 in D
 
     console.log('\n6. A conversation opens to its turns, costliest first, each at its whole cost');
     const listed = await getConversationTurns({ conversationId: d.id, window: MARCH, limit: 100 });
@@ -491,6 +499,19 @@ async function main(): Promise<void> {
     check(
       big?.rows.map((entry) => entry.part).join(',') === 'reply,tool',
       `its rows in the order they were written (${big?.rows.map((entry) => entry.part).join(', ')})`
+    );
+    const small = await getTurnMeter(ours.id, turnIds.small);
+    check(
+      small !== null &&
+        near(small.replyCostUsd, 0.01) &&
+        near(small.sideCostUsd, 0.004) &&
+        small.rows.map((entry) => entry.part).join(',') === 'earlier_attempt,reply',
+      `a retried turn's earlier attempt is on the side, not in the reply — reply $${small?.replyCostUsd.toFixed(3)}, on the side $${small?.sideCostUsd.toFixed(3)}`
+    );
+    const pending = await getTurnMeter(ours.id, turnIds.retry);
+    check(
+      pending !== null && near(pending.replyCostUsd, 0) && near(pending.sideCostUsd, 0.05),
+      `a turn still waiting on its retry has no reply yet — both attempts on the side ($${pending?.sideCostUsd.toFixed(3)})`
     );
 
     console.log(
