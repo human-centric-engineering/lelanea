@@ -303,6 +303,14 @@ describe('planRecap — when it is owed', () => {
     await expect(planRecap(USER, S2)).resolves.toMatchObject({ prior: { id: S1.id } });
   });
 
+  it('is not owed when the session looked back to has lost its row', async () => {
+    h.tables.journeyEvent.splice(
+      h.tables.journeyEvent.findIndex((row) => row.id === S1.id),
+      1
+    );
+    await expect(planRecap(USER, S2)).resolves.toBeNull();
+  });
+
   it('never looks back to another person’s session', async () => {
     // The population: OTHER has a later exchange, and even a turn row naming my session id.
     exchange(OTHER, 'ses_other_1', 'o1', 'Their words', hour(30));
@@ -465,6 +473,63 @@ describe('readRecapMaterial — what it carries, for this person only', () => {
     const material = await readRecapMaterial(ME, PRIOR);
     expect(material.text.match(/\[Material ends\]/g)).toHaveLength(1);
     expect(material.text.trimEnd().endsWith('[Material ends]')).toBe(true);
+  });
+
+  it('names only the steps it has words for: entering a module, and moving on from one', async () => {
+    h.tables.journeyEvent.push(
+      {
+        id: 'j1',
+        userId: ME,
+        type: 'node_completed',
+        moduleSlug: 'onboarding',
+        nodeKey: 'onboarding',
+        occurredAt: hour(11),
+      },
+      {
+        id: 'j2',
+        userId: ME,
+        type: 'node_entered',
+        moduleSlug: null,
+        nodeKey: 'curiosity-of-self',
+        occurredAt: hour(12),
+      },
+      {
+        id: 'j3',
+        userId: ME,
+        type: 'module.feedback',
+        moduleSlug: 'values',
+        nodeKey: null,
+        occurredAt: hour(13),
+      },
+      {
+        id: 'j4',
+        userId: ME,
+        type: 'node_entered',
+        moduleSlug: null,
+        nodeKey: null,
+        occurredAt: hour(14),
+      }
+    );
+
+    const material = await readRecapMaterial(ME, PRIOR);
+
+    expect(material.text).toContain(
+      'Their journey since then: moved on from Onboarding; began Curiosity of self.'
+    );
+    expect(material.account.journey).toBe(2);
+  });
+
+  it('skips a message with nothing in it', async () => {
+    exchange(ME, S1.id, 'm-blank', '   ', hour(11));
+    const material = await readRecapMaterial(ME, PRIOR);
+    expect(material.account.words).toBe(1);
+  });
+
+  it('says so when nothing they said was kept', async () => {
+    h.tables.aiMessage.length = 0;
+    const material = await readRecapMaterial(ME, PRIOR);
+    expect(material.text).toContain('Nothing they said last time was kept.');
+    expect(material.account.words).toBe(0);
   });
 
   it('says so when nothing has changed since', async () => {
