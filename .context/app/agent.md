@@ -513,8 +513,10 @@ user and are in Daybreak's export.
   attempt recorded.
 - If a later session was removed (f-forget-session), the latest one left is
   already closed. It is never resumed: the next arrival opens a fresh session,
-  numbered past every session a close row still names, so a removed session's
-  ids are never used again.
+  numbered past every session a close row still names, so no surviving row's id
+  is reused. **A removed current session leaves no row naming it**, so its
+  ordinal, and with it its ids, can come round again. f-forget-session must
+  leave a tombstone if anything keeps a forgotten session's id.
 
 **Two tabs at once open one session.** A row's id is a digest of
 `(userId, ordinal, kind)`, and the close and the open are written in one

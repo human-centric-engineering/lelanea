@@ -77,8 +77,8 @@ export interface Arrival {
   opened: boolean;
 }
 
-const startedPayloadSchema = z.object({ ordinal: z.number().int().positive() });
-const closedPayloadSchema = z.object({ ordinal: z.number().int().positive() });
+/** Both kinds of row carry their session's ordinal; a close also names its session. */
+const ordinalPayloadSchema = z.object({ ordinal: z.number().int().positive() });
 
 /**
  * The id of a session's started or closed row: a digest of the person, the
@@ -111,7 +111,7 @@ interface StartedRow {
 }
 
 function toSession(row: StartedRow, closedAt: Date | null): Session {
-  const parsed = startedPayloadSchema.safeParse(row.payload);
+  const parsed = ordinalPayloadSchema.safeParse(row.payload);
   // Only this file writes the row, so an unreadable payload is a corrupt row,
   // and guessing its ordinal could reuse a live session's id.
   if (!parsed.success) throw new Error(`Session row ${row.id} has no readable ordinal`);
@@ -122,7 +122,7 @@ const STARTED_SELECT = { id: true, occurredAt: true, payload: true } as const;
 
 /** The ordinal a close row names. Only this file writes it, so unreadable is corrupt. */
 function closeOrdinal(row: { id: string; payload: unknown }): number {
-  const parsed = closedPayloadSchema.safeParse(row.payload);
+  const parsed = ordinalPayloadSchema.safeParse(row.payload);
   if (!parsed.success) throw new Error(`Session close ${row.id} has no readable ordinal`);
   return parsed.data.ordinal;
 }
@@ -165,7 +165,9 @@ export async function arriveSession(userId: string, now: Date = new Date()): Pro
   // The latest session is already closed only when a later one was removed
   // (f-forget-session): sessions are closed by the arrival that opens the
   // next. Then open afresh, closing nothing, numbered past every session a
-  // close still names, so no id of a removed session is used again.
+  // row still names, so no surviving row's id is reused. A removed CURRENT
+  // session leaves no row naming it, so its ordinal can come round again:
+  // f-forget-session must tombstone it if anything outlives it by its id.
   const decision =
     latest && closedOrdinal >= latest.ordinal
       ? ({ kind: 'open' } as const)
