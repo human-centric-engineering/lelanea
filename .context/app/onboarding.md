@@ -239,6 +239,9 @@ event, and an answer revised afterwards.
 
 ## The AI opens the first conversation (t-122)
 
+Each later session opens with a recap built on this mechanism (f-recap t-142):
+[`conversation.md` → The recap](./conversation.md#the-recap--the-ai-opens-each-new-session-f-recap-t-142).
+
 Owner ruling, 1 Oct 2026: after the hand-off the AI speaks first, on the
 person's own words. `lib/app/conversation/opening.ts` builds it out of the
 pieces a turn already has, and Sunrise's `openingTurn` (#474), which lets the
