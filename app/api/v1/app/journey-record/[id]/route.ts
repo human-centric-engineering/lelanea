@@ -30,13 +30,12 @@ export const PATCH = withAuth<{ id: string }>(
     const edit = await validateRequestBody(request, ownEntryEditSchema);
     const entry = await editOwnEntry(session.user.id, id, edit);
 
-    // Which fields changed, never what to.
+    // Which fields changed, never what to. A parsed edit carries only the keys
+    // that were sent.
     log.info('Own journey entry changed', {
       userId: session.user.id,
       entryId: id,
-      fields: Object.entries(edit).flatMap(([field, value]) =>
-        value === undefined ? [] : [field]
-      ),
+      fields: Object.keys(edit),
     });
 
     return successResponse(entry);
