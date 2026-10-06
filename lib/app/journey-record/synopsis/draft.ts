@@ -119,6 +119,8 @@ interface SynopsisAgent {
   provider: string;
   model: string;
   fallbackProviders: string[];
+  /** The operator's setting on the agent, as a turn would use it. */
+  temperature: number;
   systemPrompt: string;
 }
 
@@ -136,6 +138,7 @@ async function readSeatAgent(): Promise<SynopsisAgent | null> {
     provider: agent.provider,
     model: agent.model,
     fallbackProviders: agent.fallbackProviders,
+    temperature: agent.temperature,
     // Composed exactly as the chat handler composes a turn's, by the one helper
     // the voice comparison and the turn record already share.
     systemPrompt: composeAgentPrompt(agent).systemPrompt,
@@ -185,6 +188,7 @@ async function askForDraft(
       responseSchemaName: 'journey_synopsis',
       parse: parseSynopsisReply,
       retryUserMessage: SYNOPSIS_RETRY_MESSAGE,
+      temperature: agent.temperature,
       maxTokens: SYNOPSIS_MAX_TOKENS,
       timeoutMs: SYNOPSIS_TIMEOUT_MS,
       phase: SYNOPSIS_PHASE,

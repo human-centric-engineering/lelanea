@@ -14,7 +14,11 @@ import {
   synopsisMessages,
   synopsisTranscript,
 } from '@/lib/app/journey-record/synopsis/prompt';
-import { JOURNEY_SUMMARY_MAX } from '@/lib/app/journey-record/entry';
+import {
+  JOURNEY_BODY_MAX,
+  JOURNEY_OUTCOME_TEXT_MAX,
+  JOURNEY_SUMMARY_MAX,
+} from '@/lib/app/journey-record/entry';
 
 const VALID = {
   summary: 'Thinking about leaving nursing',
@@ -75,6 +79,19 @@ describe('the provider directive', () => {
       'outcomes',
     ]);
     expect(SYNOPSIS_RESPONSE_SCHEMA.additionalProperties).toBe(false);
+  });
+
+  it('carries the same length limits the reply is validated against', () => {
+    const properties = SYNOPSIS_RESPONSE_SCHEMA.properties as Record<
+      string,
+      { minLength?: number; maxLength?: number; items?: { properties: Record<string, unknown> } }
+    >;
+    expect(properties.summary).toMatchObject({ minLength: 1, maxLength: JOURNEY_SUMMARY_MAX });
+    expect(properties.body).toMatchObject({ minLength: 1, maxLength: JOURNEY_BODY_MAX });
+    expect(properties.outcomes.items?.properties.text).toMatchObject({
+      minLength: 1,
+      maxLength: JOURNEY_OUTCOME_TEXT_MAX,
+    });
   });
 });
 

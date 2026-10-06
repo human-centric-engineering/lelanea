@@ -164,7 +164,16 @@ const uniqueViolationSchema = z.object({
     .object({
       target: z.union([z.string(), z.array(z.string())]).optional(),
       driverAdapterError: z
-        .object({ cause: z.object({ constraint: z.object({ index: z.string() }) }) })
+        .object({
+          cause: z.object({
+            // The pg adapter names the index, or the columns when Postgres
+            // reports no constraint name.
+            constraint: z.union([
+              z.object({ index: z.string() }),
+              z.object({ fields: z.array(z.string()) }),
+            ]),
+          }),
+        })
         .optional(),
     })
     .optional(),
@@ -178,8 +187,12 @@ function isSessionAlreadyDrafted(err: unknown): boolean {
   const parsed = uniqueViolationSchema.safeParse(err);
   if (!parsed.success) return false;
   const meta = parsed.data.meta;
-  const index =
-    meta?.driverAdapterError?.cause.constraint.index ?? [meta?.target ?? []].flat().join(',');
+  const constraint = meta?.driverAdapterError?.cause.constraint;
+  const index = constraint
+    ? 'index' in constraint
+      ? constraint.index
+      : constraint.fields.join(',')
+    : [meta?.target ?? []].flat().join(',');
   return index.includes('sessionId');
 }
 

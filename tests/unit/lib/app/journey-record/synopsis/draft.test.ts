@@ -368,6 +368,7 @@ beforeEach(() => {
     provider: '',
     model: '',
     fallbackProviders: [],
+    temperature: 0.6,
     systemInstructions: AGENT_INSTRUCTIONS,
     persona: null,
     brandVoiceInstructions: null,
@@ -512,6 +513,20 @@ describe('one draft per session', () => {
       await expect(draftSynopsis(ANA, session(), NOW)).rejects.toThrow('Unique constraint failed');
     }
   );
+
+  it('reads the session’s columns when the adapter names no index', async () => {
+    substantialSession();
+    const { prisma } = await import('@/lib/db/client');
+    vi.mocked(prisma.appJourneyEntry.create).mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { driverAdapterError: { cause: { constraint: { fields: ['sessionId'] } } } },
+      })
+    );
+
+    expect(await draftSynopsis(ANA, session(), NOW)).toBe('exists');
+  });
 
   it('reads the session’s index from `meta.target` too', async () => {
     substantialSession();
@@ -890,6 +905,12 @@ describe('the seat', () => {
     const { system } = sentPrompt();
     expect(system).toContain(`${PROFILE_PERSONA}\n\nAnd brief.`);
     expect(system).toContain('Never mention the weather.');
+  });
+
+  it('calls the model at the temperature an operator set on the agent', async () => {
+    substantialSession();
+    await draftSynopsis(ANA, session(), NOW);
+    expect(mocks.chat.mock.calls[0][1]).toMatchObject({ temperature: 0.6 });
   });
 
   it('reads the synopsis seat, not a conversation seat', async () => {

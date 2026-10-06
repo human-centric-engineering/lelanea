@@ -65,6 +65,8 @@ import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import { decideSession } from '@/lib/app/sessions/boundary';
+// Type only: the drafting module itself is imported when a close happens.
+import type { ClosedSession } from '@/lib/app/journey-record/synopsis/material';
 
 /** The event types, as written to `framework_journey_event.type`. */
 export const SESSION_EVENT_TYPE = {
@@ -127,11 +129,7 @@ export interface ArrivalOptions {
  * throws: a draft that does not happen costs the person an account, never the
  * arrival.
  */
-function queueDraftOfClosed(
-  userId: string,
-  closed: Session & { closedAt: Date; nextStartedAt: Date },
-  options: ArrivalOptions
-): void {
+function queueDraftOfClosed(userId: string, closed: ClosedSession, options: ArrivalOptions): void {
   const work = import('@/lib/app/journey-record/synopsis/draft')
     .then(({ queueSynopsisDraft }) => queueSynopsisDraft(userId, closed))
     .catch((err: unknown) => {

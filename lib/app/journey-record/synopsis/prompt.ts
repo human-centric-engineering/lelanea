@@ -19,6 +19,7 @@ import type { LlmMessage } from '@/lib/orchestration/llm/types';
 import {
   JOURNEY_BODY_MAX,
   JOURNEY_OUTCOME_KINDS,
+  JOURNEY_OUTCOME_TEXT_MAX,
   JOURNEY_OUTCOMES_MAX,
   JOURNEY_SUMMARY_MAX,
   journeyOutcomeSchema,
@@ -35,12 +36,16 @@ export const synopsisReplySchema = z
   .strict();
 export type SynopsisReply = z.infer<typeof synopsisReplySchema>;
 
-/** The same contract, as the provider's structured-output directive. */
+/**
+ * The same contract, as the provider's structured-output directive, with the
+ * same limits: a provider that honours it cannot return a reply the schema
+ * above would refuse on length.
+ */
 export const SYNOPSIS_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
-    summary: { type: 'string', maxLength: JOURNEY_SUMMARY_MAX },
-    body: { type: 'string' },
+    summary: { type: 'string', minLength: 1, maxLength: JOURNEY_SUMMARY_MAX },
+    body: { type: 'string', minLength: 1, maxLength: JOURNEY_BODY_MAX },
     outcomes: {
       type: 'array',
       maxItems: JOURNEY_OUTCOMES_MAX,
@@ -48,7 +53,7 @@ export const SYNOPSIS_RESPONSE_SCHEMA: Record<string, unknown> = {
         type: 'object',
         properties: {
           kind: { type: 'string', enum: [...JOURNEY_OUTCOME_KINDS] },
-          text: { type: 'string' },
+          text: { type: 'string', minLength: 1, maxLength: JOURNEY_OUTCOME_TEXT_MAX },
         },
         required: ['kind', 'text'],
         additionalProperties: false,
