@@ -409,6 +409,52 @@ describe('fetchTranscript', () => {
     });
   });
 
+  it('carries the id of the owed opening, and a recap account leniently (f-recap t-142)', async () => {
+    const account = {
+      turnId: 'app_recap_v1_ses_2',
+      seat: 'facilitator',
+      status: 'completed',
+      attempts: 1,
+      modelId: null,
+      providerSlug: null,
+      fingerprintVersion: null,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+      pricing: null,
+      errorCode: null,
+      startedAt: '2026-10-02T09:00:00.000Z',
+      completedAt: null,
+    };
+    const recap = { since: '2026-10-01T09:00:00.000Z', words: 2, notes: [], journey: 0 };
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              seat: 'facilitator',
+              conversationId: 'c1',
+              entries: [
+                { ...entry, id: 'a1', turn: { ...account, recap } },
+                { ...entry, id: 'a2', turn: { ...account, recap: { words: -1 } } },
+              ],
+              opening: true,
+              openingTurnId: 'app_recap_v1_ses_3',
+            },
+          }),
+          { status: 200 }
+        )
+    );
+
+    const transcript = await fetchTranscript('facilitator', { fetchImpl });
+
+    expect(transcript).toMatchObject({ opening: true, openingTurnId: 'app_recap_v1_ses_3' });
+    const turns = transcript.entries.map((e) => (e.kind === 'reply' ? e.turn : null));
+    expect(turns[0]).toMatchObject({ recap });
+    expect(turns[1]).toMatchObject({ recap: null });
+  });
+
   it('throws on a refusal', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 401 }));
     await expect(fetchTranscript('facilitator', { fetchImpl })).rejects.toBeInstanceOf(TurnRefused);

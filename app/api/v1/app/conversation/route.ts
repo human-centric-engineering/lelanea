@@ -12,8 +12,10 @@
  * a 404 — the pane renders either way.
  *
  * On the facilitator seat the answer also carries `opening`: whether the pane
- * should ask the AI to speak first (`POST …/conversation/opening`, t-122).
- * Only when nothing is in the transcript; `openingDue` says the rest.
+ * should ask the AI to speak first (`POST …/conversation/opening`), and, when
+ * it should, `openingTurnId`, the id that turn will run under. On an empty
+ * transcript that is the welcome (t-122, `openingDue`); on one under way, the
+ * recap that opens a new session (f-recap t-142, `recapDue`).
  *
  * Reading the pane is how a person arrives, so this opens their session, or
  * resumes the one they are in, before anything else is decided (f-recap
@@ -35,8 +37,10 @@ import { getRouteLogger } from '@/lib/api/context';
 import { validateQueryParams } from '@/lib/api/validation';
 import { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 import { readTranscript } from '@/lib/app/conversation/transcript';
-import { openingDue } from '@/lib/app/conversation/opening';
-import { arriveSessionQuietly } from '@/lib/app/sessions/store';
+import { openingDue, OPENING_TURN_ID } from '@/lib/app/conversation/opening';
+import { recapDue } from '@/lib/app/conversation/recap';
+import { arriveSessionQuietly, type Arrival } from '@/lib/app/sessions/store';
+import type { GateSubject } from '@/lib/app/gateway/gate';
 
 const querySchema = z.object({
   seat: z
@@ -55,6 +59,21 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
+/**
+ * The id of the opening the pane should ask for now, or null when none is owed.
+ * The welcome only ever on an empty transcript; otherwise the recap, which an
+ * empty one can be owed too — a conversation the person deleted leaves their
+ * sessions behind it.
+ */
+async function owedOpening(
+  user: GateSubject,
+  empty: boolean,
+  arrival: Arrival | null
+): Promise<string | null> {
+  if (empty && (await openingDue(user))) return OPENING_TURN_ID;
+  return arrival ? recapDue(user, arrival.session) : null;
+}
+
 export const GET = withAuth(async (request, session) => {
   const log = await getRouteLogger(request);
   const query = validateQueryParams(request.nextUrl.searchParams, querySchema);
@@ -66,10 +85,13 @@ export const GET = withAuth(async (request, session) => {
     arriveSessionQuietly(session.user.id),
     readTranscript(session, seat),
   ]);
-  // Asked only of an empty transcript: a conversation under way has no opening
-  // owed, and most reads are of one (t-122 review round 3).
+  // The welcome is asked only of an empty transcript (t-122 review round 3);
+  // the recap answers a sitting already under way in a couple of queries
+  // (`recapDue`).
   if (seat === CONVERSATION_SEAT) {
-    transcript.opening = transcript.entries.length === 0 && (await openingDue(session.user));
+    const turnId = await owedOpening(session.user, transcript.entries.length === 0, arrival);
+    transcript.opening = turnId !== null;
+    if (turnId !== null) transcript.openingTurnId = turnId;
   }
 
   log.info('Own conversation read', {
@@ -78,6 +100,7 @@ export const GET = withAuth(async (request, session) => {
     entries: transcript.entries.length,
     resumed: transcript.conversationId !== null,
     opening: transcript.opening ?? false,
+    openingTurnId: transcript.openingTurnId ?? null,
     sessionOpened: arrival?.opened ?? false,
   });
 

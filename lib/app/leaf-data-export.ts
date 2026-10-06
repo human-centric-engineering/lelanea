@@ -113,7 +113,7 @@ export function initLeafSubjectSources(): void {
         section: 'turns',
         disposition: 'export',
         description:
-          'A record of each turn you took with the assistant: when, in which part of the app, which AI model answered and which version of Lelañea Fulton’s voice it was given, how it was steered to speak (its register, and which of your voice leanings it applied, or set aside for a while to keep things gentle), how much text it read and wrote, what it cost, and which of your sessions with the app it was part of. Your words and the replies are in your conversations, not here.',
+          'A record of each turn you took with the assistant: when, in which part of the app, which AI model answered and which version of Lelañea Fulton’s voice it was given, how it was steered to speak (its register, and which of your voice leanings it applied, or set aside for a while to keep things gentle), how much text it read and wrote, what it cost, and which of your sessions with the app it was part of. Where the assistant opened a session by recapping the last one, it also says what that recap drew on: how many of your messages, the headings of the notes it was given, and how many steps of your journey. Your words and the replies are in your conversations, not here.',
       },
       {
         // Never the words — see the model's docblock. Categories, tiers, the

@@ -1286,6 +1286,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/app/agent/turn-record.ts',
         'lib/app/agent/metering.ts',
         'lib/app/conversation/opening.ts',
+        // f-recap t-142: the member's own words, quoted back in the recap.
+        'lib/app/conversation/recap.ts',
         'lib/app/memory/delete-exchange.ts',
         'lib/app/memory/delete-conversation.ts',
         'lib/app/memory/memory-index.ts',
@@ -1295,7 +1297,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       ]);
       // Every entry is a settled design, not a gap awaiting a fix.
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.disposition)).toEqual(
-        Array<'by-design'>(13).fill('by-design')
+        Array<'by-design'>(14).fill('by-design')
       );
     },
   },
@@ -1343,6 +1345,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ['lib/app/agent/turn-record.ts', 'by-design'],
         ['lib/app/agent/metering.ts', 'by-design'],
         ['lib/app/conversation/opening.ts', 'by-design'],
+        ['lib/app/conversation/recap.ts', 'by-design'],
         ['lib/app/memory/delete-exchange.ts', 'by-design'],
         ['lib/app/memory/delete-conversation.ts', 'by-design'],
         ['lib/app/memory/memory-index.ts', 'by-design'],

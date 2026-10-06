@@ -534,6 +534,10 @@ timestamps would invent them.
 one, each with `startedAt` and `closedAt`. "Current" is the latest to start, and
 only the next arrival closes it, so read after arriving, as the pane does.
 
+**What opens one.** The AI opens each new session after the first with a
+recap of the last session that had an exchange (f-recap t-142):
+[`conversation.md` → The recap](./conversation.md#the-recap--the-ai-opens-each-new-session-f-recap-t-142).
+
 ### Privacy
 
 A turn record is about the person: `ON DELETE CASCADE` on a hand-written FK to

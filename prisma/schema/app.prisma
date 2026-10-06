@@ -554,6 +554,11 @@ model AppTurn {
   /// a reverse field to Daybreak's `JourneyEvent`. Null on every turn from before
   /// sessions, deliberately not backfilled: those sittings were never recorded.
   sessionId          String?
+  /// What a session recap drew on (f-recap t-142): counts and note headings,
+  /// never the material — `recapAccountSchema` in
+  /// `lib/app/conversation/recap-account.ts`. Written when the recap is
+  /// claimed; the account under the reply reads it back. Null on every other turn.
+  recap              Json?
   conversationId     String?
   userMessageId      String?
   assistantMessageId String?

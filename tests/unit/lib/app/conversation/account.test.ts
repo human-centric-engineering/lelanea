@@ -34,6 +34,7 @@ const turn = (fields: Partial<TurnAccount> = {}): TurnAccount => ({
   register: null,
   registerSource: null,
   leanings: null,
+  recap: null,
   inputTokens: 3_812,
   outputTokens: 240,
   costUsd: 0.0123,
@@ -246,6 +247,55 @@ describe('the parts', () => {
       })
     );
     expect(parts.map((p) => p.key)).toEqual(['looked_up', 'wrote_profile', 'pointed_to']);
+  });
+
+  it('says a recap opened the session, and names what it drew on (f-recap t-142)', () => {
+    const parts = accountParts(
+      input({
+        capabilities: ['search_knowledge_base'],
+        turn: turn({
+          recap: {
+            since: '2026-09-18T09:00:00.000Z',
+            words: 3,
+            notes: ['life wealth', 'life family'],
+            journey: 1,
+          },
+        }),
+      })
+    );
+
+    // First: it is what the turn was.
+    expect(parts[0]).toEqual({
+      key: 'recap',
+      line: 'Opened the session with a recap of the last one',
+      detail:
+        'Opened this session with a recap of the last one, drawing on 3 things you said last time; your notes on life wealth and life family; and where your journey has moved since.',
+    });
+    expect(parts[1]?.key).toBe('looked_up');
+  });
+
+  it('says one thing in the singular, and only what a recap drew on', () => {
+    const parts = accountParts(
+      input({ turn: turn({ recap: { since: 'x', words: 1, notes: [], journey: 0 } }) })
+    );
+    expect(parts[0]?.detail).toBe(
+      'Opened this session with a recap of the last one, drawing on one thing you said last time.'
+    );
+  });
+
+  it('sets the sources apart with semicolons when the notes are a list of their own', () => {
+    const parts = accountParts(
+      input({
+        turn: turn({ recap: { since: 'x', words: 2, notes: ['a', 'b', 'c'], journey: 1 } }),
+      })
+    );
+    expect(parts[0]?.detail).toBe(
+      'Opened this session with a recap of the last one, drawing on 2 things you said last time; your notes on a, b, and c; and where your journey has moved since.'
+    );
+  });
+
+  it('says nothing of a recap on a turn that was not one', () => {
+    expect(accountParts(input()).map((part) => part.key)).not.toContain('recap');
   });
 
   it('is composed from a list of sources — the seam §11 and §13 add to', () => {

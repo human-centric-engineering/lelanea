@@ -202,3 +202,24 @@ describe('the done frame carries the leanings (f-leanings t-136)', () => {
     expect(parsed).toMatchObject({ leanings: undefined });
   });
 });
+
+describe('the done frame carries what a recap drew on (f-recap t-142)', () => {
+  const done = {
+    tokenUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    costUsd: 0.001,
+  };
+  const recap = { since: '2026-10-01T09:00:00.000Z', words: 2, notes: ['life wealth'], journey: 1 };
+
+  it('keeps the recap account', () => {
+    expect(parseConversationEvent(block('done', { ...done, recap }))).toMatchObject({
+      type: 'done',
+      recap,
+    });
+  });
+
+  it('drops an account it cannot read without dropping the frame', () => {
+    const parsed = parseConversationEvent(block('done', { ...done, recap: { words: 'many' } }));
+    expect(parsed).toMatchObject({ type: 'done', costUsd: 0.001 });
+    expect(parsed).toMatchObject({ recap: undefined });
+  });
+});

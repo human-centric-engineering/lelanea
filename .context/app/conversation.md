@@ -30,9 +30,10 @@ lib/app/conversation/
   events.ts                                    the leaf SSE event schema
   transcript.ts                                readTranscript() · assembleTranscript()
   opening.ts · opening-id.ts                   the AI's opening after onboarding (t-122)
+  recap.ts · recap-account.ts                  the recap that opens each new session (f-recap t-142)
   copy.ts                                      every word the pane says of its own
 app/api/v1/app/conversation/route.ts           GET — the transcript, read back
-app/api/v1/app/conversation/opening/route.ts   POST — the AI's opening, streamed (t-122)
+app/api/v1/app/conversation/opening/route.ts   POST — the AI's opening or a recap, streamed (t-122, t-142)
 ```
 
 ## The transcript read — `GET /api/v1/app/conversation?seat=`
@@ -63,18 +64,22 @@ arm nor an admin's ownerless arm can widen a transcript.
 **The shape:**
 
 ```ts
-{ seat, conversationId: string | null, entries: TranscriptEntry[], opening?: boolean }
+{ seat, conversationId: string | null, entries: TranscriptEntry[],
+  opening?: boolean, openingTurnId?: string }
 
 { kind: 'user',  id, text, at, turnId: string | null }
 { kind: 'reply', id, text, at, turnId, citations, turn: TurnAccount | null }
 // TurnAccount: turnId, seat, status, attempts, modelId, providerSlug,
-//   fingerprintVersion, register, registerSource, inputTokens, outputTokens, costUsd (null = unpriced,
-//   never 0), pricing, errorCode, startedAt, completedAt
+//   fingerprintVersion, register, registerSource, leanings, recap, inputTokens, outputTokens,
+//   costUsd (null = unpriced, never 0), pricing, errorCode, startedAt, completedAt
 ```
 
 `opening` is on the facilitator seat only: whether the pane should ask for the
-AI's opening now — true only on an empty transcript, and only when `openingDue`
-says so ([`onboarding.md`](./onboarding.md#the-ai-opens-the-first-conversation-t-122)).
+AI to speak first now, and `openingTurnId` the id it will run under. On an
+empty transcript that is the welcome, when `openingDue` says so
+([`onboarding.md`](./onboarding.md#the-ai-opens-the-first-conversation-t-122));
+on a conversation under way, the recap, when `recapDue` says so
+([below](#the-recap--the-ai-opens-each-new-session-f-recap-t-142)).
 
 `turn` is `null` on a reply written before the seam existed. A tool-using
 turn writes one assistant row per pass; consecutive assistant rows become one
@@ -108,11 +113,133 @@ second request with the same id gets", "The deadlines"):
 
 The AI's opening after onboarding (t-122) needs no correction: the agent
 opens it through Sunrise's `openingTurn`, so it has no user row, and its reply
-stands first, joined to its turn row by `assistantMessageId`.
+stands first, joined to its turn row by `assistantMessageId`. A session recap
+(t-142) has no user row either, and lands mid-conversation, so it is placed by
+its window: see [the recap](#the-recap--the-ai-opens-each-new-session-f-recap-t-142).
 
 All are pure (`assembleTranscript`) and pinned in
 `tests/unit/lib/app/conversation/transcript.test.ts` against fixtures that
 first show the thing corrected is there.
+
+## The recap — the AI opens each new session (f-recap t-142)
+
+Product description §3.8: a person who told her something specific last week
+is met with it this week, and never asked it again. Owner ruling, 6 Oct 2026
+(journalled on f-recap): the recap is the **facilitator's own opening turn**,
+one per new session. It does not use the `synopsis` seat or
+`get_progress_synopsis`, which stay free for f-journey-record's session
+synopses. `lib/app/conversation/recap.ts` builds it on the welcome's mechanism
+([`onboarding.md`](./onboarding.md#the-ai-opens-the-first-conversation-t-122)),
+so it is a turn through `runFacilitationTurn`: metered, deadlined, recorded,
+crisis-screened, steered to the seat's register and leanings, and opened
+through `openingTurn` with nothing stored in the person's name.
+
+**Once per session, keyed on the turn id.** It runs under
+`recapTurnId(session.id)` (`app_recap_v1_<session id>`, `opening-id.ts`), so
+the ledger gives it once per sitting: a reload replays the recorded reply with
+no model call, a second tab is `turn_in_flight`, and a failure runs again, at
+most `MAX_OPENING_ATTEMPTS` times. The hook hashes and screens the fixed
+`RECAP_MESSAGE` alone, so a re-run whose material has moved on is still the
+same turn. New words need a new version in the id, as the welcome's do.
+
+**When it is owed** (`planRecap`; `recapDue` adds "someone to speak, and its
+reply not already in the transcript" — completed, or `reply_not_linked`, which
+the transcript shows; a running one is still offered, so the pane adopts its
+replay. The route refuses a `reply_not_linked` one too, whichever tab asks):
+
+- the facilitator seat, past the gate, handed off;
+- a session in which **nothing has been said yet** on the seat: no turn
+  stamped with it other than the recap, no message of the person's since it
+  began (a turn whose arrival failed is stamped with none), and no crisis
+  answered since. Whoever speaks first in a sitting, it is never the recap
+  after them; the pane also lets it go when the person sends first;
+- an **earlier session with an exchange**: a completed turn, stamped with an
+  earlier session, that answered a message of theirs. The latest such session
+  is the one looked back to, so a sitting where they only looked in is passed
+  over rather than recapped as empty.
+
+The first-ever arrival has no earlier exchange, so it keeps the welcome; the
+two never compete. The transcript read asks the welcome first on an empty
+transcript and the recap otherwise — an empty one too, since a conversation the
+person deleted leaves their sessions behind it. The recap checks "said in this
+session" first, alone, because that one query answers most reads.
+
+**What it carries** travels with the turn as its system message, after
+`RECAP_MESSAGE`, because the context block is cached per person for a minute
+and never sees the turn. It is read inside the turn's run, which the hook calls
+only for the request that claimed it, so a replay or an in-flight refusal reads
+none of it. Read for this person only, fenced, and bounded (`MAX_RECAP_*`):
+
+| Material                      | Read from                                                                                                                                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Their own words, oldest first | the user messages of their turns stamped with that session, joined under their own conversation; the latest few (`MAX_RECAP_MESSAGES`), each cut                                              |
+| Notes captured since          | `getNotes()`, so hidden slots and leanings are already gone; removed notes left out; the stored reading on one line, so a special-category one is its sentinel and none can forge a `> ` line |
+| The journey since             | `node_entered` / `node_completed` in `framework_journey_event` since that session began; "began" / "moved on from" a module, never "completed" (§6.12)                                        |
+
+A deleted exchange's words are gone from the message table, so they never
+come back here. The material is reference, not instructions, and the ask says
+so; the fence markers are stripped from anything the person wrote. This is the
+deterministic stand-in for the kept synopses f-journey-record will replace it
+with.
+
+**The framing** (`RECAP_MESSAGE`): quote a few of their words exactly, from the
+`> ` lines only; say briefly what changed; ask one open question about what has
+shifted; never ask for anything the notes hold; no list, no dates.
+
+**Nothing understood invisibly.** What it drew on — the session's start, how
+many of their messages, the notes' headings and how many journey steps, never
+the material — is kept on `app_turn.recap` (`recapAccountSchema`) by the
+request that claimed the turn, sent on its `done` frame, and read back on
+reload. The account under the reply leads with it: "Opened this session with a
+recap of the last one, drawing on…" (`account.ts`). A replay says what the
+answering attempt drew on, not what the material says now.
+
+**In the transcript.** A recap has no row of the person's before it and lands
+below the last session's reply, so `assembleTranscript` places it by its window:
+from its claim (less `NO_USER_ROW_GRACE_MS`, which the reply lookup grants it
+too) to its linked reply, or to when it failed, and never past the person's
+next message. Its rows are its own reply, never the tail of the one above; a
+failed recap's rows are dropped; and once a reply's terminal row is read, any
+assistant row before the person speaks again is an earlier attempt's fragment
+and is dropped.
+
+**The pane** takes the id from `openingTurnId` and runs it when idle, below
+what is there. A reply that lands replaces whatever the read showed of it — a
+recap still running when the pane was read has its rows so far in the read, and
+the replay it is answered with is the whole of it; one that does not land takes
+nothing away. A dropped connection reads the transcript again and adopts it
+whole, provided the pane still holds what it held when it asked.
+
+**Not yet:**
+
+- A tab left open across the gap is not recapped: the recap is decided on the
+  pane's read, and the person's next turn then speaks first.
+- Deleting the last exchange of a session (t-127) deletes the recap after it
+  too: an exchange's window runs to the person's next message, and the recap
+  sits inside it.
+- A failed recap attempt's fragment, re-run, joins the reply above it when that
+  reply has no linked final row (`reply_not_linked`). Bounding it needs the
+  message clock compared with the settle clock, which `turn-record.ts` warns
+  can skew and drop a real reply; three rare conditions together did not earn
+  that risk (code review round 1).
+- A member's own turn may use a recap's id (`openingTurnId` is in the read),
+  which spoils that session's recap and groups that turn as one. It touches
+  only their own conversation. Refusing the reserved prefixes belongs in the
+  turn hook, which must still accept them from the opening and recap routes
+  (code review round 3).
+- If the session looked back to has lost its started row (f-forget-session),
+  no earlier session is tried: the recap waits for the next exchange. Whether a
+  forgotten session leaves a tombstone is f-forget-session's decision.
+- The material is the person's own words and notes, in their own
+  conversation, framed as reference in the turn's system message, which
+  Sunrise's input guard does not scan for an opening turn (as for the welcome).
+
+**Proved on a real database** by `npm run smoke:app-recap`: a first session
+with a real turn and a note, moved thirteen hours back; the next arrival opens
+a second session and owes the recap; the real hook and model quote what they
+said and do not ask for the note; the row keeps the account; the transcript
+stands it as its own reply with the account naming it; asked again, it replays
+with no second model call.
 
 ## The turn — `streamTurn()`
 
@@ -556,6 +683,8 @@ the chrome's words.
 | `tests/unit/components/app/conversation/use-conversation.test.tsx` | The id sent, then equal on the retry, for each retryable ending; `not_sent` and `TURN_ID_REUSED` drop it; `TURN_IN_FLIGHT` mints nothing; a newer draft kept; the status read on mount and after an ending, no timer in the source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `tests/unit/lib/app/conversation/opening.test.ts`                  | When the opening is owed (the gate, the hand-off, nothing else said, not yet completed); the turn it runs carries the app's words under the opening's id; the words pass the input guard                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `tests/unit/app/api/v1/app/conversation/opening/route.test.ts`     | No body read; `opening_not_due` and no surface; no chat sub-cap charged; API keys and signed-out callers refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `tests/unit/lib/app/conversation/recap.test.ts`                    | When the recap is owed, one case per rule (the first-ever arrival keeps the welcome; a completed recap is not asked for again); what it carries, for this person only against a second person's rows in the same window; a masked reading stays masked; the fixed ask to the hook and the material to the model; the account kept on the claimed row and sent on `done`, and a replay's from the row                                                                                                                                                                                                                                                                                                                                                            |
+| `tests/unit/lib/app/agent/turn-window.test.ts`                     | The welcome and a recap reach back by the grace; a member turn does not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `tests/unit/components/app/conversation/transcript.test.tsx`       | A live opening shows the thinking row and no bubble of the person's                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `tests/unit/lib/app/conversation/copy.test.ts`                     | `ceilingEnding`: the three beats; spend past the limit stated as it is; "at least" when some replies had no price; no amounts under half a cent; the reset read in UTC; a $0 limit with no date; no figures at all; each unusable figure dropping only its own clause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `tests/unit/lib/app/agent/endings.test.ts`                         | Each named refusal code maps to `not_sent`; every other platform code does not; no platform text in any frame; the limit frame's "at least", its amounts under half a cent, and the reset day named in UTC on a machine that is not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |

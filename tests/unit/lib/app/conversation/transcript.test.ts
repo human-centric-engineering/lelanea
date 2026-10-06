@@ -134,7 +134,9 @@ function turn(
     register: string | null;
     registerSource: string | null;
     leanings: unknown;
+    recap: unknown;
     startedAt: Date;
+    completedAt: Date | null;
   }> = {}
 ) {
   return {
@@ -148,6 +150,7 @@ function turn(
     register: null as string | null,
     registerSource: null as string | null,
     leanings: null as unknown,
+    recap: null as unknown,
     inputTokens: 100,
     outputTokens: 40,
     costUsd: 0.00063,
@@ -649,6 +652,124 @@ describe('assembleTranscript — the opening (t-122)', () => {
   });
 });
 
+describe('assembleTranscript — a session recap (f-recap t-142)', () => {
+  const RECAP = 'app_recap_v1_ses_2';
+  const ACCOUNT = { since: at(0).toISOString(), words: 1, notes: ['life wealth'], journey: 0 };
+  /** Last session: one exchange, its reply ended at a1. */
+  const lastSession = [
+    user('u1', 'My grandmother’s lighthouse', 1, 't1'),
+    assistant('a1', 'Tell me.', 3),
+  ];
+  const lastTurn = turn('t1', { userMessageId: 'u1', assistantMessageId: 'a1' });
+
+  it('stands the recap as its own reply, below the one before, with what it drew on', () => {
+    const entries = assemble(
+      [...lastSession, assistant('r1', 'Last time you spoke of the lighthouse.', 122)],
+      [
+        lastTurn,
+        turn(RECAP, {
+          startedAt: at(120),
+          completedAt: at(123),
+          assistantMessageId: 'r1',
+          recap: ACCOUNT,
+        }),
+      ]
+    );
+
+    const replies = entries.filter((entry) => entry.kind === 'reply');
+    expect(replies).toHaveLength(2);
+    // The reply above keeps its own words: the recap is not its tail.
+    expect(replies[0]).toMatchObject({ id: 'a1', text: 'Tell me.', turnId: 't1' });
+    expect(replies[1]).toMatchObject({
+      id: 'r1',
+      text: 'Last time you spoke of the lighthouse.',
+      turnId: RECAP,
+      turn: { turnId: RECAP, recap: ACCOUNT },
+    });
+  });
+
+  it('owns its rows while still running, and stops at the person’s next message', () => {
+    const entries = assemble(
+      [
+        ...lastSession,
+        assistant('r1', 'Last time…', 122),
+        user('u2', 'Something new', 130, 't2'),
+        assistant('a2', 'Go on.', 132),
+      ],
+      [
+        lastTurn,
+        turn(RECAP, { status: 'running', startedAt: at(120), completedAt: null }),
+        turn('t2', { userMessageId: 'u2', assistantMessageId: 'a2', startedAt: at(130) }),
+      ]
+    );
+
+    expect(entries.map((entry) => entry.id)).toEqual(['u1', 'a1', 'r1', 'u2', 'a2']);
+    expect(entries[2]).toMatchObject({ turnId: RECAP, turn: { status: 'running' } });
+    // The reply to what they said next is that turn's, not the open recap's.
+    expect(entries[4]).toMatchObject({ text: 'Go on.', turnId: 't2' });
+  });
+
+  it('shows nothing of a recap that failed with no reply, and leaves the reply above whole', () => {
+    // The population: the failed recap did leave a fragment behind.
+    const fragment = assistant('r0', 'Half a recap', 122);
+    const entries = assemble(
+      [...lastSession, fragment],
+      [
+        lastTurn,
+        turn(RECAP, {
+          status: 'failed',
+          startedAt: at(120),
+          completedAt: at(125),
+          errorCode: 'timed_out',
+        }),
+      ]
+    );
+
+    expect(entries.map((entry) => entry.id)).toEqual(['u1', 'a1']);
+    expect(entries[1]).toMatchObject({ text: 'Tell me.' });
+  });
+
+  it('gives a row to the latest recap that holds it, past one abandoned while running', () => {
+    const entries = assemble(
+      [...lastSession, assistant('r3', 'This session’s recap.', 202)],
+      [
+        lastTurn,
+        // Abandoned while running last session, before the person spoke again:
+        // its window never closed.
+        turn('app_recap_v1_ses_1b', {
+          status: 'running',
+          startedAt: at(60),
+          completedAt: null,
+          recap: { since: 'x', words: 9, notes: [], journey: 0 },
+        }),
+        turn(RECAP, { status: 'running', startedAt: at(200), completedAt: null, recap: ACCOUNT }),
+      ]
+    );
+
+    expect(entries[2]).toMatchObject({ id: 'r3', turnId: RECAP, turn: { recap: ACCOUNT } });
+  });
+
+  it('drops an earlier attempt’s fragments when the recap ran again', () => {
+    // Attempt one wrote at 105 and failed; the re-run's claim moved to 200.
+    const entries = assemble(
+      [...lastSession, assistant('r0', 'Half a recap', 105), assistant('r1', 'Last time…', 202)],
+      [
+        lastTurn,
+        turn(RECAP, {
+          attempts: 2,
+          startedAt: at(200),
+          completedAt: at(203),
+          assistantMessageId: 'r1',
+        }),
+      ]
+    );
+
+    expect(entries.map((entry) => entry.id)).toEqual(['u1', 'a1', 'r1']);
+    expect(entries[1]).toMatchObject({ text: 'Tell me.' });
+    expect(entries[2]).toMatchObject({ text: 'Last time…', turnId: RECAP });
+  });
+});
+
 describe('readTranscript', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -690,8 +811,9 @@ describe('readTranscript', () => {
     // Through the platform's visibility helper, composed with AND and narrowed
     // to the owner: the shared and ownerless arms cannot widen a transcript.
     expect(where.conversation.AND).toEqual([{ OR: [{ userId: ME }] }, { userId: ME }]);
-    // Under the caller's id: this conversation's turns, and the opening's
-    // row on this seat while a re-run has its conversation id unset (t-122).
+    // Under the caller's id: this conversation's turns, and the opening's and
+    // a recap's row on this seat while a re-run has its conversation id unset
+    // (t-122, t-142).
     expect(findTurns.mock.calls[0][0].where).toEqual({
       userId: ME,
       OR: [
@@ -700,6 +822,11 @@ describe('readTranscript', () => {
           seat: CONVERSATION_SEAT,
           conversationId: null,
           turnId: { startsWith: 'app_opening_' },
+        },
+        {
+          seat: CONVERSATION_SEAT,
+          conversationId: null,
+          turnId: { startsWith: 'app_recap_' },
         },
       ],
     });

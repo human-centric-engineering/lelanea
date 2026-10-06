@@ -42,6 +42,13 @@ import { leaningDimension, type LeaningKey } from '@/lib/app/voice/leanings';
 import { SET_LEANING_SLUG, type LeaningChange } from '@/lib/app/voice/leaning-change';
 import { HELD_WHEN_HARD } from '@/lib/app/voice/leanings-select';
 
+/**
+ * A list in a sentence: "a, b, and c". In the leanings, each item starts with
+ * "toward", so an item's own "and" ("cool and analytical") does not read as
+ * the list's.
+ */
+const listOf = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
+
 /** What a source reads: the reply's own data, live or read back. */
 export interface AccountInput {
   /** When the reply landed — ISO. */
@@ -87,6 +94,44 @@ const NAMED_CAPABILITIES = new Set([
   LOOKED_BACK,
   CHANGED_A_LEANING,
 ]);
+
+/**
+ * Opened the session with a recap of the last one (f-recap t-142) — and what
+ * it drew on.
+ *
+ * The recap is steered by material the person never sees, so this is the
+ * guardrail's line for it: their words from last time, the notes captured
+ * since (by the heading the notes panel files them under) and the journey's
+ * steps. The words themselves are not repeated: they are in the transcript,
+ * and the notes are in the notes. First, because it is what the turn was.
+ */
+const recapped: AccountSource = (input) => {
+  const recap = input.turn?.recap;
+  if (!recap) return null;
+  const drew: string[] = [];
+  if (recap.words > 0) {
+    drew.push(
+      recap.words === 1
+        ? 'one thing you said last time'
+        : `${recap.words} things you said last time`
+    );
+  }
+  if (recap.notes.length > 0) {
+    drew.push(`your notes on ${listOf.format(recap.notes)}`);
+  }
+  if (recap.journey > 0) drew.push('where your journey has moved since');
+  // Semicolons between the sources when the notes are a list of their own, so
+  // where that list ends reads plainly.
+  const joined =
+    recap.notes.length > 1 && drew.length > 1
+      ? `${drew.slice(0, -1).join('; ')}; and ${drew[drew.length - 1]}`
+      : listOf.format(drew);
+  const detail =
+    drew.length > 0
+      ? `Opened this session with a recap of the last one, drawing on ${joined}.`
+      : 'Opened this session with a recap of the last one.';
+  return { key: 'recap', line: 'Opened the session with a recap of the last one', detail };
+};
 
 /** Looked something up in her material — and how many passages it drew on. */
 const lookedUp: AccountSource = (input) => {
@@ -334,11 +379,13 @@ const otherCapability: AccountSource = (input) => {
 };
 
 /**
- * Every source, in the order their sentences read: what was consulted, then
- * what was written, then what was offered. §13 adds modules instructed.
+ * Every source, in the order their sentences read: what the turn was (a
+ * recap), what was consulted, then what was written, then what was offered.
+ * §13 adds modules instructed.
  * Exported so a test can see the seam.
  */
 export const ACCOUNT_SOURCES: readonly AccountSource[] = [
+  recapped,
   lookedUp,
   lookedBack,
   readTheProfile,
@@ -455,12 +502,6 @@ function towardWords(key: LeaningKey, stop: number): string {
     ? `strongly toward ${poleWords(label.replace(FURTHER, ' and '))}`
     : `toward ${poleWords(mildPole(label))}`;
 }
-
-/**
- * A list in a sentence: "a, b, and c". Each item starts with "toward", so an
- * item's own "and" ("cool and analytical") does not read as the list's.
- */
-const listOf = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
 
 /** The pole a held dial was leaning toward, either stop: only a hard pole is ever held. */
 function heldPole(key: LeaningKey): string {
