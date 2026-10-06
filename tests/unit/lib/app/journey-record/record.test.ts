@@ -23,6 +23,7 @@ interface EntryRow {
   body: string;
   outcomes: unknown;
   modules: string[];
+  notes: unknown;
   withheldFromAgent: boolean;
   occurredAt: Date;
   keptAt: Date | null;
@@ -88,6 +89,7 @@ vi.mock('@/lib/db/client', () => {
             summary: null,
             outcomes: [],
             modules: [],
+            notes: [],
             withheldFromAgent: false,
             keptAt: null,
             createdAt: now,
@@ -152,6 +154,7 @@ function row(overrides: Partial<EntryRow> & Pick<EntryRow, 'id' | 'userId'>): En
     body: 'Words.',
     outcomes: [],
     modules: [],
+    notes: [],
     withheldFromAgent: false,
     occurredAt: at,
     keptAt: at,
