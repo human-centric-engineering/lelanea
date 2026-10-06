@@ -1,16 +1,20 @@
 /**
- * The opening — the AI speaks first after onboarding (f-onboarding t-122)
+ * The opening — the AI speaks first (f-onboarding t-122, f-recap t-142)
  *
  * POST /api/v1/app/conversation/opening — no body. Streams (SSE) the
  * facilitator's opening reply, as the role route streams a turn.
  *
- * The pane calls this when the transcript read says `opening: true`. The
- * message is written on the server (`OPENING_MESSAGE`); nothing the client
- * sends reaches it, and a body is ignored. The rules are in
- * `lib/app/conversation/opening.ts`.
+ * The pane calls this when the transcript read says `opening: true`. Which
+ * opening is the server's to decide: the welcome after onboarding, when
+ * nothing has ever been said on the seat; otherwise the recap that opens a new
+ * session. The two never overlap — the welcome needs nothing ever said, the
+ * recap an earlier exchange. The words are written on the server; nothing the
+ * client sends reaches them, and a body is ignored. The rules are in
+ * `lib/app/conversation/opening.ts` and `recap.ts`.
  *
- * - **Not owed** (not past the gate, not handed off, or the person has already
- *   spoken on the facilitator seat): `409` with reason `opening_not_due`.
+ * - **Not owed** (not past the gate, not handed off, or something already said
+ *   on the facilitator seat — ever, for the welcome; in this session, for the
+ *   recap): `409` with reason `opening_not_due`.
  * - **Already running**: `409` with reason `turn_in_flight`, from the turn hook.
  * - **Already completed**: the recorded reply again, with no model call.
  * - **No facilitator agent to speak**: `404`, as the role route answers.
@@ -35,6 +39,7 @@ import { getRouteLogger } from '@/lib/api/context';
 import { getRequestId, getVisitorId } from '@/lib/logging/context';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import { OPENING_NOT_DUE, prepareOpening, runOpening } from '@/lib/app/conversation/opening';
+import { prepareRecap, runRecap } from '@/lib/app/conversation/recap';
 
 export const POST = withAuth(
   async (request, session) => {
@@ -44,24 +49,43 @@ export const POST = withAuth(
     const userId = session.user.id;
 
     const log = await getRouteLogger(request);
-    const prepared = await prepareOpening(session.user);
-    if (!prepared.ready) {
-      log.info('Opening not started', { userId, reason: prepared.reason });
-      if (prepared.reason === 'no_surface') {
+    const turnRequest = {
+      user: session.user,
+      requestId: await getRequestId(),
+      visitorId: await getVisitorId(),
+      signal: request.signal,
+      keepAlive: (work: Promise<unknown>) => after(work),
+      headers: request.headers,
+    };
+
+    const welcome = await prepareOpening(session.user);
+    if (welcome.ready) {
+      log.info('Opening started', { userId, seat: CONVERSATION_SEAT, kind: 'welcome' });
+      const events = await runOpening(welcome.surface, turnRequest);
+      return sseResponse(events, { signal: request.signal });
+    }
+
+    const recap = await prepareRecap(session.user);
+    if (!recap.ready) {
+      // The welcome's reason when it had a surface to refuse on, so a seat
+      // with no agent is a 404 whichever opening was asked about.
+      const reason = welcome.reason === 'no_surface' ? welcome.reason : recap.reason;
+      log.info('Opening not started', { userId, reason });
+      if (reason === 'no_surface') {
         throw new NotFoundError('The conversation has no agent to speak just now.');
       }
       throw new ConflictError('There is no opening to give.', { reason: OPENING_NOT_DUE });
     }
 
-    log.info('Opening started', { userId, seat: CONVERSATION_SEAT });
-    const events = await runOpening(prepared.surface, {
-      user: session.user,
-      requestId: await getRequestId(),
-      visitorId: await getVisitorId(),
-      signal: request.signal,
-      keepAlive: (work) => after(work),
-      headers: request.headers,
+    log.info('Opening started', {
+      userId,
+      seat: CONVERSATION_SEAT,
+      kind: 'recap',
+      words: recap.material.account.words,
+      notes: recap.material.account.notes.length,
+      journey: recap.material.account.journey,
     });
+    const events = await runRecap(recap, turnRequest);
     return sseResponse(events, { signal: request.signal });
   },
   {

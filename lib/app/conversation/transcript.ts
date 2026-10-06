@@ -67,7 +67,13 @@ import type { Citation } from '@/types/orchestration';
 import { citationSchema } from '@/lib/validations/orchestration';
 import { resolveFacilitationSurface } from '@/lib/framework/facilitation/agents/surface';
 import { openingWindowStart, REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
-import { isOpeningTurnId, OPENING_TURN_ID_PREFIX } from '@/lib/app/conversation/opening-id';
+import {
+  isOpeningTurnId,
+  isRecapTurnId,
+  OPENING_TURN_ID_PREFIX,
+  RECAP_TURN_ID_PREFIX,
+} from '@/lib/app/conversation/opening-id';
+import { parseRecapAccount, type RecapAccount } from '@/lib/app/conversation/recap-account';
 import { answeredCalls, answeredCapabilities } from '@/lib/app/agent/capability-answers';
 import { leaningChangeForCall, type LeaningChange } from '@/lib/app/voice/leaning-change';
 import { loadLibraryForChips, suggestionsFromProvenance } from '@/lib/app/resources/suggest';
@@ -90,6 +96,8 @@ export interface TurnAccount {
   registerSource: RegisterSource | null;
   /** The person's leanings the turn applied, and any held (f-leanings t-136); null when it had none. */
   leanings: LeaningsStamp | null;
+  /** What a session recap drew on (f-recap t-142); null on every other turn. */
+  recap: RecapAccount | null;
   inputTokens: number | null;
   outputTokens: number | null;
   /** Null when unpriced — never zero, which would read as free. */
@@ -145,10 +153,13 @@ export interface Transcript {
   conversationId: string | null;
   entries: TranscriptEntry[];
   /**
-   * Whether the pane should ask for the AI's opening now (t-122). Set by the
-   * read route, on the facilitator seat only; absent elsewhere.
+   * Whether the pane should ask for the AI's opening now: the welcome (t-122)
+   * or a session recap (f-recap t-142). Set by the read route, on the
+   * facilitator seat only; absent elsewhere.
    */
   opening?: boolean;
+  /** The id the owed opening will run under, when `opening` is true. */
+  openingTurnId?: string;
 }
 
 /** `metadata.app` on the person's row, as the turn seam writes it. */
@@ -181,6 +192,7 @@ interface TurnRow {
   register: string | null;
   registerSource: string | null;
   leanings: unknown;
+  recap: unknown;
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
@@ -218,6 +230,7 @@ function accountOf(turn: TurnRow): TurnAccount {
     register: parseRegister(turn.register),
     registerSource: parseRegisterSource(turn.registerSource),
     leanings: parseLeaningsStamp(turn.leanings),
+    recap: parseRecapAccount(turn.recap),
     inputTokens: turn.inputTokens,
     outputTokens: turn.outputTokens,
     costUsd: turn.costUsd,
@@ -238,6 +251,14 @@ function accountOf(turn: TurnRow): TurnAccount {
  * reply whose id is the last row's — the terminal one the turn row names and
  * the one carrying the citations.
  *
+ * **Except a session recap** (f-recap t-142), which the agent opens mid-
+ * conversation with no row of the person's before it. Its rows are the ones
+ * inside its window ({@link recapWindows}), and they are its own reply, never
+ * the tail of the reply above. And once a reply's terminal row has been read,
+ * any further assistant row before the person speaks again belongs to no
+ * reply: only an agent-opened turn writes there, so it is an earlier recap
+ * attempt's fragment, which a re-run's claim no longer bounds.
+ *
  * `library` resolves each reply's suggestion chips (t-87): the caller reads it
  * once for the whole conversation. `null` shows no chips.
  */
@@ -254,15 +275,24 @@ export function assembleTranscript(
   }
 
   const entries: TranscriptEntry[] = [];
-  let pendingReply: { rows: MessageRow[] } | null = null;
+  // `recap` is set when the rows are a session recap's: its turn row, which
+  // owns them even before it links a reply. Widened rather than annotated, so
+  // the loop does not read it as the `null` it starts as: `flushReply`
+  // resets it from a closure the narrowing cannot see.
+  let pendingReply = null as { rows: MessageRow[]; recap?: TurnRow } | null;
+  // The pending reply's terminal row has been read: nothing more is its.
+  let replyEnded = false;
   // The turn row the current user row opened, if the seam recorded one.
   let currentTurn: TurnRow | undefined;
+  const recaps = recapWindows(messages, turns);
 
   const flushReply = () => {
     if (!pendingReply || pendingReply.rows.length === 0) return;
     const rows = pendingReply.rows;
     const terminal = rows[rows.length - 1];
-    const turn = rows.map((row) => byAssistantMessage.get(row.id)).find((t) => t !== undefined);
+    const turn =
+      rows.map((row) => byAssistantMessage.get(row.id)).find((t) => t !== undefined) ??
+      pendingReply.recap;
     // A turn that failed on a later pass, and was never retried, leaves its
     // earlier passes' rows behind with no reply linked to any of them. Those
     // are fragments, not the agent's answer; the turn row's `errorCode` is the record.
@@ -272,6 +302,7 @@ export function assembleTranscript(
     // — the agent answered on the stream and only the link failed. Both keep their
     // rows.
     if (
+      !pendingReply.recap &&
       !turn &&
       currentTurn &&
       currentTurn.assistantMessageId === null &&
@@ -317,16 +348,30 @@ export function assembleTranscript(
       // The platform's own marker for a turn that ended without a reply. Not a
       // reply; the turn row's `errorCode` is the record of what happened.
       if (isErrorMarker(row.metadata)) continue;
+      const recap = recaps.find((window) => window.holds(row));
+      if (recap) {
+        if (recap.leftNothing) continue;
+        if (pendingReply?.recap !== recap.turn) {
+          flushReply();
+          pendingReply = { rows: [], recap: recap.turn };
+        }
+        pendingReply.rows.push(row);
+        replyEnded = byAssistantMessage.has(row.id);
+        continue;
+      }
+      if (replyEnded) continue;
       // Before the person's first message, every row is the opening's: an
       // earlier attempt's fragments, or a failed one's, are not its reply.
       if (!personSpoke && openingSince !== null) {
         if (openingLeftNothing || row.createdAt < openingSince) continue;
       }
       (pendingReply ??= { rows: [] }).rows.push(row);
+      replyEnded = byAssistantMessage.has(row.id);
       continue;
     }
     if (row.role !== 'user') continue;
     personSpoke = true;
+    replyEnded = false;
     flushReply();
 
     const turnId = turnIdOf(row.metadata);
@@ -363,6 +408,48 @@ export function assembleTranscript(
   }
   flushReply();
   return entries;
+}
+
+/** A session recap's place in the conversation, and whether it left a reply there. */
+interface RecapWindow {
+  turn: TurnRow;
+  /** It failed with no reply: its rows are fragments, shown nowhere. */
+  leftNothing: boolean;
+  holds: (row: MessageRow) => boolean;
+}
+
+/**
+ * Where each session recap's rows are (f-recap t-142). From its claim, reached
+ * back by the agent-opened grace as its reply is found (`turnWindowStart`), to
+ * its terminal row when it linked one, or to when it settled when it failed —
+ * and never past the person's next message, so a recap still running, or one
+ * abandoned, cannot take in the reply to what they say next.
+ *
+ * Two never overlap: a recap is the first turn of its session, and sessions
+ * are twelve quiet hours apart.
+ */
+function recapWindows(messages: MessageRow[], turns: TurnRow[]): RecapWindow[] {
+  const createdAt = new Map(messages.map((row) => [row.id, row.createdAt]));
+  return turns
+    .filter((turn) => isRecapTurnId(turn.turnId))
+    .map((turn) => {
+      const since = openingWindowStart(turn.startedAt);
+      const nextWords = messages.find((row) => row.role === 'user' && row.createdAt >= since);
+      const linked = turn.assistantMessageId ? createdAt.get(turn.assistantMessageId) : undefined;
+      const settled = turn.status === 'failed' ? turn.completedAt : null;
+      const until = linked ?? settled ?? null;
+      return {
+        turn,
+        leftNothing:
+          turn.status === 'failed' &&
+          turn.assistantMessageId === null &&
+          turn.errorCode !== REPLY_NOT_LINKED,
+        holds: (row: MessageRow) =>
+          row.createdAt >= since &&
+          (until === null || row.createdAt <= until) &&
+          (nextWords === undefined || row.createdAt < nextWords.createdAt),
+      };
+    });
 }
 
 /**
@@ -403,14 +490,16 @@ export async function readTranscript(
       },
     }),
     prisma.appTurn.findMany({
-      // The opening's row too when its conversation id is not set: a re-run
-      // clears it at the claim, and a run that failed before starting never
-      // set it. Without its row, an earlier attempt's fragments read as a reply.
+      // An agent-opened turn's row too when its conversation id is not set: a
+      // re-run clears it at the claim, and a run that failed before starting
+      // never set it. Without its row, an earlier attempt's fragments read as
+      // a reply.
       where: {
         userId,
         OR: [
           { conversationId },
           { seat, conversationId: null, turnId: { startsWith: OPENING_TURN_ID_PREFIX } },
+          { seat, conversationId: null, turnId: { startsWith: RECAP_TURN_ID_PREFIX } },
         ],
       },
       select: {
@@ -424,6 +513,7 @@ export async function readTranscript(
         register: true,
         registerSource: true,
         leanings: true,
+        recap: true,
         inputTokens: true,
         outputTokens: true,
         costUsd: true,

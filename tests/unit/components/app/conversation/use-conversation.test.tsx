@@ -46,6 +46,8 @@ function openTurn() {
 
 /** Whether the transcript read says the AI's opening is owed (t-122). */
 let openingOwed = false;
+/** The id the read names for it, when it names one (t-142). */
+let openingTurnId: string | undefined;
 /** What the transcript read returns. */
 let transcriptEntries: unknown[] = [];
 
@@ -58,6 +60,7 @@ const emptyTranscript = () =>
         conversationId: null,
         entries: transcriptEntries,
         opening: openingOwed,
+        ...(openingTurnId !== undefined && { openingTurnId }),
       },
     }),
     { status: 200 }
@@ -134,6 +137,7 @@ beforeEach(() => {
   voiceInput = 'off';
   voiceDown = false;
   openingOwed = false;
+  openingTurnId = undefined;
   transcriptEntries = [];
   openingRequests.length = 0;
   refuseOpening = null;
@@ -866,6 +870,78 @@ describe('the AI speaks first, once (t-122)', () => {
     // The first ask, then one per re-read: bounded, never a loop.
     expect(openingRequests).toHaveLength(MAX_OPENING_RECHECKS + 1);
     expect(transcriptReads()).toBe(MAX_OPENING_RECHECKS + 1);
+  });
+
+  describe('a session recap (f-recap t-142)', () => {
+    const RECAP = 'app_recap_v1_ses_2';
+    const lastTime = {
+      kind: 'reply',
+      id: 'a0',
+      text: 'Tell me about the lighthouse.',
+      at: '2026-10-01T10:00:00.000Z',
+      turnId: 't0',
+      citations: [],
+      capabilities: [],
+      turn: null,
+    };
+    const account = { since: '2026-10-01T09:00:00.000Z', words: 1, notes: [], journey: 0 };
+
+    it('opens a conversation already under way, below what is there, under the id the read named', async () => {
+      transcriptEntries = [lastTime];
+      openingOwed = true;
+      openingTurnId = RECAP;
+      const { result } = renderHook(() => useConversation({ fetchImpl }));
+
+      await waitFor(() => expect(openingRequests).toHaveLength(1));
+      expect(openingRequests[0]).toBeUndefined();
+      await act(async () => {
+        latest().push('start', { conversationId: 'c1' });
+        latest().push('content', { delta: 'Last time, the lighthouse.' });
+        latest().push('done', { recap: account });
+        latest().close();
+      });
+
+      await waitFor(() => expect(result.current.entries).toHaveLength(2));
+      expect(result.current.entries[0]).toMatchObject({ id: 'a0' });
+      expect(result.current.entries[1]).toMatchObject({
+        kind: 'reply',
+        text: 'Last time, the lighthouse.',
+        turnId: RECAP,
+        turn: { turnId: RECAP, recap: account },
+      });
+      expect(openingRequests).toHaveLength(1);
+    });
+
+    it('never runs the welcome on a conversation under way, whatever the read says', async () => {
+      transcriptEntries = [lastTime];
+      openingOwed = true;
+      openingTurnId = 'app_opening_v1';
+      await loaded();
+      expect(openingRequests).toHaveLength(0);
+    });
+
+    it('reads again when its connection drops, adopting the recap that landed below what was there', async () => {
+      transcriptEntries = [lastTime];
+      openingOwed = true;
+      openingTurnId = RECAP;
+      const { result } = renderHook(() => useConversation({ fetchImpl }));
+      await waitFor(() => expect(openingRequests).toHaveLength(1));
+
+      openingOwed = false;
+      openingTurnId = undefined;
+      transcriptEntries = [
+        lastTime,
+        { ...lastTime, id: 'r1', text: 'Last time, the lighthouse.', turnId: RECAP },
+      ];
+      await act(async () => {
+        latest().push('start', { conversationId: 'c1' });
+        latest().close();
+      });
+
+      await waitFor(() => expect(result.current.entries).toHaveLength(2));
+      expect(result.current.entries[1]).toMatchObject({ id: 'r1', turnId: RECAP });
+      expect(result.current.live).toBeNull();
+    });
   });
 
   it('holds a message sent while the opening is being answered', async () => {

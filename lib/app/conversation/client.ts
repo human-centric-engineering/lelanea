@@ -29,6 +29,7 @@
 
 import { REGISTER_SOURCES, registerSchema } from '@/lib/app/voice/register';
 import { leaningsStampSchema } from '@/lib/app/voice/leanings-select';
+import { recapAccountSchema } from '@/lib/app/conversation/recap-account';
 import { z } from 'zod';
 
 import { parseConversationEvent, type ConversationEvent } from '@/lib/app/conversation/events';
@@ -47,7 +48,11 @@ export function transcriptRouteFor(seat: string): string {
   return `/api/v1/app/conversation?seat=${encodeURIComponent(seat)}`;
 }
 
-/** The AI's opening after onboarding (t-122): no body, the words are the server's. */
+/**
+ * The AI's opening (t-122) — the welcome after onboarding, or the recap that
+ * opens a new session (f-recap t-142). No body: which, and the words, are the
+ * server's.
+ */
 export const OPENING_ROUTE = '/api/v1/app/conversation/opening';
 
 /** Whether a turn sent now can be expected to be answered (§08 t-55). Install-wide. */
@@ -230,6 +235,7 @@ const transcriptEnvelopeSchema = z.object({
     conversationId: z.string().nullable(),
     entries: z.array(z.unknown()),
     opening: z.boolean().optional(),
+    openingTurnId: z.string().optional(),
   }),
 });
 
@@ -355,6 +361,8 @@ const accountSchema = z.object({
   registerSource: z.enum(REGISTER_SOURCES).nullable().default(null).catch(null),
   // The same for the leanings (f-leanings t-136).
   leanings: leaningsStampSchema.nullable().default(null).catch(null),
+  // And for what a session recap drew on (f-recap t-142).
+  recap: recapAccountSchema.nullable().default(null).catch(null),
   inputTokens: z.number().nullable(),
   outputTokens: z.number().nullable(),
   costUsd: z.number().nullable(),
@@ -416,6 +424,7 @@ function validateEntries(data: {
   conversationId: string | null;
   entries: unknown[];
   opening?: boolean;
+  openingTurnId?: string;
 }): Transcript {
   const entries: TranscriptEntry[] = [];
   for (const raw of data.entries) {
@@ -427,5 +436,6 @@ function validateEntries(data: {
     conversationId: data.conversationId,
     entries,
     ...(data.opening !== undefined && { opening: data.opening }),
+    ...(data.openingTurnId !== undefined && { openingTurnId: data.openingTurnId }),
   };
 }

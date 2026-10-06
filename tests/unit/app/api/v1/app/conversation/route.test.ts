@@ -17,13 +17,16 @@ import { mockAuthenticatedUser, mockUnauthenticatedUser } from '@/tests/helpers/
 const ME = 'cmjbv4i3x00003wsloputgwul';
 const OTHER = 'cmu7other0000000000000000';
 
-const { store, readTranscript, routeLog, openingDue, arriveSessionQuietly } = vi.hoisted(() => ({
-  openingDue: vi.fn(),
-  arriveSessionQuietly: vi.fn(),
-  store: new Map<string, { seat: string; conversationId: string | null; entries: unknown[] }>(),
-  readTranscript: vi.fn(),
-  routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
+const { store, readTranscript, routeLog, openingDue, recapDue, arriveSessionQuietly } = vi.hoisted(
+  () => ({
+    openingDue: vi.fn(),
+    recapDue: vi.fn(),
+    arriveSessionQuietly: vi.fn(),
+    store: new Map<string, { seat: string; conversationId: string | null; entries: unknown[] }>(),
+    readTranscript: vi.fn(),
+    routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  })
+);
 
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
@@ -33,7 +36,11 @@ vi.mock('@/lib/app/conversation/transcript', async (importOriginal) => {
   return { ...actual, readTranscript };
 });
 
-vi.mock('@/lib/app/conversation/opening', () => ({ openingDue }));
+vi.mock('@/lib/app/conversation/opening', () => ({
+  openingDue,
+  OPENING_TURN_ID: 'app_opening_v1',
+}));
+vi.mock('@/lib/app/conversation/recap', () => ({ recapDue }));
 vi.mock('@/lib/app/sessions/store', () => ({ arriveSessionQuietly }));
 
 import { auth } from '@/lib/auth/config';
@@ -53,6 +60,7 @@ beforeEach(() => {
   });
   vi.mocked(auth.api.getSession).mockResolvedValue(mockAuthenticatedUser('USER'));
   openingDue.mockResolvedValue(false);
+  recapDue.mockResolvedValue(null);
   arriveSessionQuietly.mockResolvedValue({
     session: { id: 'ses-1', ordinal: 1, startedAt: new Date(), closedAt: null },
     opened: false,
@@ -151,7 +159,10 @@ describe('the opening flag (t-122)', () => {
     openingDue.mockResolvedValue(true);
     const body = await (await GET(request())).json();
     expect(body.data.opening).toBe(true);
+    expect(body.data.openingTurnId).toBe('app_opening_v1');
     expect(openingDue).toHaveBeenCalledWith(expect.objectContaining({ id: ME }));
+    // An empty transcript is never owed a recap: there is nothing to look back on.
+    expect(recapDue).not.toHaveBeenCalled();
   });
 
   it('is false when the opening rules say no', async () => {
@@ -159,7 +170,7 @@ describe('the opening flag (t-122)', () => {
     expect(body.data.opening).toBe(false);
   });
 
-  it('is false once anything is in the transcript, without asking', async () => {
+  it('is false once anything is in the transcript, without asking the welcome', async () => {
     openingDue.mockResolvedValue(true);
     store.set(`${ME}:facilitator`, {
       seat: 'facilitator',
@@ -168,14 +179,58 @@ describe('the opening flag (t-122)', () => {
     });
     const body = await (await GET(request())).json();
     expect(body.data.opening).toBe(false);
+    expect(body.data).not.toHaveProperty('openingTurnId');
     expect(openingDue).not.toHaveBeenCalled();
   });
 
   it('is absent on the onboarding seat: the opening is the facilitator’s', async () => {
     openingDue.mockResolvedValue(true);
+    recapDue.mockResolvedValue('app_recap_v1_ses-1');
     const body = await (await GET(request('/api/v1/app/conversation?seat=onboarding'))).json();
     expect(body.data).not.toHaveProperty('opening');
     expect(openingDue).not.toHaveBeenCalled();
+    expect(recapDue).not.toHaveBeenCalled();
+  });
+});
+
+describe('the recap flag (f-recap t-142)', () => {
+  const underWay = () =>
+    store.set(`${ME}:facilitator`, {
+      seat: 'facilitator',
+      conversationId: 'c-mine',
+      entries: [{ kind: 'reply', id: 'r1', text: 'Hello', at: 'now', turnId: 'o' }],
+    });
+
+  it('names the recap owed on a conversation under way, asked of the session just arrived in', async () => {
+    underWay();
+    recapDue.mockResolvedValue('app_recap_v1_ses-1');
+
+    const body = await (await GET(request())).json();
+
+    expect(body.data.opening).toBe(true);
+    expect(body.data.openingTurnId).toBe('app_recap_v1_ses-1');
+    expect(recapDue).toHaveBeenCalledWith(
+      expect.objectContaining({ id: ME }),
+      expect.objectContaining({ id: 'ses-1' })
+    );
+  });
+
+  it('is false when the recap rules say no', async () => {
+    underWay();
+    const body = await (await GET(request())).json();
+    expect(body.data.opening).toBe(false);
+    expect(body.data).not.toHaveProperty('openingTurnId');
+  });
+
+  it('is not asked when the session could not be written: there is no sitting to key it on', async () => {
+    underWay();
+    arriveSessionQuietly.mockResolvedValueOnce(null);
+    recapDue.mockResolvedValue('app_recap_v1_ses-1');
+
+    const body = await (await GET(request())).json();
+
+    expect(body.data.opening).toBe(false);
+    expect(recapDue).not.toHaveBeenCalled();
   });
 });
 

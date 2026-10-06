@@ -43,7 +43,7 @@ import type { Citation } from '@/types/orchestration';
 import { isRecord } from '@/lib/utils';
 import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { readFingerprintVersion } from '@/lib/app/voice/fingerprint';
-import { isOpeningTurnId } from '@/lib/app/conversation/opening-id';
+import { isAgentOpenedTurnId } from '@/lib/app/conversation/opening-id';
 import type { RegisterChoice } from '@/lib/app/voice/register';
 import type { LeaningsStamp } from '@/lib/app/voice/leanings-select';
 
@@ -322,13 +322,15 @@ export interface TurnOutcome {
 }
 
 /**
- * How far before its claim the AI's opening (t-122) reaches back for its reply.
- * The agent opens that turn, so there is no row of the person's to bound the
- * window by, only the claim's `startedAt`, which is this server's clock. The
- * grace absorbs a skew against the clock that stamped the reply; an opening is
- * the first turn in its conversation, so the wider window takes in nothing
- * else. Only an opening gets it: a member turn whose user message id failed to
- * record keeps the claim's start, or it could take in the previous reply.
+ * How far before its claim a turn the agent opens reaches back for its reply:
+ * the opening after onboarding (t-122) and a session recap (f-recap t-142).
+ * There is no row of the person's to bound the window by, only the claim's
+ * `startedAt`, which is this server's clock. The grace absorbs a skew against
+ * the clock that stamped the reply. Neither takes in anything else with it: an
+ * opening is the first turn in its conversation, and a recap the first in its
+ * session, which began after at least twelve quiet hours. Only those get it: a
+ * member turn whose user message id failed to record keeps the claim's start,
+ * or it could take in the previous reply.
  */
 export const NO_USER_ROW_GRACE_MS = 5_000;
 
@@ -340,13 +342,13 @@ export function openingWindowStart(startedAt: Date): Date {
 /**
  * When a turn's messages begin: the person's own message for it, as stamped by
  * the same writer as the reply. With no user message id, the claim's start —
- * reached back by {@link NO_USER_ROW_GRACE_MS} for the AI's opening only.
+ * reached back by {@link NO_USER_ROW_GRACE_MS} for a turn the agent opened only.
  */
 export async function turnWindowStart(
   turn: Pick<AppTurn, 'userId' | 'turnId' | 'startedAt' | 'conversationId' | 'userMessageId'>
 ): Promise<Date> {
   if (!turn.userMessageId || !turn.conversationId) {
-    return isOpeningTurnId(turn.turnId) ? openingWindowStart(turn.startedAt) : turn.startedAt;
+    return isAgentOpenedTurnId(turn.turnId) ? openingWindowStart(turn.startedAt) : turn.startedAt;
   }
   const message = await prisma.aiMessage.findFirst({
     where: {

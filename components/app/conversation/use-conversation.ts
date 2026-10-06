@@ -19,7 +19,7 @@ import type {
   CrisisResource,
 } from '@/lib/app/conversation/events';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
-import { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
+import { isRecapTurnId, OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
 import type { TranscriptEntry } from '@/lib/app/conversation/transcript';
 import {
   ENDING_CRISIS,
@@ -105,6 +105,15 @@ import type { Citation } from '@/types/orchestration';
  * reply is adopted, or asked for. One still running (a reload, a second tab) is asked again every few
  * seconds, showing the thinking row, until it lands as a replay.
  *
+ * ## And opens each new session with a recap (f-recap t-142)
+ *
+ * The same read may instead say a session recap is owed, on a conversation
+ * already under way. It runs the same way, under the id the read named
+ * (`openingTurnId`), below what is already there. The person speaking first
+ * lets it go: `send` clears it, and the server would refuse it anyway. A
+ * dropped recap reads the transcript again as the welcome does, adopting it if
+ * it landed, provided the pane still holds what it held when it asked.
+ *
  * **The status read** is asked once on mount and again after every ending,
  * never on a timer. `paused` and `unavailable` put a line above the composer;
  * `available`, or a turn that completes, clears it.
@@ -162,7 +171,7 @@ export interface LiveTurn {
   resource?: CrisisResource;
   /** The same frame's `message` — the whole resource as text — shown when `resource` did not parse. */
   crisisText?: string;
-  /** The AI's opening (t-122): there are no words of the person's to show. */
+  /** The AI's opening (t-122) or a session recap (t-142): there are no words of the person's to show. */
   opening?: true;
 }
 
@@ -214,6 +223,14 @@ interface Options {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * The id the owed opening will run under: the one the read named, or the
+ * welcome's, from a server too old to name one.
+ */
+function owedId(transcript: { openingTurnId?: string }): string {
+  return transcript.openingTurnId ?? OPENING_TURN_ID;
+}
+
 /** How many times an opening that did not land reads the transcript again (t-122). */
 export const MAX_OPENING_RECHECKS = 2;
 
@@ -240,8 +257,8 @@ export function useConversation(options: Options = {}): ConversationState {
   const [unreadable, setUnreadable] = useState(false);
   const [status, setStatus] = useState<GenerationStatus | null>(null);
   const [voiceInput, setVoiceInput] = useState<VoiceInputState | null>(null);
-  // The transcript read said the AI's opening is owed (t-122).
-  const [openingOwed, setOpeningOwed] = useState(false);
+  // The id of the opening the transcript read said is owed (t-122, t-142).
+  const [openingOwed, setOpeningOwed] = useState<string | null>(null);
   // Aborted when the seat changes: what was read for one seat is not the next's.
   const seatScope = useRef(new AbortController());
   // How many times an opening that did not land has read the transcript again.
@@ -285,7 +302,7 @@ export function useConversation(options: Options = {}): ConversationState {
     setEntries([]);
     setLive(null);
     setUnreadable(false);
-    setOpeningOwed(false);
+    setOpeningOwed(null);
     setPhase('loading');
   }
   // ...and let go of the old seat's turn. It carries on server-side and is
@@ -313,7 +330,7 @@ export function useConversation(options: Options = {}): ConversationState {
         setEntries(transcript.entries);
         // Only ever raised here: a slower first read must not cancel an
         // opening a newer read already found owed. The seat change clears it.
-        if (transcript.opening === true) setOpeningOwed(true);
+        if (transcript.opening === true) setOpeningOwed(owedId(transcript));
         setPhase('idle');
       })
       .catch((error: unknown) => {
@@ -361,18 +378,19 @@ export function useConversation(options: Options = {}): ConversationState {
 
   /**
    * Read the transcript again for the AI's opening (t-122), while the pane
-   * still has nothing in it. An opening that landed meanwhile is adopted; one
-   * still owed is asked for. A pane already holding a conversation has nothing
-   * to ask.
+   * still holds what it held when it asked: nothing, for the welcome; the
+   * conversation so far, for a recap (t-142). An opening that landed meanwhile
+   * is adopted; one still owed is asked for. A pane that has moved on since has
+   * nothing to ask.
    */
   const recheckOpening = useCallback(
-    (signal?: AbortSignal) => {
-      if (seat !== CONVERSATION_SEAT || entriesRef.current.length > 0) return;
+    (signal?: AbortSignal, holding = 0) => {
+      if (seat !== CONVERSATION_SEAT || entriesRef.current.length !== holding) return;
       fetchTranscript(seat, { signal, fetchImpl })
         .then((transcript) => {
-          if (signal?.aborted || busy.current || entriesRef.current.length > 0) return;
-          if (transcript.entries.length > 0) setEntries(transcript.entries);
-          else if (transcript.opening === true) setOpeningOwed(true);
+          if (signal?.aborted || busy.current || entriesRef.current.length !== holding) return;
+          if (transcript.entries.length > holding) setEntries(transcript.entries);
+          else if (transcript.opening === true) setOpeningOwed(owedId(transcript));
         })
         .catch((error: unknown) => {
           if (signal?.aborted) return;
@@ -480,7 +498,7 @@ export function useConversation(options: Options = {}): ConversationState {
             // keep the composer waiting while it did.
             if (options.recheck && openingRechecks.current < MAX_OPENING_RECHECKS) {
               openingRechecks.current += 1;
-              recheckOpening(seatScope.current.signal);
+              recheckOpening(seatScope.current.signal, entriesRef.current.length);
             }
           } else {
             const boxed = draftRef.current.trim() === '' || draftRef.current.trim() === message;
@@ -603,6 +621,7 @@ export function useConversation(options: Options = {}): ConversationState {
                     register: event.register ?? null,
                     registerSource: event.registerSource ?? null,
                     leanings: event.leanings ?? null,
+                    recap: event.recap ?? null,
                     inputTokens: event.tokenUsage?.inputTokens ?? null,
                     outputTokens: event.tokenUsage?.outputTokens ?? null,
                     // A replay's `done` says `0` for an unpriced turn (turns.ts),
@@ -700,6 +719,8 @@ export function useConversation(options: Options = {}): ConversationState {
       const retry = kept.current?.message === message ? kept.current.turnId : null;
       const turnId = retry ?? mintTurnId();
       kept.current = null;
+      // Whoever speaks first in a sitting, the recap is never after them (t-142).
+      setOpeningOwed(null);
 
       if (retry) {
         // The retry supersedes the earlier attempt's row (and its bubble, if
@@ -717,14 +738,16 @@ export function useConversation(options: Options = {}): ConversationState {
     [draft, phase, run]
   );
 
-  // The AI's opening (t-122): once the transcript is idle and still empty.
-  // `openingOwed` is cleared as it starts, so it is asked for once per read.
+  // The AI's opening (t-122): once the transcript is idle and still empty. A
+  // recap (t-142) opens a conversation already under way. `openingOwed` is
+  // cleared as it starts, so it is asked for once per read.
   useEffect(() => {
-    if (!openingOwed || phase !== 'idle' || entries.length > 0 || busy.current) return;
+    if (openingOwed === null || phase !== 'idle' || busy.current) return;
+    if (entries.length > 0 && !isRecapTurnId(openingOwed)) return;
     if (seat !== CONVERSATION_SEAT) return;
-    setOpeningOwed(false);
+    setOpeningOwed(null);
     busy.current = true;
-    run(OPENING_TURN_ID, null);
+    run(openingOwed, null);
   }, [openingOwed, phase, entries.length, seat, run]);
 
   // Ask again whether it is owed when the shell says the journey moved. Not on
