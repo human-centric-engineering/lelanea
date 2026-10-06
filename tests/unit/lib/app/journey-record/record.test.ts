@@ -240,6 +240,45 @@ describe('getJourneyRecord', () => {
     expect(entry.session).toBeNull();
   });
 
+  it('costs a synopsis whose session row is unreadable only its window, not the whole record', async () => {
+    const readable = await session(ME, 2, new Date('2026-10-02T09:00:00Z'));
+    db.events.push({
+      id: 'ses_corrupt',
+      userId: ME,
+      type: 'session.started',
+      payload: { ordinal: 'not a number' },
+      occurredAt: new Date('2026-10-01T09:00:00Z'),
+    });
+    db.entries.push(
+      row({
+        id: 'cmgood00000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: readable,
+        summary: 'Readable',
+        occurredAt: new Date('2026-10-02T09:00:00Z'),
+      }),
+      row({
+        id: 'cmbad000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_corrupt',
+        summary: 'Corrupt session',
+        occurredAt: new Date('2026-10-01T09:00:00Z'),
+      })
+    );
+
+    const { entries } = await getJourneyRecord(ME);
+
+    expect(entries.map((e) => [e.summary, e.session?.ordinal ?? null])).toEqual([
+      ['Readable', 2],
+      ['Corrupt session', null],
+    ]);
+    expect(error).toHaveBeenCalledWith('Session row has no readable ordinal', {
+      sessionId: 'ses_corrupt',
+    });
+  });
+
   it('costs an entry with unreadable outcomes only its outcomes, and says so', async () => {
     db.entries.push(
       row({ id: 'cmbad000000000000000000000', userId: ME, outcomes: [{ kind: 'decision' }] })

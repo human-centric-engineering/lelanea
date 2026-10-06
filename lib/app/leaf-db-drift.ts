@@ -303,9 +303,6 @@ export function registerLeafDriftProbes(): void {
     probe: indexExists('idx_app_memory_embedding', 'hnsw'),
   });
 
-  // t-115. Every app_* table refuses a row with no org. A CHECK, because
-  // Prisma cannot model one, so `migrate dev` would drop it. A row with no org
-  // would be seen by no org and caught by no per-org key.
   // f-journey-record t-145. The record's two hand-written FKs and its shape.
   registerAppDriftProbe({
     name: 'app_journey_entry_userId_fkey (hand-written FK → user)',
@@ -332,6 +329,9 @@ export function registerLeafDriftProbes(): void {
     probe: constraintExists('app_journey_entry_shape_check', '"keptAt" IS NOT NULL'),
   });
 
+  // t-115. Every app_* table refuses a row with no org. A CHECK, because
+  // Prisma cannot model one, so `migrate dev` would drop it. A row with no org
+  // would be seen by no org and caught by no per-org key.
   for (const table of APP_ORG_OWNED_TABLES) {
     registerAppDriftProbe({
       name: `${table}_orgId_not_null (every row names its org)`,

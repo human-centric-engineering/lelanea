@@ -284,7 +284,8 @@ export async function readSessions(
  * Read by id rather than by listing every session, because the record names
  * the sessions it needs. An id that is not one of this person's started rows
  * is simply absent from the map: the `userId` filter is what keeps one
- * person's session ids from resolving another's.
+ * person's session ids from resolving another's. So is a row whose payload is
+ * unreadable.
  */
 export async function readSessionsById(
   userId: string,
@@ -297,7 +298,18 @@ export async function readSessionsById(
     where: { userId, type: SESSION_EVENT_TYPE.started, id: { in: [...ids] } },
     select: STARTED_SELECT,
   });
-  const sessions = rows.map((row) => toSession(row, null));
+  // A display read, so one unreadable row costs that session and is logged,
+  // rather than failing the whole read. `toSession` throws on purpose for the
+  // arrival path, where guessing an ordinal could reuse a live session's id;
+  // nothing here writes.
+  const sessions = rows.flatMap((row) => {
+    try {
+      return [toSession(row, null)];
+    } catch {
+      logger.error('Session row has no readable ordinal', { sessionId: row.id });
+      return [];
+    }
+  });
   const closeIds = await Promise.all(
     sessions.map((session) => sessionEventId(userId, session.ordinal, 'closed'))
   );
