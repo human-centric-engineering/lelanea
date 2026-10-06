@@ -206,6 +206,18 @@ async function readNoteRefs(userId: string, turnIds: string[]): Promise<JourneyN
   return [...latest].map(([slotSlug, version]) => ({ slotSlug, version }));
 }
 
+/**
+ * Only the conversation, for another draft of a session already drafted
+ * (t-147): its modules and notes were derived once, and do not change because
+ * the person asked for different words.
+ */
+export function readSessionLines(
+  userId: string,
+  turns: readonly SessionTurn[]
+): Promise<{ readable: number; lines: SessionLine[] }> {
+  return readLines(userId, exchangesOf(turns));
+}
+
 /** Everything a closed session gives its synopsis, from the turns already read. */
 export async function readSynopsisMaterial(
   userId: string,
@@ -213,7 +225,7 @@ export async function readSynopsisMaterial(
   turns: readonly SessionTurn[]
 ): Promise<SynopsisMaterial> {
   const [{ readable, lines }, modules, notes] = await Promise.all([
-    readLines(userId, exchangesOf(turns)),
+    readSessionLines(userId, turns),
     readModules(userId, session),
     // Every turn of the session, not only its exchanges: a note can be written on any.
     readNoteRefs(

@@ -71,16 +71,31 @@ export const SYNOPSIS_RETRY_MESSAGE =
 const TRANSCRIPT_START = '[The session begins]';
 const TRANSCRIPT_END = '[The session ends]';
 
-function unfenced(text: string): string {
-  return text.replaceAll(TRANSCRIPT_START, '').replaceAll(TRANSCRIPT_END, '');
-}
+/** The fence around the draft being replaced, and around what the person said of it. */
+const PREVIOUS_START = '[The last draft begins]';
+const PREVIOUS_END = '[The last draft ends]';
+const STEER_START = '[What they said begins]';
+const STEER_END = '[What they said ends]';
+
+/** Every fence this prompt draws, stripped from anything placed inside one. */
+const FENCES = [
+  TRANSCRIPT_START,
+  TRANSCRIPT_END,
+  PREVIOUS_START,
+  PREVIOUS_END,
+  STEER_START,
+  STEER_END,
+];
 
 /**
- * One message, every line of it quoted with "> ", so nothing inside a message
- * can pass for a speaker's label: those are the only unquoted lines.
+ * One piece of material, every fence stripped from it and every line of it
+ * quoted with "> ", so nothing inside it can close a fence or pass for a
+ * speaker's label: those are the only unquoted lines.
  */
 function quoted(text: string): string {
-  return unfenced(text)
+  let clean = text;
+  for (const fence of FENCES) clean = clean.replaceAll(fence, '');
+  return clean
     .split(/\r?\n/)
     .map((line) => `> ${line}`)
     .join('\n');
@@ -94,17 +109,54 @@ export function synopsisTranscript(lines: readonly SessionLine[]): string {
   return [TRANSCRIPT_START, ...said, TRANSCRIPT_END].join('\n\n');
 }
 
-/** Her composed system prompt, then the session as the one thing to write about. */
+/** What a regenerate carries into the prompt (t-147): the draft it replaces, and why. */
+export interface SynopsisRetake {
+  previous: { summary: string; body: string };
+  /** What the person said about the last draft. Null when they gave no reason. */
+  steer: string | null;
+}
+
+/**
+ * The ask for another draft: the last one, and what the person said about it,
+ * each fenced and quoted as the transcript is. Their steer is about the
+ * account, so it is weighed as a request about the writing, never as a fact
+ * about the session: the conversation is still the only source.
+ */
+function retakeAsk(retake: SynopsisRetake): string {
+  const parts = [
+    'They read your last draft and asked for another.',
+    [
+      PREVIOUS_START,
+      quoted(`${retake.previous.summary}\n\n${retake.previous.body}`),
+      PREVIOUS_END,
+    ].join('\n'),
+  ];
+  if (retake.steer) {
+    parts.push(
+      'What they said about it, a request about the writing, not something said in the session:',
+      [STEER_START, quoted(retake.steer), STEER_END].join('\n')
+    );
+  }
+  parts.push(
+    'Write the account again, from the session. Take their request into account where the session bears it out. Add nothing the session does not contain.'
+  );
+  return parts.join('\n\n');
+}
+
+/**
+ * Her composed system prompt, then the session as the one thing to write
+ * about. A regenerate adds the draft it replaces and the person's steer after
+ * the session, so the session is still what the account is written from.
+ */
 export function synopsisMessages(
   systemPrompt: string,
-  lines: readonly SessionLine[]
+  lines: readonly SessionLine[],
+  retake?: SynopsisRetake
 ): LlmMessage[] {
+  const ask = `Write the account of this session.\n\n${synopsisTranscript(lines)}`;
   return [
     { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: `Write the account of this session.\n\n${synopsisTranscript(lines)}`,
-    },
+    { role: 'user', content: retake ? `${ask}\n\n${retakeAsk(retake)}` : ask },
   ];
 }
 

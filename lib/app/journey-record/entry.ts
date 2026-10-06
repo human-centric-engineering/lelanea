@@ -31,6 +31,10 @@ export const JOURNEY_SUMMARY_MAX = 200;
 export const JOURNEY_BODY_MAX = 20_000;
 export const JOURNEY_OUTCOME_TEXT_MAX = 500;
 export const JOURNEY_OUTCOMES_MAX = 20;
+/** How many times a person may ask for another draft of one synopsis (t-147). */
+export const MAX_SYNOPSIS_REGENERATIONS = 3;
+/** What a person may say about a draft when asking for another. */
+export const SYNOPSIS_STEER_MAX = 500;
 
 export const journeyOutcomeSchema = z.object({
   kind: z.enum(JOURNEY_OUTCOME_KINDS),
@@ -78,6 +82,13 @@ export interface JourneyEntry {
   notes: JourneyNoteRef[];
   /** "Keep this from her": no agent reads this entry. Own entries only. */
   withheldFromAgent: boolean;
+  /** How many more drafts the person may ask for. Null unless it is a draft synopsis. */
+  regenerationsLeft: number | null;
+  /**
+   * A kept synopsis written from an exchange the person has since deleted, so
+   * it may still describe or quote it. Cleared when they change it.
+   */
+  sourceRemoved: boolean;
   /** Where it sits in time: a synopsis at its session's start, an own entry when written. */
   occurredAt: string;
   keptAt: string | null;

@@ -12,7 +12,9 @@
  * `session.started` row. It is ledgered in `.context/app/divergences.md` (Row
  * 29), with daybreak#293 proposing the element it stands in for.
  *
- * **This module is the only code that reads or writes the table.**
+ * **This module is the only code that reads or writes the table.** Keeping
+ * and regenerating (`keep.ts`, `synopsis/regenerate.ts`) decide what to write
+ * and call the conditional writes here.
  *
  * ## The record is the person's
  *
@@ -22,9 +24,10 @@
  *
  * This file writes own entries and synopsis drafts, and removes any entry.
  * What goes into a draft is decided in `synopsis/` (t-146); this file only
- * stores it. Keeping one is t-147. A synopsis is never edited here, because
- * what keeping it does to the person's notes (owner rulings 2 and 3) belongs
- * to keeping, not to a text edit beside it.
+ * stores it. Keeping one, and changing one already kept, is `keep.ts`
+ * (t-147). A synopsis is never edited here, because what keeping it does to
+ * the person's notes (owner rulings 2 and 3) belongs to keeping, not to a
+ * text edit beside it.
  *
  * @see lib/app/journey-record/query.ts — search and filters
  * @see .context/app/journey-record.md
@@ -35,9 +38,11 @@ import { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db/client';
+import type { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { readSessionsById, type Session } from '@/lib/app/sessions/store';
 import {
+  MAX_SYNOPSIS_REGENERATIONS,
   journeyNoteRefsSchema,
   journeyOutcomesSchema,
   type JourneyEntry,
@@ -82,6 +87,11 @@ function toEntry(row: AppJourneyEntry, session: Session | undefined): JourneyEnt
     modules: row.modules,
     notes: readNoteRefs(row),
     withheldFromAgent: row.withheldFromAgent,
+    regenerationsLeft:
+      row.kind === 'synopsis' && row.state === 'draft'
+        ? Math.max(0, MAX_SYNOPSIS_REGENERATIONS - row.regenerations)
+        : null,
+    sourceRemoved: row.sourceRemovedAt !== null,
     occurredAt: row.occurredAt.toISOString(),
     keptAt: row.keptAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
@@ -238,6 +248,134 @@ export async function writeSynopsisDraft(
   }
 }
 
+/** One of the person's synopses, with what keeping and regenerating it need beyond the wire shape. */
+export interface StoredSynopsis {
+  entry: JourneyEntry;
+  sessionId: string;
+  /** The row's own `updatedAt`, for a change conditional on nothing having moved. */
+  updatedAt: Date;
+  regenerations: number;
+}
+
+/**
+ * One of the person's synopses. Another person's id, or one that never
+ * existed, answers 404; one of their own entries answers 409, because it is
+ * changed by editing it, never by keeping it.
+ */
+export async function readOwnSynopsis(userId: string, id: string): Promise<StoredSynopsis> {
+  const row = await prisma.appJourneyEntry.findFirst({ where: { id, userId } });
+  if (!row) throw new NotFoundError('Entry not found');
+  if (row.kind !== 'synopsis' || !row.sessionId) {
+    throw new ConflictError('Something you wrote is changed by editing it, not by keeping it', {
+      reason: 'not_a_synopsis',
+    });
+  }
+  return {
+    entry: toEntry(row, undefined),
+    sessionId: row.sessionId,
+    updatedAt: row.updatedAt,
+    regenerations: row.regenerations,
+  };
+}
+
+/** The account as the person keeps it: theirs if they changed it, the draft's if not. */
+export interface SynopsisText {
+  summary: string;
+  body: string;
+  outcomes: JourneyOutcome[];
+}
+
+/**
+ * Keep a synopsis, or change one already kept, if nothing has moved since it
+ * was read (`updatedAt`). The one write that decides which of two submits
+ * keeps: the loser matches nothing and is told `false`, and writes no note.
+ *
+ * Changing the text clears the "written from something since deleted" flag:
+ * the person has read it and said what it should say.
+ */
+export async function claimSynopsisKeep(
+  userId: string,
+  id: string,
+  claim: {
+    from: 'draft' | 'kept';
+    updatedAt: Date;
+    keptAt: Date;
+    text: SynopsisText | null;
+    notes: JourneyNoteRef[];
+  }
+): Promise<boolean> {
+  const { count } = await prisma.appJourneyEntry.updateMany({
+    where: { id, userId, kind: 'synopsis', state: claim.from, updatedAt: claim.updatedAt },
+    data: {
+      state: 'kept',
+      ...(claim.from === 'draft' ? { keptAt: claim.keptAt } : {}),
+      ...(claim.text
+        ? {
+            summary: claim.text.summary,
+            body: claim.text.body,
+            outcomes: claim.text.outcomes,
+            sourceRemovedAt: null,
+          }
+        : {}),
+      notes: claim.notes,
+    },
+  });
+  return count === 1;
+}
+
+/** The notes a kept synopsis lists, at the versions keeping left them. */
+export async function recordKeptNotes(
+  userId: string,
+  id: string,
+  notes: JourneyNoteRef[]
+): Promise<void> {
+  await prisma.appJourneyEntry.updateMany({
+    where: { id, userId, kind: 'synopsis', state: 'kept' },
+    data: { notes },
+  });
+}
+
+/**
+ * Take one of a draft's regenerations, if it still has the count it was read
+ * with. Taken before the model is called, so of two submits only one calls it.
+ */
+export async function claimRegeneration(
+  userId: string,
+  id: string,
+  regenerations: number
+): Promise<boolean> {
+  const { count } = await prisma.appJourneyEntry.updateMany({
+    where: { id, userId, kind: 'synopsis', state: 'draft', regenerations },
+    data: { regenerations: { increment: 1 } },
+  });
+  return count === 1;
+}
+
+/** Give back a regeneration whose draft never came, so a failed call costs no try. */
+export async function refundRegeneration(
+  userId: string,
+  id: string,
+  claimed: number
+): Promise<void> {
+  await prisma.appJourneyEntry.updateMany({
+    where: { id, userId, kind: 'synopsis', state: 'draft', regenerations: claimed },
+    data: { regenerations: { decrement: 1 } },
+  });
+}
+
+/** Put another draft's words in place of the last one's, while it is still a draft. */
+export async function replaceSynopsisDraft(
+  userId: string,
+  id: string,
+  text: SynopsisText
+): Promise<boolean> {
+  const { count } = await prisma.appJourneyEntry.updateMany({
+    where: { id, userId, kind: 'synopsis', state: 'draft' },
+    data: { summary: text.summary, body: text.body, outcomes: text.outcomes },
+  });
+  return count === 1;
+}
+
 /**
  * Change one of the person's own entries: its words, its summary, or whether
  * she may read it.
@@ -291,6 +429,39 @@ export async function removeJourneyEntry(
   const { count } = await prisma.appJourneyEntry.deleteMany({ where: { id, userId } });
   if (count === 0) throw new NotFoundError('Entry not found');
   return { id, kind: existing.kind };
+}
+
+type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];
+
+/**
+ * The person deleted exchanges from these sessions: settle what each session's
+ * synopsis still holds of them, inside the deletion's own transaction (owner
+ * ruling, 6 Oct 2026, at t-147; §12 "Deletion is real").
+ *
+ * - **A draft is removed.** Nobody has kept it, it may quote what was deleted,
+ *   and drafting it again would charge the person for their own deletion. The
+ *   session is not redrafted, as for any removed draft.
+ * - **A kept synopsis is flagged**, never taken. It is the person's kept
+ *   account, perhaps in their own edited words, so it stays until they change
+ *   or remove it; the flag tells them it was written from something they have
+ *   since deleted. Changing it clears the flag (`keep.ts`).
+ *
+ * Keyed on the person as well as the sessions, so a session id can only ever
+ * reach their own synopsis.
+ */
+export async function settleSynopsesOfDeletedExchanges(
+  tx: Tx,
+  input: { userId: string; sessionIds: readonly (string | null)[]; at: Date }
+): Promise<{ removed: number; flagged: number }> {
+  const sessionIds = [...new Set(input.sessionIds.filter((id): id is string => id !== null))];
+  if (sessionIds.length === 0) return { removed: 0, flagged: 0 };
+  const where = { userId: input.userId, kind: 'synopsis' as const, sessionId: { in: sessionIds } };
+  const removed = await tx.appJourneyEntry.deleteMany({ where: { ...where, state: 'draft' } });
+  const flagged = await tx.appJourneyEntry.updateMany({
+    where: { ...where, state: 'kept', sourceRemovedAt: null },
+    data: { sourceRemovedAt: input.at },
+  });
+  return { removed: removed.count, flagged: flagged.count };
 }
 
 const OUTCOME_HEADINGS = { action: 'Actions', insight: 'Insights', tension: 'Tensions' } as const;

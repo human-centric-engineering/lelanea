@@ -841,7 +841,8 @@ describe('what it costs, and who pays', () => {
     expect(await draftSynopsis(ANA, session(), NOW)).toBe('drafted');
 
     expect(db.entries).toHaveLength(1);
-    expect(mocks.warn).toHaveBeenCalledWith('Synopsis cost row failed', {
+    expect(mocks.warn).toHaveBeenCalledWith('Synopsis seat cost row failed', {
+      kind: 'journey_synopsis',
       error: 'cost table locked',
     });
   });

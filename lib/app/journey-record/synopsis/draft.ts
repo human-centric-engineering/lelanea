@@ -38,7 +38,9 @@
  * prompt composed from its profile as a turn's is, called one-shot through
  * `runStructuredCompletion` on its own provider and model: Daybreak's slot
  * extractor's shape (`lib/framework/data-slots/capabilities/extract.ts`). An
- * empty seat drafts nothing, and an operator can rebind it in the admin.
+ * empty seat drafts nothing, and an operator can rebind it in the admin. The
+ * gate, the call and the charge are `seat.ts`'s, shared with regenerating and
+ * the re-read.
  *
  * ## What it costs, and who pays
  *
@@ -60,19 +62,7 @@
  * @see .context/app/journey-record.md — "Drafting a synopsis"
  */
 
-import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
-import { logCost } from '@/lib/orchestration/llm/cost-tracker';
-import { getProvider } from '@/lib/orchestration/llm/provider-manager';
-import { resolveAgentProviderAndModel } from '@/lib/orchestration/llm/agent-resolver';
-import { runStructuredCompletion } from '@/lib/orchestration/llm/structured-completion';
-import { ProviderError } from '@/lib/orchestration/llm/provider';
-import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agents/binding-queries';
-import { CostOperation } from '@/types/orchestration';
-import { isGenerationPaused } from '@/lib/app/agent/availability';
-import { mayStartGeneratedTurn } from '@/lib/app/agent/ceiling';
-import { SYNOPSIS_SEAT } from '@/lib/app/agent/pins';
-import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { hasSynopsis, writeSynopsisDraft } from '@/lib/app/journey-record/record';
 import {
   exchangesOf,
@@ -87,18 +77,15 @@ import {
   SYNOPSIS_RETRY_MESSAGE,
   synopsisMessages,
   type SynopsisReply,
+  type SynopsisRetake,
 } from '@/lib/app/journey-record/synopsis/prompt';
+import { askSeat, openSeat, type SeatAgent } from '@/lib/app/journey-record/synopsis/seat';
 
 /** The cost row's tag, so the meter can say what this was. */
 export const SYNOPSIS_COST_KIND = 'journey_synopsis';
 
-/** Span phase for the call: a synopsis, not evaluation work. */
-const SYNOPSIS_PHASE = 'journey-synopsis';
-
 /** An account, not a scalar: room for a few paragraphs and the outcomes. */
 const SYNOPSIS_MAX_TOKENS = 2_000;
-/** Off the request path, so it can afford a slow provider. Per attempt. */
-const SYNOPSIS_TIMEOUT_MS = 60_000;
 
 /** What became of one request to draft. */
 export type SynopsisDraftOutcome =
@@ -114,99 +101,26 @@ export type SynopsisDraftOutcome =
   /** The model call failed or its reply was refused. Nothing stored. */
   | 'failed';
 
-interface SynopsisAgent {
-  id: string;
-  provider: string;
-  model: string;
-  fallbackProviders: string[];
-  /** The operator's setting on the agent, as a turn would use it. */
-  temperature: number;
-  systemPrompt: string;
-}
-
-/** The agent in the seat, with its prompt composed from its profile. Null when the seat is empty. */
-async function readSeatAgent(): Promise<SynopsisAgent | null> {
-  const binding = await getFacilitationBindingByRole(SYNOPSIS_SEAT);
-  if (!binding?.agent || !binding.agent.isActive || binding.agent.deletedAt) return null;
-  const agent = await prisma.aiAgent.findUnique({
-    where: { id: binding.agent.id },
-    select: { ...AGENT_SELECT, fallbackProviders: true },
-  });
-  if (!agent) return null;
-  return {
-    id: agent.id,
-    provider: agent.provider,
-    model: agent.model,
-    fallbackProviders: agent.fallbackProviders,
-    temperature: agent.temperature,
-    // Composed exactly as the chat handler composes a turn's, by the one helper
-    // the voice comparison and the turn record already share.
-    systemPrompt: composeAgentPrompt(agent).systemPrompt,
-  };
-}
-
 /**
- * Charge the person for the call. Awaited, so the row is inside the work the
- * host keeps alive; never throws, because a lost cost row does not undo the
- * draft.
+ * Ask the seat's agent for a draft of these lines: the first, or another one
+ * the person asked for (`regenerate.ts`). Throws when the call fails or the
+ * reply is refused.
  */
-async function charge(
+export function askForDraft(
   userId: string,
-  agentId: string,
-  call: { model: string; provider: string; inputTokens: number; outputTokens: number }
-): Promise<void> {
-  await logCost({
-    userId,
-    agentId,
-    model: call.model,
-    provider: call.provider,
-    inputTokens: call.inputTokens,
-    outputTokens: call.outputTokens,
-    operation: CostOperation.CHAT,
-    metadata: { seat: SYNOPSIS_SEAT, kind: SYNOPSIS_COST_KIND },
-  }).catch((err: unknown) => {
-    logger.warn('Synopsis cost row failed', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  });
-}
-
-/** Ask the seat's agent for the draft. Throws when the call fails or the reply is refused. */
-async function askForDraft(
-  userId: string,
-  agent: SynopsisAgent,
-  lines: Parameters<typeof synopsisMessages>[1]
+  agent: SeatAgent,
+  lines: Parameters<typeof synopsisMessages>[1],
+  retake?: SynopsisRetake
 ): Promise<SynopsisReply> {
-  const { providerSlug, model } = await resolveAgentProviderAndModel(agent, 'chat');
-  const provider = await getProvider(providerSlug);
-  try {
-    const result = await runStructuredCompletion<SynopsisReply>({
-      provider,
-      model,
-      messages: synopsisMessages(agent.systemPrompt, lines),
-      responseSchema: SYNOPSIS_RESPONSE_SCHEMA,
-      responseSchemaName: 'journey_synopsis',
-      parse: parseSynopsisReply,
-      retryUserMessage: SYNOPSIS_RETRY_MESSAGE,
-      temperature: agent.temperature,
-      maxTokens: SYNOPSIS_MAX_TOKENS,
-      timeoutMs: SYNOPSIS_TIMEOUT_MS,
-      phase: SYNOPSIS_PHASE,
-    });
-    await charge(userId, agent.id, {
-      model,
-      provider: providerSlug,
-      inputTokens: result.tokenUsage.input,
-      outputTokens: result.tokenUsage.output,
-    });
-    return result.value;
-  } catch (err) {
-    // A truncation is the one failure that carries what it was billed.
-    if (err instanceof ProviderError && err.usage) {
-      await charge(userId, agent.id, { model, provider: providerSlug, ...err.usage });
-    }
-    throw err;
-  }
+  return askSeat(userId, agent, {
+    kind: SYNOPSIS_COST_KIND,
+    messages: synopsisMessages(agent.systemPrompt, lines, retake),
+    responseSchema: SYNOPSIS_RESPONSE_SCHEMA,
+    responseSchemaName: 'journey_synopsis',
+    parse: parseSynopsisReply,
+    retryUserMessage: SYNOPSIS_RETRY_MESSAGE,
+    maxTokens: SYNOPSIS_MAX_TOKENS,
+  });
 }
 
 /**
@@ -222,11 +136,9 @@ export async function draftSynopsis(
   const turns = await readSessionTurns(userId, session.id);
   if (exchangesOf(turns).length < MIN_SYNOPSIS_EXCHANGES) return 'not_substantial';
   if (await hasSynopsis(userId, session.id)) return 'exists';
-  if (await isGenerationPaused()) return 'paused';
-  const allowance = await mayStartGeneratedTurn(userId, now);
-  if (!allowance.allowed) return 'ceiling_reached';
-  const agent = await readSeatAgent();
-  if (!agent) return 'no_agent';
+  const seat = await openSeat(userId, now);
+  if ('refused' in seat) return seat.refused;
+  const { agent } = seat;
 
   const material = await readSynopsisMaterial(userId, session, turns);
   // Held to the exchanges that can still be read, so a session whose

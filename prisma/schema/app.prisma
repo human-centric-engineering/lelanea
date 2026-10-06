@@ -799,6 +799,14 @@ model AppJourneyEntry {
   occurredAt        DateTime
   /// When the entry was kept. Null while it is a draft.
   keptAt            DateTime?
+  /// How many times the person has asked for another draft of this synopsis
+  /// (t-147). Capped (`MAX_SYNOPSIS_REGENERATIONS`), and claimed before the
+  /// model is called, so a double submit drafts once.
+  regenerations     Int                  @default(0)
+  /// Set when an exchange this synopsis was written from has since been
+  /// deleted (owner ruling, 6 Oct 2026, at t-147). Only a kept synopsis is
+  /// flagged: a draft is removed instead. Cleared when the person changes it.
+  sourceRemovedAt   DateTime?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 

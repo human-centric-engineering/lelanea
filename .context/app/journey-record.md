@@ -8,15 +8,16 @@ description: The journey record — a person's session synopses and their own en
 The journey record holds the app's account of the work and the person's own
 writing, together and in time order (product description §3.16). Feature
 `f-journey-record` (§19) builds it in five tasks. **t-145**, the store and its
-API, and **t-146**, [drafting a synopsis](#drafting-a-synopsis), are the parts
-described here. Later tasks add their sections as they land.
+API, **t-146**, [drafting a synopsis](#drafting-a-synopsis), and **t-147**,
+[keeping one](#keeping-a-synopsis), are the parts described here. Later tasks
+add their sections as they land.
 
 ## What is in it
 
-| Kind       | Written by                                         | State                                                                           |
-| ---------- | -------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `synopsis` | the `synopsis` seat, when a session closes (t-146) | `draft` until the person approves, edits or regenerates it (t-147), then `kept` |
-| `own`      | the person, whenever they want                     | `kept` from the moment it is written                                            |
+| Kind       | Written by                                         | State                                                                         |
+| ---------- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `synopsis` | the `synopsis` seat, when a session closes (t-146) | `draft` until the person keeps it, as written or changed (t-147), then `kept` |
+| `own`      | the person, whenever they want                     | `kept` from the moment it is written                                          |
 
 Module reflections, the third thing §3.16 names, land from phase 7, when
 modules have interiors. They will add a kind.
@@ -34,7 +35,8 @@ Each entry carries:
 - the `modules` it touched;
 - the `notes` its session wrote, each `{ slotSlug, version }`: references for keeping to confirm, never a reading (`journeyNoteRefsSchema`);
 - `occurredAt`, which is a synopsis's session start, or when an own entry was written;
-- `withheldFromAgent`, below.
+- `withheldFromAgent`, below;
+- on the wire, `regenerationsLeft` (a draft's remaining redrafts, else null) and `sourceRemoved` (a kept synopsis written from an exchange since deleted).
 
 ## Where it lives, and why not in Daybreak's stream
 
@@ -77,18 +79,21 @@ the CHECK are drift-probed in `lib/app/leaf-db-drift.ts`.
   the record at all.
 - **A synopsis is changed by keeping it, never by editing it in place.** The
   edit route refuses a synopsis with 409, because what keeping does to the
-  person's notes (owner rulings 2 and 3) belongs to keeping (t-147). Any entry
-  can be removed.
+  person's notes (owner rulings 2 and 3) belongs to keeping. A kept synopsis
+  is changed through the keep route too, so the notes follow the text. Any
+  entry can be removed.
 
 ## The API
 
-| Route                                   | Does                                                                                                                                                                                      |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/app/journey-record`        | The kept record, newest first, each synopsis with its session's window, plus totals over all of it. `?q=` `?module=` `?outcome=` `?kind=` narrow it; `?drafts=true` adds what is waiting. |
-| `POST /api/v1/app/journey-record`       | `{ body, summary?, withheldFromAgent? }`: an own entry.                                                                                                                                   |
-| `PATCH /api/v1/app/journey-record/:id`  | Change an own entry's words, summary or `withheldFromAgent`.                                                                                                                              |
-| `DELETE /api/v1/app/journey-record/:id` | Remove any entry, words and all. Removing a synopsis does not redraft it.                                                                                                                 |
-| `GET /api/v1/app/journey-record/export` | The kept record as a Markdown download, oldest first.                                                                                                                                     |
+| Route                                            | Does                                                                                                                                                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/app/journey-record`                 | The kept record, newest first, each synopsis with its session's window, plus totals over all of it. `?q=` `?module=` `?outcome=` `?kind=` narrow it; `?drafts=true` adds what is waiting. |
+| `POST /api/v1/app/journey-record`                | `{ body, summary?, withheldFromAgent? }`: an own entry.                                                                                                                                   |
+| `PATCH /api/v1/app/journey-record/:id`           | Change an own entry's words, summary or `withheldFromAgent`.                                                                                                                              |
+| `DELETE /api/v1/app/journey-record/:id`          | Remove any entry, words and all. Removing a synopsis does not redraft it. This is how a draft is discarded.                                                                               |
+| `POST /api/v1/app/journey-record/:id/keep`       | `{ confirm, edit? }`: keep a synopsis, as written or changed, or change one already kept. Returns the entry and what it did to each listed note.                                          |
+| `POST /api/v1/app/journey-record/:id/regenerate` | `{ steer? }`: another draft in place of this one. Returns the new draft.                                                                                                                  |
+| `GET /api/v1/app/journey-record/export`          | The kept record as a Markdown download, oldest first.                                                                                                                                     |
 
 **Search and filters run in memory** over the person's whole record
 (`lib/app/journey-record/query.ts`), as the notes do. The totals need all of it
@@ -201,10 +206,128 @@ stays removed.
 `npm run smoke:app-synopsis` proves the wiring on the dev database with a real
 model: a session of three real turns closes, and its stored draft is printed.
 
+## Keeping a synopsis
+
+A draft is only the app's account of what happened. The person keeps it as
+written, changes it first, asks for another, or discards it
+(`lib/app/journey-record/keep.ts`, `synopsis/regenerate.ts`). Keeping is also
+their strongest lever over what the app believes about them. The draft lists
+the visible notes its session wrote, and keeping says which of those are right
+(owner rulings 2 and 3 at planning; the t-147 rulings on how).
+
+### What keeping does to the notes
+
+| The person                      | The notes still ticked                                                                                                                                        | The unticked notes        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| keeps it as written             | each is **confirmed**: a new version with the same reading, `user_confirmed`, confidence 10                                                                   | left exactly as they were |
+| changes it, then keeps it       | the changed account is **re-read** against each: one it says differently is **corrected** to what it says; one it agrees with or doesn't mention is confirmed | left exactly as they were |
+| changes a synopsis already kept | the same, over the notes it confirmed when kept                                                                                                               | not listed any more       |
+
+A confirmation or correction is written through `correctNote` (`lib/app/slots/notes.ts`) with its own reasoning line, so the notes panel says it came from keeping the account. Rules that hold throughout:
+
+- **Only a note still at the version the session wrote is touched.** One that
+  has moved on since (a later session, a correction, a removal) is left alone.
+  Confirming the newer reading would confirm something the account never
+  listed.
+- **Hidden, special-category, withheld, removed and retired notes are never
+  touched.** They are never listed in the first place, but a slot can be
+  reclassified after drafting. So keeping asks again: the notes panel must
+  offer the note as correctable, and `correctNote` refuses on its own terms.
+- **One already confirmed at full confidence is not written again**, so a kept
+  synopsis can be kept twice without growing the note's history.
+- **After keeping, a synopsis lists only the notes it confirmed**, at the
+  versions it left them. A later change re-reads exactly those.
+- **A changed account is always kept.** If the re-read can't run (paused, at
+  the ceiling, no agent in the seat, or the call failed), the text is kept and
+  the notes are left alone, because confirming them could confirm something
+  the edit contradicts. The response says so (`notesUnread`).
+
+### The re-read
+
+Owner ruling 3 assumed Daybreak's slot extraction could run over a passage of
+text. It cannot. Daybreak's notes are written only by the AI calling
+`fill_slot` inside a turn, and its `extract.ts` only turns prose into a typed
+value for a slot already chosen. So the re-read is our own call, in that
+file's shape (`synopsis/reread.ts`), and Daybreak has been asked for the
+element (see below).
+
+- It goes through the synopsis seat (`synopsis/seat.ts`). It is gated and
+  charged exactly as a draft is, tagged `kind: 'journey_synopsis_reread'`.
+- It has instructions of its own rather than her voice, and runs at
+  temperature 0. It reads; it doesn't write.
+- Each ticked note gets a verdict: `agrees`, `differs` with the reading the
+  account supports, or `silent`. A reply about a note it was not asked about
+  is dropped. A note it skipped counts as `silent`. A malformed reply is
+  asked for once more, then refused.
+
+### Regenerating
+
+The person can ask for another draft, optionally saying why ("shorter", "you
+missed the part about my father"). The new draft replaces the old one and is
+still a draft.
+
+- **Same call as the first draft** (`askForDraft`, `draft.ts`), written from
+  the same session. The last draft and the person's steer are added after the
+  session, each fenced as material. The steer is weighed as a request about
+  the writing, never as a fact about the session.
+- **Modules and notes are not drafted again.** They were derived from the
+  session, and a different wording changes neither.
+- **Capped at three per draft** (`MAX_SYNOPSIS_REGENERATIONS`). A try is taken
+  before the model is called, so a double submit drafts once. The second
+  submit gets 409 `regenerating`. A call that fails gives its try back.
+- **Refusals come back as 409**, with a `reason`: `not_a_draft`,
+  `no_more_drafts`, `paused`, `ceiling_reached` or `no_agent`. A failed call
+  is 503, and the draft is unchanged.
+
+### Discarding
+
+A draft is discarded by removing it (`DELETE`, above). The session is not
+redrafted.
+
+### Once
+
+The keep is one conditional write (`claimSynopsisKeep`, on the row's
+`updatedAt`), made before any note is touched. Of two submits, one matches
+and keeps; the other finds the synopsis already kept with that text and
+answers with it, having written nothing. A submit that loses to a
+_different_ change gets 409 `changed_meanwhile`.
+
+### When the person deletes what a synopsis was written from
+
+Deleting an exchange, or a conversation, settles its session's synopsis in the
+same transaction (owner ruling, 6 Oct 2026, at t-147;
+`settleSynopsesOfDeletedExchanges`):
+
+- **A draft is removed.** Nobody has kept it, it may quote what was deleted,
+  and redrafting it would charge the person for their own deletion.
+- **A kept synopsis is flagged** (`sourceRemovedAt`; `sourceRemoved` on the
+  wire). It is the person's kept account, perhaps in their own words, so it
+  is never taken silently. The flag tells them it was written from something
+  they have since deleted. Changing it clears the flag.
+
+The deleted-conversation sweep settles them the same way, whichever path
+deleted the conversation.
+
+**Known limit:** a draft written in the seconds between a session closing and
+an exchange from it being deleted can land after the deletion settled. It is
+then an ordinary draft the person can discard. **Trigger to revisit:** a
+report of a draft quoting something deleted.
+
+### What it costs
+
+- The re-read and each redraft are charged to the person, as a draft is
+  (`synopsis/seat.ts`). Approving never calls a model.
+- Keeping with an edit and regenerating share a per-person sub-cap of 10 a
+  minute (`lib/app/journey-record/rate-limit.ts`), on top of the
+  `/api/v1/**` section cap.
+
+### Asked of Daybreak
+
+The re-read stands in for a "re-read this text against these slots" element
+Daybreak doesn't have. It has been asked for, with `reread.ts` as the
+reference implementation (link below once filed).
+
 ## Not yet
 
-- Keeping (t-147), the timeline at `/app/journey` (t-148),
-  and the recap and memory search reading the record (t-149).
-- Editing a kept synopsis after the fact. §12 says anything in the record can
-  be edited. That goes through keeping's path, so the person's notes follow
-  the text (t-147).
+- The timeline at `/app/journey` (t-148), and the recap and memory search
+  reading the record (t-149).
