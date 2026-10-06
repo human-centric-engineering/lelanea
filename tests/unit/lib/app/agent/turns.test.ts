@@ -25,6 +25,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Prisma } from '@prisma/client';
 
+import type { Arrival } from '@/lib/app/sessions/store';
+
 interface TurnRow {
   id: string;
   userId: string;
@@ -39,6 +41,7 @@ interface TurnRow {
   register?: string | null;
   registerSource?: string | null;
   leanings?: unknown;
+  sessionId?: string | null;
   conversationId: string | null;
   userMessageId: string | null;
   assistantMessageId: string | null;
@@ -163,6 +166,17 @@ const HER_PERSONA = 'Who she is.\n\nVoice fingerprint: lelanea_voice_fingerprint
 // f-memory t-129 — the turn hands the person's message to their memory index.
 const { queueMessageIndex } = vi.hoisted(() => ({ queueMessageIndex: vi.fn() }));
 vi.mock('@/lib/app/memory/memory-index', () => ({ queueMessageIndex }));
+
+// f-recap t-141 — the turn arrives before it claims. The session rule and its
+// store are `tests/unit/lib/app/sessions/`; here the seam is asked whether it
+// arrives first and stamps the session it was handed.
+const { arriveSessionQuietly } = vi.hoisted(() => ({
+  arriveSessionQuietly: vi.fn(async (userId: string): Promise<Arrival | null> => ({
+    session: { id: `ses-${userId}`, ordinal: 1, startedAt: new Date(), closedAt: null },
+    opened: false,
+  })),
+}));
+vi.mock('@/lib/app/sessions/store', () => ({ arriveSessionQuietly }));
 
 vi.mock('@/lib/db/client', () => {
   const next = (prefix: string): string => `${prefix}-${++db.seq}`;
@@ -762,6 +776,73 @@ describe('what a turn records', () => {
   });
 });
 
+describe('the session a turn falls in (f-recap t-141)', () => {
+  it('arrives before the claim writes the turn row, and stamps the session on it', async () => {
+    let rowsWhenArriving = -1;
+    arriveSessionQuietly.mockImplementationOnce(async (userId: string) => {
+      rowsWhenArriving = db.turns.length;
+      return {
+        session: { id: `ses-${userId}`, ordinal: 1, startedAt: new Date(), closedAt: null },
+        opened: true,
+      };
+    });
+
+    await take(turnFor({ userId: 'user-1' }));
+    await take(turnFor({ userId: 'user-2', clientTurnId: 'turn-2' }));
+
+    // The turn row did not yet exist, so it could not count as its own activity.
+    expect(rowsWhenArriving).toBe(0);
+    expect(db.turns).toHaveLength(2);
+    expect(db.turns.map((t) => [t.userId, t.sessionId])).toEqual([
+      ['user-1', 'ses-user-1'],
+      ['user-2', 'ses-user-2'],
+    ]);
+  });
+
+  it('a re-run whose arrival could not be written keeps the session its first attempt had', async () => {
+    behaviour.outcome = 'error';
+    await take(turnFor());
+    expect(db.turns[0]).toMatchObject({ status: 'failed', sessionId: 'ses-user-1' });
+
+    behaviour.outcome = 'answer';
+    arriveSessionQuietly.mockResolvedValueOnce(null);
+    await take(turnFor());
+
+    expect(db.turns[0]).toMatchObject({
+      status: 'completed',
+      attempts: 2,
+      sessionId: 'ses-user-1',
+    });
+  });
+
+  it('arrives on a turn the pause answers, and hands the arrival to the host', async () => {
+    db.flags.set(GENERATION_PAUSED_FLAG, true);
+    const kept: Promise<unknown>[] = [];
+    const result = await runRecordedTurn(
+      { ...turnFor(), keepAlive: (work) => kept.push(work) },
+      fakeRun(turnFor())
+    );
+    if ('refused' in result) throw new Error('refused');
+    await drain(result[Symbol.asyncIterator]());
+
+    expect(modelCalls).toBe(0);
+    expect(arriveSessionQuietly).toHaveBeenCalledTimes(1);
+    expect(arriveSessionQuietly).toHaveBeenCalledWith('user-1');
+    expect(await kept[0]).toMatchObject({ session: { id: 'ses-user-1' } });
+  });
+
+  it('still takes the turn, unstamped, when the session could not be written', async () => {
+    arriveSessionQuietly.mockResolvedValueOnce(null);
+
+    await take(turnFor());
+
+    expect(modelCalls).toBe(1);
+    expect(db.turns[0]).toMatchObject({ status: 'completed' });
+    // Left out of the insert, so the column keeps its NULL default.
+    expect(db.turns[0].sessionId).toBeUndefined();
+  });
+});
+
 describe('a turn costed at nothing', () => {
   it('is marked unpriced with no cost — beside a priced turn as the population', async () => {
     // The population: the agent's pinned model, which t-52 taught the registry, prices.
@@ -1270,7 +1351,7 @@ describe('the edges of a claim', () => {
 
     const claim = await claimTurn(
       request,
-      { fingerprintVersion: '1.0', register: null, leanings: null },
+      { fingerprintVersion: '1.0', register: null, leanings: null, sessionId: null },
       staleClaimMs(60_000)
     );
 
@@ -1291,7 +1372,7 @@ describe('the edges of a claim', () => {
           agentSlug: 'lelanea-guide',
           requestHash: 'x',
         },
-        { fingerprintVersion: null, register: null, leanings: null },
+        { fingerprintVersion: null, register: null, leanings: null, sessionId: null },
         staleClaimMs(60_000)
       )
     ).rejects.toThrow(/lost its row/);

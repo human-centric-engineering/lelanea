@@ -135,6 +135,7 @@ import type {
 } from '@/lib/framework/facilitation/agents/turn-hook';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 import { queueMessageIndex } from '@/lib/app/memory/memory-index';
+import { arriveSessionQuietly, type Arrival } from '@/lib/app/sessions/store';
 
 /** Error codes a refused turn carries, for a client to branch on (`turn-codes.ts`, import-light). */
 export { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
@@ -436,6 +437,13 @@ export async function runRecordedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
 ): Promise<ChatStream | FacilitationTurnRefusal> {
+  // Taking a turn is arriving (f-recap t-141), whatever then answers it: the
+  // resource, a pause, a refusal or the model. Started here and awaited only by
+  // the claim, which stamps it; the host keeps it alive past any response that
+  // does not wait for it. It never throws, so it never stands in the way.
+  const arrival = arriveSessionQuietly(turn.userId);
+  keepAlive(turn, arrival);
+
   const locale = preferredLanguageTag(turn.headers?.get('accept-language') ?? null);
   const who = { userId: turn.userId, seat: turn.role };
   const crisis = await detectCrisis(turn.message, locale, who);
@@ -444,7 +452,10 @@ export async function runRecordedTurn(
     return only(crisisFrame(crisis.resource));
   }
 
-  const result = await runGeneratedTurn(turn, run, { crisisNow: crisis.resource !== null });
+  const result = await runGeneratedTurn(turn, run, {
+    crisisNow: crisis.resource !== null,
+    arrival,
+  });
   // A refusal carries no stream, so it shows no resource — and records none.
   if (crisis.resource === null || isRefusal(result)) return result;
   await recordCrisisShown(crisis, who);
@@ -467,7 +478,7 @@ export async function runRecordedTurn(
 async function runGeneratedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun,
-  options: { crisisNow: boolean } = { crisisNow: false }
+  options: { crisisNow: boolean; arrival: Promise<Arrival | null> }
 ): Promise<ChatStream | FacilitationTurnRefusal> {
   const turnId = turn.clientTurnId ?? mintTurnId();
   const requestHash = await hashTurnRequest(turn.role, turn.message);
@@ -482,7 +493,7 @@ async function runGeneratedTurn(
     return only(held);
   }
 
-  const [deadlines, fingerprintVersion, register, last, leaningInputs, proposed] =
+  const [deadlines, fingerprintVersion, register, last, leaningInputs, proposed, arrival] =
     await Promise.all([
       getAgentDeadlines(),
       readAgentFingerprintVersion(turn.agentSlug),
@@ -491,6 +502,9 @@ async function runGeneratedTurn(
       readLeaningInputs(turn.userId, turn.role),
       // Only the seat with leanings has a proposal to carry (f-leanings t-137).
       hasRegister(turn.role) ? proposedRecently(turn.userId, turn.role) : false,
+      // Before the claim writes the turn row, which would otherwise be its own
+      // last activity and keep every sitting open (f-recap t-141).
+      options.arrival,
     ]);
   // Against the register's source: under a crisis hold the harder poles are held at rest.
   const leanings = leaningsFrom(leaningInputs, register?.source ?? null);
@@ -503,7 +517,7 @@ async function runGeneratedTurn(
       agentSlug: turn.agentSlug,
       requestHash,
     },
-    { fingerprintVersion, register, leanings },
+    { fingerprintVersion, register, leanings, sessionId: arrival?.session.id ?? null },
     staleClaimMs(deadlines.turnDeadlineMs)
   );
   // The context block is cached per person for a minute, built for the last
@@ -600,7 +614,7 @@ async function heldEnding(turn: FacilitationTurn): Promise<ChatEvent | null> {
  * refuses — `after()` outside a request scope throws — costs only the guarantee
  * on a serverless deploy; a long-lived server finishes the turn regardless.
  */
-function keepAlive(turn: FacilitationTurn, finished: Promise<void>): void {
+function keepAlive(turn: FacilitationTurn, finished: Promise<unknown>): void {
   try {
     turn.keepAlive?.(finished);
   } catch (err) {

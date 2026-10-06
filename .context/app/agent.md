@@ -476,10 +476,63 @@ cost row for an unpriced turn still says $0; the turn record is what knows bette
 
 ### Sessions
 
-There are none, deliberately. Daybreak has no session concept and a facilitation
-conversation resumes forever, so turns are metered one by one with timestamps
-(`startedAt`, `completedAt`). A "sitting" is derivable later by whoever needs one
-(f-recap, f-journey-record) without a retrofit.
+f-recap t-141; owner rulings of 6 Oct 2026 on `f-recap`. A facilitation
+conversation still resumes forever. A **session** is a sitting inside it: it
+starts when the person arrives, or takes a turn, **after twelve hours with no
+turn** (`SESSION_GAP_HOURS`, `lib/app/sessions/boundary.ts`). That matches the
+register lean's sitting. It deliberately does not match Daybreak's 30-minute
+engagement dwell, which measures how long someone stayed, not whether they came
+back. A sitting is the person's, not the seat's: onboarding and the facilitator
+share one.
+
+**Where it lives.** Rows in Daybreak's `framework_journey_event`, with `journeyId`
+null: `session.started` (`{ ordinal }`) and `session.closed`
+(`{ sessionId, ordinal }`). There is no `app_` session table. Daybreak has no
+writer for these yet, so `lib/app/sessions/store.ts` writes them itself. That is
+divergence Row 28, and it goes when
+[`daybreak#292`](https://github.com/human-centric-engineering/daybreak/issues/292)
+ships. Erasure and subject access come with the stream: its rows cascade with the
+user and are in Daybreak's export.
+
+**When it is written.**
+
+- `arriveSession()` runs when the pane is read
+  (`GET /api/v1/app/conversation`, either seat), and at the start of every turn
+  (`lib/app/agent/turns.ts`), whatever answers it: the crisis resource, a pause
+  or limit, a refusal or the model. The turn does not wait for it except to
+  stamp its claim, and the host keeps it alive past a response that does not.
+- It must run before the turn row exists, otherwise the new turn would count as
+  its own last activity and no sitting would ever end.
+- A reload inside the sitting writes nothing.
+- After the gap, it closes the last session, stamped at its last activity (the
+  latest turn's `completedAt`, or the sitting's own start if it had no turn),
+  then opens the next. Nothing runs on a timer.
+- The first-ever arrival opens session 1 and closes nothing.
+- Every caller uses `arriveSessionQuietly`, so a failed write never fails a read
+  or a turn. A new turn is left unstamped; a re-run keeps the session its first
+  attempt recorded.
+- If a later session was removed (f-forget-session), the latest one left is
+  already closed. It is never resumed: the next arrival opens a fresh session,
+  numbered past every session a close row still names, so no surviving row's id
+  is reused. **A removed current session leaves no row naming it**, so its
+  ordinal, and with it its ids, can come round again. f-forget-session must
+  leave a tombstone if anything keeps a forgotten session's id.
+
+**Two tabs at once open one session.** A row's id is a digest of
+`(userId, ordinal, kind)`, and the close and the open are written in one
+transaction. Concurrent arrivals collide on the started row's primary key, and the loser reads
+the winner's row. This is the turn claim's shape, not a read-then-write.
+
+**Each turn is stamped with its session.** `app_turn.sessionId` holds the started
+row's id, so "which exchanges belong to this session" is a lookup
+(f-forget-session). It is a hand-written FK, `ON DELETE SET NULL`, drift-probed:
+a turn's metering outlives a removed session. Turns from before sessions are
+null and stay null. Those sittings were never recorded, and backfilling them from
+timestamps would invent them.
+
+**Reading.** `readSessions(userId)` returns the current session and the previous
+one, each with `startedAt` and `closedAt`. "Current" is the latest to start, and
+only the next arrival closes it, so read after arriving, as the pane does.
 
 ### Privacy
 

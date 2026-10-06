@@ -21,6 +21,7 @@ import type { ChatStream } from '@/lib/orchestration/chat/types';
 import type { ChatEvent } from '@/types/orchestration';
 
 const mocks = vi.hoisted(() => ({
+  arriveSessionQuietly: vi.fn(async (): Promise<null> => null),
   paused: vi.fn(),
   check: vi.fn(),
   createEvent: vi.fn(),
@@ -93,6 +94,9 @@ vi.mock('@/lib/app/voice/register-store', () => ({
           ? { register: 'guiding', source: 'safety', moduleSlug: 'values' }
           : { register: 'teaching', source: 'module', moduleSlug: 'values' }
   ),
+}));
+vi.mock('@/lib/app/sessions/store', () => ({
+  arriveSessionQuietly: mocks.arriveSessionQuietly,
 }));
 vi.mock('@/lib/app/agent/turn-record', () => ({
   claimTurn: mocks.claimTurn,
@@ -180,6 +184,16 @@ describe('runRecordedTurn — someone in danger', () => {
       });
       // Nothing claimed: a hard turn writes no model turn.
       expect(mocks.claimTurn).not.toHaveBeenCalled();
+    });
+
+    it('counts as the person arriving, though it claims no turn (f-recap t-141)', async () => {
+      // An arrival that never settles: the resource is not held up behind it.
+      mocks.arriveSessionQuietly.mockReturnValueOnce(new Promise(() => {}));
+
+      const out = await frames(await runRecordedTurn(turn('I want to kill myself'), vi.fn()));
+
+      expect(out[0]).toMatchObject({ type: 'error', code: 'crisis' });
+      expect(mocks.arriveSessionQuietly).toHaveBeenCalledWith(turn('x').userId);
     });
 
     it('answers with the resource while generation is paused', async () => {
