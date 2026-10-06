@@ -77,8 +77,7 @@ vi.mock('@/lib/db/client', () => {
         ),
         create: vi.fn(async ({ data }: { data: Partial<EntryRow> }) => {
           const now = new Date();
-          const row: EntryRow = {
-            id: `cmentry${String(++db.seq).padStart(18, '0')}`,
+          const defaults = {
             sessionId: null,
             summary: null,
             outcomes: [],
@@ -88,8 +87,12 @@ vi.mock('@/lib/db/client', () => {
             createdAt: now,
             updatedAt: now,
             orgId: 'install',
-            ...(data as Omit<EntryRow, 'id'>),
           };
+          const row = {
+            ...defaults,
+            ...data,
+            id: `cmentry${String(++db.seq).padStart(18, '0')}`,
+          } as EntryRow;
           db.entries.push(row);
           return { ...row };
         }),

@@ -22,34 +22,42 @@ import { editOwnEntry, removeJourneyEntry } from '@/lib/app/journey-record/recor
 import { JOURNEY_RECORD_OWNERSHIP } from '@/lib/app/journey-record/ownership';
 import { journeyEntryIdSchema, ownEntryEditSchema } from '@/lib/app/journey-record/validation';
 
-export const PATCH = withAuth<{ id: string }>(async (request, session, { params }) => {
-  const log = await getRouteLogger(request);
-  const { id: raw } = await params;
-  const id = validatePathParam(raw, journeyEntryIdSchema, { label: 'entry id' });
-  const edit = await validateRequestBody(request, ownEntryEditSchema);
-  const entry = await editOwnEntry(session.user.id, id, edit);
+export const PATCH = withAuth<{ id: string }>(
+  async (request, session, { params }) => {
+    const log = await getRouteLogger(request);
+    const { id: raw } = await params;
+    const id = validatePathParam(raw, journeyEntryIdSchema, { label: 'entry id' });
+    const edit = await validateRequestBody(request, ownEntryEditSchema);
+    const entry = await editOwnEntry(session.user.id, id, edit);
 
-  // Which fields changed, never what to.
-  log.info('Own journey entry changed', {
-    userId: session.user.id,
-    entryId: id,
-    fields: Object.entries(edit).flatMap(([field, value]) => (value === undefined ? [] : [field])),
-  });
+    // Which fields changed, never what to.
+    log.info('Own journey entry changed', {
+      userId: session.user.id,
+      entryId: id,
+      fields: Object.entries(edit).flatMap(([field, value]) =>
+        value === undefined ? [] : [field]
+      ),
+    });
 
-  return successResponse(entry);
-}, JOURNEY_RECORD_OWNERSHIP);
+    return successResponse(entry);
+  },
+  { ownership: JOURNEY_RECORD_OWNERSHIP }
+);
 
-export const DELETE = withAuth<{ id: string }>(async (request, session, { params }) => {
-  const log = await getRouteLogger(request);
-  const { id: raw } = await params;
-  const id = validatePathParam(raw, journeyEntryIdSchema, { label: 'entry id' });
-  const removed = await removeJourneyEntry(session.user.id, id);
+export const DELETE = withAuth<{ id: string }>(
+  async (request, session, { params }) => {
+    const log = await getRouteLogger(request);
+    const { id: raw } = await params;
+    const id = validatePathParam(raw, journeyEntryIdSchema, { label: 'entry id' });
+    const removed = await removeJourneyEntry(session.user.id, id);
 
-  log.info('Journey entry removed by the person it is about', {
-    userId: session.user.id,
-    entryId: id,
-    kind: removed.kind,
-  });
+    log.info('Journey entry removed by the person it is about', {
+      userId: session.user.id,
+      entryId: id,
+      kind: removed.kind,
+    });
 
-  return successResponse(removed);
-}, JOURNEY_RECORD_OWNERSHIP);
+    return successResponse(removed);
+  },
+  { ownership: JOURNEY_RECORD_OWNERSHIP }
+);

@@ -9,12 +9,10 @@
  * the person's (§12), and there is no admin door to it.
  */
 
-import type { WithAuthOptions } from '@/lib/auth/guards';
+import type { RouteOwnership } from '@/lib/auth/guards';
 
-export const JOURNEY_RECORD_OWNERSHIP: WithAuthOptions<{ id: string }> = {
-  ownership: {
-    decidedBy: 'self',
-    because:
-      "Every read, write and removal is keyed on the caller's own id. A path names an entry, never a subject, and another person's entry id matches nothing.",
-  },
+export const JOURNEY_RECORD_OWNERSHIP: RouteOwnership = {
+  decidedBy: 'self',
+  because:
+    "Every read, write and removal is keyed on the caller's own id. A path names an entry, never a subject, and another person's entry id matches nothing.",
 };

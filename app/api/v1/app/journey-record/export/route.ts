@@ -16,20 +16,23 @@ import { withAuth } from '@/lib/auth/guards';
 import { exportJourneyRecordMarkdown } from '@/lib/app/journey-record/record';
 import { JOURNEY_RECORD_OWNERSHIP } from '@/lib/app/journey-record/ownership';
 
-export const GET = withAuth(async (request, session) => {
-  const log = await getRouteLogger(request);
-  const { markdown, entries } = await exportJourneyRecordMarkdown(session.user.id);
-  const day = new Date().toISOString().slice(0, 10);
+export const GET = withAuth(
+  async (request, session) => {
+    const log = await getRouteLogger(request);
+    const { markdown, entries } = await exportJourneyRecordMarkdown(session.user.id);
+    const day = new Date().toISOString().slice(0, 10);
 
-  log.info('Own journey record exported', { userId: session.user.id, entries });
+    log.info('Own journey record exported', { userId: session.user.id, entries });
 
-  return new Response(markdown, {
-    headers: {
-      'Content-Type': 'text/markdown; charset=utf-8',
-      'Content-Disposition': `attachment; filename="lelanea-journey-${day}.md"`,
-      // Personal data, one copy per request: nothing between here and the
-      // browser should keep it.
-      'Cache-Control': 'private, no-store',
-    },
-  });
-}, JOURNEY_RECORD_OWNERSHIP);
+    return new Response(markdown, {
+      headers: {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Content-Disposition': `attachment; filename="lelanea-journey-${day}.md"`,
+        // Personal data, one copy per request: nothing between here and the
+        // browser should keep it.
+        'Cache-Control': 'private, no-store',
+      },
+    });
+  },
+  { ownership: JOURNEY_RECORD_OWNERSHIP }
+);
