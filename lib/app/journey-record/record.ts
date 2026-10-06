@@ -248,6 +248,16 @@ export async function writeSynopsisDraft(
   }
 }
 
+/**
+ * How long a keep or a redraft holds its synopsis. Longer than the model's two
+ * attempts (`seat.ts`), so a live one is never taken over; short enough that a
+ * crashed one does not hold the person up for long.
+ */
+export const SYNOPSIS_LEASE_MS = 3 * 60_000;
+
+/** What keeping still owes a synopsis's notes. Null once they are settled. */
+export type NotesPending = 'confirm' | 'reread';
+
 /** One of the person's synopses, with what keeping and regenerating it need beyond the wire shape. */
 export interface StoredSynopsis {
   entry: JourneyEntry;
@@ -255,14 +265,22 @@ export interface StoredSynopsis {
   /** The row's own `updatedAt`, for a change conditional on nothing having moved. */
   updatedAt: Date;
   regenerations: number;
+  notesPending: NotesPending | null;
+  /** A keep or a redraft holds it, and has for less than {@link SYNOPSIS_LEASE_MS}. */
+  busy: boolean;
 }
 
 /**
- * One of the person's synopses. Another person's id, or one that never
- * existed, answers 404; one of their own entries answers 409, because it is
- * changed by editing it, never by keeping it.
+ * One of the person's synopses, with its session's window as the record shows
+ * it. Another person's id, or one that never existed, answers 404; one of
+ * their own entries answers 409, because it is changed by editing it, never by
+ * keeping it.
  */
-export async function readOwnSynopsis(userId: string, id: string): Promise<StoredSynopsis> {
+export async function readOwnSynopsis(
+  userId: string,
+  id: string,
+  now: Date = new Date()
+): Promise<StoredSynopsis> {
   const row = await prisma.appJourneyEntry.findFirst({ where: { id, userId } });
   if (!row) throw new NotFoundError('Entry not found');
   if (row.kind !== 'synopsis' || !row.sessionId) {
@@ -270,11 +288,25 @@ export async function readOwnSynopsis(userId: string, id: string): Promise<Store
       reason: 'not_a_synopsis',
     });
   }
+  const sessions = await readSessionsById(userId, [row.sessionId]);
   return {
-    entry: toEntry(row, undefined),
+    entry: toEntry(row, sessions.get(row.sessionId)),
     sessionId: row.sessionId,
     updatedAt: row.updatedAt,
     regenerations: row.regenerations,
+    notesPending: row.notesPending,
+    busy:
+      row.workingSince !== null && now.getTime() - row.workingSince.getTime() < SYNOPSIS_LEASE_MS,
+  };
+}
+
+/** No keep or redraft holds it, or the one that did is older than the lease. */
+function leaseFree(now: Date) {
+  return {
+    OR: [
+      { workingSince: null },
+      { workingSince: { lt: new Date(now.getTime() - SYNOPSIS_LEASE_MS) } },
+    ],
   };
 }
 
@@ -287,8 +319,13 @@ export interface SynopsisText {
 
 /**
  * Keep a synopsis, or change one already kept, if nothing has moved since it
- * was read (`updatedAt`). The one write that decides which of two submits
- * keeps: the loser matches nothing and is told `false`, and writes no note.
+ * was read (`updatedAt`) and nothing else holds it. The one write that decides
+ * which of two submits keeps: the loser matches nothing and is told `false`,
+ * and writes no note.
+ *
+ * It takes the lease (`workingSince = now`) and records what the notes are
+ * owed (`notesPending`), so a keep that fails before {@link finishSynopsisKeep}
+ * is finished by the next one rather than taken for done.
  *
  * Changing the text clears the "written from something since deleted" flag:
  * the person has read it and said what it should say.
@@ -299,16 +336,24 @@ export async function claimSynopsisKeep(
   claim: {
     from: 'draft' | 'kept';
     updatedAt: Date;
-    keptAt: Date;
+    now: Date;
     text: SynopsisText | null;
     notes: JourneyNoteRef[];
+    pending: NotesPending;
   }
 ): Promise<boolean> {
   const { count } = await prisma.appJourneyEntry.updateMany({
-    where: { id, userId, kind: 'synopsis', state: claim.from, updatedAt: claim.updatedAt },
+    where: {
+      id,
+      userId,
+      kind: 'synopsis',
+      state: claim.from,
+      updatedAt: claim.updatedAt,
+      ...leaseFree(claim.now),
+    },
     data: {
       state: 'kept',
-      ...(claim.from === 'draft' ? { keptAt: claim.keptAt } : {}),
+      ...(claim.from === 'draft' ? { keptAt: claim.now } : {}),
       ...(claim.text
         ? {
             summary: claim.text.summary,
@@ -318,62 +363,103 @@ export async function claimSynopsisKeep(
           }
         : {}),
       notes: claim.notes,
+      notesPending: claim.pending,
+      workingSince: claim.now,
     },
   });
   return count === 1;
 }
 
-/** The notes a kept synopsis lists, at the versions keeping left them. */
-export async function recordKeptNotes(
+/**
+ * The notes a kept synopsis lists, at the versions keeping left them, what is
+ * still owed them, and the lease given back. Only by the keep that holds it.
+ */
+export async function finishSynopsisKeep(
   userId: string,
   id: string,
-  notes: JourneyNoteRef[]
+  finish: { lease: Date; notes: JourneyNoteRef[]; pending: NotesPending | null }
 ): Promise<void> {
   await prisma.appJourneyEntry.updateMany({
-    where: { id, userId, kind: 'synopsis', state: 'kept' },
-    data: { notes },
+    where: { id, userId, kind: 'synopsis', state: 'kept', workingSince: finish.lease },
+    data: { notes: finish.notes, notesPending: finish.pending, workingSince: null },
   });
 }
 
 /**
- * Take one of a draft's regenerations, if it still has the count it was read
- * with. Taken before the model is called, so of two submits only one calls it.
+ * Give back a keep's lease without settling its notes, when settling failed:
+ * what they are owed stays recorded, so the next keep can finish it at once.
+ */
+export async function releaseSynopsisKeep(userId: string, id: string, lease: Date): Promise<void> {
+  await prisma.appJourneyEntry.updateMany({
+    where: { id, userId, kind: 'synopsis', workingSince: lease },
+    data: { workingSince: null },
+  });
+}
+
+/**
+ * Take one of a draft's regenerations and its lease, if it still has the
+ * count it was read with and nothing else holds it. Taken before the model is
+ * called, so a second submit, at once or while the first is being written,
+ * calls nothing.
  */
 export async function claimRegeneration(
   userId: string,
   id: string,
-  regenerations: number
+  claim: { regenerations: number; now: Date }
 ): Promise<boolean> {
   const { count } = await prisma.appJourneyEntry.updateMany({
-    where: { id, userId, kind: 'synopsis', state: 'draft', regenerations },
-    data: { regenerations: { increment: 1 } },
+    where: {
+      id,
+      userId,
+      kind: 'synopsis',
+      state: 'draft',
+      regenerations: claim.regenerations,
+      ...leaseFree(claim.now),
+    },
+    data: { regenerations: { increment: 1 }, workingSince: claim.now },
   });
   return count === 1;
 }
 
-/** Give back a regeneration whose draft never came, so a failed call costs no try. */
-export async function refundRegeneration(
-  userId: string,
-  id: string,
-  claimed: number
-): Promise<void> {
+/** Give back a regeneration whose draft never came, and its lease, so a failed call costs no try. */
+export async function refundRegeneration(userId: string, id: string, lease: Date): Promise<void> {
   await prisma.appJourneyEntry.updateMany({
-    where: { id, userId, kind: 'synopsis', state: 'draft', regenerations: claimed },
-    data: { regenerations: { decrement: 1 } },
+    where: { id, userId, kind: 'synopsis', state: 'draft', workingSince: lease },
+    data: { regenerations: { decrement: 1 }, workingSince: null },
   });
 }
 
-/** Put another draft's words in place of the last one's, while it is still a draft. */
+/**
+ * Put another draft's words in place of the last one's, while it is still a
+ * draft held by this redraft's lease, and give the lease back.
+ */
 export async function replaceSynopsisDraft(
   userId: string,
   id: string,
-  text: SynopsisText
+  text: SynopsisText,
+  lease: Date
 ): Promise<boolean> {
   const { count } = await prisma.appJourneyEntry.updateMany({
-    where: { id, userId, kind: 'synopsis', state: 'draft' },
-    data: { summary: text.summary, body: text.body, outcomes: text.outcomes },
+    where: { id, userId, kind: 'synopsis', state: 'draft', workingSince: lease },
+    data: {
+      summary: text.summary,
+      body: text.body,
+      outcomes: text.outcomes,
+      workingSince: null,
+    },
   });
   return count === 1;
+}
+
+/**
+ * Remove a session's draft, if it is still a draft: what drafting does when
+ * the session lost an exchange while it was being written (§12).
+ */
+export async function removeSynopsisDraft(userId: string, sessionId: string): Promise<number> {
+  const { count } = await prisma.appJourneyEntry.deleteMany({
+    where: { userId, kind: 'synopsis', sessionId, state: 'draft' },
+  });
+  return count;
 }
 
 /**

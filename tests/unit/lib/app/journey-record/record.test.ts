@@ -29,6 +29,8 @@ interface EntryRow {
   keptAt: Date | null;
   regenerations: number;
   sourceRemovedAt: Date | null;
+  notesPending: 'confirm' | 'reread' | null;
+  workingSince: Date | null;
   createdAt: Date;
   updatedAt: Date;
   orgId: string | null;
@@ -96,6 +98,8 @@ vi.mock('@/lib/db/client', () => {
             keptAt: null,
             regenerations: 0,
             sourceRemovedAt: null,
+            notesPending: null,
+            workingSince: null,
             createdAt: now,
             updatedAt: now,
             orgId: 'install',
@@ -166,6 +170,8 @@ function row(overrides: Partial<EntryRow> & Pick<EntryRow, 'id' | 'userId'>): En
     keptAt: at,
     regenerations: 0,
     sourceRemovedAt: null,
+    notesPending: null,
+    workingSince: null,
     createdAt: at,
     updatedAt: at,
     orgId: 'install',
@@ -599,19 +605,27 @@ describe('one synopsis, for keeping and regenerating (t-147)', () => {
   });
 
   it('replaces only the caller’s own draft, and never a kept one', async () => {
-    const mine = draft();
-    const theirs = { ...draft(), id: 'cmsyntheirs000000000000000', userId: THEM };
+    // The redraft's lease, held on both: only the owner's write may land.
+    const lease = new Date('2026-10-06T12:00:00.000Z');
+    const mine = { ...draft(), workingSince: lease };
+    const theirs = {
+      ...draft(),
+      id: 'cmsyntheirs000000000000000',
+      userId: THEM,
+      workingSince: lease,
+    };
     db.entries.push(mine, theirs);
     const text = { summary: 'New', body: 'A new draft.', outcomes: [] };
 
-    expect(await replaceSynopsisDraft(ME, theirs.id, text)).toBe(false);
+    expect(await replaceSynopsisDraft(ME, theirs.id, text, lease)).toBe(false);
     expect(db.entries.find((r) => r.id === theirs.id)?.body).toBe('You talked about the shop.');
 
-    expect(await replaceSynopsisDraft(ME, mine.id, text)).toBe(true);
+    expect(await replaceSynopsisDraft(ME, mine.id, text, lease)).toBe(true);
     expect(db.entries.find((r) => r.id === mine.id)?.body).toBe('A new draft.');
 
-    db.entries.find((r) => r.id === mine.id)!.state = 'kept';
-    expect(await replaceSynopsisDraft(ME, mine.id, { ...text, body: 'Again.' })).toBe(false);
+    const row = db.entries.find((r) => r.id === mine.id)!;
+    Object.assign(row, { state: 'kept', workingSince: lease });
+    expect(await replaceSynopsisDraft(ME, mine.id, { ...text, body: 'Again.' }, lease)).toBe(false);
     expect(db.entries.find((r) => r.id === mine.id)?.body).toBe('A new draft.');
   });
 });

@@ -24,7 +24,9 @@ import {
   type EntryRow,
 } from '@/tests/unit/lib/app/slots/notes-fake';
 
-const { seat, reread, queueNoteIndex } = vi.hoisted(() => ({
+const { seat, reread, queueNoteIndex, notesFailure } = vi.hoisted(() => ({
+  /** Set to make the notes read fail once, as a database blip would. */
+  notesFailure: { next: null as Error | null },
   seat: { openSeat: vi.fn() },
   reread: { rereadNotes: vi.fn() },
   queueNoteIndex: vi.fn(),
@@ -42,6 +44,18 @@ vi.mock('@/lib/db/utils', async () => {
 vi.mock('@/lib/app/memory/memory-index', () => ({ queueNoteIndex, forgetWipedNotes: vi.fn() }));
 vi.mock('@/lib/app/journey-record/synopsis/seat', () => seat);
 vi.mock('@/lib/app/journey-record/synopsis/reread', () => reread);
+vi.mock('@/lib/app/slots/notes', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/app/slots/notes')>();
+  return {
+    ...actual,
+    getNotes: async (...args: Parameters<typeof actual.getNotes>) => {
+      const failure = notesFailure.next;
+      notesFailure.next = null;
+      if (failure) throw failure;
+      return actual.getNotes(...args);
+    },
+  };
+});
 
 const { keepSynopsis, KEPT_CONFIRMATION_NOTE, KEPT_CORRECTION_NOTE } =
   await import('@/lib/app/journey-record/keep');
@@ -81,6 +95,7 @@ let draft: EntryRow;
 beforeEach(() => {
   vi.clearAllMocks();
   resetWorld();
+  notesFailure.next = null;
   seat.openSeat.mockResolvedValue({ agent: AGENT });
   reread.rereadNotes.mockResolvedValue(new Map());
 
@@ -408,6 +423,90 @@ describe('a double submit', () => {
   });
 });
 
+describe('a keep that fails half way', () => {
+  it('keeps an edit whose re-read could not even ask, and says the notes were not read', async () => {
+    seat.openSeat.mockRejectedValue(new Error('database blip'));
+    const before = world.values.length;
+
+    const kept = await keepSynopsis(
+      ME,
+      draft.id,
+      { confirm: [LISTED[0]], edit: { summary: 'S', body: 'B.', outcomes: [] } },
+      NOW
+    );
+
+    expect(entry(draft.id)).toMatchObject({ state: 'kept', body: 'B.', notesPending: 'reread' });
+    expect(kept.notesUnread).toBe('failed');
+    expect(world.values).toHaveLength(before);
+  });
+
+  it('is finished by the next keep when settling the notes failed after the claim', async () => {
+    notesFailure.next = new Error('database blip');
+
+    await expect(keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW)).rejects.toThrow(
+      'database blip'
+    );
+    // Kept, still owing its notes, and the lease given back.
+    expect(entry(draft.id)).toMatchObject({
+      state: 'kept',
+      notesPending: 'confirm',
+      workingSince: null,
+    });
+    expect(versions(ME, 'life_work')).toHaveLength(1);
+
+    const retried = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+
+    expect(retried.notes[0]).toEqual({ slotSlug: 'life_work', outcome: 'confirmed' });
+    expect(versions(ME, 'life_work')).toHaveLength(2);
+    expect(entry(draft.id).notesPending).toBeNull();
+  });
+
+  it('reads an edit it could not read before on the next keep, even one changing nothing', async () => {
+    const edit = { summary: 'Teaching', body: 'It was about teaching.', outcomes: [] };
+    seat.openSeat.mockResolvedValueOnce({ refused: 'ceiling_reached' });
+    await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]], edit }, NOW);
+    expect(entry(draft.id).notesPending).toBe('reread');
+    reread.rereadNotes.mockResolvedValue(
+      new Map([['life_work', { verdict: 'differs', value: 'Teaching' }]])
+    );
+
+    const again = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+
+    expect(reread.rereadNotes).toHaveBeenCalledWith(
+      ME,
+      AGENT,
+      edit,
+      expect.arrayContaining([expect.objectContaining({ slotSlug: 'life_work' })])
+    );
+    expect(again.notes[0]).toEqual({ slotSlug: 'life_work', outcome: 'corrected' });
+    expect(versions(ME, 'life_work')[1].value).toBe('Teaching');
+    expect(entry(draft.id).notesPending).toBeNull();
+  });
+
+  it('takes over a lease left by a keep that never finished', async () => {
+    entry(draft.id).workingSince = new Date(NOW.getTime() - 10 * 60_000);
+
+    const kept = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+
+    expect(kept.entry.state).toBe('kept');
+    expect(entry(draft.id).workingSince).toBeNull();
+  });
+
+  it('waits for a keep still under way rather than racing it', async () => {
+    entry(draft.id).workingSince = new Date(NOW.getTime() - 1_000);
+
+    await expect(
+      keepSynopsis(
+        ME,
+        draft.id,
+        { confirm: [], edit: { summary: 'S', body: 'B.', outcomes: [] } },
+        NOW
+      )
+    ).rejects.toMatchObject({ details: { reason: 'busy' } });
+    expect(entry(draft.id).state).toBe('draft');
+  });
+});
+
 describe('discarding a draft', () => {
   it('leaves no entry, kept or otherwise, and nothing left to keep', async () => {
     expect(world.entries).toHaveLength(1);
@@ -436,7 +535,8 @@ describe('two changes to a kept synopsis at once', () => {
 
     const kept = results.find((result) => result.status === 'fulfilled');
     const refused = results.find((result) => result.status === 'rejected');
-    expect(refused?.reason).toMatchObject({ details: { reason: 'changed_meanwhile' } });
+    // The second met the first's lease: told to try again, never racing its notes.
+    expect(refused?.reason).toMatchObject({ details: { reason: 'busy' } });
     expect(kept?.status === 'fulfilled' && kept.value.entry.body).toBe(entry(draft.id).body);
   });
 });

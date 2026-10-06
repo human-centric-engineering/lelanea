@@ -27,7 +27,7 @@
  *
  * **Only what it was asked about.** A reading for a slot it was not given is
  * dropped, and a slot it said nothing about counts as `silent`. A different
- * reading is held to the length a note's value may have here.
+ * reading is held to the length a note's value may have (`MAX_NOTE_LENGTH`).
  *
  * @see lib/app/journey-record/keep.ts — the caller
  */
@@ -37,16 +37,21 @@ import { z } from 'zod';
 import { tryParseJson } from '@/lib/orchestration/evaluations/parse-structured';
 import type { LlmMessage } from '@/lib/orchestration/llm/types';
 import type { JourneyOutcome } from '@/lib/app/journey-record/entry';
+import { MAX_NOTE_LENGTH } from '@/lib/app/slots/validation';
 import { askSeat, type SeatAgent } from '@/lib/app/journey-record/synopsis/seat';
 
 /** The cost row's tag, so the meter can say what this was. */
 export const SYNOPSIS_REREAD_COST_KIND = 'journey_synopsis_reread';
 
-/** A reading a re-read may propose for a note. A note, not an essay. */
-export const REREAD_VALUE_MAX = 1_000;
+/** A reading a re-read may propose for a note: as long as a note may be. */
+export const REREAD_VALUE_MAX = MAX_NOTE_LENGTH;
 
-/** A verdict per note, and a short reading for the ones that differ. */
-const REREAD_MAX_TOKENS = 1_000;
+/**
+ * A verdict per note, and a reading for the ones that differ. Room for several
+ * full-length readings: a reply cut short is charged and then refused, which
+ * leaves every note unread.
+ */
+const REREAD_MAX_TOKENS = 4_000;
 
 export const REREAD_VERDICTS = ['agrees', 'differs', 'silent'] as const;
 export type RereadVerdict = (typeof REREAD_VERDICTS)[number];
@@ -77,8 +82,9 @@ const readingSchema = z
     value: z.string().trim().max(REREAD_VALUE_MAX).nullable(),
   })
   .strict()
-  .refine((reading) => (reading.verdict === 'differs') === Boolean(reading.value), {
-    message: 'A different reading carries its value, and only then',
+  // A value echoed beside `agrees` or `silent` is ignored, not a malformed reply.
+  .refine((reading) => reading.verdict !== 'differs' || Boolean(reading.value), {
+    message: 'A different reading carries its value',
   });
 
 const rereadReplySchema = z.object({ readings: z.array(readingSchema) }).strict();

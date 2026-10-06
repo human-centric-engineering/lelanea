@@ -32,6 +32,11 @@
  * second row from anywhere else. A draft the person removed is not redrafted,
  * because the session never closes again.
  *
+ * **Not over what was deleted** (t-147). Deleting an exchange removes its
+ * session's draft, but a draft still being written is not there to remove. So
+ * once it is stored, the session's turns are read again, and a draft that lost
+ * an exchange meanwhile is removed (`lostExchanges`, `material.ts`).
+ *
  * ## Who writes it
  *
  * The agent bound to the `synopsis` seat (`agent.ts`, seeded by `026`), its
@@ -63,9 +68,14 @@
  */
 
 import { logger } from '@/lib/logging';
-import { hasSynopsis, writeSynopsisDraft } from '@/lib/app/journey-record/record';
+import {
+  hasSynopsis,
+  removeSynopsisDraft,
+  writeSynopsisDraft,
+} from '@/lib/app/journey-record/record';
 import {
   exchangesOf,
+  lostExchanges,
   MIN_SYNOPSIS_EXCHANGES,
   readSessionTurns,
   readSynopsisMaterial,
@@ -99,7 +109,9 @@ export type SynopsisDraftOutcome =
   /** No active agent in the `synopsis` seat. */
   | 'no_agent'
   /** The model call failed or its reply was refused. Nothing stored. */
-  | 'failed';
+  | 'failed'
+  /** An exchange it was written from was deleted meanwhile: the draft was removed. */
+  | 'deleted_meanwhile';
 
 /**
  * Ask the seat's agent for a draft of these lines: the first, or another one
@@ -166,7 +178,14 @@ export async function draftSynopsis(
     modules: material.modules,
     notes: material.notes,
   });
-  return stored ? 'drafted' : 'exists';
+  if (!stored) return 'exists';
+  // An exchange deleted while the model was writing: the draft may quote it,
+  // and deleting one removes the draft (§12).
+  if (await lostExchanges(userId, session.id, turns)) {
+    await removeSynopsisDraft(userId, session.id);
+    return 'deleted_meanwhile';
+  }
+  return 'drafted';
 }
 
 /**

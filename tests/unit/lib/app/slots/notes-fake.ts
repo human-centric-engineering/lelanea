@@ -89,6 +89,8 @@ export interface EntryRow {
   keptAt: Date | null;
   regenerations: number;
   sourceRemovedAt: Date | null;
+  notesPending: 'confirm' | 'reread' | null;
+  workingSince: Date | null;
   createdAt: Date;
   updatedAt: Date;
   orgId: string | null;
@@ -104,10 +106,14 @@ const ENTRY_WHERE = new Set([
   'updatedAt',
   'regenerations',
   'sourceRemovedAt',
+  'workingSince',
 ]);
 
 function entryMatches(row: EntryRow, where: Record<string, unknown>): boolean {
   return Object.entries(where).every(([key, condition]) => {
+    if (key === 'OR') {
+      return (condition as Record<string, unknown>[]).some((clause) => entryMatches(row, clause));
+    }
     if (!ENTRY_WHERE.has(key)) throw new Error(`the fake does not model ${key} on an entry`);
     const actual = (row as unknown as Record<string, unknown>)[key];
     if (condition instanceof Date) {
@@ -117,6 +123,10 @@ function entryMatches(row: EntryRow, where: Record<string, unknown>): boolean {
       const operators = condition as Record<string, unknown>;
       if (Object.keys(operators).join() === 'in') {
         return (operators.in as unknown[]).includes(actual);
+      }
+      // The lease's "taken longer ago than this" (t-147).
+      if (Object.keys(operators).join() === 'lt' && operators.lt instanceof Date) {
+        return actual instanceof Date && actual.getTime() < operators.lt.getTime();
       }
       throw new Error(`the fake does not model ${JSON.stringify(condition)} on ${key}`);
     }
@@ -134,6 +144,8 @@ const ENTRY_WRITES = new Set([
   'notes',
   'regenerations',
   'sourceRemovedAt',
+  'notesPending',
+  'workingSince',
 ]);
 
 export interface TurnRow {
@@ -502,6 +514,14 @@ export const prismaFake = {
       return { count: gone.length };
     }),
   },
+  journeyEvent: {
+    // A synopsis's session window (`readSessionsById`). No sessions are
+    // modelled, so it is always unreadable here: the entry carries `session: null`.
+    findMany: vi.fn(async ({ where }: { where: { userId?: string } }) => {
+      if (!where.userId) throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+      return [];
+    }),
+  },
   appJourneyEntry: {
     findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
       const row = world.entries.find((candidate) => entryMatches(candidate, where));
@@ -638,6 +658,8 @@ export function synopsisEntry(overrides: Partial<EntryRow> = {}): EntryRow {
     keptAt: null,
     regenerations: 0,
     sourceRemovedAt: null,
+    notesPending: null,
+    workingSince: null,
     createdAt: at,
     updatedAt: at,
     orgId: 'install',

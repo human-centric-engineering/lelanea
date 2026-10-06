@@ -75,8 +75,6 @@ describe('parseRereadReply', () => {
       'a different reading with a blank value',
       [{ slotSlug: 'a', verdict: 'differs', value: '  ' }],
     ],
-    ['an agreeing reading with a value', [{ slotSlug: 'a', verdict: 'agrees', value: 'x' }]],
-    ['a silent reading with a value', [{ slotSlug: 'a', verdict: 'silent', value: 'x' }]],
     ['an unknown verdict', [{ slotSlug: 'a', verdict: 'maybe', value: null }]],
     [
       'a value past the limit',
@@ -84,6 +82,21 @@ describe('parseRereadReply', () => {
     ],
   ])('refuses %s', (_label, readings) => {
     expect(parseRereadReply(reply(readings))).toBeNull();
+  });
+
+  it('tolerates a value echoed beside an agreeing or silent verdict, and ignores it', () => {
+    const parsed = parseRereadReply(
+      reply([
+        { slotSlug: 'life_work', verdict: 'agrees', value: 'the current reading' },
+        { slotSlug: 'life_rhythm', verdict: 'silent', value: 'something' },
+      ])
+    );
+    expect(parsed).not.toBeNull();
+
+    const readings = readingsFrom(parsed!, NOTES);
+
+    expect(readings.get('life_work')).toEqual({ verdict: 'agrees' });
+    expect(readings.get('life_rhythm')).toEqual({ verdict: 'silent' });
   });
 
   it('refuses an extra top-level field, and prose', () => {

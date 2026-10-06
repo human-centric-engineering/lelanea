@@ -22,7 +22,7 @@ import {
 
 const { seat, material } = vi.hoisted(() => ({
   seat: { openSeat: vi.fn(), askSeat: vi.fn() },
-  material: { readSessionTurns: vi.fn(), readSessionLines: vi.fn() },
+  material: { readSessionTurns: vi.fn(), readSessionLines: vi.fn(), lostExchanges: vi.fn() },
 }));
 
 vi.mock('@/lib/db/client', async () => ({
@@ -77,6 +77,7 @@ beforeEach(() => {
   seat.askSeat.mockResolvedValue(REPLY);
   material.readSessionTurns.mockResolvedValue([]);
   material.readSessionLines.mockResolvedValue({ readable: 3, lines: LINES });
+  material.lostExchanges.mockResolvedValue(false);
   draft = synopsisEntry({
     modules: ['onboarding'],
     notes: [{ slotSlug: 'life_work', version: 1 }],
@@ -221,6 +222,40 @@ describe('a double submit', () => {
     expect(refused?.reason).toMatchObject({ details: { reason: 'regenerating' } });
     expect(seat.askSeat).toHaveBeenCalledTimes(1);
     expect(entry(draft.id).regenerations).toBe(1);
+  });
+});
+
+describe('while one is being written', () => {
+  it('refuses a second submit made after the first took its try, and calls nothing', async () => {
+    // The first has claimed (count 1) and is waiting on the model.
+    Object.assign(draft, { regenerations: 1, workingSince: new Date() });
+
+    await expect(regenerateSynopsis(ME, draft.id, 'shorter')).rejects.toMatchObject({
+      details: { reason: 'regenerating' },
+    });
+    expect(seat.askSeat).not.toHaveBeenCalled();
+    expect(entry(draft.id).regenerations).toBe(1);
+  });
+
+  it('takes over a lease left by a redraft that never finished', async () => {
+    Object.assign(draft, { regenerations: 1, workingSince: new Date(Date.now() - 10 * 60_000) });
+
+    await regenerateSynopsis(ME, draft.id, null);
+
+    expect(entry(draft.id)).toMatchObject({
+      regenerations: 2,
+      workingSince: null,
+      body: REPLY.body,
+    });
+  });
+
+  it('removes the new draft when an exchange was deleted while it was written', async () => {
+    material.lostExchanges.mockResolvedValue(true);
+
+    await expect(regenerateSynopsis(ME, draft.id, null)).rejects.toMatchObject({
+      details: { reason: 'changed_meanwhile' },
+    });
+    expect(world.entries.find((row) => row.id === draft.id)).toBeUndefined();
   });
 });
 

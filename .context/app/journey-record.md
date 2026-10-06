@@ -276,7 +276,8 @@ still a draft.
   before the model is called, so a double submit drafts once. The second
   submit gets 409 `regenerating`. A call that fails gives its try back.
 - **Refusals come back as 409**, with a `reason`: `not_a_draft`,
-  `no_more_drafts`, `paused`, `ceiling_reached` or `no_agent`. A failed call
+  `no_more_drafts`, `paused`, `ceiling_reached`, `no_agent`, `regenerating`
+  or `changed_meanwhile`. A failed call
   is 503, and the draft is unchanged.
 
 ### Discarding
@@ -284,13 +285,26 @@ still a draft.
 A draft is discarded by removing it (`DELETE`, above). The session is not
 redrafted.
 
-### Once
+### Once, and finished
 
 The keep is one conditional write (`claimSynopsisKeep`, on the row's
-`updatedAt`), made before any note is touched. Of two submits, one matches
-and keeps; the other finds the synopsis already kept with that text and
-answers with it, having written nothing. A submit that loses to a
-_different_ change gets 409 `changed_meanwhile`.
+`updatedAt`), made before any note is touched. It takes a lease on the
+synopsis (`workingSince`, three minutes) and records what its notes are owed
+(`notesPending`: `confirm`, or `reread` when the text changed).
+
+- **A double submit keeps once.** Of two submits, one matches and keeps; the
+  other finds the synopsis already kept with that text and answers with it,
+  having written nothing.
+- **A different change arriving while one is settling** meets the lease and
+  gets 409 `busy`: try again in a moment. One that lost to a change already
+  finished gets 409 `changed_meanwhile`.
+- **Nothing owed is forgotten.** The notes are settled after the claim, in
+  writes of their own. If that fails, the synopsis is kept with its notes still
+  owed and the lease given back, and the next keep of it, even one changing
+  nothing, finishes the work. So does the next keep after a re-read that could
+  not run. A lease left by a crash is taken over once it is three minutes old.
+- **Regenerating takes the same lease**, so a second redraft, at once or while
+  the first is being written, calls nothing and gets 409 `regenerating`.
 
 ### When the person deletes what a synopsis was written from
 
@@ -308,10 +322,13 @@ same transaction (owner ruling, 6 Oct 2026, at t-147;
 The deleted-conversation sweep settles them the same way, whichever path
 deleted the conversation.
 
-**Known limit:** a draft written in the seconds between a session closing and
-an exchange from it being deleted can land after the deletion settled. It is
-then an ordinary draft the person can discard. **Trigger to revisit:** a
-report of a draft quoting something deleted.
+**A draft being written when the exchange is deleted** is not there for the
+deletion to remove. So drafting and redrafting read the session's turns again
+once the draft is stored, and remove a draft that lost an exchange meanwhile
+(`lostExchanges`, `material.ts`; the draft's outcome is `deleted_meanwhile`).
+Between them, the deletion finds a draft stored before it, and the re-read
+finds a deletion settled before that. What is left is the two writes landing
+within the same few milliseconds.
 
 ### What it costs
 

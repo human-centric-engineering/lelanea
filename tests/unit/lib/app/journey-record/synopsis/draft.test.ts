@@ -207,6 +207,19 @@ vi.mock('@/lib/db/client', () => {
           db.entries.push(row);
           return { ...row };
         }),
+        // Removing a draft that lost an exchange while it was written (t-147).
+        deleteMany: vi.fn(
+          async ({ where }: { where: { userId: string; sessionId: string; state: string } }) => {
+            const gone = db.entries.filter(
+              (e) =>
+                e.userId === where.userId &&
+                e.sessionId === where.sessionId &&
+                e.state === where.state
+            );
+            db.entries = db.entries.filter((e) => !gone.includes(e));
+            return { count: gone.length };
+          }
+        ),
       },
       aiAgent: { findUnique: mocks.agent },
     },
@@ -473,6 +486,27 @@ describe('a session whose words are gone', () => {
 
     expect(sentPrompt().user).not.toContain('Reply to: I am thinking of leaving the hospital.');
     expect(sentPrompt().user).toContain('I would miss the children’s ward.');
+  });
+});
+
+describe('an exchange deleted while the draft is written', () => {
+  it('removes the draft it may quote, and says so', async () => {
+    const [first] = substantialSession();
+    // The person deletes an exchange while the model is writing.
+    mocks.chat.mockImplementation(async () => {
+      db.turns = db.turns.filter((turn) => turn.id !== first.id);
+      return chatAnswer(JSON.stringify(REPLY));
+    });
+
+    expect(await draftSynopsis(ANA, session(), NOW)).toBe('deleted_meanwhile');
+    expect(db.entries).toHaveLength(0);
+  });
+
+  it('keeps the draft when nothing was deleted', async () => {
+    substantialSession();
+
+    expect(await draftSynopsis(ANA, session(), NOW)).toBe('drafted');
+    expect(db.entries).toHaveLength(1);
   });
 });
 

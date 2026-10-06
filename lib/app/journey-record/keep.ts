@@ -48,23 +48,34 @@
  * ## Once
  *
  * The keep is one conditional write (`claimSynopsisKeep`), made before any
- * note is touched. Of two submits, one matches and one matches nothing; the
- * loser finds the synopsis already kept with that text, and answers with it
- * having written nothing.
+ * note is touched. It takes a lease on the synopsis and records what its notes
+ * are owed. Of two submits, one matches and one matches nothing; the loser
+ * finds the synopsis already kept with that text, and answers with it having
+ * written nothing. A different change arriving while one is settling meets the
+ * lease and is told to try again; it never races the first one's notes.
+ *
+ * **Finished, never forgotten.** The notes are settled after the keep is
+ * claimed, in writes of their own, so a failure between the two leaves a kept
+ * synopsis whose notes are still owed. That is recorded (`notesPending`), and
+ * the next keep of it, even one changing nothing, finishes the work: confirming
+ * the ticked notes, or re-reading the kept text first when that is what was
+ * owed. A note confirmed before the failure has moved on by then, and is no
+ * longer listed.
  *
  * @see .context/app/journey-record.md — "Keeping a synopsis"
  */
 
 import { ConflictError } from '@/lib/api/errors';
 import { logger } from '@/lib/logging';
-import { SLOT_SENSITIVITY, SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots';
+import { SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots';
 import type { Note } from '@/lib/app/slots/notes-view';
 import { CORRECTION_CONFIDENCE, correctNote, getNotes } from '@/lib/app/slots/notes';
 import type { JourneyEntry, JourneyNoteRef } from '@/lib/app/journey-record/entry';
 import {
   claimSynopsisKeep,
+  finishSynopsisKeep,
   readOwnSynopsis,
-  recordKeptNotes,
+  releaseSynopsisKeep,
   type SynopsisText,
 } from '@/lib/app/journey-record/record';
 import { openSeat, type SeatRefusal } from '@/lib/app/journey-record/synopsis/seat';
@@ -119,14 +130,13 @@ function sameText(entry: JourneyEntry, text: SynopsisText): boolean {
   );
 }
 
-/** Whether keeping may write to this note: what the panel would let the person correct. */
+/**
+ * Whether keeping may write to this note: one the panel would let the person
+ * correct (`correctable` already excludes removed, retired and special-category
+ * notes), holding words rather than the special-category sentinel.
+ */
 function confirmable(note: Note): boolean {
-  return (
-    note.correctable &&
-    !note.withheld &&
-    !note.removed &&
-    note.sensitivity !== SLOT_SENSITIVITY.special_category
-  );
+  return note.correctable && !note.withheld;
 }
 
 /** The person confirmed it at full confidence already: writing it again would add nothing. */
@@ -146,9 +156,11 @@ async function reread(
   notes: readonly Note[],
   now: Date
 ): Promise<{ readings: Map<string, RereadResult> } | { unread: SeatRefusal | 'failed' }> {
-  const seat = await openSeat(userId, now);
-  if ('refused' in seat) return { unread: seat.refused };
   try {
+    // Inside the try: a read error deciding whether to ask is a re-read that
+    // could not run, not a keep that failed.
+    const seat = await openSeat(userId, now);
+    if ('refused' in seat) return { unread: seat.refused };
     const readings = await rereadNotes(
       userId,
       seat.agent,
@@ -267,38 +279,68 @@ export async function keepSynopsis(
   input: SynopsisKeep,
   now: Date = new Date()
 ): Promise<KeptSynopsis> {
-  const stored = await readOwnSynopsis(userId, id);
+  const stored = await readOwnSynopsis(userId, id, now);
   const { entry } = stored;
   const edit = input.edit && !sameText(entry, input.edit) ? input.edit : null;
 
-  // Kept already, and nothing to change: a second submit of the same keep.
-  if (entry.state === 'kept' && !edit) return { entry, notes: [], notesUnread: null };
+  // Kept already, nothing to change and nothing owed: a second submit of the
+  // same keep. A keep that failed half way still owes its notes, and this one
+  // finishes it.
+  if (entry.state === 'kept' && !edit && stored.notesPending === null) {
+    return { entry, notes: [], notesUnread: null };
+  }
 
   const listed = entry.notes;
   const ticked = listed.filter((ref) => input.confirm.some((other) => sameRef(other, ref)));
+  // Owed a re-read when the text changed, now or in a keep that never read it.
+  const pending = edit || stored.notesPending === 'reread' ? 'reread' : 'confirm';
 
   const claimed = await claimSynopsisKeep(userId, id, {
     from: entry.state,
     updatedAt: stored.updatedAt,
-    keptAt: now,
+    now,
     text: edit,
     // What it lists until its notes are settled: what was ticked, as listed.
     notes: ticked,
+    pending,
   });
   if (!claimed) {
     // Someone else's submit got there first. If it kept what this one asks
     // for, this is a double submit, and its answer is the kept synopsis.
-    const current = await readOwnSynopsis(userId, id);
+    const current = await readOwnSynopsis(userId, id, now);
     if (current.entry.state === 'kept' && (!input.edit || sameText(current.entry, input.edit))) {
       return { entry: current.entry, notes: [], notesUnread: null };
+    }
+    if (current.busy) {
+      throw new ConflictError('This account is being saved. Try again in a moment.', {
+        reason: 'busy',
+      });
     }
     throw new ConflictError('This account changed while you were keeping it. Look again.', {
       reason: 'changed_meanwhile',
     });
   }
 
-  const settled = await settleNotes(userId, listed, ticked, edit, now);
-  await recordKeptNotes(userId, id, settled.kept);
-  const { entry: kept } = await readOwnSynopsis(userId, id);
-  return { entry: kept, notes: settled.outcomes, notesUnread: settled.notesUnread };
+  const kept = edit ?? {
+    summary: entry.summary ?? '',
+    body: entry.body,
+    outcomes: entry.outcomes,
+  };
+  let settled: Awaited<ReturnType<typeof settleNotes>>;
+  try {
+    settled = await settleNotes(userId, listed, ticked, pending === 'reread' ? kept : null, now);
+  } catch (err) {
+    // The text is kept and what its notes are owed is recorded; giving the
+    // lease back lets the next keep finish them at once.
+    await releaseSynopsisKeep(userId, id, now).catch(() => undefined);
+    throw err;
+  }
+  await finishSynopsisKeep(userId, id, {
+    lease: now,
+    notes: settled.kept,
+    // An edit that could not be read is still owed its re-read.
+    pending: settled.notesUnread ? 'reread' : null,
+  });
+  const { entry: after } = await readOwnSynopsis(userId, id);
+  return { entry: after, notes: settled.outcomes, notesUnread: settled.notesUnread };
 }

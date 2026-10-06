@@ -9,7 +9,8 @@
  *   What it did to each listed note comes back beside the entry.
  *
  * Another person's entry id answers 404, the same as one that never existed.
- * A double submit keeps once and answers with the kept synopsis.
+ * A double submit keeps once and answers with the kept synopsis; a different
+ * change arriving while one is being saved answers 409 `busy`.
  *
  * Authentication: required. Rate limiting: the `/api/v1/**` section cap, and
  * the journey record's sub-cap, because an edit is read by a model and charged
