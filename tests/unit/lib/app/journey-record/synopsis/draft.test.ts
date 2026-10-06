@@ -225,7 +225,12 @@ vi.mock('@/lib/app/agent/availability', () => ({ isGenerationPaused: mocks.pause
 vi.mock('@/lib/app/agent/metering', () => ({ getMonthToDate: mocks.monthToDate }));
 
 import { draftSynopsis, queueSynopsisDraft } from '@/lib/app/journey-record/synopsis/draft';
-import { MIN_SYNOPSIS_EXCHANGES } from '@/lib/app/journey-record/synopsis/material';
+import {
+  MAX_SYNOPSIS_MESSAGE_CHARS,
+  MAX_SYNOPSIS_TRANSCRIPT_CHARS,
+  MIN_SYNOPSIS_EXCHANGES,
+} from '@/lib/app/journey-record/synopsis/material';
+import { ProviderError } from '@/lib/orchestration/llm/provider';
 import type { Session } from '@/lib/app/sessions/store';
 
 const ANA = 'user-ana';
@@ -558,6 +563,35 @@ describe('what reaches the model', () => {
   });
 });
 
+describe('how much of the session reaches the model', () => {
+  it('cuts a long message, keeps the latest that fit, and skips an empty one', async () => {
+    exchange(ANA, SESSION, 1, 'EARLIEST ' + 'a'.repeat(MAX_SYNOPSIS_MESSAGE_CHARS * 2));
+    for (let minute = 10; minute < 200; minute += 10) {
+      exchange(ANA, SESSION, minute, `Turn ${minute}: ` + 'b'.repeat(1_400));
+    }
+    exchange(ANA, SESSION, 300, '   ');
+
+    await draftSynopsis(ANA, session(), CLOSED, NOW);
+
+    const { user } = sentPrompt();
+    // The newest survive, and the transcript stays inside its budget.
+    expect(user).toContain('Turn 190:');
+    expect(user).not.toContain('EARLIEST');
+    expect(user.length).toBeLessThan(MAX_SYNOPSIS_TRANSCRIPT_CHARS + 2_000);
+    // An empty message leaves no empty line in their name.
+    expect(user).not.toMatch(/They said:\n\s*\n/);
+  });
+
+  it('marks a message it had to cut', async () => {
+    substantialSession();
+    exchange(ANA, SESSION, 30, 'LONG ' + 'c'.repeat(MAX_SYNOPSIS_MESSAGE_CHARS + 50));
+
+    await draftSynopsis(ANA, session(), CLOSED, NOW);
+
+    expect(sentPrompt().user).toMatch(/LONG c+ …/);
+  });
+});
+
 describe('what is derived, not guessed', () => {
   it('lists the modules touched in the session’s window, once each, in the order first touched', async () => {
     substantialSession();
@@ -659,6 +693,41 @@ describe('what it costs, and who pays', () => {
     expect(db.entries).toHaveLength(0);
   });
 
+  it('charges a truncated reply with what it was billed, and stores nothing', async () => {
+    substantialSession();
+    mocks.chat.mockRejectedValue(
+      new ProviderError('cut off', {
+        code: 'truncated_no_output',
+        retriable: false,
+        usage: { inputTokens: 900, outputTokens: 2_000 },
+      })
+    );
+
+    expect(await draftSynopsis(ANA, session(), CLOSED, NOW)).toBe('failed');
+
+    expect(db.entries).toHaveLength(0);
+    // Retried once, as the runner does, and both attempts were billed.
+    expect(mocks.chat).toHaveBeenCalledTimes(2);
+    expect(mocks.logCost).toHaveBeenCalledTimes(1);
+    expect(mocks.logCost).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ANA, inputTokens: 1_800, outputTokens: 4_000 })
+    );
+  });
+
+  it('keeps the draft when its cost row cannot be written, and says so', async () => {
+    substantialSession();
+    mocks.logCost.mockRejectedValue(new Error('cost table locked'));
+
+    expect(await draftSynopsis(ANA, session(), CLOSED, NOW)).toBe('drafted');
+
+    expect(db.entries).toHaveLength(1);
+    await vi.waitFor(() =>
+      expect(mocks.warn).toHaveBeenCalledWith('Synopsis cost row failed', {
+        error: 'cost table locked',
+      })
+    );
+  });
+
   it('asks the meter about this person', async () => {
     substantialSession();
     await draftSynopsis(ANA, session(), CLOSED, NOW);
@@ -692,6 +761,32 @@ describe('the seat', () => {
     expect(await draftSynopsis(ANA, session(), CLOSED, NOW)).toBe('no_agent');
     expect(mocks.chat).not.toHaveBeenCalled();
     expect(db.entries).toHaveLength(0);
+  });
+
+  it('drafts nothing when the bound agent’s row has gone', async () => {
+    substantialSession();
+    mocks.agent.mockResolvedValue(null);
+
+    expect(await draftSynopsis(ANA, session(), CLOSED, NOW)).toBe('no_agent');
+    expect(mocks.chat).not.toHaveBeenCalled();
+  });
+
+  it('honours an operator’s own text on the agent, appended after her profile', async () => {
+    substantialSession();
+    const base = await mocks.agent();
+    mocks.agent.mockResolvedValue({
+      ...base,
+      persona: 'And brief.',
+      personaMode: 'append',
+      guardrails: 'Never mention the weather.',
+      guardrailsMode: 'override',
+    });
+
+    await draftSynopsis(ANA, session(), CLOSED, NOW);
+
+    const { system } = sentPrompt();
+    expect(system).toContain(`${PROFILE_PERSONA}\n\nAnd brief.`);
+    expect(system).toContain('Never mention the weather.');
   });
 
   it('reads the synopsis seat, not a conversation seat', async () => {
