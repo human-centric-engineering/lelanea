@@ -285,8 +285,11 @@ function alreadyAnswered(recap: RecapTurnRow | null): boolean {
  */
 export async function recapDue(user: GateSubject, session: Session): Promise<string | null> {
   try {
+    // The cheapest no first: once the recap has answered, every read until the
+    // person speaks would otherwise pay for the whole plan to learn it.
+    if (alreadyAnswered(await readRecapTurn(user.id, recapTurnId(session.id)))) return null;
     const plan = await planRecap(user, session);
-    if (plan === null || alreadyAnswered(plan.recap)) return null;
+    if (plan === null) return null;
     const surface = await resolveFacilitationSurface(user.id, CONVERSATION_SEAT);
     return surface !== null ? plan.turnId : null;
   } catch (error) {
@@ -521,7 +524,12 @@ async function readKeptAccount(userId: string, turnId: string): Promise<RecapAcc
       select: { recap: true },
     });
     return parseRecapAccount(row?.recap);
-  } catch {
+  } catch (error) {
+    logger.warn('Recap account could not be read for a replay', {
+      userId,
+      turnId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }

@@ -389,8 +389,11 @@ export function useConversation(options: Options = {}): ConversationState {
       fetchTranscript(seat, { signal, fetchImpl })
         .then((transcript) => {
           if (signal?.aborted || busy.current || entriesRef.current.length !== holding) return;
-          if (transcript.entries.length > holding) setEntries(transcript.entries);
-          else if (transcript.opening === true) setOpeningOwed(owedId(transcript));
+          // The server's transcript is the truth once it holds anything: for a
+          // recap that is the conversation with the recap, whole, in place of
+          // what the pane showed of it.
+          if (transcript.entries.length > 0) setEntries(transcript.entries);
+          if (transcript.opening === true) setOpeningOwed(owedId(transcript));
         })
         .catch((error: unknown) => {
           if (signal?.aborted) return;
@@ -429,11 +432,13 @@ export function useConversation(options: Options = {}): ConversationState {
       // end when its request is aborted.
       const finish = (outcome: ConversationEntry[]) => {
         if (controller.signal.aborted) return;
-        // An opening replaces what the transcript showed of it: a recap still
-        // running when the pane was read has its rows so far in the read, and
-        // the replay it is answered with is the whole of it (t-142).
+        // An opening that landed replaces what the transcript showed of it: a
+        // recap still running when the pane was read has its rows so far in
+        // the read, and the reply it is answered with is the whole of it
+        // (t-142). One that did not land takes nothing away.
+        const replaces = message === null && outcome.length > 0;
         setEntries((previous) => [
-          ...(message === null ? previous.filter((entry) => entry.turnId !== turnId) : previous),
+          ...(replaces ? previous.filter((entry) => entry.turnId !== turnId) : previous),
           ...outcome,
         ]);
         setLive(null);

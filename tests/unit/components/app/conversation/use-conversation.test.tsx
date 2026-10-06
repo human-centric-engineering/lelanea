@@ -936,6 +936,44 @@ describe('the AI speaks first, once (t-122)', () => {
       expect(result.current.entries[0]).toMatchObject({ id: 'a0' });
     });
 
+    it('keeps what the read showed of a recap when its own request ends without a reply', async () => {
+      const partial = { ...lastTime, id: 'r-part', text: 'Last time…', turnId: RECAP };
+      transcriptEntries = [lastTime, partial];
+      openingOwed = true;
+      openingTurnId = RECAP;
+      const { result } = renderHook(() => useConversation({ fetchImpl }));
+
+      await waitFor(() => expect(openingRequests).toHaveLength(1));
+      // An ending the server chose (paused): nothing to read again, nothing landed.
+      await failTurn('paused');
+
+      await waitFor(() => expect(result.current.phase).toBe('idle'));
+      expect(result.current.entries.map((entry) => entry.id)).toEqual(['a0', 'r-part']);
+    });
+
+    it('adopts the whole recap when its connection drops after the read showed part of it', async () => {
+      const partial = { ...lastTime, id: 'r-part', text: 'Last time…', turnId: RECAP };
+      transcriptEntries = [lastTime, partial];
+      openingOwed = true;
+      openingTurnId = RECAP;
+      const { result } = renderHook(() => useConversation({ fetchImpl }));
+      await waitFor(() => expect(openingRequests).toHaveLength(1));
+
+      // It completed server-side; the read now has it whole, in the same place.
+      openingOwed = false;
+      openingTurnId = undefined;
+      transcriptEntries = [lastTime, { ...partial, id: 'r1', text: 'Last time, the lighthouse.' }];
+      await act(async () => {
+        latest().push('start', { conversationId: 'c1' });
+        latest().close();
+      });
+
+      await waitFor(() =>
+        expect(result.current.entries.map((entry) => entry.id)).toEqual(['a0', 'r1'])
+      );
+      expect(result.current.entries[1]).toMatchObject({ text: 'Last time, the lighthouse.' });
+    });
+
     it('never runs the welcome on a conversation under way, whatever the read says', async () => {
       transcriptEntries = [lastTime];
       openingOwed = true;

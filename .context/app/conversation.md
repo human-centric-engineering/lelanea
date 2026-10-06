@@ -204,11 +204,11 @@ assistant row before the person speaks again is an earlier attempt's fragment
 and is dropped.
 
 **The pane** takes the id from `openingTurnId` and runs it when idle, below
-what is there, replacing whatever the read showed of it — a recap still running
-when the pane was read has its rows so far in the read, and the replay it is
-answered with is the whole of it. A dropped connection reads the transcript again, as the
-welcome's does, adopting the recap if it landed, provided the pane still holds
-what it held when it asked.
+what is there. A reply that lands replaces whatever the read showed of it — a
+recap still running when the pane was read has its rows so far in the read, and
+the replay it is answered with is the whole of it; one that does not land takes
+nothing away. A dropped connection reads the transcript again and adopts it
+whole, provided the pane still holds what it held when it asked.
 
 **Not yet:**
 

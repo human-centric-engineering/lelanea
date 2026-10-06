@@ -425,13 +425,18 @@ interface RecapWindow {
  * and never past the person's next message, so a recap still running, or one
  * abandoned, cannot take in the reply to what they say next.
  *
- * Two never overlap: a recap is the first turn of its session, and sessions
- * are twelve quiet hours apart.
+ * Two settled ones never overlap: a recap is the first turn of its session,
+ * and sessions are twelve quiet hours apart. One abandoned while running stays
+ * open until the person speaks, so the latest window holding a row wins.
  */
 function recapWindows(messages: MessageRow[], turns: TurnRow[]): RecapWindow[] {
   const createdAt = new Map(messages.map((row) => [row.id, row.createdAt]));
+  // Latest first, so a row is its latest recap's: a recap abandoned while
+  // running, before the person spoke again, leaves a window open behind the
+  // next session's.
   return turns
     .filter((turn) => isRecapTurnId(turn.turnId))
+    .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
     .map((turn) => {
       const since = openingWindowStart(turn.startedAt);
       const nextWords = messages.find((row) => row.role === 'user' && row.createdAt >= since);

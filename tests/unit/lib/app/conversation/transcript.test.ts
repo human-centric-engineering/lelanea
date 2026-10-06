@@ -729,6 +729,26 @@ describe('assembleTranscript — a session recap (f-recap t-142)', () => {
     expect(entries[1]).toMatchObject({ text: 'Tell me.' });
   });
 
+  it('gives a row to the latest recap that holds it, past one abandoned while running', () => {
+    const entries = assemble(
+      [...lastSession, assistant('r3', 'This session’s recap.', 202)],
+      [
+        lastTurn,
+        // Abandoned while running last session, before the person spoke again:
+        // its window never closed.
+        turn('app_recap_v1_ses_1b', {
+          status: 'running',
+          startedAt: at(60),
+          completedAt: null,
+          recap: { since: 'x', words: 9, notes: [], journey: 0 },
+        }),
+        turn(RECAP, { status: 'running', startedAt: at(200), completedAt: null, recap: ACCOUNT }),
+      ]
+    );
+
+    expect(entries[2]).toMatchObject({ id: 'r3', turnId: RECAP, turn: { recap: ACCOUNT } });
+  });
+
   it('drops an earlier attempt’s fragments when the recap ran again', () => {
     // Attempt one wrote at 105 and failed; the re-run's claim moved to 200.
     const entries = assemble(

@@ -666,6 +666,25 @@ describe('recapDue — a reply already in the transcript', () => {
     await expect(recapDue(USER, S2)).resolves.toBeNull();
   });
 
+  it('answers a recap that already answered with its ledger row alone', async () => {
+    h.tables.appTurn.push({
+      id: 'turn-recap',
+      userId: ME,
+      turnId: RECAP_ID,
+      seat: 'facilitator',
+      status: 'completed',
+      attempts: 1,
+      errorCode: null,
+      sessionId: S2.id,
+      userMessageId: null,
+      startedAt: hour(33),
+    });
+    await expect(recapDue(USER, S2)).resolves.toBeNull();
+    // Nothing else of the plan was asked.
+    expect(h.hasPassedGate).not.toHaveBeenCalled();
+    expect(h.readJourneyNodeStates).not.toHaveBeenCalled();
+  });
+
   it('is still offered while running, so the pane adopts its replay', async () => {
     h.tables.appTurn.push({
       id: 'turn-recap',
