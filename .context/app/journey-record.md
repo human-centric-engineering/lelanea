@@ -146,7 +146,7 @@ words are never logged.
 ### Who writes it
 
 The agent in Daybreak's `synopsis` seat: `lelanea-synopsis`
-(`synopsis/agent.ts`), seeded with the seat by
+(`lib/app/journey-record/synopsis/agent.ts`), seeded with the seat by
 `prisma/seeds/app-lelanea/026-synopsis-seat.ts`. It wears her voice profile
 (`lelanea-voice-core`) with instructions of its own, and its prompt is
 composed from the profile as a turn's is. It is called one-shot through

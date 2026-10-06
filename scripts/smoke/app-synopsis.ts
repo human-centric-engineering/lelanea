@@ -25,6 +25,9 @@
  * Self-cleaning: creates one `smoke-app-synopsis-*` user and removes it and
  * every row keyed on it, on every path. Never unscoped deletes.
  *
+ * FORK NOTE — this runs the real `lib/app/leaf-bootstrap` seam (`initLeafApp()`)
+ * and walks Lelañea's map and onboarding; a fork should replace it.
+ *
  * Usage: `npm run smoke:app-synopsis` (reads `.env.local`). Exit 0 on every
  * assertion passing, 1 otherwise.
  */

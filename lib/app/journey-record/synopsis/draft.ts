@@ -189,7 +189,10 @@ function charge(
   void logCost({
     userId,
     agentId,
-    ...call,
+    model: call.model,
+    provider: call.provider,
+    inputTokens: call.inputTokens,
+    outputTokens: call.outputTokens,
     operation: CostOperation.CHAT,
     metadata: { seat: SYNOPSIS_SEAT, kind: SYNOPSIS_COST_KIND },
   }).catch((err: unknown) => {
