@@ -268,6 +268,21 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'is the right answer, not a gap. f-onboarding t-122.',
   },
   {
+    path: 'lib/app/conversation/recap.ts',
+    disposition: 'by-design',
+    reason:
+      'the session recap reads the member’s OWN messages twice (f-recap t-142): ' +
+      'whether they have said anything on the facilitator seat since this session ' +
+      'began (a `findFirst` selecting only the id), and the words of their own ' +
+      'turns from the session it looks back to, found by the turn rows’ ' +
+      '`userMessageId` under `userId` and joined with `conversation: { userId }`. ' +
+      'Both take the user id from the session of the route that calls them, ' +
+      'and are about the member’s own rows only, so an ownerless or shared ' +
+      'thread matching nothing is the right answer. `conversationVisibilityWhere` ' +
+      'answers who may SEE a thread; quoting someone their own words back must ' +
+      'be narrower than that, the owner alone.',
+  },
+  {
     path: 'lib/app/memory/delete-exchange.ts',
     disposition: 'by-design',
     reason:
