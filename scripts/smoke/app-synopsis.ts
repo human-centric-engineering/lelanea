@@ -1,6 +1,6 @@
 /**
- * Smoke: drafting a session's synopsis, on the real development database and a
- * real model (f-journey-record t-146).
+ * Smoke: drafting a session's synopsis, then redrafting and keeping it, on the
+ * real development database and a real model (f-journey-record t-146, t-147).
  *
  * The unit tests fake the database and mock the model, so they prove the rules
  * and the queries. What they cannot prove is the wiring: that the arrival
@@ -14,9 +14,15 @@
  * 2. Moves that session more than twelve hours into the past.
  * 3. Arrives, as the pane does: the session closes and its draft is queued.
  * 4. Waits for the draft, prints it, and checks what was stored and charged.
+ * 5. Asks again, and finds the draft rather than writing a second.
+ * 6. Asks for another draft with a steer, and prints it (t-147).
+ * 7. Keeps it with an edit that contradicts the note, ticked: the re-read
+ *    corrects the note to what the edit says, and prints both (t-147).
+ * 8. Deletes an exchange of the session: the kept synopsis is flagged, not
+ *    taken (t-147).
  *
- * Whether the account reads well is a human judgement, made by the owner at
- * ship (t-147 is where the person changes it).
+ * Whether the account, the redraft and the corrected note read well is a
+ * human judgement, made by the owner at ship.
  *
  * Needs a seeded, migrated database (the map published, the synopsis seat
  * bound by `026-synopsis-seat`) and a provider for her model. Skips (exit 0,
@@ -57,6 +63,11 @@ import { SYNOPSIS_SEAT } from '@/lib/app/agent/pins';
 import { SYNOPSIS_AGENT_SLUG } from '@/lib/app/journey-record/synopsis/agent';
 import { draftSynopsis, SYNOPSIS_COST_KIND } from '@/lib/app/journey-record/synopsis/draft';
 import { getJourneyRecord } from '@/lib/app/journey-record/record';
+import { regenerateSynopsis } from '@/lib/app/journey-record/synopsis/regenerate';
+import { SYNOPSIS_REREAD_COST_KIND } from '@/lib/app/journey-record/synopsis/reread';
+import { keepSynopsis } from '@/lib/app/journey-record/keep';
+import { deleteExchanges } from '@/lib/app/memory/delete-exchange';
+import { getSlotHeads } from '@/lib/framework/data-slots/values';
 import { runAsOrg } from '@/lib/tenancy/context';
 import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 import type { ChatStream } from '@/lib/orchestration/chat/types';
@@ -72,6 +83,11 @@ const SAID = [
 /** The note the first turn wrote: visible, so the draft lists it. */
 const NOTE_SLUG = 'life_work';
 const NOTE_VALUE = 'You are weighing whether to leave nursing after nine years.';
+/** What the person asks of the second draft. */
+const STEER = 'Shorter, please, and say more about the children’s ward.';
+/** What they keep instead: it says the opposite of the note. */
+const EDITED_BODY =
+  'You told me you have decided to stay in nursing, full time. Leaving is no longer on your mind; what you want is a better rota.';
 /** Thirteen hours: past the twelve-hour gap. */
 const QUIET_MS = 13 * 60 * 60 * 1000;
 /** How long to wait for the queued draft: a real model, off the request path. */
@@ -320,6 +336,53 @@ async function main(): Promise<void> {
       )
     );
     check(again === 'exists', 'a second request finds the draft and calls nothing');
+
+    console.log('\n6. They ask for another draft, and say why');
+    const redraft = await runAsOrg(INSTALL_ORG_ID, () =>
+      regenerateSynopsis(user.id, row.id, STEER)
+    );
+    console.log(
+      `\n    STEER: ${STEER}\n    SUMMARY: ${redraft.summary}\n\n    ${redraft.body.replace(/\n+/g, '\n    ')}\n`
+    );
+    check(redraft.state === 'draft', 'the new draft is still a draft');
+    check(redraft.body !== row.body, 'and it replaced the first');
+    check(redraft.regenerationsLeft === 2, 'with two more redrafts left');
+
+    console.log('\n7. They keep it, edited to say the opposite of the note, with the note ticked');
+    const ticked = redraft.notes.filter((ref) => ref.slotSlug === NOTE_SLUG);
+    const kept = await runAsOrg(INSTALL_ORG_ID, () =>
+      keepSynopsis(user.id, row.id, {
+        confirm: ticked,
+        edit: { summary: 'Staying in nursing', body: EDITED_BODY, outcomes: [] },
+      })
+    );
+    console.log(`    notes: ${JSON.stringify(kept.notes)}  unread: ${kept.notesUnread}`);
+    const [head] = await runAsOrg(INSTALL_ORG_ID, () =>
+      getSlotHeads(user.id, { slotSlugs: [NOTE_SLUG] })
+    );
+    console.log(`    the note was: ${NOTE_VALUE}\n    the note is:  ${head?.value}\n`);
+    check(kept.entry.state === 'kept' && kept.entry.body === EDITED_BODY, 'the edit is kept');
+    check(kept.notesUnread === null, 'and was read against the note');
+    check(
+      kept.notes.some((note) => note.slotSlug === NOTE_SLUG && note.outcome === 'corrected'),
+      'which it corrected'
+    );
+    check(
+      head?.sourceType === 'user_confirmed' && head.value !== NOTE_VALUE,
+      'to a confirmed reading of what they kept'
+    );
+    const rereads = await prisma.aiCostLog.count({
+      where: { userId: user.id, metadata: { path: ['kind'], equals: SYNOPSIS_REREAD_COST_KIND } },
+    });
+    check(rereads === 1, 'and the re-read was charged to them, once');
+
+    console.log('\n8. They delete an exchange the account was written from');
+    await runAsOrg(INSTALL_ORG_ID, () =>
+      deleteExchanges({ userId: user.id, exchangeIds: [firstTurn.id] })
+    );
+    const flagged = await prisma.appJourneyEntry.findUnique({ where: { id: row.id } });
+    check(flagged !== null && flagged.state === 'kept', 'the kept synopsis stays');
+    check(flagged?.sourceRemovedAt != null, 'flagged as written from something since deleted');
 
     console.log('\n✓ smoke:app-synopsis passed');
   } finally {

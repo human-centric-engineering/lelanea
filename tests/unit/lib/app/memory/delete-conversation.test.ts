@@ -22,13 +22,14 @@
  * @see lib/app/memory/delete-conversation.ts
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 
 import {
   definition,
   ME,
   prismaFake,
   resetWorld,
+  synopsisEntry,
   THEM,
   value,
   world,
@@ -323,6 +324,72 @@ describe('forgetDeletedConversations', () => {
     expect(invalidateContext).not.toHaveBeenCalledWith(expect.any(String), expect.any(String), {
       userId: THEM,
     });
+  });
+});
+
+describe('the synopses of the sessions its turns were in (t-147)', () => {
+  const DELETED_AT = new Date('2026-10-06T12:00:00.000Z');
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(DELETED_AT);
+    // turn-a and turn-c (deleted) in two sessions; turn-b (kept) in a third;
+    // theirs under session one's id too.
+    const sessionOf: Record<string, string> = {
+      'turn-a': 'ses_one',
+      'turn-c': 'ses_two',
+      'turn-b': 'ses_three',
+      'turn-x': 'ses_one',
+    };
+    for (const row of world.turns) row.sessionId = sessionOf[row.id];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const entry = (id: string) => world.entries.find((row) => row.id === id);
+
+  function synopses() {
+    const draft = synopsisEntry({ sessionId: 'ses_one' });
+    const kept = synopsisEntry({ sessionId: 'ses_two', state: 'kept', keptAt: new Date(1) });
+    const untouched = synopsisEntry({ sessionId: 'ses_three' });
+    const theirs = synopsisEntry({ userId: THEM, sessionId: 'ses_one' });
+    world.entries.push(draft, kept, untouched, theirs);
+    expect(world.entries).toHaveLength(4);
+    return { draft, kept, untouched, theirs };
+  }
+
+  it('removes a draft, flags a kept one, and leaves the kept conversation’s and theirs alone', async () => {
+    const { draft, kept, untouched, theirs } = synopses();
+
+    await forgetDeletedConversations([DELETED], { userId: ME });
+
+    expect(entry(draft.id)).toBeUndefined();
+    expect(entry(kept.id)).toMatchObject({ state: 'kept', sourceRemovedAt: DELETED_AT });
+    expect(entry(untouched.id)).toMatchObject({ state: 'draft', sourceRemovedAt: null });
+    expect(entry(theirs.id)).toMatchObject({ state: 'draft', sourceRemovedAt: null });
+  });
+
+  it('settles each person’s own on the sweep, and only theirs', async () => {
+    const { draft, kept, untouched, theirs } = synopses();
+
+    await sweepDeletedConversations();
+
+    expect(entry(draft.id)).toBeUndefined();
+    expect(entry(kept.id)?.sourceRemovedAt).toEqual(DELETED_AT);
+    expect(entry(untouched.id)).toMatchObject({ state: 'draft', sourceRemovedAt: null });
+    // Their conversation is gone too, so their session's draft goes with it.
+    expect(entry(theirs.id)).toBeUndefined();
+  });
+
+  it('touches no synopsis for turns taken before sessions', async () => {
+    for (const row of world.turns) row.sessionId = null;
+    const { draft, kept } = synopses();
+
+    await forgetDeletedConversations([DELETED], { userId: ME });
+
+    expect(entry(draft.id)).toBeDefined();
+    expect(entry(kept.id)?.sourceRemovedAt).toBeNull();
   });
 });
 

@@ -27,6 +27,8 @@ interface EntryRow {
   withheldFromAgent: boolean;
   occurredAt: Date;
   keptAt: Date | null;
+  regenerations: number;
+  sourceRemovedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   orgId: string | null;
@@ -92,6 +94,8 @@ vi.mock('@/lib/db/client', () => {
             notes: [],
             withheldFromAgent: false,
             keptAt: null,
+            regenerations: 0,
+            sourceRemovedAt: null,
             createdAt: now,
             updatedAt: now,
             orgId: 'install',
@@ -137,7 +141,9 @@ import {
   exportJourneyRecordMarkdown,
   findJourneyEntriesForSubject,
   getJourneyRecord,
+  readOwnSynopsis,
   removeJourneyEntry,
+  replaceSynopsisDraft,
 } from '@/lib/app/journey-record/record';
 import { sessionEventId } from '@/lib/app/sessions/store';
 
@@ -158,6 +164,8 @@ function row(overrides: Partial<EntryRow> & Pick<EntryRow, 'id' | 'userId'>): En
     withheldFromAgent: false,
     occurredAt: at,
     keptAt: at,
+    regenerations: 0,
+    sourceRemovedAt: null,
     createdAt: at,
     updatedAt: at,
     orgId: 'install',
@@ -534,5 +542,76 @@ describe('findJourneyEntriesForSubject', () => {
       'cmdraft00000000000000000000',
       'cmmine00000000000000000000',
     ]);
+  });
+});
+
+describe('one synopsis, for keeping and regenerating (t-147)', () => {
+  const draft = () =>
+    row({
+      id: 'cmsyndraft0000000000000000',
+      userId: ME,
+      kind: 'synopsis',
+      state: 'draft',
+      sessionId: 'ses_mine',
+      summary: 'The shop',
+      body: 'You talked about the shop.',
+      keptAt: null,
+      regenerations: 1,
+    });
+
+  it('reads the caller’s own synopsis with what is left to redraft and its row’s clock', async () => {
+    const mine = draft();
+    db.entries.push(mine);
+
+    const stored = await readOwnSynopsis(ME, mine.id);
+
+    expect(stored).toMatchObject({
+      sessionId: 'ses_mine',
+      regenerations: 1,
+      updatedAt: mine.updatedAt,
+    });
+    expect(stored.entry).toMatchObject({ regenerationsLeft: 2, sourceRemoved: false });
+  });
+
+  it('says a kept synopsis has no redrafts and whether it was written from something deleted', async () => {
+    db.entries.push({
+      ...draft(),
+      state: 'kept',
+      keptAt: new Date('2026-10-02T00:00:00Z'),
+      sourceRemovedAt: new Date('2026-10-03T00:00:00Z'),
+    });
+
+    const { entry } = await readOwnSynopsis(ME, 'cmsyndraft0000000000000000');
+
+    expect(entry).toMatchObject({ regenerationsLeft: null, sourceRemoved: true });
+  });
+
+  it('answers another person’s synopsis as one that never existed, and refuses an own entry', async () => {
+    db.entries.push(draft(), row({ id: 'cmown00000000000000000000', userId: ME }));
+    expect(db.entries).toHaveLength(2);
+
+    await expect(readOwnSynopsis(THEM, 'cmsyndraft0000000000000000')).rejects.toBeInstanceOf(
+      NotFoundError
+    );
+    await expect(readOwnSynopsis(ME, 'cmown00000000000000000000')).rejects.toMatchObject({
+      details: { reason: 'not_a_synopsis' },
+    });
+  });
+
+  it('replaces only the caller’s own draft, and never a kept one', async () => {
+    const mine = draft();
+    const theirs = { ...draft(), id: 'cmsyntheirs000000000000000', userId: THEM };
+    db.entries.push(mine, theirs);
+    const text = { summary: 'New', body: 'A new draft.', outcomes: [] };
+
+    expect(await replaceSynopsisDraft(ME, theirs.id, text)).toBe(false);
+    expect(db.entries.find((r) => r.id === theirs.id)?.body).toBe('You talked about the shop.');
+
+    expect(await replaceSynopsisDraft(ME, mine.id, text)).toBe(true);
+    expect(db.entries.find((r) => r.id === mine.id)?.body).toBe('A new draft.');
+
+    db.entries.find((r) => r.id === mine.id)!.state = 'kept';
+    expect(await replaceSynopsisDraft(ME, mine.id, { ...text, body: 'Again.' })).toBe(false);
+    expect(db.entries.find((r) => r.id === mine.id)?.body).toBe('A new draft.');
   });
 });

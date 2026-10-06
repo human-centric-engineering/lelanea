@@ -138,7 +138,7 @@ function retakeAsk(retake: SynopsisRetake): string {
     );
   }
   parts.push(
-    'Write the account again, from the session. Take their request into account where the session bears it out. Add nothing the session does not contain.'
+    'Write the account again, from the session. Do what they asked of the writing: its length, what it dwells on, what it leaves out or brings in. A request to include something counts only where the session contains it. Add nothing the session does not contain.'
   );
   return parts.join('\n\n');
 }
