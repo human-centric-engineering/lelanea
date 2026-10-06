@@ -73,6 +73,7 @@
     "smoke:app-journey-map": "tsx --env-file=.env.local scripts/smoke/app-journey-map.ts",
     "smoke:app-onboarding": "tsx --env-file=.env.local scripts/smoke/app-onboarding.ts",
     "smoke:app-recap": "tsx --env-file=.env.local scripts/smoke/app-recap.ts",
+    "smoke:app-synopsis": "tsx --env-file=.env.local scripts/smoke/app-synopsis.ts",
     "smoke:app-register": "tsx --env-file=.env.local scripts/smoke/app-register.ts",
     "smoke:app-leanings": "tsx --env-file=.env.local scripts/smoke/app-leanings.ts",
     "smoke:app-delete-note": "tsx --env-file=.env.local scripts/smoke/app-delete-note.ts",
