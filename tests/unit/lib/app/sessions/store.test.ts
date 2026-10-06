@@ -513,6 +513,8 @@ describe('arriveSession', () => {
     expect(queueSynopsisDraft).toHaveBeenCalledWith(ANA, {
       ...first.session,
       closedAt: at(1, 90_000),
+      // Its window runs until this arrival began the next one.
+      nextStartedAt: at(24),
     });
     // The work is handed to the host, so a serverless function outlives it.
     expect(keepAlive).toHaveBeenCalledTimes(1);

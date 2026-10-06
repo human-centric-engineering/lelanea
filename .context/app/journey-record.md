@@ -121,9 +121,9 @@ reads it.
   (`MIN_SYNOPSIS_EXCHANGES`, `material.ts`). An exchange is a completed turn
   that answered a message of the person's, on either seat. Openings and recaps
   are hers, not an exchange, and never count. Fewer than three is a look-in,
-  and an account of one would be padding. A session whose messages can no
-  longer be read (its conversation deleted since) is not drafted either,
-  rather than sending the model nothing and charging for it.
+  and an account of one would be padding. The count is held to the exchanges
+  whose words can still be read, so a session whose conversation was deleted
+  since is not sent to the model and charged for what is left of it.
 - **Once per session.** Only the arrival that writes a session's close queues
   its draft, so two arrivals never both ask. A session that already has a
   synopsis is skipped, and the unique index on `sessionId` refuses a second
@@ -135,7 +135,7 @@ reads it.
 | Part                          | From                                                                                                                                                                                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `summary`, `body`, `outcomes` | the model, given both sides of the session's exchanges, oldest first, fenced as material. Each message is cut to 2,000 characters; the latest exchanges that fit in 24,000 are kept, whole, so a reply never stands without what it answered     |
-| `modules`                     | the session's window in `framework_journey_event`: `node_*` and `module.*` events, once each, in the order first touched. Usually just `onboarding` in release 1                                                                                 |
+| `modules`                     | `node_*` and `module.*` events in `framework_journey_event` from the session's start until the next one began (so a module opened after the last exchange counts), once each, in the order first touched. Usually just `onboarding` in release 1 |
 | `notes`                       | what the session's turns wrote (`app_turn_slot_write`), kept only when the notes panel shows it (`getNotes`: no hidden slot, no voice leaning) and it is not removed, withheld or special category; each at the latest version the session wrote |
 | `occurredAt`                  | the session's start                                                                                                                                                                                                                              |
 
@@ -166,8 +166,13 @@ the seats a person speaks through.
   resolves from the install's default chat model until someone picks one in
   the admin. Its instructions, profile link and `restricted` knowledge mode are
   reconciled on every run.
-- **An empty seat drafts nothing.** A database that has not run `db:seed`
-  since this landed has no synopsis agent, so it drafts no synopses.
+- **Existing databases get it from a migration**,
+  `20261016100100_app_synopsis_seat`, which writes the same agent and binding
+  wherever she already exists and leaves an operator's agent or seat alone. On
+  a fresh database the seed creates them. An empty seat drafts nothing.
+- **Only the agent's primary provider is tried**, as Daybreak's slot extractor
+  does. Its configured fallbacks are not, so a primary outage at a session's
+  close leaves that session with no draft (the known limit below).
 
 ### What it costs, and who pays
 

@@ -164,7 +164,7 @@ vi.mock('@/lib/db/client', () => {
             where: {
               userId: string;
               type: { in: string[] };
-              occurredAt: { gte: Date; lte: Date };
+              occurredAt: { gte: Date; lt: Date };
             };
           }) =>
             db.events
@@ -173,7 +173,7 @@ vi.mock('@/lib/db/client', () => {
                   e.userId === where.userId &&
                   where.type.in.includes(e.type) &&
                   e.occurredAt >= where.occurredAt.gte &&
-                  e.occurredAt <= where.occurredAt.lte
+                  e.occurredAt < where.occurredAt.lt
               )
               .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
               .map((e) => ({ moduleSlug: e.moduleSlug }))
@@ -248,6 +248,8 @@ const BEN = 'user-ben';
 const SESSION = 'ses_ana_1';
 const T0 = new Date('2026-10-01T09:00:00.000Z');
 const CLOSED = new Date('2026-10-01T10:30:00.000Z');
+/** When the arrival that closed it began the next session. */
+const NEXT = new Date('2026-10-01T23:00:00.000Z');
 const NOW = new Date('2026-10-02T09:00:00.000Z');
 const minutes = (n: number) => new Date(T0.getTime() + n * 60_000);
 const session = (id = SESSION, startedAt = T0): ClosedSession => ({
@@ -255,6 +257,7 @@ const session = (id = SESSION, startedAt = T0): ClosedSession => ({
   ordinal: 1,
   startedAt,
   closedAt: CLOSED,
+  nextStartedAt: NEXT,
 });
 
 const PROFILE_PERSONA = 'You are Lelañea Fulton, warm and exact.';
@@ -442,14 +445,27 @@ describe('a session whose words are gone', () => {
     // The conversation was deleted since: the turn rows outlive its messages.
     db.messages = [];
 
-    expect(await draftSynopsis(ANA, session(), NOW)).toBe('nothing_to_read');
+    expect(await draftSynopsis(ANA, session(), NOW)).toBe('not_substantial');
     expect(mocks.chat).not.toHaveBeenCalled();
     expect(mocks.logCost).not.toHaveBeenCalled();
     expect(db.entries).toHaveLength(0);
   });
 
+  it('holds the threshold to the exchanges that can still be read', async () => {
+    const [first, second] = substantialSession();
+    // Three turn rows, but two of their messages went with a deleted conversation.
+    db.messages = db.messages.filter(
+      (m) => m.id !== first.userMessageId && m.id !== second.userMessageId
+    );
+
+    expect(await draftSynopsis(ANA, session(), NOW)).toBe('not_substantial');
+    expect(mocks.chat).not.toHaveBeenCalled();
+    expect(mocks.logCost).not.toHaveBeenCalled();
+  });
+
   it('drops an exchange whose message is gone, rather than leave its reply answering nothing', async () => {
     const [first] = substantialSession();
+    exchange(ANA, SESSION, 30, 'And one more thing.');
     db.messages = db.messages.filter((m) => m.id !== first.userMessageId);
 
     await draftSynopsis(ANA, session(), NOW);
@@ -670,15 +686,19 @@ describe('what is derived, not guessed', () => {
       { userId: ANA, type: 'node_entered', moduleSlug: 'values', occurredAt: minutes(5) },
       { userId: ANA, type: 'module.feedback', moduleSlug: 'onboarding', occurredAt: minutes(6) },
       { userId: ANA, type: 'node_completed', moduleSlug: 'values', occurredAt: minutes(7) },
-      // Outside the window, another person's, and a session row: none of them.
+      // After the last turn but before the next session began: still this sitting.
+      { userId: ANA, type: 'module.entered', moduleSlug: 'body', occurredAt: minutes(200) },
+      // Before it, from the next session on, another person's, and a session
+      // row: none of them.
       { userId: ANA, type: 'node_entered', moduleSlug: 'purpose', occurredAt: minutes(-60) },
+      { userId: ANA, type: 'node_entered', moduleSlug: 'next', occurredAt: NEXT },
       { userId: BEN, type: 'node_entered', moduleSlug: 'body', occurredAt: minutes(5) },
       { userId: ANA, type: 'session.started', moduleSlug: null, occurredAt: minutes(0) }
     );
 
     await draftSynopsis(ANA, session(), NOW);
 
-    expect(db.entries[0].modules).toEqual(['values', 'onboarding']);
+    expect(db.entries[0].modules).toEqual(['values', 'onboarding', 'body']);
   });
 
   it('stores no modules when the session touched none', async () => {
@@ -785,6 +805,20 @@ describe('what it costs, and who pays', () => {
     );
   });
 
+  it('has written the cost row by the time the draft settles, so the host keeps it alive', async () => {
+    substantialSession();
+    let costWritten = false;
+    mocks.logCost.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      costWritten = true;
+      return null;
+    });
+
+    await draftSynopsis(ANA, session(), NOW);
+
+    expect(costWritten).toBe(true);
+  });
+
   it('keeps the draft when its cost row cannot be written, and says so', async () => {
     substantialSession();
     mocks.logCost.mockRejectedValue(new Error('cost table locked'));
@@ -792,11 +826,9 @@ describe('what it costs, and who pays', () => {
     expect(await draftSynopsis(ANA, session(), NOW)).toBe('drafted');
 
     expect(db.entries).toHaveLength(1);
-    await vi.waitFor(() =>
-      expect(mocks.warn).toHaveBeenCalledWith('Synopsis cost row failed', {
-        error: 'cost table locked',
-      })
-    );
+    expect(mocks.warn).toHaveBeenCalledWith('Synopsis cost row failed', {
+      error: 'cost table locked',
+    });
   });
 
   it('asks the meter about this person', async () => {

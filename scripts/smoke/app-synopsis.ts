@@ -313,7 +313,11 @@ async function main(): Promise<void> {
 
     console.log('\n5. Asked again, the session is not drafted twice');
     const again = await runAsOrg(INSTALL_ORG_ID, () =>
-      draftSynopsis(user.id, { ...first.session, closedAt: row.occurredAt }, new Date())
+      draftSynopsis(
+        user.id,
+        { ...first.session, closedAt: row.occurredAt, nextStartedAt: second.session.startedAt },
+        new Date()
+      )
     );
     check(again === 'exists', 'a second request finds the draft and calls nothing');
 

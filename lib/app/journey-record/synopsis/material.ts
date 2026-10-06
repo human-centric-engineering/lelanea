@@ -46,8 +46,13 @@ const MODULE_EVENT_TYPES: readonly string[] = [
   ENGAGEMENT_EVENT_TYPE.moduleCompleted,
 ];
 
-/** A session that has closed: its window has an end. */
-export type ClosedSession = Session & { closedAt: Date };
+/**
+ * A session that has closed. `closedAt` is its last activity (its last turn);
+ * `nextStartedAt` is when the arrival that closed it began the next one. The
+ * time between belongs to this sitting, though no turn was taken in it: a
+ * module opened after the last exchange was opened in this session.
+ */
+export type ClosedSession = Session & { closedAt: Date; nextStartedAt: Date };
 
 /** One message of the session, as the prompt quotes it. */
 export interface SessionLine {
@@ -56,6 +61,11 @@ export interface SessionLine {
 }
 
 export interface SynopsisMaterial {
+  /**
+   * The exchanges whose words can still be read: what the threshold is held
+   * to. A turn row outlives its messages when a conversation is deleted.
+   */
+  readable: number;
   /** The conversation, oldest first, whole exchanges within {@link MAX_SYNOPSIS_TRANSCRIPT_CHARS}. */
   lines: SessionLine[];
   /** Module slugs touched in the window, in the order first touched. */
@@ -108,11 +118,11 @@ function cut(text: string, max: number): string {
 async function readLines(
   userId: string,
   exchanges: readonly SessionTurn[]
-): Promise<SessionLine[]> {
+): Promise<{ readable: number; lines: SessionLine[] }> {
   const ids = exchanges.flatMap((turn) =>
     [turn.userMessageId, turn.assistantMessageId].filter((id): id is string => id !== null)
   );
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return { readable: 0, lines: [] };
   const rows = await prisma.aiMessage.findMany({
     where: { id: { in: ids }, role: { in: ['user', 'assistant'] }, conversation: { userId } },
     select: { id: true, role: true, content: true },
@@ -125,29 +135,31 @@ async function readLines(
     return content === '' ? [] : [{ role, content }];
   };
 
+  // A message of theirs that is gone or empty leaves its reply answering
+  // nothing the model can see, so the exchange goes whole.
+  const readable = exchanges
+    .map((turn) => ({ turn, said: line(turn.userMessageId, 'user') }))
+    .filter(({ said }) => said.length > 0);
+
   const kept: SessionLine[][] = [];
   let total = 0;
-  for (const turn of [...exchanges].reverse()) {
-    const said = line(turn.userMessageId, 'user');
-    // A message of theirs that is gone or empty leaves its reply answering
-    // nothing the model can see, so the exchange goes whole.
-    if (said.length === 0) continue;
+  for (const { turn, said } of [...readable].reverse()) {
     const pair = [...said, ...line(turn.assistantMessageId, 'assistant')];
     const size = pair.reduce((sum, entry) => sum + entry.content.length, 0);
     if (total + size > MAX_SYNOPSIS_TRANSCRIPT_CHARS) break;
     total += size;
     kept.push(pair);
   }
-  return kept.reverse().flat();
+  return { readable: readable.length, lines: kept.reverse().flat() };
 }
 
-/** The modules the session's window touched, from the event stream. */
+/** The modules touched from the session's start until the next one began, from the event stream. */
 async function readModules(userId: string, session: ClosedSession): Promise<string[]> {
   const events = await prisma.journeyEvent.findMany({
     where: {
       userId,
       type: { in: [...MODULE_EVENT_TYPES] },
-      occurredAt: { gte: session.startedAt, lte: session.closedAt },
+      occurredAt: { gte: session.startedAt, lt: session.nextStartedAt },
     },
     orderBy: { occurredAt: 'asc' },
     select: { moduleSlug: true },
@@ -200,7 +212,7 @@ export async function readSynopsisMaterial(
   session: ClosedSession,
   turns: readonly SessionTurn[]
 ): Promise<SynopsisMaterial> {
-  const [lines, modules, notes] = await Promise.all([
+  const [{ readable, lines }, modules, notes] = await Promise.all([
     readLines(userId, exchangesOf(turns)),
     readModules(userId, session),
     // Every turn of the session, not only its exchanges: a note can be written on any.
@@ -209,5 +221,5 @@ export async function readSynopsisMaterial(
       turns.map((turn) => turn.id)
     ),
   ]);
-  return { lines, modules, notes };
+  return { readable, lines, modules, notes };
 }

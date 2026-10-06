@@ -70,10 +70,21 @@ function unfenced(text: string): string {
   return text.replaceAll(TRANSCRIPT_START, '').replaceAll(TRANSCRIPT_END, '');
 }
 
-/** The conversation as one fenced block: who spoke, then what they said. */
+/**
+ * One message, every line of it quoted with "> ", so nothing inside a message
+ * can pass for a speaker's label: those are the only unquoted lines.
+ */
+function quoted(text: string): string {
+  return unfenced(text)
+    .split(/\r?\n/)
+    .map((line) => `> ${line}`)
+    .join('\n');
+}
+
+/** The conversation as one fenced block: who spoke, then what they said, quoted. */
 export function synopsisTranscript(lines: readonly SessionLine[]): string {
   const said = lines.map(
-    (line) => `${line.role === 'user' ? 'They said' : 'You said'}:\n${unfenced(line.content)}`
+    (line) => `${line.role === 'user' ? 'They said' : 'You said'}:\n${quoted(line.content)}`
   );
   return [TRANSCRIPT_START, ...said, TRANSCRIPT_END].join('\n\n');
 }

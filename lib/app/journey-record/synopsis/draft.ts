@@ -22,9 +22,9 @@
  * before this task has.
  *
  * **Only a session of substance**: {@link MIN_SYNOPSIS_EXCHANGES} exchanges or
- * more (`material.ts`). A look-in gets none, and so does a session whose words
- * can no longer be read (a conversation deleted since), rather than a model
- * call with nothing to summarise.
+ * more (`material.ts`), counted on the exchanges whose words can still be read.
+ * A look-in gets none, and so does a session whose conversation was deleted
+ * since, rather than a model call over what is left of it.
  *
  * **Once.** Only the arrival that writes a session's close queues its draft
  * (`sessions/store.ts`), so two arrivals never both ask. A session that already
@@ -103,12 +103,10 @@ const SYNOPSIS_TIMEOUT_MS = 60_000;
 /** What became of one request to draft. */
 export type SynopsisDraftOutcome =
   | 'drafted'
-  /** Fewer exchanges than {@link MIN_SYNOPSIS_EXCHANGES}. */
+  /** Fewer exchanges than {@link MIN_SYNOPSIS_EXCHANGES}, or fewer whose words can still be read. */
   | 'not_substantial'
   /** The session already has a synopsis, or another writer stored one first. */
   | 'exists'
-  /** Its exchanges' messages can no longer be read: nothing to summarise. */
-  | 'nothing_to_read'
   | 'paused'
   | 'ceiling_reached'
   /** No active agent in the `synopsis` seat. */
@@ -144,13 +142,17 @@ async function readSeatAgent(): Promise<SynopsisAgent | null> {
   };
 }
 
-/** Charge the person for the call. Never throws: the draft is not undone by a lost cost row. */
-function charge(
+/**
+ * Charge the person for the call. Awaited, so the row is inside the work the
+ * host keeps alive; never throws, because a lost cost row does not undo the
+ * draft.
+ */
+async function charge(
   userId: string,
   agentId: string,
   call: { model: string; provider: string; inputTokens: number; outputTokens: number }
-): void {
-  void logCost({
+): Promise<void> {
+  await logCost({
     userId,
     agentId,
     model: call.model,
@@ -187,7 +189,7 @@ async function askForDraft(
       timeoutMs: SYNOPSIS_TIMEOUT_MS,
       phase: SYNOPSIS_PHASE,
     });
-    charge(userId, agent.id, {
+    await charge(userId, agent.id, {
       model,
       provider: providerSlug,
       inputTokens: result.tokenUsage.input,
@@ -197,7 +199,7 @@ async function askForDraft(
   } catch (err) {
     // A truncation is the one failure that carries what it was billed.
     if (err instanceof ProviderError && err.usage) {
-      charge(userId, agent.id, { model, provider: providerSlug, ...err.usage });
+      await charge(userId, agent.id, { model, provider: providerSlug, ...err.usage });
     }
     throw err;
   }
@@ -223,7 +225,9 @@ export async function draftSynopsis(
   if (!agent) return 'no_agent';
 
   const material = await readSynopsisMaterial(userId, session, turns);
-  if (material.lines.length === 0) return 'nothing_to_read';
+  // Held to the exchanges that can still be read, so a session whose
+  // conversation was deleted since is a look-in now, not a model call.
+  if (material.readable < MIN_SYNOPSIS_EXCHANGES) return 'not_substantial';
   let reply: SynopsisReply;
   try {
     reply = await askForDraft(userId, agent, material.lines);

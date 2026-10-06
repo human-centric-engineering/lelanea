@@ -28,11 +28,14 @@
  * the runner records a unit as applied when `run()` resolves, and a quiet return
  * would bank "seated nobody" as a success that every later `db:seed` skips.
  *
- * ## Existing databases
+ * ## Existing databases get it from a migration
  *
- * A new unit runs on the next `db:seed` of every database. Until then that
- * database drafts no synopses, which is what it did before this task: the
- * standing step after merge is to run it.
+ * `20261016100100_app_synopsis_seat` writes the same agent and binding on
+ * every database that already has her, because the migrator runs before every
+ * start and the seeder only when someone asks (owner rule, 22 Sept 2026). On a
+ * fresh database she does not exist yet when migrations run, so this unit is
+ * what creates them there. Either order ends in the same two rows. What this
+ * unit still owns everywhere is reconciling the agent's code-owned columns.
  *
  * @see lib/app/journey-record/synopsis/agent.ts
  * @see lib/app/agent/pins.ts — `SYNOPSIS_SEAT`

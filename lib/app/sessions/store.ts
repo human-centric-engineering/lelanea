@@ -129,7 +129,7 @@ export interface ArrivalOptions {
  */
 function queueDraftOfClosed(
   userId: string,
-  closed: Session & { closedAt: Date },
+  closed: Session & { closedAt: Date; nextStartedAt: Date },
   options: ArrivalOptions
 ): void {
   const work = import('@/lib/app/journey-record/synopsis/draft')
@@ -267,7 +267,11 @@ export async function arriveSession(
       });
     });
     if (decision.kind === 'roll' && latest) {
-      queueDraftOfClosed(userId, { ...latest, closedAt: decision.closeAt }, options);
+      queueDraftOfClosed(
+        userId,
+        { ...latest, closedAt: decision.closeAt, nextStartedAt: now },
+        options
+      );
     }
     return { session: { id, ordinal, startedAt: now, closedAt: null }, opened: true };
   } catch (err) {

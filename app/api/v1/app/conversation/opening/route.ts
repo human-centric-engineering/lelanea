@@ -70,7 +70,7 @@ export const POST = withAuth(
     const recap =
       welcome.reason === 'no_surface'
         ? welcome
-        : await prepareRecap(session.user, { keepAlive: (work) => after(work) });
+        : await prepareRecap(session.user, { keepAlive: turnRequest.keepAlive });
     if (!recap.ready) {
       const reason = recap.reason;
       log.info('Opening not started', { userId, reason });
