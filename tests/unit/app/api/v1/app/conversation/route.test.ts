@@ -181,25 +181,33 @@ describe('the opening flag (t-122)', () => {
 
 describe('arriving (f-recap t-141)', () => {
   it.each(['facilitator', 'onboarding'])(
-    'opens or resumes the caller’s session on the %s seat, before the transcript is read',
+    'opens or resumes the caller’s session on the %s seat',
     async (seat) => {
-      const order: string[] = [];
-      arriveSessionQuietly.mockImplementationOnce(async () => {
-        order.push('arrive');
-        return null;
-      });
-      readTranscript.mockImplementationOnce(async () => {
-        order.push('read');
-        return { seat, conversationId: null, entries: [] };
-      });
-
       await GET(request(`/api/v1/app/conversation?seat=${seat}`));
 
+      expect(arriveSessionQuietly).toHaveBeenCalledTimes(1);
       expect(arriveSessionQuietly).toHaveBeenCalledWith(ME);
       expect(arriveSessionQuietly).not.toHaveBeenCalledWith(OTHER);
-      expect(order).toEqual(['arrive', 'read']);
     }
   );
+
+  it('has arrived before the opening is decided', async () => {
+    const order: string[] = [];
+    arriveSessionQuietly.mockImplementationOnce(async () => {
+      // Settles after the transcript read has had its turn.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      order.push('arrived');
+      return null;
+    });
+    openingDue.mockImplementationOnce(async () => {
+      order.push('opening');
+      return false;
+    });
+
+    await GET(request());
+
+    expect(order).toEqual(['arrived', 'opening']);
+  });
 
   it('still answers the conversation when the session could not be written', async () => {
     arriveSessionQuietly.mockResolvedValueOnce(null);

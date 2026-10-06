@@ -25,7 +25,8 @@
  * together both read the same stale (or absent) session, both decide to open
  * session *n*, and both try to insert the same id: Postgres lets one commit and
  * fails the other with `P2002`. The loser reads the winner's row. The close and
- * the open are written in one transaction, so a loser writes neither. Same
+ * the open are written in one transaction, so a loser writes neither; the
+ * close skips a duplicate rather than failing, so the open is the one guard. Same
  * shape as the turn claim (`lib/app/agent/turn-record.ts`), not a
  * read-then-write behind a hope.
  *
@@ -153,14 +154,21 @@ export async function arriveSession(userId: string, now: Date = new Date()): Pro
   try {
     await executeTransaction(async (tx) => {
       if (decision.kind === 'roll' && latest) {
-        await tx.journeyEvent.create({
-          data: {
-            id: await sessionEventId(userId, latest.ordinal, 'closed'),
-            userId,
-            type: SESSION_EVENT_TYPE.closed,
-            occurredAt: decision.closeAt,
-            payload: { sessionId: latest.id, ordinal: latest.ordinal },
-          },
+        // A close that already exists is skipped, not a failure: the started
+        // row below is the only guard. Its session can already be closed when
+        // the session after it was removed (f-forget-session), and a close
+        // that failed here would fail every arrival after it.
+        await tx.journeyEvent.createMany({
+          data: [
+            {
+              id: await sessionEventId(userId, latest.ordinal, 'closed'),
+              userId,
+              type: SESSION_EVENT_TYPE.closed,
+              occurredAt: decision.closeAt,
+              payload: { sessionId: latest.id, ordinal: latest.ordinal },
+            },
+          ],
+          skipDuplicates: true,
         });
       }
       await tx.journeyEvent.create({

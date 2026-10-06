@@ -799,13 +799,31 @@ describe('the session a turn falls in (f-recap t-141)', () => {
     ]);
   });
 
+  it('a re-run whose arrival could not be written keeps the session its first attempt had', async () => {
+    behaviour.outcome = 'error';
+    await take(turnFor());
+    expect(db.turns[0]).toMatchObject({ status: 'failed', sessionId: 'ses-user-1' });
+
+    behaviour.outcome = 'answer';
+    arriveSessionQuietly.mockResolvedValueOnce(null);
+    await take(turnFor());
+
+    expect(db.turns[0]).toMatchObject({
+      status: 'completed',
+      attempts: 2,
+      sessionId: 'ses-user-1',
+    });
+  });
+
   it('still takes the turn, unstamped, when the session could not be written', async () => {
     arriveSessionQuietly.mockResolvedValueOnce(null);
 
     await take(turnFor());
 
     expect(modelCalls).toBe(1);
-    expect(db.turns[0]).toMatchObject({ status: 'completed', sessionId: null });
+    expect(db.turns[0]).toMatchObject({ status: 'completed' });
+    // Left out of the insert, so the column keeps its NULL default.
+    expect(db.turns[0].sessionId).toBeUndefined();
   });
 });
 

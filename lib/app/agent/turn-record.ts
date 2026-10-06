@@ -166,7 +166,9 @@ export async function claimTurn(
     // A re-run never has to clear one: whether a turn has leanings follows
     // from its seat, and an id's seat is fixed by its request hash.
     ...(stamp.leanings ? { leanings: stamp.leanings } : {}),
-    sessionId: stamp.sessionId,
+    // Left out when the arrival could not be written, so a re-run keeps the
+    // session its first attempt recorded rather than nulling it.
+    ...(stamp.sessionId ? { sessionId: stamp.sessionId } : {}),
   };
   const { requestHash } = request;
 

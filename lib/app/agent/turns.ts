@@ -441,6 +441,9 @@ export async function runRecordedTurn(
   const who = { userId: turn.userId, seat: turn.role };
   const crisis = await detectCrisis(turn.message, locale, who);
   if (crisis.resource?.tier === 'hard') {
+    // The person took a turn, so they arrived (f-recap t-141). Not awaited:
+    // nothing stands between them and the resource, and it never throws.
+    void arriveSessionQuietly(turn.userId);
     await recordCrisisShown(crisis, who);
     return only(crisisFrame(crisis.resource));
   }

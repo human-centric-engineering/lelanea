@@ -506,12 +506,17 @@ user and are in Daybreak's export.
   latest turn's `completedAt`, or the sitting's own start if it had no turn),
   then opens the next. Nothing runs on a timer.
 - The first-ever arrival opens session 1 and closes nothing.
-- Both callers use `arriveSessionQuietly`, so a failed write never fails a read
-  or a turn. The turn is stamped null instead.
+- A hard-tier crisis turn claims no turn row but still arrives, without waiting:
+  nothing stands between the person and the resource.
+- Every caller uses `arriveSessionQuietly`, so a failed write never fails a read
+  or a turn. A new turn is left unstamped; a re-run keeps the session its first
+  attempt recorded.
+- A close that already exists is skipped rather than failing, so removing a
+  session (f-forget-session) cannot wedge the arrivals after it.
 
 **Two tabs at once open one session.** A row's id is a digest of
 `(userId, ordinal, kind)`, and the close and the open are written in one
-transaction. Concurrent arrivals collide on the primary key, and the loser reads
+transaction. Concurrent arrivals collide on the started row's primary key, and the loser reads
 the winner's row. This is the turn claim's shape, not a read-then-write.
 
 **Each turn is stamped with its session.** `app_turn.sessionId` holds the started

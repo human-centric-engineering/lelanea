@@ -190,6 +190,39 @@ vi.mock('@/lib/db/utils', async () => {
             await Promise.resolve();
             return { ...row };
           }),
+          // `skipDuplicates`: ON CONFLICT DO NOTHING. It waits on a holder the
+          // same way, then skips a row whose id is already committed.
+          createMany: vi.fn(
+            async ({
+              data,
+              skipDuplicates,
+            }: {
+              data: Partial<EventRow>[];
+              skipDuplicates?: boolean;
+            }) => {
+              let count = 0;
+              for (const item of data) {
+                const id = item.id ?? `evt-${++db.seq}`;
+                const holder = db.held.get(id);
+                if (holder) await holder;
+                if (db.events.some((e) => e.id === id) || pending.some((e) => e.id === id)) {
+                  if (skipDuplicates) continue;
+                  throw __p2002();
+                }
+                db.held.set(id, ended);
+                pending.push({
+                  journeyId: null,
+                  payload: null,
+                  occurredAt: new Date(),
+                  ...item,
+                  id,
+                } as EventRow);
+                count++;
+              }
+              await Promise.resolve();
+              return { count };
+            }
+          ),
         },
       };
       try {
@@ -344,6 +377,25 @@ describe('arriveSession', () => {
     await arriveSession(ANA, at(12));
     expect(closed(ANA)).toHaveLength(1);
     expect(closed(ANA)[0].occurredAt).toEqual(at(0));
+  });
+
+  it('keeps arriving when the latest session was removed, its predecessor already closed', async () => {
+    // Sessions 1 and 2, then session 2's row removed, as forgetting a session
+    // would. Session 1 is the latest left, and it is already closed.
+    const one = await arriveSession(ANA, at(0));
+    turnDone(ANA, at(1), at(2), one.session.id);
+    const two = await arriveSession(ANA, at(30));
+    db.events = db.events.filter((e) => e.id !== two.session.id);
+    expect(closed(ANA)).toHaveLength(1);
+
+    const next = await arriveSession(ANA, at(60));
+
+    expect(next.opened).toBe(true);
+    expect(next.session.ordinal).toBe(2);
+    // The existing close is kept as written, not duplicated or moved.
+    expect(closed(ANA)).toHaveLength(1);
+    expect(closed(ANA)[0].occurredAt).toEqual(at(2));
+    expect((await arriveSession(ANA, at(61))).session.id).toBe(next.session.id);
   });
 
   it('treats the two seats as one sitting', async () => {

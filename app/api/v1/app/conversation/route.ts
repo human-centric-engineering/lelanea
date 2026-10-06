@@ -60,8 +60,12 @@ export const GET = withAuth(async (request, session) => {
   const query = validateQueryParams(request.nextUrl.searchParams, querySchema);
   const seat = query.seat ?? CONVERSATION_SEAT;
 
-  const arrival = await arriveSessionQuietly(session.user.id);
-  const transcript = await readTranscript(session, seat);
+  // Beside the transcript read, which does not depend on it; before the opening
+  // is decided, which will (f-recap t-142).
+  const [arrival, transcript] = await Promise.all([
+    arriveSessionQuietly(session.user.id),
+    readTranscript(session, seat),
+  ]);
   // Asked only of an empty transcript: a conversation under way has no opening
   // owed, and most reads are of one (t-122 review round 3).
   if (seat === CONVERSATION_SEAT) {
