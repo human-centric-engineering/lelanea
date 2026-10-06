@@ -548,7 +548,10 @@ function attemptOf(
  * The cost rows one turn caused: those tagged with its id, and the embedding of
  * its reply, which the platform writes without the tag and joins by message id.
  *
- * Every attempt's rows are included — a failed first attempt was spent too.
+ * Every attempt's tagged rows are included — a failed first attempt was spent
+ * too. Not an earlier attempt's reply embedding: that is joined by the current
+ * `assistantMessageId`, which a retry resets, so it counts in the conversation
+ * and the month but not here (budget.md; withdrawn as t-144).
  * Scoped to the turn's person: turn ids are unique per person, not globally.
  *
  * **An earlier attempt's reply passes are `earlier_attempt`** (owner ruling,

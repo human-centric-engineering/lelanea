@@ -164,7 +164,12 @@ cannot say which person is running away.
 in that conversation in the window — including one whose attempt started just
 before the 1st, or that was retried — each at its whole cost. Rows in the
 conversation tied to no turn are counted in its figure on the month page but
-not listed, and the page says so.
+not listed, and the page says so. One of those can be a turn's own: the
+embedding of a reply from an **earlier attempt** is joined by the turn's current
+reply's message id, which a retry resets, so it is left out of that turn's
+listing and counted only in the conversation's figure, the month and the limit.
+About $0.00001 and rare; placing it needs each attempt's reply found from its
+tagged message, which was judged not worth it (owner, 6 Oct 2026, t-144).
 
 **This UTC month, three levels.** The page shows the total, then who (each
 person against their limit), then which conversations, then seat, model and
