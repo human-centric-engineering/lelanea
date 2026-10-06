@@ -159,6 +159,7 @@ covered by the version contract.
   - `lib/app/onboarding/` — the first-run sequence: the discovery questions as data slots, and the set a person is asked
   - `lib/app/resources/` — the resources tool: `suggest_resource`, the suggestion shape the pane reads, and the offering the agent is shown
   - `lib/app/safety/` — the crisis path: deterministic detection, the context check, the regional resource and the safety record
+  - `lib/app/sessions/` — a person's sittings: the twelve-hour boundary, and opening, closing and reading sessions in Daybreak's event stream
   - `lib/app/slots/` — the authored slot taxonomy: the store, and the provider Daybreak's global slot sync reads
   - `lib/app/usage/` — the usage view: the wire shapes of the meter's member endpoints, and what each figure means
   - `lib/app/voice/` — the voice corpus: designation, comparison, corpus access and the chat context contributor

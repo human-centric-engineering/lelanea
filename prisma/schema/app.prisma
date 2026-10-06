@@ -546,6 +546,14 @@ model AppTurn {
   /// the prompt reads it back from here. Null on a seat with no leanings, and on
   /// a turn claimed before them.
   leanings           Json?
+  /// The session the turn fell in (f-recap t-141): the id of its
+  /// `session.started` row in Daybreak's `framework_journey_event`, stamped at
+  /// claim (`lib/app/sessions/store.ts`). What makes "which exchanges belong to
+  /// a session" a lookup rather than a re-derivation from timestamps. Hand-written
+  /// FK, `ON DELETE SET NULL`, with no Prisma `@relation`: a relation would add
+  /// a reverse field to Daybreak's `JourneyEvent`. Null on every turn from before
+  /// sessions, deliberately not backfilled: those sittings were never recorded.
+  sessionId          String?
   conversationId     String?
   userMessageId      String?
   assistantMessageId String?
@@ -576,6 +584,7 @@ model AppTurn {
   @@index([orgId])
   @@index([userId, startedAt])
   @@index([conversationId])
+  @@index([sessionId])
   /// The status read: the most recent turn anyone finished (§08 t-55).
   @@index([completedAt])
   @@map("app_turn")

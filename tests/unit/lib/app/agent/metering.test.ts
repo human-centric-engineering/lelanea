@@ -453,8 +453,9 @@ describe('one turn', () => {
   it('says what produced it and sums every row it caused, reply apart from side costs', async () => {
     findTurn.mockResolvedValue(TURN);
     findCostRows.mockResolvedValue([
-      // Two attempts' replies — a failed first attempt was spent too.
-      costRow({ id: 'r1', totalCostUsd: 0.002 }),
+      // Two attempts' replies — a failed first attempt was spent too, before
+      // the retry reset `startedAt` (10:00:00). It is a side cost (t-139).
+      costRow({ id: 'r1', totalCostUsd: 0.002, createdAt: new Date('2026-09-18T09:59:00Z') }),
       costRow({ id: 'r2', totalCostUsd: 0.003 }),
       costRow({
         id: 's',
@@ -500,15 +501,87 @@ describe('one turn', () => {
       unpricedRows: 1,
     });
     expect(meter!.costUsd).toBeCloseTo(0.0055, 10);
-    expect(meter!.replyCostUsd).toBeCloseTo(0.005, 10);
-    expect(meter!.sideCostUsd).toBeCloseTo(0.0005, 10);
+    // The reply is the attempt that answered; the one before it is on the side.
+    expect(meter!.replyCostUsd).toBeCloseTo(0.003, 10);
+    expect(meter!.sideCostUsd).toBeCloseTo(0.0025, 10);
     expect(meter!.rows.map((row) => [row.id, row.part, row.unpriced])).toEqual([
-      ['r1', 'reply', false],
+      ['r1', 'earlier_attempt', false],
       ['r2', 'reply', false],
       ['s', 'summary', true],
       ['t', 'tool', false],
       ['e', 'reply_embedding', false],
     ]);
+  });
+
+  describe('which attempt a reply pass belongs to (t-139)', () => {
+    // TURN is on its second attempt, claimed at 10:00:00.
+    const parts = async (rows: ReturnType<typeof costRow>[], turn: Partial<typeof TURN> = {}) => {
+      findTurn.mockResolvedValue({ ...TURN, ...turn });
+      findCostRows.mockResolvedValue(rows);
+      const meter = await getTurnMeter(ME, TURN.turnId);
+      return meter!.rows.map((row) => [row.id, row.part]);
+    };
+    const tagged = (attempt: number) => ({ turnId: TURN.turnId, seat: 'onboarding', attempt });
+
+    it('goes by the attempt the row was stamped with, not by when it landed', async () => {
+      expect(
+        await parts([
+          // The failed attempt's cost, logged without waiting, landing after the retry claimed.
+          costRow({ id: 'late', metadata: tagged(1), createdAt: new Date('2026-09-18T10:00:05Z') }),
+          // This attempt's reply, its row's clock a moment behind the claim's.
+          costRow({ id: 'skew', metadata: tagged(2), createdAt: new Date('2026-09-18T09:59:59Z') }),
+        ])
+      ).toEqual([
+        ['late', 'earlier_attempt'],
+        ['skew', 'reply'],
+      ]);
+    });
+
+    it('falls back to time for rows from before the stamp — and only on a retried turn', async () => {
+      const early = costRow({ id: 'early', createdAt: new Date('2026-09-18T09:59:59Z') });
+      const atStart = costRow({ id: 'at', createdAt: new Date('2026-09-18T10:00:00Z') });
+      expect(await parts([early, atStart])).toEqual([
+        ['early', 'earlier_attempt'],
+        ['at', 'reply'],
+      ]);
+      // Never retried, so nothing is an earlier attempt, whatever the clocks say.
+      expect(await parts([early], { attempts: 1 })).toEqual([['early', 'reply']]);
+    });
+
+    it('places a stamp that is not a whole number by time, as if it had none', async () => {
+      const at = (id: string, attempt: unknown) =>
+        costRow({
+          id,
+          metadata: { turnId: TURN.turnId, attempt },
+          createdAt: new Date('2026-09-18T09:59:59Z'),
+        });
+      // Each is before the retry claimed, so by time it is an earlier attempt's —
+      // not this attempt's reply, which a lenient read of '2' or 2.5 would say.
+      expect(await parts([at('string', '2'), at('fraction', 2.5)])).toEqual([
+        ['string', 'earlier_attempt'],
+        ['fraction', 'earlier_attempt'],
+      ]);
+    });
+
+    it("moves only reply passes: a failed attempt's other rows keep what they were", async () => {
+      expect(
+        await parts([
+          costRow({
+            id: 'tool',
+            operation: 'tool_call',
+            metadata: { ...tagged(1), slug: 'search_knowledge_base' },
+          }),
+          costRow({
+            id: 'summary',
+            createdAt: new Date('2026-09-18T09:59:00Z'),
+            metadata: { turnId: TURN.turnId, kind: 'conversation_summary' },
+          }),
+        ])
+      ).toEqual([
+        ['tool', 'tool'],
+        ['summary', 'summary'],
+      ]);
+    });
   });
 
   it("never reads dollars from the turn row's own costUsd", async () => {

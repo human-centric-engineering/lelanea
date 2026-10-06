@@ -159,6 +159,20 @@ export function registerLeafDriftProbes(): void {
   });
 
   registerAppDriftProbe({
+    name: 'app_turn_sessionId_fkey (hand-written FK → framework_journey_event)',
+    kind: 'FK constraint',
+    table: 'app_turn',
+    // f-recap t-141. Prisma cannot see this relation (it would add a reverse
+    // field to Daybreak's `JourneyEvent`), so it emits a DROP for it on the
+    // next generated migration. `ON DELETE SET NULL` is the action: a turn's
+    // metering outlives its session row. Re-created with `NO ACTION`, removing
+    // a session (f-forget-session) would fail with `P2003` for every sitting
+    // that had a turn in it; with `CASCADE`, it would silently delete the
+    // turns' metering with it.
+    probe: constraintExists('app_turn_sessionId_fkey', 'ON DELETE SET NULL'),
+  });
+
+  registerAppDriftProbe({
     name: 'app_turn_slot_write_turnId_fkey (hand-written FK → app_turn)',
     kind: 'FK constraint',
     table: 'app_turn_slot_write',
