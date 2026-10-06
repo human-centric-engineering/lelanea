@@ -638,6 +638,18 @@ describe('runRecap', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done', recap: stored });
   });
 
+  it('says nothing of an earlier attempt’s account when this run could not keep its own', async () => {
+    const earlier = { since: S1.startedAt.toISOString(), words: 3, notes: ['old'], journey: 2 };
+    h.tables.appTurn.push({ id: 'turn-recap', userId: ME, turnId: RECAP_ID, recap: earlier });
+    claims();
+    h.updateMany.mockResolvedValue({ count: 0 });
+
+    const events = await drain(await runRecap(await ready(), { user: USER }));
+
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+    expect(events.at(-1)).not.toHaveProperty('recap');
+  });
+
   it('still answers when the account could not be kept', async () => {
     claims();
     h.updateMany.mockRejectedValue(new Error('db down'));
@@ -715,6 +727,31 @@ describe('recapDue — a reply already in the transcript', () => {
       startedAt: hour(33),
     });
     await expect(recapDue(USER, S2)).resolves.toBe(RECAP_ID);
+  });
+});
+
+describe('prepareRecap — a reply already shown', () => {
+  const row = (status: string, errorCode: string | null) => ({
+    id: 'turn-recap',
+    userId: ME,
+    turnId: RECAP_ID,
+    seat: 'facilitator',
+    status,
+    attempts: 1,
+    errorCode,
+    sessionId: S2.id,
+    userMessageId: null,
+    startedAt: hour(33),
+  });
+
+  it('refuses to run again a recap that answered and only failed to link', async () => {
+    h.tables.appTurn.push(row('failed', 'reply_not_linked'));
+    await expect(prepareRecap(USER)).resolves.toEqual({ ready: false, reason: OPENING_NOT_DUE });
+  });
+
+  it('is ready for a completed recap, which the ledger answers with its replay', async () => {
+    h.tables.appTurn.push(row('completed', null));
+    await expect(prepareRecap(USER)).resolves.toMatchObject({ ready: true, turnId: RECAP_ID });
   });
 });
 

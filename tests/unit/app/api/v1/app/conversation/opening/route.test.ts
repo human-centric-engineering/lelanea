@@ -169,6 +169,13 @@ describe('POST /api/v1/app/conversation/opening', () => {
     expect(h.sseResponse).toHaveBeenCalledWith('the-recap-stream', expect.anything());
   });
 
+  it('answers 404 without asking about the recap when the welcome is owed and no agent can speak', async () => {
+    h.prepareOpening.mockResolvedValue({ ready: false, reason: 'no_surface' });
+    const response = await POST(createRequest());
+    expect(response.status).toBe(404);
+    expect(h.prepareRecap).not.toHaveBeenCalled();
+  });
+
   it('answers 404 when a recap is owed but no facilitator agent can speak', async () => {
     h.prepareOpening.mockResolvedValue({ ready: false, reason: 'opening_not_due' });
     h.prepareRecap.mockResolvedValue({ ready: false, reason: 'no_surface' });

@@ -269,7 +269,7 @@ describe('the parts', () => {
       key: 'recap',
       line: 'Opened the session with a recap of the last one',
       detail:
-        'Opened this session with a recap of the last one, drawing on 3 things you said last time, your notes on life wealth and life family, and where your journey has moved since.',
+        'Opened this session with a recap of the last one, drawing on 3 things you said last time; your notes on life wealth and life family; and where your journey has moved since.',
     });
     expect(parts[1]?.key).toBe('looked_up');
   });
@@ -280,6 +280,17 @@ describe('the parts', () => {
     );
     expect(parts[0]?.detail).toBe(
       'Opened this session with a recap of the last one, drawing on one thing you said last time.'
+    );
+  });
+
+  it('sets the sources apart with semicolons when the notes are a list of their own', () => {
+    const parts = accountParts(
+      input({
+        turn: turn({ recap: { since: 'x', words: 2, notes: ['a', 'b', 'c'], journey: 1 } }),
+      })
+    );
+    expect(parts[0]?.detail).toBe(
+      'Opened this session with a recap of the last one, drawing on 2 things you said last time; your notes on a, b, and c; and where your journey has moved since.'
     );
   });
 

@@ -119,9 +119,15 @@ const recapped: AccountSource = (input) => {
     drew.push(`your notes on ${listOf.format(recap.notes)}`);
   }
   if (recap.journey > 0) drew.push('where your journey has moved since');
+  // Semicolons between the sources when the notes are a list of their own, so
+  // where that list ends reads plainly.
+  const joined =
+    recap.notes.length > 1 && drew.length > 1
+      ? `${drew.slice(0, -1).join('; ')}; and ${drew[drew.length - 1]}`
+      : listOf.format(drew);
   const detail =
     drew.length > 0
-      ? `Opened this session with a recap of the last one, drawing on ${listOf.format(drew)}.`
+      ? `Opened this session with a recap of the last one, drawing on ${joined}.`
       : 'Opened this session with a recap of the last one.';
   return { key: 'recap', line: 'Opened the session with a recap of the last one', detail };
 };

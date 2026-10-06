@@ -145,7 +145,7 @@ same turn. New words need a new version in the id, as the welcome's do.
 **When it is owed** (`planRecap`; `recapDue` adds "someone to speak, and its
 reply not already in the transcript" — completed, or `reply_not_linked`, which
 the transcript shows; a running one is still offered, so the pane adopts its
-replay):
+replay. The route refuses a `reply_not_linked` one too, whichever tab asks):
 
 - the facilitator seat, past the gate, handed off;
 - a session in which **nothing has been said yet** on the seat: no turn
@@ -222,6 +222,17 @@ whole, provided the pane still holds what it held when it asked.
   message clock compared with the settle clock, which `turn-record.ts` warns
   can skew and drop a real reply; three rare conditions together did not earn
   that risk (code review round 1).
+- A member's own turn may use a recap's id (`openingTurnId` is in the read),
+  which spoils that session's recap and groups that turn as one. It touches
+  only their own conversation. Refusing the reserved prefixes belongs in the
+  turn hook, which must still accept them from the opening and recap routes
+  (code review round 3).
+- If the session looked back to has lost its started row (f-forget-session),
+  no earlier session is tried: the recap waits for the next exchange. Whether a
+  forgotten session leaves a tombstone is f-forget-session's decision.
+- The material is the person's own words and notes, in their own
+  conversation, framed as reference in the turn's system message, which
+  Sunrise's input guard does not scan for an opening turn (as for the welcome).
 
 **Proved on a real database** by `npm run smoke:app-recap`: a first session
 with a real turn and a note, moved thirteen hours back; the next arrival opens

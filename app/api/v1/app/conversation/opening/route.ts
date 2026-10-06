@@ -65,11 +65,11 @@ export const POST = withAuth(
       return sseResponse(events, { signal: request.signal });
     }
 
-    const recap = await prepareRecap(session.user);
+    // The welcome was owed and there is no agent to speak it: the recap,
+    // which needs something said, cannot be owed instead.
+    const recap = welcome.reason === 'no_surface' ? welcome : await prepareRecap(session.user);
     if (!recap.ready) {
-      // The welcome's reason when it had a surface to refuse on, so a seat
-      // with no agent is a 404 whichever opening was asked about.
-      const reason = welcome.reason === 'no_surface' ? welcome.reason : recap.reason;
+      const reason = recap.reason;
       log.info('Opening not started', { userId, reason });
       if (reason === 'no_surface') {
         throw new NotFoundError('The conversation has no agent to speak just now.');

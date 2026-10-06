@@ -476,7 +476,12 @@ export async function prepareRecap(user: GateSubject): Promise<RecapReady | Reca
   try {
     const { session } = await arriveSession(user.id);
     const plan = await planRecap(user, session);
-    if (plan === null) return { ready: false, reason: OPENING_NOT_DUE };
+    // A completed recap is still ready — the ledger replays it. One whose reply
+    // the transcript already shows (`reply_not_linked`) is not: run again, it
+    // would be a second recap below the first, from a tab that asked earlier.
+    if (plan === null || (alreadyAnswered(plan.recap) && plan.recap?.status !== 'completed')) {
+      return { ready: false, reason: OPENING_NOT_DUE };
+    }
     const surface = await resolveFacilitationSurface(user.id, CONVERSATION_SEAT);
     if (surface === null) return { ready: false, reason: 'no_surface' };
     return { ready: true, surface, turnId: plan.turnId, prior: plan.prior };
@@ -541,7 +546,7 @@ async function readKeptAccount(userId: string, turnId: string): Promise<RecapAcc
  */
 async function* withAccount(
   events: ChatStream,
-  kept: () => RecapAccount | null,
+  run: () => { ran: boolean; kept: RecapAccount | null },
   userId: string,
   turnId: string
 ): ChatStream {
@@ -550,7 +555,8 @@ async function* withAccount(
       yield event;
       continue;
     }
-    const account = kept() ?? (await readKeptAccount(userId, turnId));
+    const { ran, kept } = run();
+    const account = ran ? kept : await readKeptAccount(userId, turnId);
     yield account ? Object.assign({}, event, { recap: account }) : event;
   }
 }
@@ -566,9 +572,13 @@ async function* withAccount(
 export async function runRecap(ready: RecapReady, request: OpeningRequest): Promise<ChatStream> {
   const userId = request.user.id;
   const { surface, turnId, prior } = ready;
+  // What this request's run kept; `ran` once it ran at all, so a run whose
+  // account could not be kept says nothing rather than an earlier attempt's.
   let kept: RecapAccount | null = null;
+  let ran = false;
 
   async function* claimed(extras: FacilitationTurnExtras): ChatStream {
+    ran = true;
     const material = await readRecapMaterial(userId, prior);
     if (await keepAccount(userId, turnId, material.account)) kept = material.account;
     logger.info('Recap material read', {
@@ -608,5 +618,5 @@ export async function runRecap(ready: RecapReady, request: OpeningRequest): Prom
     },
     claimed
   );
-  return withAccount(events, () => kept, userId, turnId);
+  return withAccount(events, () => ({ ran, kept }), userId, turnId);
 }

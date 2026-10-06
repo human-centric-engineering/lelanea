@@ -86,7 +86,8 @@ export const GET = withAuth(async (request, session) => {
     readTranscript(session, seat),
   ]);
   // The welcome is asked only of an empty transcript (t-122 review round 3);
-  // the recap answers a sitting already under way with one query (`recap.ts`).
+  // the recap answers a sitting already under way in a couple of queries
+  // (`recapDue`).
   if (seat === CONVERSATION_SEAT) {
     const turnId = await owedOpening(session.user, transcript.entries.length === 0, arrival);
     transcript.opening = turnId !== null;

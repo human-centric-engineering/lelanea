@@ -948,7 +948,9 @@ describe('the AI speaks first, once (t-122)', () => {
       await failTurn('paused');
 
       await waitFor(() => expect(result.current.phase).toBe('idle'));
-      expect(result.current.entries.map((entry) => entry.id)).toEqual(['a0', 'r-part']);
+      expect(
+        result.current.entries.map((entry) => ('id' in entry ? entry.id : entry.kind))
+      ).toEqual(['a0', 'r-part']);
     });
 
     it('adopts the whole recap when its connection drops after the read showed part of it', async () => {
@@ -969,7 +971,9 @@ describe('the AI speaks first, once (t-122)', () => {
       });
 
       await waitFor(() =>
-        expect(result.current.entries.map((entry) => entry.id)).toEqual(['a0', 'r1'])
+        expect(
+          result.current.entries.map((entry) => ('id' in entry ? entry.id : entry.kind))
+        ).toEqual(['a0', 'r1'])
       );
       expect(result.current.entries[1]).toMatchObject({ text: 'Last time, the lighthouse.' });
     });
