@@ -447,6 +447,23 @@ export function updateOverlaySet(
   return writeSet((before) => ({ ...before, ...edit }), revisionRead, editorId);
 }
 
+/**
+ * Save the leaning bounds (f-leanings t-138): a new revision of the set, back
+ * to `draft` if anything changed, as any other change to it is. Bounds are
+ * part of authoring her voice (§7.3), so they are signed off with the rest.
+ *
+ * Nobody's stored leaning is touched. The leanings store clamps a stored stop
+ * to these bounds when it reads it, so tightening a dial and loosening it again
+ * gives a person back what they chose.
+ */
+export function updateLeaningBounds(
+  leanings: LeaningBounds,
+  revisionRead: number,
+  editorId: string
+): Promise<VoiceWriteResult> {
+  return writeSet((before) => ({ ...before, leanings }), revisionRead, editorId);
+}
+
 /** Put the set's framing back to an earlier revision, as a new one. It returns to `draft`. */
 export async function restoreOverlaySetRevision(
   revision: number,

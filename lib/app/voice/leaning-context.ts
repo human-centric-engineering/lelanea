@@ -33,14 +33,29 @@ import type { LeaningChange } from '@/lib/app/voice/leaning-change';
 const HEADING =
   'The person’s leanings: lasting settings for how your voice leans for them, which they can also change in Settings. Each is its two poles, where it is now, and what may change:';
 
+/** The asking route, which both forms of the rule open with. */
+const ASKED =
+  'If they ask for a lasting change in how you speak with them, use set_leaning with how: asked.';
+
 /**
  * The rule. Pinned by `tests/unit/lib/app/voice/leaning-context.test.ts`
  * beside the tool's description, which says the same.
  */
 export const LEANING_RULE = [
-  'If they ask for a lasting change in how you speak with them, use set_leaning with how: asked.',
+  ASKED,
   'If you notice a pattern they have not named, you may propose one change, to a leaning that says you may suggest one: call set_leaning with how: proposed, which changes nothing, and in one sentence say what you noticed and what you would change, and ask. What you have noted about how they like to be met is your evidence; it is never a reason to change a leaning yourself.',
   'Only if they say yes in their next message, call set_leaning with how: agreed, the same leaning and direction. Never change a leaning on your own inference. Propose at most one at a time, never while they are struggling, and let a no stand.',
+].join('\n');
+
+/**
+ * The rule when no dial may be suggested (t-138: an admin turned suggestions
+ * off, for all of them or for each one that can move). The propose route is
+ * left out rather than offered and then refused, so the AI is not invited to
+ * do something every dial forbids.
+ */
+export const LEANING_RULE_ASKED_ONLY = [
+  ASKED,
+  'None of these is one for you to suggest: change a leaning only when they ask for it.',
 ].join('\n');
 
 function where(dial: LeaningDialView, stop: LeaningStop): string {
@@ -63,11 +78,12 @@ function line(dial: LeaningDialView): string {
 /**
  * A proposal from the AI's last reply, awaiting the person's answer: what it
  * was, and the one call that makes it on a yes. A proposal for a dial that has
- * since moved or locked is not named; the tool would refuse it anyway.
+ * since moved, locked, or stopped being one to suggest is not named; the tool
+ * would refuse it anyway.
  */
 function awaiting(view: LeaningsView, proposal: LeaningChange): string | null {
   const dial = view.dials.find((candidate) => candidate.key === proposal.leaning);
-  if (!dial || dial.locked || dial.position !== proposal.from) return null;
+  if (!dial || dial.locked || !dial.suggest || dial.position !== proposal.from) return null;
   const toward =
     proposal.to === LEANING_REST ? 'rest' : proposal.to < proposal.from ? dial.left : dial.right;
   return `In your last reply you proposed setting ${dial.key} ${where(dial, proposal.to)}. If their message now says yes, call set_leaning with how: agreed, leaning: ${dial.key}, toward: "${toward}". If it does not, let it go.`;
@@ -82,12 +98,13 @@ export function composeLeaningContext(
   proposals: readonly LeaningChange[] = []
 ): string {
   if (!view.configured || view.dials.every((dial) => dial.locked)) return '';
+  const suggestable = view.dials.some((dial) => !dial.locked && dial.suggest);
   const pending = proposals.flatMap((proposal) => awaiting(view, proposal) ?? []);
   return [
     HEADING,
     ...view.dials.map(line),
     '',
-    LEANING_RULE,
+    suggestable ? LEANING_RULE : LEANING_RULE_ASKED_ONLY,
     ...(pending.length > 0 ? ['', ...pending] : []),
   ].join('\n');
 }

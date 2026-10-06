@@ -34,6 +34,9 @@ export const VOICE_OVERLAYS_ENDPOINT = OVERLAYS;
 /** The set's framing: `PUT` saves it. Its `/history`, `/restore` and `/sign-off` sit under it. */
 export const VOICE_OVERLAY_SET_ENDPOINT = `${OVERLAYS}/set`;
 
+/** The leaning bounds, on the set: `PUT` saves them as a new revision of it (f-leanings t-138). */
+export const VOICE_OVERLAY_LEANINGS_ENDPOINT = `${OVERLAYS}/set/leanings`;
+
 /** Add a situation. `POST`. */
 export const VOICE_OVERLAY_SITUATIONS_ENDPOINT = `${OVERLAYS}/situations`;
 

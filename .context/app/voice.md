@@ -888,6 +888,56 @@ guard, and that the next claim's leanings carry the change.
 `npm run smoke:app-leanings` runs an ask and a pattern-then-yes against the
 real model first (`--asking-only` runs just those).
 
+### Editing the bounds (t-138)
+
+Changing a bound used to take a migration. Now it is edited on the Voice page
+(`/admin/app/voice`), inside the card for the set's general blocks, because the
+bounds are on the set: **one revision, one sign-off, one history** for both.
+The card summarises each dial (its reach each way, locked, or not suggested)
+and opens `components/app/admin/voice/leaning-bounds-editor.tsx`: the
+set-wide "the AI may suggest changes" switch, then per dial how far toward
+each pole (strongly, one stop, not at all) and its own suggestion switch.
+Neither way allowed is locked at rest. A dial's switch is disabled while it is
+locked or suggestions are off for every dial, because it would do nothing.
+
+**The write.** `PUT /api/v1/admin/app/voice/overlays/set/leanings` with
+`{ leanings, revision }`, `withAdminAuth`, audited as
+`app_voice_overlay_set.leanings_update`. It calls `updateLeaningBounds`
+(`lib/app/voice/overlays-admin.ts`), which goes through the same `writeSet` as
+the general blocks: a new revision, back to `draft`, nothing written when
+nothing changed, and 409 when the revision has moved. A separate route rather
+than a field on the set's `PUT`, so the general blocks' editor can't send
+stale bounds back, or the bounds editor stale blocks. The body is checked
+against the stored schema (`leaningBoundsSchema`). Every dial is required, and
+the schema cannot hold a range without rest in it (`min` above `0` or `max`
+below it), so that is refused 400. Nobody can be held away from her voice
+unshaded.
+
+**Nobody's setting is rewritten.** The bounds are config. A person's stop stays
+as they stored it, and the store clamps it on read (above). Tightening then
+loosening a bound gives them back what they chose. Locking a dial holds it at
+rest and keeps their setting for when it is unlocked.
+
+**Suggestions off.** Per dial, the leanings block says "Change it only if they
+ask." When no dial that can move may be suggested (the set-wide switch off, or
+every movable dial's own), the block swaps `LEANING_RULE` for
+`LEANING_RULE_ASKED_ONLY`, so the propose route is not described at all. A
+proposal carried from the last reply is dropped when its dial has stopped being
+one to suggest, so the block never prompts an `agreed` the tool would refuse
+with `not_suggestable`. Asking still works.
+
+**When it takes effect.** Settings reads the bounds on every request, so they
+apply there at once. The prompt follows within the 60s the composed block is
+cached for, the same window as any overlay edit. Nothing evicts per-person
+blocks on an admin save.
+
+**What proves it.** `leaning-bounds-admin.test.ts` runs the real service, store
+and block against the content fake: a new revision, the dials and the write
+clamp honouring it, a lock, a stale revision, tighten-then-loosen leaving the
+slot rows untouched, and suggestions off for all dials and then one. The route
+test pins the guard, the audit and the 400s. The component test pins what is
+sent and that no option lies outside a range with rest in it.
+
 ## The overlays are her words too, and are a DRAFT
 
 `seed-data/drafted/lelanea_voice_overlays.json` — the second
