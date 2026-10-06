@@ -475,6 +475,53 @@ describe('a keep that fails half way', () => {
     expect(entry(draft.id).notesPending).toBeNull();
   });
 
+  it('is finished by a retry from the same page, whose view is now out of date', async () => {
+    const shown = draft.updatedAt;
+    notesFailure.next = new Error('database blip');
+    await expect(
+      keepSynopsis(ME, draft.id, { seen: shown, confirm: [LISTED[0]] }, NOW)
+    ).rejects.toThrow('database blip');
+    // The failed keep's own writes moved the row on past what the page showed.
+    expect(entry(draft.id).updatedAt.getTime()).not.toBe(shown.getTime());
+
+    const retried = await keepSynopsis(ME, draft.id, { seen: shown, confirm: [LISTED[0]] }, NOW);
+
+    expect(retried.notes[0]).toEqual({ slotSlug: 'life_work', outcome: 'confirmed' });
+    expect(entry(draft.id).notesPending).toBeNull();
+  });
+
+  it('counts a note the failed keep already confirmed as done, not moved on', async () => {
+    const { prismaFake } = await import('@/tests/unit/lib/app/slots/notes-fake');
+    // life_work is confirmed, then life_rhythm's write fails.
+    let writes = 0;
+    const update = prismaFake.slotValue.update.getMockImplementation()!;
+    prismaFake.slotValue.update.mockImplementation(async (args) => {
+      writes += 1;
+      if (writes === 2) throw new Error('connection reset');
+      return update(args);
+    });
+    try {
+      await expect(
+        keepSynopsis(ME, draft.id, { confirm: [LISTED[0], LISTED[1]] }, NOW)
+      ).rejects.toThrow('connection reset');
+      expect(versions(ME, 'life_work')).toHaveLength(2);
+    } finally {
+      prismaFake.slotValue.update.mockImplementation(update);
+    }
+
+    const retried = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0], LISTED[1]] }, NOW);
+
+    expect(retried.notes.slice(0, 2)).toEqual([
+      { slotSlug: 'life_work', outcome: 'already_confirmed' },
+      { slotSlug: 'life_rhythm', outcome: 'confirmed' },
+    ]);
+    expect(versions(ME, 'life_work')).toHaveLength(2);
+    expect(entry(draft.id).notes).toEqual([
+      { slotSlug: 'life_work', version: 2 },
+      { slotSlug: 'life_rhythm', version: 2 },
+    ]);
+  });
+
   it('reads an edit it could not read before on the next keep, even one changing nothing', async () => {
     const edit = { summary: 'Teaching', body: 'It was about teaching.', outcomes: [] };
     seat.openSeat.mockResolvedValueOnce({ refused: 'ceiling_reached' });

@@ -34,7 +34,7 @@ import {
   claimRegeneration,
   readOwnSynopsis,
   refundRegeneration,
-  releaseRegeneration,
+  releaseSynopsisLease,
   replaceSynopsisDraft,
 } from '@/lib/app/journey-record/record';
 import { askForDraft } from '@/lib/app/journey-record/synopsis/draft';
@@ -87,6 +87,19 @@ export async function regenerateSynopsis(
   }
 
   if (!(await claimRegeneration(userId, id, { regenerations: stored.regenerations, now }))) {
+    // Say what changed since it was read, not only the commonest cause.
+    const current = await readOwnSynopsis(userId, id, now);
+    if (current.entry.state !== 'draft') {
+      throw new ConflictError('This account was kept while you asked. Change it instead.', {
+        reason: 'not_a_draft',
+      });
+    }
+    if (current.regenerations >= MAX_SYNOPSIS_REGENERATIONS) {
+      throw new ConflictError(
+        'That’s as many drafts as Lelañea writes of one session. Change this one in your own words.',
+        { reason: 'no_more_drafts' }
+      );
+    }
     throw new ConflictError('Another draft of this is already being written.', {
       reason: 'regenerating',
     });
@@ -122,7 +135,7 @@ export async function regenerateSynopsis(
     // The model was asked, so the try is spent, as the cap counts calls; only
     // the lease is given back. A refund here would let a steer that always
     // fails call the model without end.
-    await releaseRegeneration(userId, id, lease);
+    await releaseSynopsisLease(userId, id, lease);
     // Never the steer or the reply: they are the person's words, and an account of them.
     logger.warn('Synopsis regeneration failed; the draft is unchanged', {
       userId,

@@ -238,7 +238,15 @@ A confirmation or correction is written through `correctNote` (`lib/app/slots/no
 - **One already confirmed at full confidence is not written again**, so a kept
   synopsis can be kept twice without growing the note's history.
 - **After keeping, a synopsis lists only the notes it confirmed**, at the
-  versions it left them. A later change re-reads exactly those.
+  versions it left them. A later change re-reads exactly those, as far as they
+  are still ticked: `confirm` is always the list still ticked, so a change sent
+  with `confirm: []` unlists every note and reads none. The view (t-148) shows
+  the ticks on a kept synopsis too.
+- **The last check before a write is a read, not a lock.** A turn that writes
+  the same note in the milliseconds between that read and the write can still
+  be overwritten. Closing it needs an expected-version append from Daybreak's
+  `appendSlotValue`, which is Daybreak's file. **Trigger to revisit:** a note
+  confirmed by keeping found to have buried a newer reading.
 - **A changed account is always kept.** If the re-read can't run (paused, at
   the ceiling, no agent in the seat, or the call failed), the text is kept and
   the notes are left alone, because confirming them could confirm something

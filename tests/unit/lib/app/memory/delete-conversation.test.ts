@@ -382,6 +382,24 @@ describe('the synopses of the sessions its turns were in (t-147)', () => {
     expect(entry(theirs.id)).toBeUndefined();
   });
 
+  it('leaves the synopsis of a turn retried into another conversation since it was read', async () => {
+    const { draft, kept } = synopses();
+    // turn-a (session one) is claimed again between the read and the delete.
+    prismaFake.slotValue.updateMany.mockImplementationOnce(async () => {
+      const retried = world.turns.find((row) => row.id === 'turn-a')!;
+      retried.status = 'running';
+      retried.conversationId = null;
+      return { count: 1 };
+    });
+
+    await forgetDeletedConversations([DELETED], { userId: ME });
+
+    // turn-a was not deleted, so session one's draft stays; turn-c's session is settled.
+    expect(world.turns.some((row) => row.id === 'turn-a')).toBe(true);
+    expect(entry(draft.id)).toMatchObject({ state: 'draft' });
+    expect(entry(kept.id)?.sourceRemovedAt).toEqual(DELETED_AT);
+  });
+
   it('touches no synopsis for turns taken before sessions', async () => {
     for (const row of world.turns) row.sessionId = null;
     const { draft, kept } = synopses();

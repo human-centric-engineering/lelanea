@@ -15,8 +15,14 @@
  * nothing in it can close a fence or pass for an unquoted label.
  */
 export function quoteMaterial(text: string, fences: readonly string[]): string {
+  // Until nothing changes: stripping one copy can join the text around it
+  // into another ("[The account [The account ends]ends]").
   let clean = text;
-  for (const fence of fences) clean = clean.replaceAll(fence, '');
+  let before: string;
+  do {
+    before = clean;
+    for (const fence of fences) clean = clean.replaceAll(fence, '');
+  } while (clean !== before);
   return clean
     .split(/\r?\n/)
     .map((line) => `> ${line}`)

@@ -258,6 +258,23 @@ describe('while one is being written', () => {
     expect(entry(draft.id).regenerations).toBe(1);
   });
 
+  it('says the draft was kept, when that is why the claim missed', async () => {
+    // Kept in another tab between this request's read and its claim.
+    const findFirst = (await import('@/tests/unit/lib/app/slots/notes-fake')).prismaFake
+      .appJourneyEntry.findFirst;
+    const read = findFirst.getMockImplementation()!;
+    findFirst.mockImplementationOnce(async (args) => {
+      const row = await read(args);
+      Object.assign(entry(draft.id), { state: 'kept', keptAt: new Date() });
+      return row;
+    });
+
+    await expect(regenerateSynopsis(ME, draft.id, null)).rejects.toMatchObject({
+      details: { reason: 'not_a_draft' },
+    });
+    expect(seat.askSeat).not.toHaveBeenCalled();
+  });
+
   it('takes over a lease left by a redraft that never finished', async () => {
     Object.assign(draft, { regenerations: 1, workingSince: new Date(Date.now() - 10 * 60_000) });
 

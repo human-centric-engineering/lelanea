@@ -75,7 +75,7 @@ import {
   claimSynopsisKeep,
   finishSynopsisKeep,
   readOwnSynopsis,
-  releaseSynopsisKeep,
+  releaseSynopsisLease,
   type SynopsisText,
 } from '@/lib/app/journey-record/record';
 import { openSeat, type SeatRefusal } from '@/lib/app/journey-record/synopsis/seat';
@@ -149,6 +149,15 @@ function confirmable(note: Note): boolean {
 function alreadyConfirmed(note: Note): boolean {
   return (
     note.sourceType === SLOT_SOURCE_TYPE.user_confirmed && note.confidence === CORRECTION_CONFIDENCE
+  );
+}
+
+/** The note's head is keeping's own write over the listed version: a keep got this far before. */
+function keptEarlier(note: Note, ref: JourneyNoteRef): boolean {
+  return (
+    note.version === ref.version + 1 &&
+    note.sourceType === SLOT_SOURCE_TYPE.user_confirmed &&
+    (note.reasoningNote === KEPT_CONFIRMATION_NOTE || note.reasoningNote === KEPT_CORRECTION_NOTE)
   );
 }
 
@@ -246,6 +255,11 @@ async function settleNote(
   if (!at.ticked) return { outcome: 'unticked', ref: null };
   const note = at.note;
   if (!note || !confirmable(note)) return { outcome: 'not_confirmable', ref: null };
+  // A keep that failed half way may already have written this one: its
+  // version, one on, says it came from keeping. That is this work, done.
+  if (keptEarlier(note, ref)) {
+    return { outcome: 'already_confirmed', ref: { slotSlug: ref.slotSlug, version: note.version } };
+  }
   if (note.version !== ref.version) return { outcome: 'moved_on', ref: null };
   // Left listed at the version it is, so a later change can read it again.
   if (at.unread) return { outcome: 'unread', ref };
@@ -307,11 +321,14 @@ export async function keepSynopsis(
   // Owed a re-read when the text changed, now or in a keep that never read it.
   const pending = edit || stored.notesPending === 'reread' ? 'reread' : 'confirm';
 
+  // Finishing what an earlier keep owes changes no text, so it needs no
+  // proof of what the page showed: that keep's own writes moved the row on
+  // since. Anything else is conditional on what the person was shown, so a
+  // page that is out of date matches nothing.
+  const finishing = entry.state === 'kept' && !edit && stored.notesPending !== null;
   const claimed = await claimSynopsisKeep(userId, id, {
     from: entry.state,
-    // What the person was shown, not what this request read: a page that is
-    // out of date matches nothing.
-    updatedAt: input.seen,
+    updatedAt: finishing ? stored.updatedAt : input.seen,
     now,
     text: edit,
     // What it lists until its notes are settled: what was ticked, as listed.
@@ -346,7 +363,7 @@ export async function keepSynopsis(
   } catch (err) {
     // The text is kept and what its notes are owed is recorded; giving the
     // lease back lets the next keep finish them at once.
-    await releaseSynopsisKeep(userId, id, now).catch(() => undefined);
+    await releaseSynopsisLease(userId, id, now).catch(() => undefined);
     throw err;
   }
   let finished: boolean;
@@ -358,7 +375,7 @@ export async function keepSynopsis(
       pending: settled.notesUnread ? 'reread' : null,
     });
   } catch (err) {
-    await releaseSynopsisKeep(userId, id, now).catch(() => undefined);
+    await releaseSynopsisLease(userId, id, now).catch(() => undefined);
     throw err;
   }
   if (!finished) {

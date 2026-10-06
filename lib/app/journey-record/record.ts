@@ -388,10 +388,11 @@ export async function finishSynopsisKeep(
 }
 
 /**
- * Give back a keep's lease without settling its notes, when settling failed:
- * what they are owed stays recorded, so the next keep can finish it at once.
+ * Give back a keep's or a redraft's lease and nothing else: a keep whose notes
+ * failed to settle keeps what they are owed, and a redraft whose call failed
+ * keeps its spent try. Only by the one that holds it.
  */
-export async function releaseSynopsisKeep(userId: string, id: string, lease: Date): Promise<void> {
+export async function releaseSynopsisLease(userId: string, id: string, lease: Date): Promise<void> {
   await prisma.appJourneyEntry.updateMany({
     where: { id, userId, kind: 'synopsis', workingSince: lease },
     data: { workingSince: null },
@@ -428,14 +429,6 @@ export async function refundRegeneration(userId: string, id: string, lease: Date
   await prisma.appJourneyEntry.updateMany({
     where: { id, userId, kind: 'synopsis', state: 'draft', workingSince: lease },
     data: { regenerations: { decrement: 1 }, workingSince: null },
-  });
-}
-
-/** Give back a redraft's lease without its try: the model was asked, and the call counts. */
-export async function releaseRegeneration(userId: string, id: string, lease: Date): Promise<void> {
-  await prisma.appJourneyEntry.updateMany({
-    where: { id, userId, kind: 'synopsis', workingSince: lease },
-    data: { workingSince: null },
   });
 }
 

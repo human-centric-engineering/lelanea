@@ -388,7 +388,12 @@ export const prismaFake = {
         };
       }) => {
         const keys = Object.keys(where).sort().join();
-        const byId = keys === 'id,userId' && where.id?.in;
+        // The conversation deletion's "the turns this deletes" (t-147) is the
+        // id read narrowed to a deleted conversation.
+        const byId =
+          (keys === 'id,userId' ||
+            (keys === 'conversationId,id,userId' && where.conversationId?.in)) &&
+          where.id?.in;
         const byConversation =
           (keys === 'conversationId' || keys === 'conversationId,userId') &&
           where.conversationId?.in;
@@ -398,7 +403,11 @@ export const prismaFake = {
         return world.turns
           .filter((row) =>
             byId
-              ? where.id!.in.includes(row.id) && row.userId === where.userId
+              ? where.id!.in.includes(row.id) &&
+                row.userId === where.userId &&
+                (!where.conversationId ||
+                  (row.conversationId !== null &&
+                    where.conversationId.in.includes(row.conversationId)))
               : row.conversationId !== null &&
                 where.conversationId!.in.includes(row.conversationId) &&
                 (where.userId === undefined || row.userId === where.userId)

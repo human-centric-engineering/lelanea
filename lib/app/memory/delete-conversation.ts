@@ -182,6 +182,17 @@ export async function forgetDeletedConversations(
         // which resets its conversation (`claimTurn`); deleting its record now
         // would take the ledger row the new attempt writes, and leave that
         // version unwiped and unfindable.
+        // The sessions of the turns this deletes, read under the same
+        // condition: a turn retried into another conversation is left, and so
+        // is its session's synopsis.
+        const going = await tx.appTurn.findMany({
+          where: {
+            id: { in: owned.map((turn) => turn.id) },
+            userId,
+            conversationId: { in: [conversationId ?? ''] },
+          },
+          select: { sessionId: true },
+        });
         const deleted = await tx.appTurn.deleteMany({
           where: {
             id: { in: owned.map((turn) => turn.id) },
@@ -194,7 +205,7 @@ export async function forgetDeletedConversations(
         // So may their sessions' synopses (t-147): a draft goes, a kept one is flagged.
         await settleSynopsesOfDeletedExchanges(tx, {
           userId,
-          sessionIds: owned.map((turn) => turn.sessionId),
+          sessionIds: going.map((turn) => turn.sessionId),
           at: removedAt,
         });
         return { turns: deleted.count, versions };
