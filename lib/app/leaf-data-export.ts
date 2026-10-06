@@ -6,7 +6,7 @@
  * the leaf's export seam, reserved so a leaf's collectors merge cleanly on
  * upgrade — the subject-access analogue of `lib/app/leaf-bootstrap.ts`,
  * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`. Lelañea declares
- * `AppWaitlistEntry`, `AppAcknowledgement`, `AppUserBudget`, `AppTurn`, `AppSafetyEvent` and `AppMemoryEmbedding` here; the guidance below is
+ * `AppWaitlistEntry`, `AppAcknowledgement`, `AppUserBudget`, `AppTurn`, `AppSafetyEvent`, `AppMemoryEmbedding` and `AppJourneyEntry` here; the guidance below is
  * upstream's and still applies to every table added after them.
  *
  * Called by `lib/app/data-export.ts`'s `collectAppSubjectData()` alongside the
@@ -54,6 +54,10 @@ import {
   listMemoryEntriesForSubject,
 } from '@/lib/app/memory/memory-index';
 import { findSafetyEventsForSubject } from '@/lib/app/safety/record';
+import {
+  findJourneyEntriesForSubject,
+  listJourneyEntriesForOrg,
+} from '@/lib/app/journey-record/record';
 
 /**
  * Declare the leaf app's own models to core's subject-source registry.
@@ -136,6 +140,15 @@ export function initLeafSubjectSources(): void {
         disposition: 'export',
         description:
           'Which of your messages are indexed so the assistant can find them again by what they mean, when each was indexed, and by which AI model. The index holds no words: what you said is in your conversations. Deleting a message, a conversation or your account removes it from the index.',
+      },
+      {
+        // f-journey-record t-145. The whole record, drafts included: a draft is
+        // not in the record yet, but we hold it, so it is theirs to see here.
+        model: 'AppJourneyEntry',
+        section: 'journeyRecord',
+        disposition: 'export',
+        description:
+          'Your journey record: the account of each session you kept, with what came out of it and which modules it touched, and everything you wrote there yourself, including whether you asked that the assistant not read it. It also holds any account of a session still waiting for you to approve, change or set aside, marked as a draft.',
       },
     ],
     excluded: [
@@ -374,15 +387,17 @@ export function initLeafSubjectSources(): void {
  * against superseded document versions, because we still hold them.
  */
 export async function collectLeafSubjectData(subject: AppSubjectQuery): Promise<AppSubjectData> {
-  const [waitlist, acknowledgements, budget, turns, safety, memory] = await Promise.all([
-    findWaitlistEntriesForSubject(subject),
-    findAcknowledgementsForSubject(subject),
-    findUserBudgetsForSubject(subject),
-    findTurnsForSubject(subject),
-    findSafetyEventsForSubject(subject),
-    listMemoryEntriesForSubject(subject),
-  ]);
-  return { waitlist, acknowledgements, budget, turns, safety, memory };
+  const [waitlist, acknowledgements, budget, turns, safety, memory, journeyRecord] =
+    await Promise.all([
+      findWaitlistEntriesForSubject(subject),
+      findAcknowledgementsForSubject(subject),
+      findUserBudgetsForSubject(subject),
+      findTurnsForSubject(subject),
+      findSafetyEventsForSubject(subject),
+      listMemoryEntriesForSubject(subject),
+      findJourneyEntriesForSubject(subject),
+    ]);
+  return { waitlist, acknowledgements, budget, turns, safety, memory, journeyRecord };
 }
 
 /**
@@ -451,6 +466,16 @@ const ORG_SOURCES: OrgDataSource[] = [
     description:
       'Which of each member’s messages are in the memory index, when and by which model. Not the vectors, and no words.',
     fetch: ({ orgId }) => listMemoryEntriesForOrg(orgId),
+  },
+  {
+    // f-journey-record t-145. Read through the record module, the only code
+    // that touches the table.
+    model: 'AppJourneyEntry',
+    section: 'appJourneyEntries',
+    disposition: 'export',
+    description:
+      'Each member’s journey record: kept and draft session synopses, and the entries they wrote themselves.',
+    fetch: ({ orgId }) => listJourneyEntriesForOrg(orgId),
   },
   {
     model: 'AppSafetyEvent',
@@ -787,7 +812,7 @@ const ORG_SOURCES: OrgDataSource[] = [
 /**
  * Declare this leaf app's `orgId`-carrying models for an ORG's data export — the
  * org-subject twin of {@link initLeafSubjectSources}. Daybreak ships it empty;
- * t-112 fills it with all 37 of ours (`ORG_SOURCES` above).
+ * t-112 fills it with all of ours (`ORG_SOURCES` above).
  *
  * A new model of ours carries `orgId` like the rest (tenant-owned under Sunrise
  * §107), so `tests/unit/lib/privacy/org-sources.test.ts` names it until it

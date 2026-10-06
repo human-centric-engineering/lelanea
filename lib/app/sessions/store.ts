@@ -276,3 +276,42 @@ export async function readSessions(
     previous: sessions[1] ? { ...sessions[1], closedAt: closedAt(1) } : null,
   };
 }
+
+/**
+ * Named sessions of one person's, with their windows, keyed by id
+ * (f-journey-record t-145): what each synopsis in the record is about.
+ *
+ * Read by id rather than by listing every session, because the record names
+ * the sessions it needs. An id that is not one of this person's started rows
+ * is simply absent from the map: the `userId` filter is what keeps one
+ * person's session ids from resolving another's.
+ */
+export async function readSessionsById(
+  userId: string,
+  ids: readonly string[]
+): Promise<Map<string, Session>> {
+  const found = new Map<string, Session>();
+  if (ids.length === 0) return found;
+
+  const rows = await prisma.journeyEvent.findMany({
+    where: { userId, type: SESSION_EVENT_TYPE.started, id: { in: [...ids] } },
+    select: STARTED_SELECT,
+  });
+  const sessions = rows.map((row) => toSession(row, null));
+  const closeIds = await Promise.all(
+    sessions.map((session) => sessionEventId(userId, session.ordinal, 'closed'))
+  );
+  const closes =
+    closeIds.length === 0
+      ? []
+      : await prisma.journeyEvent.findMany({
+          where: { userId, type: SESSION_EVENT_TYPE.closed, id: { in: closeIds } },
+          select: { id: true, occurredAt: true },
+        });
+  const closedAtById = new Map(closes.map((close) => [close.id, close.occurredAt]));
+
+  sessions.forEach((session, index) => {
+    found.set(session.id, { ...session, closedAt: closedAtById.get(closeIds[index]) ?? null });
+  });
+  return found;
+}
