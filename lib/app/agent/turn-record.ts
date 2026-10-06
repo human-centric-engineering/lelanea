@@ -135,6 +135,12 @@ export interface TurnStamp {
   register: RegisterChoice | null;
   /** The person's leanings the turn applies, and any held (f-leanings t-136), or null on a seat with none. */
   leanings: LeaningsStamp | null;
+  /**
+   * The session the turn fell in (f-recap t-141), opened or resumed before the
+   * claim — or null when that could not be written. A re-run is stamped with
+   * the session it re-runs in, which a re-run after the gap makes a new one.
+   */
+  sessionId: string | null;
 }
 
 /**
@@ -160,6 +166,7 @@ export async function claimTurn(
     // A re-run never has to clear one: whether a turn has leanings follows
     // from its seat, and an id's seat is fixed by its request hash.
     ...(stamp.leanings ? { leanings: stamp.leanings } : {}),
+    sessionId: stamp.sessionId,
   };
   const { requestHash } = request;
 

@@ -135,6 +135,7 @@ import type {
 } from '@/lib/framework/facilitation/agents/turn-hook';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 import { queueMessageIndex } from '@/lib/app/memory/memory-index';
+import { arriveSessionQuietly } from '@/lib/app/sessions/store';
 
 /** Error codes a refused turn carries, for a client to branch on (`turn-codes.ts`, import-light). */
 export { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
@@ -482,7 +483,7 @@ async function runGeneratedTurn(
     return only(held);
   }
 
-  const [deadlines, fingerprintVersion, register, last, leaningInputs, proposed] =
+  const [deadlines, fingerprintVersion, register, last, leaningInputs, proposed, arrival] =
     await Promise.all([
       getAgentDeadlines(),
       readAgentFingerprintVersion(turn.agentSlug),
@@ -491,6 +492,9 @@ async function runGeneratedTurn(
       readLeaningInputs(turn.userId, turn.role),
       // Only the seat with leanings has a proposal to carry (f-leanings t-137).
       hasRegister(turn.role) ? proposedRecently(turn.userId, turn.role) : false,
+      // Before the claim writes the turn row, which would otherwise be its own
+      // last activity and keep every sitting open (f-recap t-141).
+      arriveSessionQuietly(turn.userId),
     ]);
   // Against the register's source: under a crisis hold the harder poles are held at rest.
   const leanings = leaningsFrom(leaningInputs, register?.source ?? null);
@@ -503,7 +507,7 @@ async function runGeneratedTurn(
       agentSlug: turn.agentSlug,
       requestHash,
     },
-    { fingerprintVersion, register, leanings },
+    { fingerprintVersion, register, leanings, sessionId: arrival?.session.id ?? null },
     staleClaimMs(deadlines.turnDeadlineMs)
   );
   // The context block is cached per person for a minute, built for the last

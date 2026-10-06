@@ -15,6 +15,12 @@
  * should ask the AI to speak first (`POST …/conversation/opening`, t-122).
  * Only when nothing is in the transcript; `openingDue` says the rest.
  *
+ * Reading the pane is how a person arrives, so this opens their session, or
+ * resumes the one they are in, before anything else is decided (f-recap
+ * t-141). Either seat: a sitting is the person's, not the seat's. A reload
+ * inside the sitting writes nothing, and a failure to write it never fails
+ * the read.
+ *
  * Authentication: required. Rate limiting: inherited from the `/api/v1/**`
  * section cap. Caching: `no-store` — a turn may be settling as this is read.
  *
@@ -30,6 +36,7 @@ import { validateQueryParams } from '@/lib/api/validation';
 import { CONVERSATION_SEAT, READABLE_SEATS } from '@/lib/app/conversation/seats';
 import { readTranscript } from '@/lib/app/conversation/transcript';
 import { openingDue } from '@/lib/app/conversation/opening';
+import { arriveSessionQuietly } from '@/lib/app/sessions/store';
 
 const querySchema = z.object({
   seat: z
@@ -53,6 +60,7 @@ export const GET = withAuth(async (request, session) => {
   const query = validateQueryParams(request.nextUrl.searchParams, querySchema);
   const seat = query.seat ?? CONVERSATION_SEAT;
 
+  const arrival = await arriveSessionQuietly(session.user.id);
   const transcript = await readTranscript(session, seat);
   // Asked only of an empty transcript: a conversation under way has no opening
   // owed, and most reads are of one (t-122 review round 3).
@@ -66,6 +74,7 @@ export const GET = withAuth(async (request, session) => {
     entries: transcript.entries.length,
     resumed: transcript.conversationId !== null,
     opening: transcript.opening ?? false,
+    sessionOpened: arrival?.opened ?? false,
   });
 
   return successResponse(transcript, undefined, { headers: { 'Cache-Control': 'no-store' } });
