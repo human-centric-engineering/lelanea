@@ -36,6 +36,14 @@
  * stamped at the sitting's last activity — the latest turn's `completedAt`, or
  * the sitting's own start when it had none (`boundary.ts`).
  *
+ * ## A close queues the session's synopsis
+ *
+ * The arrival that writes a close is the only moment a close is known, so it
+ * queues the closed session's draft (f-journey-record t-146) once its
+ * transaction has committed. Queued, not awaited: the arrival never waits on
+ * a model. Only the winner of a race gets here, since a loser's transaction
+ * wrote nothing.
+ *
  * ## Both seats, one sitting
  *
  * A sitting is the person's, not the seat's: onboarding and the facilitator
@@ -52,6 +60,7 @@ import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import { decideSession } from '@/lib/app/sessions/boundary';
+import { queueSynopsisDraft } from '@/lib/app/journey-record/synopsis/draft';
 
 /** The event types, as written to `framework_journey_event.type`. */
 export const SESSION_EVENT_TYPE = {
@@ -209,6 +218,9 @@ export async function arriveSession(userId: string, now: Date = new Date()): Pro
         },
       });
     });
+    if (decision.kind === 'roll' && latest) {
+      queueSynopsisDraft(userId, { ...latest, closedAt: decision.closeAt }, decision.closeAt);
+    }
     return { session: { id, ordinal, startedAt: now, closedAt: null }, opened: true };
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
