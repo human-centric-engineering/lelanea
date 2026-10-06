@@ -543,7 +543,7 @@ describe('readRecapMaterial — what it carries, for this person only', () => {
 describe('prepareRecap', () => {
   it('arrives first, then is ready on the facilitator surface with this session’s id', async () => {
     const ready = await prepareRecap(USER);
-    expect(h.arriveSession).toHaveBeenCalledWith(ME);
+    expect(h.arriveSession).toHaveBeenCalledWith(ME, undefined, {});
     expect(ready).toMatchObject({ ready: true, surface: SURFACE, turnId: RECAP_ID });
   });
 

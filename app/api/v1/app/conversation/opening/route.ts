@@ -67,7 +67,10 @@ export const POST = withAuth(
 
     // The welcome was owed and there is no agent to speak it: the recap,
     // which needs something said, cannot be owed instead.
-    const recap = welcome.reason === 'no_surface' ? welcome : await prepareRecap(session.user);
+    const recap =
+      welcome.reason === 'no_surface'
+        ? welcome
+        : await prepareRecap(session.user, { keepAlive: turnRequest.keepAlive });
     if (!recap.ready) {
       const reason = recap.reason;
       log.info('Opening not started', { userId, reason });

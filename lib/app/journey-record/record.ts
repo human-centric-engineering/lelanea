@@ -20,24 +20,28 @@
  * person's entry id matches nothing and answers 404, the same as an id that
  * never existed.
  *
- * This file writes only **own** entries, and removes any entry. Drafting a
- * synopsis is t-146 and keeping one is t-147. A synopsis is never edited here,
- * because what keeping it does to the person's notes (owner rulings 2 and 3)
- * belongs to keeping, not to a text edit beside it.
+ * This file writes own entries and synopsis drafts, and removes any entry.
+ * What goes into a draft is decided in `synopsis/` (t-146); this file only
+ * stores it. Keeping one is t-147. A synopsis is never edited here, because
+ * what keeping it does to the person's notes (owner rulings 2 and 3) belongs
+ * to keeping, not to a text edit beside it.
  *
  * @see lib/app/journey-record/query.ts — search and filters
  * @see .context/app/journey-record.md
  */
 
 import type { AppJourneyEntry } from '@prisma/client';
+import { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { readSessionsById, type Session } from '@/lib/app/sessions/store';
 import {
+  journeyNoteRefsSchema,
   journeyOutcomesSchema,
   type JourneyEntry,
+  type JourneyNoteRef,
   type JourneyOutcome,
 } from '@/lib/app/journey-record/entry';
 import {
@@ -59,6 +63,14 @@ function readOutcomes(row: AppJourneyEntry): JourneyOutcome[] {
   return [];
 }
 
+/** The stored note references, read as defensively as the outcomes. */
+function readNoteRefs(row: AppJourneyEntry): JourneyNoteRef[] {
+  const parsed = journeyNoteRefsSchema.safeParse(row.notes);
+  if (parsed.success) return parsed.data;
+  logger.error('Journey entry has unreadable notes', { entryId: row.id });
+  return [];
+}
+
 function toEntry(row: AppJourneyEntry, session: Session | undefined): JourneyEntry {
   return {
     id: row.id,
@@ -68,6 +80,7 @@ function toEntry(row: AppJourneyEntry, session: Session | undefined): JourneyEnt
     body: row.body,
     outcomes: readOutcomes(row),
     modules: row.modules,
+    notes: readNoteRefs(row),
     withheldFromAgent: row.withheldFromAgent,
     occurredAt: row.occurredAt.toISOString(),
     keptAt: row.keptAt?.toISOString() ?? null,
@@ -124,6 +137,105 @@ export async function createOwnEntry(userId: string, entry: OwnEntryCreate): Pro
     },
   });
   return toEntry(row, undefined);
+}
+
+/** A drafted synopsis, as `synopsis/draft.ts` hands it over. */
+export interface SynopsisDraftWrite {
+  sessionId: string;
+  /** The session's start: where the synopsis sits in time. */
+  occurredAt: Date;
+  summary: string;
+  body: string;
+  outcomes: JourneyOutcome[];
+  modules: string[];
+  notes: JourneyNoteRef[];
+}
+
+/**
+ * A P2002, as either shape Prisma reports it in. On this stack (the driver
+ * adapter) it carries no `meta.target`: the index is under
+ * `driverAdapterError.cause.constraint.index`, as the dev database reports it,
+ * `app_journey_entry_sessionId_key`. Read by shape, because `lib/app/**` does
+ * not import Prisma's runtime.
+ */
+const uniqueViolationSchema = z.object({
+  code: z.literal('P2002'),
+  meta: z
+    .object({
+      target: z.union([z.string(), z.array(z.string())]).optional(),
+      driverAdapterError: z
+        .object({
+          cause: z.object({
+            // The pg adapter names the index, or the columns when Postgres
+            // reports no constraint name.
+            constraint: z.union([
+              z.object({ index: z.string() }),
+              z.object({ fields: z.array(z.string()) }),
+            ]),
+          }),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+/**
+ * P2002 on the `sessionId` index: the session already has its synopsis. Any
+ * other unique violation is not that, and is thrown.
+ */
+function isSessionAlreadyDrafted(err: unknown): boolean {
+  const parsed = uniqueViolationSchema.safeParse(err);
+  if (!parsed.success) return false;
+  const meta = parsed.data.meta;
+  const constraint = meta?.driverAdapterError?.cause.constraint;
+  const index = constraint
+    ? 'index' in constraint
+      ? constraint.index
+      : constraint.fields.join(',')
+    : [meta?.target ?? []].flat().join(',');
+  return index.includes('sessionId');
+}
+
+/** Whether a session already has its synopsis, drafted or kept, or one being removed. */
+export async function hasSynopsis(userId: string, sessionId: string): Promise<boolean> {
+  const row = await prisma.appJourneyEntry.findFirst({
+    where: { userId, sessionId },
+    select: { id: true },
+  });
+  return row !== null;
+}
+
+/**
+ * Store a drafted synopsis, held out of the record until the person keeps it.
+ *
+ * The unique index on `sessionId` is the guard: a session has one synopsis,
+ * so a second writer for it gets `P2002` and is told `false`, never a second
+ * row. Nothing is replaced here: regenerating a draft is t-147's.
+ */
+export async function writeSynopsisDraft(
+  userId: string,
+  draft: SynopsisDraftWrite
+): Promise<boolean> {
+  try {
+    await prisma.appJourneyEntry.create({
+      data: {
+        userId,
+        kind: 'synopsis',
+        state: 'draft',
+        sessionId: draft.sessionId,
+        summary: draft.summary,
+        body: draft.body,
+        outcomes: draft.outcomes,
+        modules: draft.modules,
+        notes: draft.notes,
+        occurredAt: draft.occurredAt,
+      },
+    });
+    return true;
+  } catch (err) {
+    if (isSessionAlreadyDrafted(err)) return false;
+    throw err;
+  }
 }
 
 /**

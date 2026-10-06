@@ -321,6 +321,13 @@ const ALLOWED_CALL_SITES: readonly string[] = [
   // Same fork edit to a Sunrise-owned roster as the entry above; divergences
   // Row 20.
   'app/api/v1/app/agent/transcribe/route.ts | agentId=agentId | conversationId=— | workflowExecutionId=— | userId=userId',
+  // LELAÑEA — a session's synopsis draft (f-journey-record t-146): one call
+  // per closed session, billed to the person whose session it is. `agentId`
+  // is the synopsis seat's agent, read from its binding and then its row;
+  // `userId` is the person the closing arrival named, a real `User`. No
+  // conversation: it summarises a sitting, which can span two. Same fork edit
+  // to a Sunrise-owned roster as the entries above; divergences Row 20.
+  'lib/app/journey-record/synopsis/draft.ts | agentId=agentId | conversationId=— | workflowExecutionId=— | userId=userId',
   // DAYBREAK — the framework conversation supervisor. `conversationId` is the
   // id the route loaded and `loadFrameworkConversation` already resolved, so it
   // is a real `AiConversation` row. No agent: the judge runs on the platform

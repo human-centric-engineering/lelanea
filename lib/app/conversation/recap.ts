@@ -99,7 +99,12 @@ import {
   OPENING_NOT_DUE,
   type OpeningRequest,
 } from '@/lib/app/conversation/opening';
-import { arriveSession, SESSION_EVENT_TYPE, type Session } from '@/lib/app/sessions/store';
+import {
+  arriveSession,
+  SESSION_EVENT_TYPE,
+  type ArrivalOptions,
+  type Session,
+} from '@/lib/app/sessions/store';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
 import { getNotes } from '@/lib/app/slots/notes';
 import { fallbackModuleName } from '@/lib/app/modules/definitions';
@@ -472,9 +477,12 @@ export function recapContent(material: RecapMaterial): string {
  * opened. A completed recap is ready too: the ledger answers it with its
  * replay. Never throws: a failed read is "not due", as the welcome's is.
  */
-export async function prepareRecap(user: GateSubject): Promise<RecapReady | RecapRefusal> {
+export async function prepareRecap(
+  user: GateSubject,
+  options: ArrivalOptions = {}
+): Promise<RecapReady | RecapRefusal> {
   try {
-    const { session } = await arriveSession(user.id);
+    const { session } = await arriveSession(user.id, undefined, options);
     const plan = await planRecap(user, session);
     // A completed recap is still ready — the ledger replays it. One whose reply
     // the transcript already shows (`reply_not_linked`) is not: run again, it

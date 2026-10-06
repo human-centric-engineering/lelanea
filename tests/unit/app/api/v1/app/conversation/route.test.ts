@@ -251,7 +251,10 @@ describe('arriving (f-recap t-141)', () => {
       await GET(request(`/api/v1/app/conversation?seat=${seat}`));
 
       expect(arriveSessionQuietly).toHaveBeenCalledTimes(1);
-      expect(arriveSessionQuietly).toHaveBeenCalledWith(ME);
+      // With the host's `after()`, which keeps a synopsis draft its close queues alive.
+      expect(arriveSessionQuietly).toHaveBeenCalledWith(ME, undefined, {
+        keepAlive: expect.any(Function),
+      });
       expect(arriveSessionQuietly).not.toHaveBeenCalledWith(OTHER);
     }
   );

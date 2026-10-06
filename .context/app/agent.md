@@ -181,6 +181,14 @@ leaf; until this ran, its role route answered 404 for every role.
   binding points at no row that only boot materialises. The role is checked
   against a constant in code, and the only row it needs is the voice agent.
 
+**A third seat has its own agent.** `026-synopsis-seat.ts` binds Daybreak's
+`synopsis` seat (`SYNOPSIS_SEAT`) to `lelanea-synopsis`, which drafts each
+session's account one-shot and is never talked to
+([`journey-record.md`](./journey-record.md#drafting-a-synopsis)). It is
+deliberately not in `SEATED_ROLES`: the misuse screen and the escalation
+policies read that list as "the seats a person talks through", and seed 006
+would bind her chat agent to anything in it.
+
 Until §08 t-54 the agent was `internal` with no capabilities, so the role route
 answered 404 on both seats. See [How the agent is reached](#how-the-agent-is-reached).
 

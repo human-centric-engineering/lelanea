@@ -29,6 +29,7 @@
  * @see lib/app/conversation/transcript.ts
  */
 
+import { after } from 'next/server';
 import { z } from 'zod';
 
 import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
@@ -82,7 +83,9 @@ export const GET = withAuth(async (request, session) => {
   // Beside the transcript read, which does not depend on it; before the opening
   // is decided, which will (f-recap t-142).
   const [arrival, transcript] = await Promise.all([
-    arriveSessionQuietly(session.user.id),
+    // A close it writes queues a synopsis draft; `after()` keeps that alive
+    // past this response (f-journey-record t-146).
+    arriveSessionQuietly(session.user.id, undefined, { keepAlive: (work) => after(work) }),
     readTranscript(session, seat),
   ]);
   // The welcome is asked only of an empty transcript (t-122 review round 3);

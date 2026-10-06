@@ -36,6 +36,19 @@
  * stamped at the sitting's last activity — the latest turn's `completedAt`, or
  * the sitting's own start when it had none (`boundary.ts`).
  *
+ * ## A close queues the session's synopsis
+ *
+ * The arrival that writes a close is the only moment a close is known, so it
+ * queues the closed session's draft (f-journey-record t-146) once its
+ * transaction has committed. Queued, not awaited: the arrival never waits on
+ * a model, and hands the work to the host's `keepAlive` so a serverless
+ * function outlives it. Only the winner of a race gets here, since a loser's
+ * transaction wrote nothing.
+ *
+ * The drafting module is imported when a close happens, not with this file:
+ * it reaches the model and the meter, which session bookkeeping has no other
+ * use for, and it imports the journey record, which imports this file.
+ *
  * ## Both seats, one sitting
  *
  * A sitting is the person's, not the seat's: onboarding and the facilitator
@@ -52,6 +65,8 @@ import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
 import { decideSession } from '@/lib/app/sessions/boundary';
+// Type only: the drafting module itself is imported when a close happens.
+import type { ClosedSession } from '@/lib/app/journey-record/synopsis/material';
 
 /** The event types, as written to `framework_journey_event.type`. */
 export const SESSION_EVENT_TYPE = {
@@ -97,6 +112,42 @@ export async function sessionEventId(
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0'));
   return `ses_${hex.join('').slice(0, 32)}`;
+}
+
+/** What a caller can hand an arrival. */
+export interface ArrivalOptions {
+  /**
+   * Keep work started by the arrival alive past the response: the route's
+   * `after()`, or a turn's own `keepAlive`. Without it, a long-lived server
+   * still finishes the work; a serverless one may freeze it.
+   */
+  keepAlive?: (work: Promise<unknown>) => void;
+}
+
+/**
+ * Queue the closed session's synopsis, and hand the work to the host. Never
+ * throws: a draft that does not happen costs the person an account, never the
+ * arrival.
+ */
+function queueDraftOfClosed(userId: string, closed: ClosedSession, options: ArrivalOptions): void {
+  const work = import('@/lib/app/journey-record/synopsis/draft')
+    .then(({ queueSynopsisDraft }) => queueSynopsisDraft(userId, closed))
+    .catch((err: unknown) => {
+      logger.error(
+        'Synopsis draft could not be queued',
+        err instanceof Error ? err : new Error(String(err)),
+        { userId, sessionId: closed.id }
+      );
+    });
+  try {
+    options.keepAlive?.(work);
+  } catch (err) {
+    // `after()` outside a request scope throws; the work still runs.
+    logger.warn('Synopsis draft could not be kept alive past its response', {
+      userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /** P2002: another arrival already wrote this session's row. */
@@ -145,7 +196,11 @@ async function readLastTurnAt(userId: string): Promise<Date | null> {
  * the pane, and a turn's claim before its row exists. A turn row written first
  * would be its own last activity, and no sitting would ever end.
  */
-export async function arriveSession(userId: string, now: Date = new Date()): Promise<Arrival> {
+export async function arriveSession(
+  userId: string,
+  now: Date = new Date(),
+  options: ArrivalOptions = {}
+): Promise<Arrival> {
   const [latestRow, latestCloseRow, lastTurnAt] = await Promise.all([
     prisma.journeyEvent.findFirst({
       where: { userId, type: SESSION_EVENT_TYPE.started },
@@ -209,6 +264,13 @@ export async function arriveSession(userId: string, now: Date = new Date()): Pro
         },
       });
     });
+    if (decision.kind === 'roll' && latest) {
+      queueDraftOfClosed(
+        userId,
+        { ...latest, closedAt: decision.closeAt, nextStartedAt: now },
+        options
+      );
+    }
     return { session: { id, ordinal, startedAt: now, closedAt: null }, opened: true };
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
@@ -230,10 +292,11 @@ export async function arriveSession(userId: string, now: Date = new Date()): Pro
  */
 export async function arriveSessionQuietly(
   userId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: ArrivalOptions = {}
 ): Promise<Arrival | null> {
   try {
-    return await arriveSession(userId, now);
+    return await arriveSession(userId, now, options);
   } catch (err) {
     logger.error('Session arrival failed', err instanceof Error ? err : new Error(String(err)), {
       userId,

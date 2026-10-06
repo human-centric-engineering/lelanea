@@ -58,6 +58,13 @@ vi.mock('@/lib/logging', () => ({
   logger: { error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
+// The draft a close queues (f-journey-record t-146) runs off the request path;
+// here it is a spy, so these cases see what was queued and nothing more.
+const { queueSynopsisDraft } = vi.hoisted(() => ({
+  queueSynopsisDraft: vi.fn(async (_userId: string, _closed: { id: string }) => undefined),
+}));
+vi.mock('@/lib/app/journey-record/synopsis/draft', () => ({ queueSynopsisDraft }));
+
 vi.mock('@/lib/db/client', () => {
   const p2002 = () =>
     new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
@@ -489,6 +496,73 @@ describe('arriveSession', () => {
     expect(ana.session.id).not.toBe(ben.session.id);
     expect(started(ANA)).toHaveLength(1);
     expect(started(BEN)).toHaveLength(1);
+  });
+
+  it('queues the closed session’s synopsis once it has closed, and only then', async () => {
+    const first = await arriveSession(ANA, at(0));
+    turnDone(ANA, at(1), at(1, 90_000), first.session.id);
+    await arriveSession(ANA, at(5));
+    // Opening the first session and resuming it close nothing, so queue nothing.
+    expect(queueSynopsisDraft).not.toHaveBeenCalled();
+
+    const keepAlive = vi.fn();
+    await arriveSession(ANA, at(24), { keepAlive });
+
+    // Loaded when the close happens, so the queue lands a tick later.
+    await vi.waitFor(() => expect(queueSynopsisDraft).toHaveBeenCalledTimes(1));
+    expect(queueSynopsisDraft).toHaveBeenCalledWith(ANA, {
+      ...first.session,
+      closedAt: at(1, 90_000),
+      // Its window runs until this arrival began the next one.
+      nextStartedAt: at(24),
+    });
+    // The work is handed to the host, so a serverless function outlives it.
+    expect(keepAlive).toHaveBeenCalledTimes(1);
+    expect(keepAlive.mock.calls[0][0]).toBeInstanceOf(Promise);
+  });
+
+  it('still queues the draft when the host refuses to keep it alive', async () => {
+    const first = await arriveSession(ANA, at(0));
+    turnDone(ANA, at(1), at(2), first.session.id);
+    const keepAlive = vi.fn(() => {
+      throw new Error('after() was called outside a request scope');
+    });
+
+    const next = await arriveSession(ANA, at(30), { keepAlive });
+
+    expect(next.opened).toBe(true);
+    await vi.waitFor(() => expect(queueSynopsisDraft).toHaveBeenCalledTimes(1));
+  });
+
+  it('queues one synopsis when two tabs close the same session together', async () => {
+    const first = await arriveSession(ANA, at(0));
+    turnDone(ANA, at(1), at(1, 60_000), first.session.id);
+
+    let release!: () => void;
+    db.readGate = new Promise((resolve) => (release = resolve));
+    const both = Promise.all([arriveSession(ANA, at(48)), arriveSession(ANA, at(48, 5))]);
+    await vi.waitFor(() => expect(startedReads()).toBe(3));
+    release();
+    await both;
+
+    expect(closed(ANA)).toHaveLength(1);
+    await vi.waitFor(() => expect(queueSynopsisDraft).toHaveBeenCalled());
+    // Settle anything a second arrival might have queued before counting.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(queueSynopsisDraft).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(queueSynopsisDraft).mock.calls[0][1].id).toBe(first.session.id);
+  });
+
+  it('queues nothing when the close and the open fail to write', async () => {
+    const first = await arriveSession(ANA, at(0));
+    turnDone(ANA, at(1), at(2), first.session.id);
+    const { executeTransaction } = await import('@/lib/db/utils');
+    vi.mocked(executeTransaction).mockRejectedValueOnce(new Error('connection lost'));
+
+    await expect(arriveSession(ANA, at(30))).rejects.toThrow('connection lost');
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(queueSynopsisDraft).not.toHaveBeenCalled();
   });
 
   it('lets an error that is not the race through, and the quiet form logs it and answers null', async () => {

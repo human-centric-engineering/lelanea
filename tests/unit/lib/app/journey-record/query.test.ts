@@ -18,6 +18,7 @@ function entry(overrides: Partial<JourneyEntry> & Pick<JourneyEntry, 'id'>): Jou
     body: 'What was said.',
     outcomes: [],
     modules: [],
+    notes: [],
     withheldFromAgent: false,
     occurredAt: '2026-10-01T09:00:00.000Z',
     keptAt: '2026-10-01T10:00:00.000Z',

@@ -120,11 +120,26 @@ export const PINNED_MODEL_MATRIX_ROW = {
   costPerMillionTokens: null, // never a blended rate — see above
 } as const;
 
-/** The two seats this leaf's seed owns. Every other seat is left to whoever binds it. */
+/**
+ * The seats a person speaks to her through, which seed 006 binds to her agent.
+ * Every other seat is left to whoever binds it, except {@link SYNOPSIS_SEAT}.
+ *
+ * Read as "a conversation seat" elsewhere too: the misuse screen
+ * (`lib/app/safety/misuse.ts`) and {@link ESCALATION_POLICIES} cover exactly
+ * these. That is why the synopsis seat is not in it.
+ */
 export const SEATED_ROLES: readonly string[] = [
   FACILITATION_ROLES.facilitator,
   FACILITATION_ROLES.onboarding,
 ];
+
+/**
+ * The seat whose agent drafts a session's synopsis (f-journey-record t-146).
+ * Seeded by its own unit (`026-synopsis-seat.ts`), with its own agent, and not
+ * in {@link SEATED_ROLES}: nobody talks to it, so it is no conversation seat,
+ * and seed 006 would otherwise bind her chat agent to it.
+ */
+export const SYNOPSIS_SEAT = FACILITATION_ROLES.synopsis;
 
 /** What the agent's version timeline says when the seed widens it to `public`. */
 export const REACHABLE_CHANGE_SUMMARY = 'Made reachable by members (seeded — §08)';

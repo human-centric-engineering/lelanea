@@ -283,6 +283,19 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'be narrower than that, the owner alone.',
   },
   {
+    path: 'lib/app/journey-record/synopsis/material.ts',
+    disposition: 'by-design',
+    reason:
+      'drafting a session’s synopsis reads the member’s OWN messages from that ' +
+      'session (f-journey-record t-146): the turn rows stamped with it, under ' +
+      '`userId`, give the message ids, and the read joins `conversation: { userId }`. ' +
+      'The user id is the one whose session just closed, handed over by the ' +
+      'arrival that closed it; no caller asks to see anything. The words go to ' +
+      'the synopsis seat’s model, so the read must be narrower than who may SEE a ' +
+      'thread: the owner alone, and an ownerless or shared thread matching ' +
+      'nothing is the right answer.',
+  },
+  {
     path: 'lib/app/memory/delete-exchange.ts',
     disposition: 'by-design',
     reason:

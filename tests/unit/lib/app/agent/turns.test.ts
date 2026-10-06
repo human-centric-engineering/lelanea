@@ -839,8 +839,20 @@ describe('the session a turn falls in (f-recap t-141)', () => {
 
     expect(modelCalls).toBe(0);
     expect(arriveSessionQuietly).toHaveBeenCalledTimes(1);
-    expect(arriveSessionQuietly).toHaveBeenCalledWith('user-1');
+    expect(arriveSessionQuietly).toHaveBeenCalledWith('user-1', undefined, {
+      keepAlive: expect.any(Function),
+    });
     expect(await kept[0]).toMatchObject({ session: { id: 'ses-user-1' } });
+    // Work the arrival starts (a closed session's synopsis draft, f-journey-record
+    // t-146) goes to the same host.
+    const [, , options] = arriveSessionQuietly.mock.calls[0] as unknown as [
+      string,
+      undefined,
+      { keepAlive: (work: Promise<unknown>) => void },
+    ];
+    const draft = Promise.resolve('drafted');
+    options.keepAlive(draft);
+    expect(kept).toContain(draft);
   });
 
   it('still takes the turn, unstamped, when the session could not be written', async () => {

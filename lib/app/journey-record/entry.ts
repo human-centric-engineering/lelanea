@@ -41,6 +41,21 @@ export type JourneyOutcome = z.infer<typeof journeyOutcomeSchema>;
 /** What `app_journey_entry.outcomes` holds. */
 export const journeyOutcomesSchema = z.array(journeyOutcomeSchema).max(JOURNEY_OUTCOMES_MAX);
 
+/**
+ * A note a synopsis lists beside it: the slot, and the version its session
+ * wrote. A reference, never a reading, so removing the note takes its words
+ * and nothing here keeps a copy. Keeping the synopsis confirms the ones still
+ * ticked (owner ruling 2, t-147).
+ */
+export const journeyNoteRefSchema = z.object({
+  slotSlug: z.string().min(1),
+  version: z.number().int().positive(),
+});
+export type JourneyNoteRef = z.infer<typeof journeyNoteRefSchema>;
+
+/** What `app_journey_entry.notes` holds. */
+export const journeyNoteRefsSchema = z.array(journeyNoteRefSchema);
+
 /** The session a synopsis is about, with its window. */
 export interface JourneyEntrySession {
   id: string;
@@ -59,6 +74,8 @@ export interface JourneyEntry {
   body: string;
   outcomes: JourneyOutcome[];
   modules: string[];
+  /** The visible notes its session wrote, for keeping to confirm. Empty on an own entry. */
+  notes: JourneyNoteRef[];
   /** "Keep this from her": no agent reads this entry. Own entries only. */
   withheldFromAgent: boolean;
   /** Where it sits in time: a synopsis at its session's start, an own entry when written. */

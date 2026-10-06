@@ -785,6 +785,12 @@ model AppJourneyEntry {
   /// The slugs of the modules a session touched. Empty when it touched none,
   /// which in release 1, before modules have interiors, is the usual case.
   modules           String[]             @default([])
+  /// The visible notes a session's turns wrote, each `{ slotSlug, version }`
+  /// (`journeyNoteRefsSchema` in `lib/app/journey-record/entry.ts`), listed so
+  /// keeping the synopsis can confirm them (owner ruling 2). References only,
+  /// never a reading: the words stay in the note, where removing it takes them.
+  /// Hidden and special-category notes are never listed. Empty on an own entry.
+  notes             Json                 @default("[]")
   /// "Keep this from her": the person has asked that no agent read this entry
   /// (owner ruling 4, at planning). Drafts are never read whatever this says.
   withheldFromAgent Boolean              @default(false)
