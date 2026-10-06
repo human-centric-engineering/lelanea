@@ -28,8 +28,9 @@
  *
  * ## What rides on the turn
  *
- * - **Every cost row the turn causes** carries `{ turnId, seat }`, through the
- *   platform's `costLogMetadata` pass-through. Not every row: the embedding of
+ * - **Every cost row the turn causes** carries `{ turnId, seat, attempt }`,
+ *   through the platform's `costLogMetadata` pass-through. The meter depends on
+ *   `attempt` to tell this attempt's reply from a retried one's (t-139). Not every row: the embedding of
  *   the reply is written by a path that takes no metadata — see
  *   `.context/app/agent.md`, "What a turn records".
  * - **The person's message** carries `{ turnId, seat, fingerprintVersion }` under
@@ -561,7 +562,9 @@ async function runGeneratedTurn(
           recorded(
             claim.turn,
             run({
-              costLogMetadata: { turnId, seat: turn.role },
+              // `attempt` lets the meter tell this attempt's reply from a
+              // retried one's, however late either's cost row lands (t-139).
+              costLogMetadata: { turnId, seat: turn.role, attempt: claim.turn.attempts },
               messageMetadata: { turnId, seat: turn.role, fingerprintVersion },
               signal,
             }),
