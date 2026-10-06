@@ -912,6 +912,30 @@ describe('the AI speaks first, once (t-122)', () => {
       expect(openingRequests).toHaveLength(1);
     });
 
+    it('replaces what the read showed of a recap still running with the whole of it', async () => {
+      transcriptEntries = [
+        lastTime,
+        { ...lastTime, id: 'r-part', text: 'Last time…', turnId: RECAP },
+      ];
+      openingOwed = true;
+      openingTurnId = RECAP;
+      const { result } = renderHook(() => useConversation({ fetchImpl }));
+
+      await waitFor(() => expect(openingRequests).toHaveLength(1));
+      await act(async () => {
+        latest().push('start', { conversationId: 'c1' });
+        latest().push('content', { delta: 'Last time, the lighthouse. What has shifted?' });
+        latest().push('done', {});
+        latest().close();
+      });
+
+      await waitFor(() => expect(result.current.phase).toBe('idle'));
+      const recaps = result.current.entries.filter((entry) => entry.turnId === RECAP);
+      expect(recaps).toHaveLength(1);
+      expect(recaps[0]).toMatchObject({ text: 'Last time, the lighthouse. What has shifted?' });
+      expect(result.current.entries[0]).toMatchObject({ id: 'a0' });
+    });
+
     it('never runs the welcome on a conversation under way, whatever the read says', async () => {
       transcriptEntries = [lastTime];
       openingOwed = true;

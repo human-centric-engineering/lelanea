@@ -429,7 +429,13 @@ export function useConversation(options: Options = {}): ConversationState {
       // end when its request is aborted.
       const finish = (outcome: ConversationEntry[]) => {
         if (controller.signal.aborted) return;
-        setEntries((previous) => [...previous, ...outcome]);
+        // An opening replaces what the transcript showed of it: a recap still
+        // running when the pane was read has its rows so far in the read, and
+        // the replay it is answered with is the whole of it (t-142).
+        setEntries((previous) => [
+          ...(message === null ? previous.filter((entry) => entry.turnId !== turnId) : previous),
+          ...outcome,
+        ]);
         setLive(null);
         setPhase('idle');
         busy.current = false;

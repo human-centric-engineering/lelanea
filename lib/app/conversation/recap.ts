@@ -82,7 +82,10 @@ import {
   resolveFacilitationSurface,
   type FacilitationSurface,
 } from '@/lib/framework/facilitation/agents/surface';
-import { runFacilitationTurn } from '@/lib/framework/facilitation/agents/turn-hook';
+import {
+  runFacilitationTurn,
+  type FacilitationTurnExtras,
+} from '@/lib/framework/facilitation/agents/turn-hook';
 import { getRegisteredModule } from '@/lib/framework/modules/registry';
 import { JOURNEY_EVENT_TYPE } from '@/lib/framework/facilitation/journey/vocabulary';
 import { readJourneyNodeStates } from '@/lib/app/onboarding/first-run-store';
@@ -97,6 +100,7 @@ import {
   type OpeningRequest,
 } from '@/lib/app/conversation/opening';
 import { arriveSession, SESSION_EVENT_TYPE, type Session } from '@/lib/app/sessions/store';
+import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
 import { getNotes } from '@/lib/app/slots/notes';
 import { fallbackModuleName } from '@/lib/app/modules/definitions';
 
@@ -138,10 +142,18 @@ export interface PriorSession {
   startedAt: Date;
 }
 
-/** Why a recap is owed now, and under which id. */
+/** The recap's ledger row for this session, as far as deciding needs it. */
+interface RecapTurnRow {
+  status: 'running' | 'completed' | 'failed';
+  attempts: number;
+  errorCode: string | null;
+}
+
+/** Why a recap is owed now, under which id, and its ledger row if it has one. */
 export interface RecapPlan {
   turnId: string;
   prior: PriorSession;
+  recap: RecapTurnRow | null;
 }
 
 /** What the recap carries, and what its account will say it drew on. */
@@ -151,12 +163,15 @@ export interface RecapMaterial {
   account: RecapAccount;
 }
 
-/** The recap may run now, on this surface, under this id, with this material. */
+/**
+ * The recap may run now, on this surface, under this id, looking back to this
+ * session. The material is read only once the turn is claimed (`runRecap`).
+ */
 export interface RecapReady {
   ready: true;
   surface: FacilitationSurface;
   turnId: string;
-  material: RecapMaterial;
+  prior: PriorSession;
 }
 
 /** Why the recap is not run: not owed, or no facilitator agent to speak. */
@@ -220,10 +235,10 @@ async function readPriorSession(userId: string, session: Session): Promise<Prior
 }
 
 /** The recap's ledger row for this session, if it has one. */
-function readRecapTurn(userId: string, turnId: string) {
+function readRecapTurn(userId: string, turnId: string): Promise<RecapTurnRow | null> {
   return prisma.appTurn.findUnique({
     where: { userId_turnId: { userId, turnId } },
-    select: { status: true, attempts: true },
+    select: { status: true, attempts: true, errorCode: true },
   });
 }
 
@@ -245,23 +260,35 @@ export async function planRecap(user: GateSubject, session: Session): Promise<Re
   if (!passed || !handedOffFrom(journey) || prior === null) return null;
   // Given up on, as the opening is: each attempt is a model call.
   if (recap?.status === 'failed' && recap.attempts >= MAX_OPENING_ATTEMPTS) return null;
-  return { turnId, prior };
+  return { turnId, prior, recap };
+}
+
+/**
+ * Whether the recap's reply is already in the transcript: it completed, or it
+ * answered and only the link failed (`reply_not_linked`), which the transcript
+ * shows. Either way the pane is not told to start it, or a reload would show
+ * the person a second recap below the first. A running one IS offered: the
+ * pane asks, is refused as in flight, and adopts the replay in place of what
+ * it showed of it so far.
+ */
+function alreadyAnswered(recap: RecapTurnRow | null): boolean {
+  return (
+    recap?.status === 'completed' ||
+    (recap?.status === 'failed' && recap.errorCode === REPLY_NOT_LINKED)
+  );
 }
 
 /**
  * The recap's turn id when the pane should start it now, or null: owed, someone
- * to speak it, and not already completed. Never throws; a failed read is "no",
- * because a recap that does not happen costs nothing.
+ * to speak it, and its reply not already in the transcript. Never throws; a
+ * failed read is "no", because a recap that does not happen costs nothing.
  */
 export async function recapDue(user: GateSubject, session: Session): Promise<string | null> {
   try {
     const plan = await planRecap(user, session);
-    if (plan === null) return null;
-    const [surface, recap] = await Promise.all([
-      resolveFacilitationSurface(user.id, CONVERSATION_SEAT),
-      readRecapTurn(user.id, plan.turnId),
-    ]);
-    return surface !== null && recap?.status !== 'completed' ? plan.turnId : null;
+    if (plan === null || alreadyAnswered(plan.recap)) return null;
+    const surface = await resolveFacilitationSurface(user.id, CONVERSATION_SEAT);
+    return surface !== null ? plan.turnId : null;
   } catch (error) {
     logger.warn('Recap eligibility could not be read', {
       userId: user.id,
@@ -351,7 +378,9 @@ async function readNotes(userId: string, prior: PriorSession): Promise<NoteLine[
     .slice(-MAX_RECAP_NOTES)
     .map((note) => ({
       heading: note.slotSlug.replace(/_/g, ' '),
-      value: cut(unfenced(note.value).trim(), MAX_RECAP_NOTE_CHARS),
+      // One line, so a reading with line breaks cannot start a `> ` line of
+      // its own: those are the only lines the recap may quote as theirs.
+      value: cut(unfenced(note.value).replace(/\s+/g, ' ').trim(), MAX_RECAP_NOTE_CHARS),
     }));
 }
 
@@ -361,16 +390,18 @@ function moduleName(slug: string): string {
 }
 
 /**
- * The journey's steps since the session began, oldest first, as sentences.
- * Every event on the stream but the session rows themselves. "Moved on from"
- * rather than "completed": sessions close, modules do not (§6.12).
+ * The journey's steps since the session began, oldest first, as sentences:
+ * entering a module and moving on from one. "Moved on from" rather than
+ * "completed": sessions close, modules do not (§6.12).
  */
 async function readJourneySteps(userId: string, prior: PriorSession): Promise<string[]> {
   const events = await prisma.journeyEvent.findMany({
     where: {
       userId,
       occurredAt: { gte: prior.startedAt },
-      type: { notIn: [SESSION_EVENT_TYPE.started, SESSION_EVENT_TYPE.closed] },
+      // Only the steps it has words for, so the ones it would drop cannot use
+      // up the budget first. Never the session rows themselves.
+      type: { in: [JOURNEY_EVENT_TYPE.nodeEntered, JOURNEY_EVENT_TYPE.nodeCompleted] },
     },
     orderBy: { occurredAt: 'desc' },
     take: MAX_RECAP_JOURNEY_STEPS,
@@ -380,9 +411,9 @@ async function readJourneySteps(userId: string, prior: PriorSession): Promise<st
     const slug = event.moduleSlug ?? event.nodeKey;
     if (!slug) return [];
     const name = moduleName(slug);
-    if (event.type === JOURNEY_EVENT_TYPE.nodeEntered) return [`began ${name}`];
-    if (event.type === JOURNEY_EVENT_TYPE.nodeCompleted) return [`moved on from ${name}`];
-    return [];
+    return [
+      event.type === JOURNEY_EVENT_TYPE.nodeEntered ? `began ${name}` : `moved on from ${name}`,
+    ];
   });
 }
 
@@ -431,83 +462,129 @@ export function recapContent(material: RecapMaterial): string {
 }
 
 /**
- * Whether the recap may run for this person now, on which surface, and with
- * what. Arrives first — idempotent inside a sitting — so the session it is
- * keyed on is the one the turn will be stamped with. Split from
+ * Whether the recap may run for this person now, on which surface, and looking
+ * back to which session. Arrives first — idempotent inside a sitting — so the
+ * session it is keyed on is the one the turn will be stamped with. Split from
  * {@link runRecap} so the route can answer each refusal before any stream is
- * opened. A completed recap is ready too: the ledger answers it with its replay.
+ * opened. A completed recap is ready too: the ledger answers it with its
+ * replay. Never throws: a failed read is "not due", as the welcome's is.
  */
 export async function prepareRecap(user: GateSubject): Promise<RecapReady | RecapRefusal> {
-  let session: Session;
   try {
-    session = (await arriveSession(user.id)).session;
+    const { session } = await arriveSession(user.id);
+    const plan = await planRecap(user, session);
+    if (plan === null) return { ready: false, reason: OPENING_NOT_DUE };
+    const surface = await resolveFacilitationSurface(user.id, CONVERSATION_SEAT);
+    if (surface === null) return { ready: false, reason: 'no_surface' };
+    return { ready: true, surface, turnId: plan.turnId, prior: plan.prior };
   } catch (error) {
-    logger.warn('Recap could not find the session', {
+    logger.warn('Recap could not be prepared', {
       userId: user.id,
       error: error instanceof Error ? error.message : String(error),
     });
     return { ready: false, reason: OPENING_NOT_DUE };
   }
-  const plan = await planRecap(user, session);
-  if (plan === null) return { ready: false, reason: OPENING_NOT_DUE };
-  const surface = await resolveFacilitationSurface(user.id, CONVERSATION_SEAT);
-  if (surface === null) return { ready: false, reason: 'no_surface' };
-  const material = await readRecapMaterial(user.id, plan.prior);
-  return { ready: true, surface, turnId: plan.turnId, material };
 }
 
 /**
- * Keep what the recap drew on, on the row this request claimed, and say what
- * the row holds. "This request's claim" is the row started at or after
- * `claimedFrom`: a claim writes `startedAt` and a replay does not, so a replay
- * keeps the account of the attempt that answered — whatever the material says
- * now — and a claim records its own, whatever its status has reached by then.
- * Never throws: the reply is owed whether or not its account was kept.
+ * Keep what the recap drew on on its turn row. Called from inside the turn's
+ * run, which the hook calls only for the request that claimed it, so the row
+ * is this attempt's while it is still `running`. Never throws: the reply is
+ * owed whether or not its account was kept.
  */
 async function keepAccount(
   userId: string,
   turnId: string,
-  account: RecapAccount,
-  claimedFrom: Date
-): Promise<RecapAccount | null> {
+  account: RecapAccount
+): Promise<boolean> {
   try {
     const { count } = await prisma.appTurn.updateMany({
-      where: { userId, turnId, startedAt: { gte: claimedFrom } },
+      where: { userId, turnId, status: 'running' },
       data: { recap: account },
     });
-    if (count === 1) return account;
-    const row = await prisma.appTurn.findUnique({
-      where: { userId_turnId: { userId, turnId } },
-      select: { recap: true },
-    });
-    return parseRecapAccount(row?.recap);
+    return count === 1;
   } catch (error) {
     logger.error('Recap account could not be kept', {
       userId,
       turnId,
       error: error instanceof Error ? error.message : String(error),
     });
+    return false;
+  }
+}
+
+/** What a recap's row says it drew on: a replay's account. Null when it says nothing. */
+async function readKeptAccount(userId: string, turnId: string): Promise<RecapAccount | null> {
+  try {
+    const row = await prisma.appTurn.findUnique({
+      where: { userId_turnId: { userId, turnId } },
+      select: { recap: true },
+    });
+    return parseRecapAccount(row?.recap);
+  } catch {
     return null;
   }
 }
 
-/** The stream, with what the recap drew on on its `done` frame. */
-async function* withAccount(events: ChatStream, account: RecapAccount | null): ChatStream {
+/**
+ * The stream, with what the recap drew on on its `done` frame: what this
+ * request's run kept, or — for a replay, which runs nothing — what the row
+ * kept when the attempt that answered ran.
+ */
+async function* withAccount(
+  events: ChatStream,
+  kept: () => RecapAccount | null,
+  userId: string,
+  turnId: string
+): ChatStream {
   for await (const event of events) {
-    yield event.type === 'done' && account ? Object.assign({}, event, { recap: account }) : event;
+    if (event.type !== 'done') {
+      yield event;
+      continue;
+    }
+    const account = kept() ?? (await readKeptAccount(userId, turnId));
+    yield account ? Object.assign({}, event, { recap: account }) : event;
   }
 }
 
 /**
  * Run the recap on what {@link prepareRecap} resolved. The turn goes through
  * the facilitation hook exactly as a member's would, under the session's
- * recap id and with {@link RECAP_MESSAGE}; the model is given that and the
- * material. The hook's own refusals (in flight) throw its `ConflictError`.
+ * recap id and with {@link RECAP_MESSAGE}. The material is read inside the
+ * run, which the hook calls only once it has claimed the turn: a replay, or a
+ * request refused as in flight, reads none of it. The hook's own refusals (in
+ * flight) throw its `ConflictError`.
  */
 export async function runRecap(ready: RecapReady, request: OpeningRequest): Promise<ChatStream> {
   const userId = request.user.id;
-  const { surface, turnId, material } = ready;
-  const claimedFrom = new Date();
+  const { surface, turnId, prior } = ready;
+  let kept: RecapAccount | null = null;
+
+  async function* claimed(extras: FacilitationTurnExtras): ChatStream {
+    const material = await readRecapMaterial(userId, prior);
+    if (await keepAccount(userId, turnId, material.account)) kept = material.account;
+    logger.info('Recap material read', {
+      userId,
+      turnId,
+      words: material.account.words,
+      notes: material.account.notes.length,
+      journey: material.account.journey,
+    });
+    yield* streamChat({
+      // The agent opens the turn: no `message`, so no row in the person's name.
+      openingTurn: { content: recapContent(material) },
+      agentSlug: surface.agentSlug,
+      userId,
+      conversationId: surface.conversationId,
+      contextType: FACILITATION_SURFACE_CONTEXT_TYPE,
+      contextId: CONVERSATION_SEAT,
+      requestId: request.requestId,
+      visitorId: request.visitorId,
+      signal: request.signal,
+      ...extras,
+    });
+  }
+
   const events = await runFacilitationTurn(
     {
       userId,
@@ -521,21 +598,7 @@ export async function runRecap(ready: RecapReady, request: OpeningRequest): Prom
       keepAlive: request.keepAlive,
       headers: request.headers,
     },
-    (extras) =>
-      streamChat({
-        // The agent opens the turn: no `message`, so no row in the person's name.
-        openingTurn: { content: recapContent(material) },
-        agentSlug: surface.agentSlug,
-        userId,
-        conversationId: surface.conversationId,
-        contextType: FACILITATION_SURFACE_CONTEXT_TYPE,
-        contextId: CONVERSATION_SEAT,
-        requestId: request.requestId,
-        visitorId: request.visitorId,
-        signal: request.signal,
-        ...extras,
-      })
+    claimed
   );
-  const account = await keepAccount(userId, turnId, material.account, claimedFrom);
-  return withAccount(events, account);
+  return withAccount(events, () => kept, userId, turnId);
 }

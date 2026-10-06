@@ -77,14 +77,7 @@ export const POST = withAuth(
       throw new ConflictError('There is no opening to give.', { reason: OPENING_NOT_DUE });
     }
 
-    log.info('Opening started', {
-      userId,
-      seat: CONVERSATION_SEAT,
-      kind: 'recap',
-      words: recap.material.account.words,
-      notes: recap.material.account.notes.length,
-      journey: recap.material.account.journey,
-    });
+    log.info('Opening started', { userId, seat: CONVERSATION_SEAT, kind: 'recap' });
     const events = await runRecap(recap, turnRequest);
     return sseResponse(events, { signal: request.signal });
   },

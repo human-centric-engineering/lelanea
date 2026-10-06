@@ -222,6 +222,16 @@ describe('the recap flag (f-recap t-142)', () => {
     expect(body.data).not.toHaveProperty('openingTurnId');
   });
 
+  it('is asked of an empty transcript when the welcome is not owed: a deleted conversation leaves its sessions', async () => {
+    recapDue.mockResolvedValue('app_recap_v1_ses-1');
+
+    const body = await (await GET(request())).json();
+
+    expect(openingDue).toHaveBeenCalled();
+    expect(body.data.opening).toBe(true);
+    expect(body.data.openingTurnId).toBe('app_recap_v1_ses-1');
+  });
+
   it('is not asked when the session could not be written: there is no sitting to key it on', async () => {
     underWay();
     arriveSessionQuietly.mockResolvedValueOnce(null);

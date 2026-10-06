@@ -142,8 +142,10 @@ most `MAX_OPENING_ATTEMPTS` times. The hook hashes and screens the fixed
 `RECAP_MESSAGE` alone, so a re-run whose material has moved on is still the
 same turn. New words need a new version in the id, as the welcome's do.
 
-**When it is owed** (`planRecap`; `recapDue` adds "someone to speak, and not
-completed"):
+**When it is owed** (`planRecap`; `recapDue` adds "someone to speak, and its
+reply not already in the transcript" — completed, or `reply_not_linked`, which
+the transcript shows; a running one is still offered, so the pane adopts its
+replay):
 
 - the facilitator seat, past the gate, handed off;
 - a session in which **nothing has been said yet** on the seat: no turn
@@ -157,20 +159,22 @@ completed"):
   over rather than recapped as empty.
 
 The first-ever arrival has no earlier exchange, so it keeps the welcome; the
-two never compete. The transcript read asks only of a conversation under way,
-and checks "said in this session" first, alone, because that one query answers
-most reads.
+two never compete. The transcript read asks the welcome first on an empty
+transcript and the recap otherwise — an empty one too, since a conversation the
+person deleted leaves their sessions behind it. The recap checks "said in this
+session" first, alone, because that one query answers most reads.
 
 **What it carries** travels with the turn as its system message, after
 `RECAP_MESSAGE`, because the context block is cached per person for a minute
-and never sees the turn. Read for this person only, fenced, and bounded
-(`MAX_RECAP_*`):
+and never sees the turn. It is read inside the turn's run, which the hook calls
+only for the request that claimed it, so a replay or an in-flight refusal reads
+none of it. Read for this person only, fenced, and bounded (`MAX_RECAP_*`):
 
-| Material                      | Read from                                                                                                                                          |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Their own words, oldest first | the user messages of their turns stamped with that session, joined under their own conversation; the latest few (`MAX_RECAP_MESSAGES`), each cut   |
-| Notes captured since          | `getNotes()`, so hidden slots and leanings are already gone; removed notes left out; the stored reading, so a special-category one is its sentinel |
-| The journey since             | `framework_journey_event` since that session began, not the session rows; "began" / "moved on from" a module, never "completed" (§6.12)            |
+| Material                      | Read from                                                                                                                                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Their own words, oldest first | the user messages of their turns stamped with that session, joined under their own conversation; the latest few (`MAX_RECAP_MESSAGES`), each cut                                              |
+| Notes captured since          | `getNotes()`, so hidden slots and leanings are already gone; removed notes left out; the stored reading on one line, so a special-category one is its sentinel and none can forge a `> ` line |
+| The journey since             | `node_entered` / `node_completed` in `framework_journey_event` since that session began; "began" / "moved on from" a module, never "completed" (§6.12)                                        |
 
 A deleted exchange's words are gone from the message table, so they never
 come back here. The material is reference, not instructions, and the ask says
@@ -200,7 +204,9 @@ assistant row before the person speaks again is an earlier attempt's fragment
 and is dropped.
 
 **The pane** takes the id from `openingTurnId` and runs it when idle, below
-what is there. A dropped connection reads the transcript again, as the
+what is there, replacing whatever the read showed of it — a recap still running
+when the pane was read has its rows so far in the read, and the replay it is
+answered with is the whole of it. A dropped connection reads the transcript again, as the
 welcome's does, adopting the recap if it landed, provided the pane still holds
 what it held when it asked.
 
@@ -211,6 +217,11 @@ what it held when it asked.
 - Deleting the last exchange of a session (t-127) deletes the recap after it
   too: an exchange's window runs to the person's next message, and the recap
   sits inside it.
+- A failed recap attempt's fragment, re-run, joins the reply above it when that
+  reply has no linked final row (`reply_not_linked`). Bounding it needs the
+  message clock compared with the settle clock, which `turn-record.ts` warns
+  can skew and drop a real reply; three rare conditions together did not earn
+  that risk (code review round 1).
 
 **Proved on a real database** by `npm run smoke:app-recap`: a first session
 with a real turn and a note, moved thirteen hours back; the next arrival opens

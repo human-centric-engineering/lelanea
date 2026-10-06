@@ -59,13 +59,18 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-/** The id of the opening the pane should ask for now, or null when none is owed. */
+/**
+ * The id of the opening the pane should ask for now, or null when none is owed.
+ * The welcome only ever on an empty transcript; otherwise the recap, which an
+ * empty one can be owed too — a conversation the person deleted leaves their
+ * sessions behind it.
+ */
 async function owedOpening(
   user: GateSubject,
   empty: boolean,
   arrival: Arrival | null
 ): Promise<string | null> {
-  if (empty) return (await openingDue(user)) ? OPENING_TURN_ID : null;
+  if (empty && (await openingDue(user))) return OPENING_TURN_ID;
   return arrival ? recapDue(user, arrival.session) : null;
 }
 
@@ -81,8 +86,7 @@ export const GET = withAuth(async (request, session) => {
     readTranscript(session, seat),
   ]);
   // The welcome is asked only of an empty transcript (t-122 review round 3);
-  // a conversation under way may be owed the recap instead, which answers a
-  // sitting already under way with one query (`recap.ts`).
+  // the recap answers a sitting already under way with one query (`recap.ts`).
   if (seat === CONVERSATION_SEAT) {
     const turnId = await owedOpening(session.user, transcript.entries.length === 0, arrival);
     transcript.opening = turnId !== null;

@@ -58,7 +58,7 @@ import { FACILITATION_CONTEXT_TYPE } from '@/lib/app/voice/context-contributor';
 import { readTranscript } from '@/lib/app/conversation/transcript';
 import { accountParts } from '@/lib/app/conversation/account';
 import { recapTurnId } from '@/lib/app/conversation/opening-id';
-import { prepareRecap, recapDue, runRecap } from '@/lib/app/conversation/recap';
+import { prepareRecap, readRecapMaterial, recapDue, runRecap } from '@/lib/app/conversation/recap';
 import { arriveSession } from '@/lib/app/sessions/store';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
 import { DEFAULT_USER_ROLE } from '@/lib/auth/roles';
@@ -264,8 +264,10 @@ async function main(): Promise<void> {
     const ready = await runAsOrg(INSTALL_ORG_ID, () => prepareRecap(subject));
     if (!ready.ready) throw new Error(`the recap was not ready: ${ready.reason}`);
     check(ready.turnId === turnId, 'it runs under the session’s recap id');
-    check(ready.material.text.includes(PHRASE_WORD), 'its material carries what they said');
-    check(ready.material.text.includes(NOTE_VALUE), 'and the note captured since, as it was kept');
+    // What the run will read once it has claimed the turn.
+    const material = await readRecapMaterial(user.id, ready.prior);
+    check(material.text.includes(PHRASE_WORD), 'its material carries what they said');
+    check(material.text.includes(NOTE_VALUE), 'and the note captured since, as it was kept');
     const recap = await runAsOrg(INSTALL_ORG_ID, async () =>
       drain(await runRecap(ready, { user: subject }))
     );
@@ -273,7 +275,7 @@ async function main(): Promise<void> {
     check(namesWhatTheySaid(recap.text), 'it quotes or names what they said');
     check(!asksForTheNote(recap.text), 'it does not ask for what the note already holds');
     check(
-      isDeepStrictEqual(recap.done.recap, ready.material.account),
+      isDeepStrictEqual(recap.done.recap, material.account),
       'its done frame says what it drew on'
     );
     const row = await prisma.appTurn.findUnique({
@@ -286,7 +288,7 @@ async function main(): Promise<void> {
     check(row?.sessionId === second.session.id, 'stamped with the new session');
     check(
       // Compared as values: `jsonb` stores keys in its own order.
-      isDeepStrictEqual(row?.recap, ready.material.account),
+      isDeepStrictEqual(row?.recap, material.account),
       'and keeps what it drew on'
     );
 

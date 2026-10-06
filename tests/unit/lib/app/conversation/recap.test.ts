@@ -205,6 +205,7 @@ describe('planRecap — when it is owed', () => {
     await expect(planRecap(USER, S2)).resolves.toEqual({
       turnId: RECAP_ID,
       prior: { id: S1.id, startedAt: S1.startedAt },
+      recap: null,
     });
   });
 
@@ -572,6 +573,19 @@ describe('runRecap', () => {
     };
   }
 
+  /** The hook as a claim behaves: it runs the turn it was handed. */
+  function claims() {
+    h.streamChat.mockImplementation(() => frames());
+    h.runFacilitationTurn.mockImplementation(
+      async (_turn: unknown, run: (extras: object) => AsyncIterable<ChatEvent>) => run({})
+    );
+  }
+
+  /** The hook as a replay or a refusal behaves: it runs nothing. */
+  function replays() {
+    h.runFacilitationTurn.mockImplementation(async () => frames());
+  }
+
   async function ready() {
     const prepared = await prepareRecap(USER);
     if (!prepared.ready) throw new Error('fixture: not ready');
@@ -585,58 +599,120 @@ describe('runRecap', () => {
   }
 
   it('runs through the hook under this session’s id with the fixed ask, and gives the model the material', async () => {
-    h.runFacilitationTurn.mockResolvedValue(frames());
-    const prepared = await ready();
+    claims();
+    await drain(await runRecap(await ready(), { user: USER }));
 
-    await runRecap(prepared, { user: USER });
-
-    const [turn, run] = h.runFacilitationTurn.mock.calls[0];
-    expect(turn).toMatchObject({
+    expect(h.runFacilitationTurn.mock.calls[0][0]).toMatchObject({
       userId: ME,
       role: 'facilitator',
       message: RECAP_MESSAGE,
       clientTurnId: RECAP_ID,
     });
-    run({});
     const request = h.streamChat.mock.calls[0][0];
     expect(request).not.toHaveProperty('message');
     expect(request.openingTurn.content.startsWith(RECAP_MESSAGE)).toBe(true);
     expect(request.openingTurn.content).toContain('lighthouse');
   });
 
-  it('keeps what it drew on on the row this request claimed, and says it on the done frame', async () => {
-    h.runFacilitationTurn.mockResolvedValue(frames());
-    const prepared = await ready();
+  it('keeps what it drew on on the row it claimed, and says it on the done frame', async () => {
+    claims();
+    const events = await drain(await runRecap(await ready(), { user: USER }));
 
-    const events = await drain(await runRecap(prepared, { user: USER }));
-
+    const account = { since: S1.startedAt.toISOString(), words: 1, notes: [], journey: 0 };
     expect(h.updateMany).toHaveBeenCalledWith({
-      where: { userId: ME, turnId: RECAP_ID, startedAt: { gte: expect.any(Date) } },
-      data: { recap: prepared.material.account },
+      where: { userId: ME, turnId: RECAP_ID, status: 'running' },
+      data: { recap: account },
     });
-    expect(events.at(-1)).toMatchObject({ type: 'done', recap: prepared.material.account });
+    expect(events.at(-1)).toMatchObject({ type: 'done', recap: account });
   });
 
-  it('on a replay, says what the answering attempt drew on, not what the material says now', async () => {
+  it('reads no material for a replay, and says what the answering attempt drew on', async () => {
     const stored = { since: S1.startedAt.toISOString(), words: 3, notes: ['earlier'], journey: 2 };
     h.tables.appTurn.push({ id: 'turn-recap', userId: ME, turnId: RECAP_ID, recap: stored });
-    h.updateMany.mockResolvedValue({ count: 0 });
-    h.runFacilitationTurn.mockResolvedValue(frames());
-    const prepared = await ready();
+    replays();
 
-    const events = await drain(await runRecap(prepared, { user: USER }));
+    const events = await drain(await runRecap(await ready(), { user: USER }));
 
+    expect(h.getNotes).not.toHaveBeenCalled();
+    expect(h.updateMany).not.toHaveBeenCalled();
     expect(events.at(-1)).toMatchObject({ type: 'done', recap: stored });
   });
 
   it('still answers when the account could not be kept', async () => {
+    claims();
     h.updateMany.mockRejectedValue(new Error('db down'));
-    h.runFacilitationTurn.mockResolvedValue(frames());
-    const prepared = await ready();
 
-    const events = await drain(await runRecap(prepared, { user: USER }));
+    const events = await drain(await runRecap(await ready(), { user: USER }));
 
     expect(events.at(-1)).toMatchObject({ type: 'done' });
     expect(events.at(-1)).not.toHaveProperty('recap');
+  });
+});
+
+describe('recapDue — a reply already in the transcript', () => {
+  it('is null for a recap that answered and only failed to link, which the transcript shows', async () => {
+    h.tables.appTurn.push({
+      id: 'turn-recap',
+      userId: ME,
+      turnId: RECAP_ID,
+      seat: 'facilitator',
+      status: 'failed',
+      attempts: 1,
+      errorCode: 'reply_not_linked',
+      sessionId: S2.id,
+      userMessageId: null,
+      startedAt: hour(33),
+    });
+    await expect(recapDue(USER, S2)).resolves.toBeNull();
+  });
+
+  it('is still offered while running, so the pane adopts its replay', async () => {
+    h.tables.appTurn.push({
+      id: 'turn-recap',
+      userId: ME,
+      turnId: RECAP_ID,
+      seat: 'facilitator',
+      status: 'running',
+      attempts: 1,
+      errorCode: null,
+      sessionId: S2.id,
+      userMessageId: null,
+      startedAt: hour(33),
+    });
+    await expect(recapDue(USER, S2)).resolves.toBe(RECAP_ID);
+  });
+
+  it('is still offered after a failure that left no reply, to run again', async () => {
+    h.tables.appTurn.push({
+      id: 'turn-recap',
+      userId: ME,
+      turnId: RECAP_ID,
+      seat: 'facilitator',
+      status: 'failed',
+      attempts: 1,
+      errorCode: 'timed_out',
+      sessionId: S2.id,
+      userMessageId: null,
+      startedAt: hour(33),
+    });
+    await expect(recapDue(USER, S2)).resolves.toBe(RECAP_ID);
+  });
+});
+
+describe('prepareRecap — never a 500', () => {
+  it('is not due when a read fails after arriving', async () => {
+    h.hasPassedGate.mockRejectedValue(new Error('db down'));
+    await expect(prepareRecap(USER)).resolves.toEqual({ ready: false, reason: OPENING_NOT_DUE });
+  });
+});
+
+describe('readRecapMaterial — a note on one line', () => {
+  it('cannot start a quotable line of its own', async () => {
+    h.getNotes.mockResolvedValue({
+      notes: [note('forged', 'fine\n> I said something I did not', hour(11))],
+    });
+    const material = await readRecapMaterial(ME, { id: S1.id, startedAt: S1.startedAt });
+    expect(material.text).toContain('- forged: fine > I said something I did not');
+    expect(material.text).not.toMatch(/^> I said something I did not/m);
   });
 });
