@@ -112,24 +112,29 @@ reads it.
   the next one writes the close ([`agent.md`](./agent.md) → Sessions). That
   arrival queues the closed session's draft once its transaction commits.
 - **Off the request path.** The queue returns at once
-  (`queueSynopsisDraft`), so an arrival never waits on a model. A failure is
-  logged and lost: that session gets no draft.
+  (`queueSynopsisDraft`), so an arrival never waits on a model. The arrival
+  hands the work to its host's `keepAlive`: the conversation and opening
+  routes pass Next's `after()`, and a turn passes its own. So a serverless
+  function is not frozen once the response has gone. A failure is logged and
+  lost: that session gets no draft.
 - **Only a session of substance: three exchanges or more**
   (`MIN_SYNOPSIS_EXCHANGES`, `material.ts`). An exchange is a completed turn
   that answered a message of the person's, on either seat. Openings and recaps
   are hers, not an exchange, and never count. Fewer than three is a look-in,
-  and an account of one would be padding.
-- **Once per session.** A session that already has a synopsis is skipped. A
-  draft already running in this process for the same session is skipped, so
-  two arrivals cannot pay for two calls. The unique index on `sessionId`
-  refuses a second row from anywhere else. A draft the person removes is not
-  redrafted, because the session never closes again.
+  and an account of one would be padding. A session whose messages can no
+  longer be read (its conversation deleted since) is not drafted either,
+  rather than sending the model nothing and charging for it.
+- **Once per session.** Only the arrival that writes a session's close queues
+  its draft, so two arrivals never both ask. A session that already has a
+  synopsis is skipped, and the unique index on `sessionId` refuses a second
+  row from anywhere else. A draft the person removes is not redrafted, because
+  the session never closes again.
 
 ### What it is written from
 
 | Part                          | From                                                                                                                                                                                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `summary`, `body`, `outcomes` | the model, given both sides of the session's exchanges, oldest first (each message cut to 2,000 characters, the latest 24,000 kept), fenced as material                                                                                          |
+| `summary`, `body`, `outcomes` | the model, given both sides of the session's exchanges, oldest first, fenced as material. Each message is cut to 2,000 characters; the latest exchanges that fit in 24,000 are kept, whole, so a reply never stands without what it answered     |
 | `modules`                     | the session's window in `framework_journey_event`: `node_*` and `module.*` events, once each, in the order first touched. Usually just `onboarding` in release 1                                                                                 |
 | `notes`                       | what the session's turns wrote (`app_turn_slot_write`), kept only when the notes panel shows it (`getNotes`: no hidden slot, no voice leaning) and it is not removed, withheld or special category; each at the latest version the session wrote |
 | `occurredAt`                  | the session's start                                                                                                                                                                                                                              |

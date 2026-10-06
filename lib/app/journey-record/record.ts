@@ -31,11 +31,11 @@
  */
 
 import type { AppJourneyEntry } from '@prisma/client';
+import { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
-import { isRecord } from '@/lib/utils';
 import { readSessionsById, type Session } from '@/lib/app/sessions/store';
 import {
   journeyNoteRefsSchema,
@@ -151,9 +151,36 @@ export interface SynopsisDraftWrite {
   notes: JourneyNoteRef[];
 }
 
-/** P2002: the session already has its synopsis. */
-function isUniqueViolation(err: unknown): boolean {
-  return isRecord(err) && err.code === 'P2002';
+/**
+ * A P2002, as either shape Prisma reports it in. On this stack (the driver
+ * adapter) it carries no `meta.target`: the index is under
+ * `driverAdapterError.cause.constraint.index`, as the dev database reports it,
+ * `app_journey_entry_sessionId_key`. Read by shape, because `lib/app/**` does
+ * not import Prisma's runtime.
+ */
+const uniqueViolationSchema = z.object({
+  code: z.literal('P2002'),
+  meta: z
+    .object({
+      target: z.union([z.string(), z.array(z.string())]).optional(),
+      driverAdapterError: z
+        .object({ cause: z.object({ constraint: z.object({ index: z.string() }) }) })
+        .optional(),
+    })
+    .optional(),
+});
+
+/**
+ * P2002 on the `sessionId` index: the session already has its synopsis. Any
+ * other unique violation is not that, and is thrown.
+ */
+function isSessionAlreadyDrafted(err: unknown): boolean {
+  const parsed = uniqueViolationSchema.safeParse(err);
+  if (!parsed.success) return false;
+  const meta = parsed.data.meta;
+  const index =
+    meta?.driverAdapterError?.cause.constraint.index ?? [meta?.target ?? []].flat().join(',');
+  return index.includes('sessionId');
 }
 
 /** Whether a session already has its synopsis, drafted or kept, or one being removed. */
@@ -193,7 +220,7 @@ export async function writeSynopsisDraft(
     });
     return true;
   } catch (err) {
-    if (isUniqueViolation(err)) return false;
+    if (isSessionAlreadyDrafted(err)) return false;
     throw err;
   }
 }

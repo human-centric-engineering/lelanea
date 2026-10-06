@@ -15,18 +15,22 @@
  * race; `sessions/store.ts`), so only it queues a draft.
  *
  * **Off the request path.** {@link queueSynopsisDraft} returns at once, so an
- * arrival never waits on a model. A failure is logged and lost: the session
- * gets no draft, which is what every session before this task has.
+ * arrival never waits on a model. It hands back the work, which the arrival
+ * gives to the host's `keepAlive` (Next's `after()`), so a serverless function
+ * is not frozen with the call half-run once the response has gone. A failure
+ * is logged and lost: the session gets no draft, which is what every session
+ * before this task has.
  *
  * **Only a session of substance**: {@link MIN_SYNOPSIS_EXCHANGES} exchanges or
- * more (`material.ts`). A look-in gets none.
+ * more (`material.ts`). A look-in gets none, and so does a session whose words
+ * can no longer be read (a conversation deleted since), rather than a model
+ * call with nothing to summarise.
  *
- * **Once.** Three things stand between a session and a second draft: a
- * session that already has a synopsis is skipped; a draft already running in
- * this process for it is skipped, so two arrivals cannot pay for two calls;
- * and the unique index on `sessionId` refuses a second row from anywhere else.
- * A draft the person removed is not redrafted, because the session never
- * closes again.
+ * **Once.** Only the arrival that writes a session's close queues its draft
+ * (`sessions/store.ts`), so two arrivals never both ask. A session that already
+ * has a synopsis is skipped, and the unique index on `sessionId` refuses a
+ * second row from anywhere else. A draft the person removed is not redrafted,
+ * because the session never closes again.
  *
  * ## Who writes it
  *
@@ -63,22 +67,19 @@ import { getProvider } from '@/lib/orchestration/llm/provider-manager';
 import { resolveAgentProviderAndModel } from '@/lib/orchestration/llm/agent-resolver';
 import { runStructuredCompletion } from '@/lib/orchestration/llm/structured-completion';
 import { ProviderError } from '@/lib/orchestration/llm/provider';
-import {
-  composeSystemPromptString,
-  resolveEffectivePrompt,
-  type FieldMode,
-} from '@/lib/orchestration/agents/resolve-effective-prompt';
 import { getFacilitationBindingByRole } from '@/lib/framework/facilitation/agents/binding-queries';
 import { CostOperation } from '@/types/orchestration';
 import { isGenerationPaused } from '@/lib/app/agent/availability';
 import { mayStartGeneratedTurn } from '@/lib/app/agent/ceiling';
 import { SYNOPSIS_SEAT } from '@/lib/app/agent/pins';
-import type { Session } from '@/lib/app/sessions/store';
+import { AGENT_SELECT, composeAgentPrompt } from '@/lib/app/voice/comparison';
 import { hasSynopsis, writeSynopsisDraft } from '@/lib/app/journey-record/record';
 import {
-  countExchanges,
+  exchangesOf,
   MIN_SYNOPSIS_EXCHANGES,
+  readSessionTurns,
   readSynopsisMaterial,
+  type ClosedSession,
 } from '@/lib/app/journey-record/synopsis/material';
 import {
   parseSynopsisReply,
@@ -106,17 +107,14 @@ export type SynopsisDraftOutcome =
   | 'not_substantial'
   /** The session already has a synopsis, or another writer stored one first. */
   | 'exists'
-  /** This process is already drafting it. */
-  | 'in_flight'
+  /** Its exchanges' messages can no longer be read: nothing to summarise. */
+  | 'nothing_to_read'
   | 'paused'
   | 'ceiling_reached'
   /** No active agent in the `synopsis` seat. */
   | 'no_agent'
   /** The model call failed or its reply was refused. Nothing stored. */
   | 'failed';
-
-/** Sessions this process is drafting now, so two arrivals cannot pay for two calls. */
-const inFlight = new Set<string>();
 
 interface SynopsisAgent {
   id: string;
@@ -132,51 +130,17 @@ async function readSeatAgent(): Promise<SynopsisAgent | null> {
   if (!binding?.agent || !binding.agent.isActive || binding.agent.deletedAt) return null;
   const agent = await prisma.aiAgent.findUnique({
     where: { id: binding.agent.id },
-    select: {
-      id: true,
-      provider: true,
-      model: true,
-      fallbackProviders: true,
-      systemInstructions: true,
-      persona: true,
-      brandVoiceInstructions: true,
-      guardrails: true,
-      personaMode: true,
-      voiceMode: true,
-      guardrailsMode: true,
-      profile: {
-        select: {
-          id: true,
-          name: true,
-          persona: true,
-          brandVoiceInstructions: true,
-          guardrails: true,
-        },
-      },
-    },
+    select: { ...AGENT_SELECT, fallbackProviders: true },
   });
   if (!agent) return null;
-  const mode = (value: string): FieldMode => (value === 'append' ? 'append' : 'override');
-  const systemPrompt = composeSystemPromptString(
-    resolveEffectivePrompt(
-      {
-        systemInstructions: agent.systemInstructions,
-        persona: agent.persona,
-        brandVoiceInstructions: agent.brandVoiceInstructions,
-        guardrails: agent.guardrails,
-        personaMode: mode(agent.personaMode),
-        voiceMode: mode(agent.voiceMode),
-        guardrailsMode: mode(agent.guardrailsMode),
-      },
-      agent.profile
-    )
-  );
   return {
     id: agent.id,
     provider: agent.provider,
     model: agent.model,
     fallbackProviders: agent.fallbackProviders,
-    systemPrompt,
+    // Composed exactly as the chat handler composes a turn's, by the one helper
+    // the voice comparison and the turn record already share.
+    systemPrompt: composeAgentPrompt(agent).systemPrompt,
   };
 }
 
@@ -243,72 +207,63 @@ async function askForDraft(
  * Draft the synopsis of a session that has just closed, and store it as a
  * draft. Every refusal is an outcome, not an error; only a failure the caller
  * did not cause (the database) throws.
- *
- * @param closedAt - when the session went quiet: the end of its window
  */
 export async function draftSynopsis(
   userId: string,
-  session: Session,
-  closedAt: Date,
+  session: ClosedSession,
   now: Date = new Date()
 ): Promise<SynopsisDraftOutcome> {
-  const key = `${userId}\u0000${session.id}`;
-  if (inFlight.has(key)) return 'in_flight';
-  inFlight.add(key);
+  const turns = await readSessionTurns(userId, session.id);
+  if (exchangesOf(turns).length < MIN_SYNOPSIS_EXCHANGES) return 'not_substantial';
+  if (await hasSynopsis(userId, session.id)) return 'exists';
+  if (await isGenerationPaused()) return 'paused';
+  const allowance = await mayStartGeneratedTurn(userId, now);
+  if (!allowance.allowed) return 'ceiling_reached';
+  const agent = await readSeatAgent();
+  if (!agent) return 'no_agent';
+
+  const material = await readSynopsisMaterial(userId, session, turns);
+  if (material.lines.length === 0) return 'nothing_to_read';
+  let reply: SynopsisReply;
   try {
-    if ((await countExchanges(userId, session.id)) < MIN_SYNOPSIS_EXCHANGES) {
-      return 'not_substantial';
-    }
-    if (await hasSynopsis(userId, session.id)) return 'exists';
-    if (await isGenerationPaused()) return 'paused';
-    const allowance = await mayStartGeneratedTurn(userId, now);
-    if (!allowance.allowed) return 'ceiling_reached';
-    const agent = await readSeatAgent();
-    if (!agent) return 'no_agent';
-
-    const material = await readSynopsisMaterial(userId, session, closedAt);
-    let reply: SynopsisReply;
-    try {
-      reply = await askForDraft(userId, agent, material.lines);
-    } catch (err) {
-      // Never the reply itself: it is an account of what the person said.
-      logger.warn('Synopsis draft failed; the session has none', {
-        userId,
-        sessionId: session.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return 'failed';
-    }
-
-    const stored = await writeSynopsisDraft(userId, {
+    reply = await askForDraft(userId, agent, material.lines);
+  } catch (err) {
+    // Never the reply itself: it is an account of what the person said.
+    logger.warn('Synopsis draft failed; the session has none', {
+      userId,
       sessionId: session.id,
-      occurredAt: session.startedAt,
-      summary: reply.summary,
-      body: reply.body,
-      outcomes: reply.outcomes,
-      modules: material.modules,
-      notes: material.notes,
+      error: err instanceof Error ? err.message : String(err),
     });
-    return stored ? 'drafted' : 'exists';
-  } finally {
-    inFlight.delete(key);
+    return 'failed';
   }
+
+  const stored = await writeSynopsisDraft(userId, {
+    sessionId: session.id,
+    occurredAt: session.startedAt,
+    summary: reply.summary,
+    body: reply.body,
+    outcomes: reply.outcomes,
+    modules: material.modules,
+    notes: material.notes,
+  });
+  return stored ? 'drafted' : 'exists';
 }
 
 /**
  * {@link draftSynopsis}, without anyone waiting: what an arrival calls when it
- * closes a session. Returns at once; the outcome is logged.
+ * closes a session. Returns the work, settled and never rejecting, for the
+ * host to keep alive; the outcome is logged.
  */
-export function queueSynopsisDraft(userId: string, session: Session, closedAt: Date): void {
-  void draftSynopsis(userId, session, closedAt)
+export function queueSynopsisDraft(userId: string, session: ClosedSession): Promise<void> {
+  return draftSynopsis(userId, session)
     .then((outcome) => {
       logger.info('Synopsis draft', { userId, sessionId: session.id, outcome });
     })
     .catch((err: unknown) => {
-      logger.error('Synopsis draft could not be written', {
-        userId,
-        sessionId: session.id,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      logger.error(
+        'Synopsis draft could not be written',
+        err instanceof Error ? err : new Error(String(err)),
+        { userId, sessionId: session.id }
+      );
     });
 }

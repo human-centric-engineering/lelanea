@@ -142,7 +142,9 @@ describe('POST /api/v1/app/conversation/opening', () => {
 
     expect(response.status).toBe(409);
     expect(body.error.details?.reason).toBe('opening_not_due');
-    expect(h.prepareRecap).toHaveBeenCalledWith(expect.objectContaining({ id: 'user_test' }));
+    expect(h.prepareRecap).toHaveBeenCalledWith(expect.objectContaining({ id: 'user_test' }), {
+      keepAlive: expect.any(Function),
+    });
     expect(h.runOpening).not.toHaveBeenCalled();
     expect(h.runRecap).not.toHaveBeenCalled();
   });

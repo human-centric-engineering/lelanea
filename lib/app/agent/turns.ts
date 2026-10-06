@@ -442,7 +442,11 @@ export async function runRecordedTurn(
   // resource, a pause, a refusal or the model. Started here and awaited only by
   // the claim, which stamps it; the host keeps it alive past any response that
   // does not wait for it. It never throws, so it never stands in the way.
-  const arrival = arriveSessionQuietly(turn.userId);
+  // A close it writes queues the session's synopsis, which the host keeps
+  // alive the same way (f-journey-record t-146).
+  const arrival = arriveSessionQuietly(turn.userId, undefined, {
+    keepAlive: (work) => keepAlive(turn, work),
+  });
   keepAlive(turn, arrival);
 
   const locale = preferredLanguageTag(turn.headers?.get('accept-language') ?? null);

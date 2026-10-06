@@ -46,6 +46,9 @@ const MODULE_EVENT_TYPES: readonly string[] = [
   ENGAGEMENT_EVENT_TYPE.moduleCompleted,
 ];
 
+/** A session that has closed: its window has an end. */
+export type ClosedSession = Session & { closedAt: Date };
+
 /** One message of the session, as the prompt quotes it. */
 export interface SessionLine {
   role: 'user' | 'assistant';
@@ -53,33 +56,40 @@ export interface SessionLine {
 }
 
 export interface SynopsisMaterial {
-  /** How many exchanges the session held: the threshold is read on this. */
-  exchanges: number;
-  /** The conversation, oldest first, within {@link MAX_SYNOPSIS_TRANSCRIPT_CHARS}. */
+  /** The conversation, oldest first, whole exchanges within {@link MAX_SYNOPSIS_TRANSCRIPT_CHARS}. */
   lines: SessionLine[];
   /** Module slugs touched in the window, in the order first touched. */
   modules: string[];
-  /** The visible notes the session's turns wrote. */
+  /** The visible notes the session wrote. */
   notes: JourneyNoteRef[];
 }
 
-interface ExchangeTurn {
+/** A turn of the session's, as far as drafting needs it. */
+export interface SessionTurn {
   id: string;
+  status: string;
   userMessageId: string | null;
   assistantMessageId: string | null;
 }
 
 /**
- * The session's exchanges: completed turns of the person's, stamped with it,
- * that answered a message of theirs. A retried turn is one row, so each thing
- * they said is counted once.
+ * Every turn of the person's stamped with the session, oldest first: one read
+ * that answers the threshold, the exchanges and the notes' turns.
  */
-function readExchangeTurns(userId: string, sessionId: string): Promise<ExchangeTurn[]> {
+export function readSessionTurns(userId: string, sessionId: string): Promise<SessionTurn[]> {
   return prisma.appTurn.findMany({
-    where: { userId, sessionId, status: 'completed', userMessageId: { not: null } },
+    where: { userId, sessionId },
     orderBy: { startedAt: 'asc' },
-    select: { id: true, userMessageId: true, assistantMessageId: true },
+    select: { id: true, status: true, userMessageId: true, assistantMessageId: true },
   });
+}
+
+/**
+ * The session's exchanges: completed turns that answered a message of theirs.
+ * A retried turn is one row, so each thing they said is counted once.
+ */
+export function exchangesOf(turns: readonly SessionTurn[]): SessionTurn[] {
+  return turns.filter((turn) => turn.status === 'completed' && turn.userMessageId !== null);
 }
 
 /** At most `max` characters, said to be cut where it was. */
@@ -89,38 +99,55 @@ function cut(text: string, max: number): string {
 
 /**
  * Both sides of each exchange, oldest first, read only through a conversation
- * of the person's. When the whole will not fit, the latest that fit are kept:
- * where a session ended up is what its account most needs.
+ * of the person's. Kept or dropped a whole exchange at a time, so a reply never
+ * stands without what it answered; when the session will not fit, the latest
+ * exchanges that fit are kept, since where a session ended up is what its
+ * account most needs. Ordered by the turns, not by the messages' timestamps,
+ * which a message and its reply can share.
  */
-async function readLines(userId: string, turns: ExchangeTurn[]): Promise<SessionLine[]> {
-  const ids = turns.flatMap((turn) =>
+async function readLines(
+  userId: string,
+  exchanges: readonly SessionTurn[]
+): Promise<SessionLine[]> {
+  const ids = exchanges.flatMap((turn) =>
     [turn.userMessageId, turn.assistantMessageId].filter((id): id is string => id !== null)
   );
   if (ids.length === 0) return [];
   const rows = await prisma.aiMessage.findMany({
     where: { id: { in: ids }, role: { in: ['user', 'assistant'] }, conversation: { userId } },
-    orderBy: { createdAt: 'desc' },
-    select: { role: true, content: true },
+    select: { id: true, role: true, content: true },
   });
-  const lines: SessionLine[] = [];
-  let total = 0;
-  for (const row of rows) {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const line = (id: string | null, role: SessionLine['role']): SessionLine[] => {
+    const row = id ? byId.get(id) : undefined;
+    if (!row || row.role !== role) return [];
     const content = cut(row.content.trim(), MAX_SYNOPSIS_MESSAGE_CHARS);
-    if (content === '') continue;
-    if (total + content.length > MAX_SYNOPSIS_TRANSCRIPT_CHARS) break;
-    total += content.length;
-    lines.push({ role: row.role === 'user' ? 'user' : 'assistant', content });
+    return content === '' ? [] : [{ role, content }];
+  };
+
+  const kept: SessionLine[][] = [];
+  let total = 0;
+  for (const turn of [...exchanges].reverse()) {
+    const said = line(turn.userMessageId, 'user');
+    // A message of theirs that is gone or empty leaves its reply answering
+    // nothing the model can see, so the exchange goes whole.
+    if (said.length === 0) continue;
+    const pair = [...said, ...line(turn.assistantMessageId, 'assistant')];
+    const size = pair.reduce((sum, entry) => sum + entry.content.length, 0);
+    if (total + size > MAX_SYNOPSIS_TRANSCRIPT_CHARS) break;
+    total += size;
+    kept.push(pair);
   }
-  return lines.reverse();
+  return kept.reverse().flat();
 }
 
 /** The modules the session's window touched, from the event stream. */
-async function readModules(userId: string, session: Session, closedAt: Date): Promise<string[]> {
+async function readModules(userId: string, session: ClosedSession): Promise<string[]> {
   const events = await prisma.journeyEvent.findMany({
     where: {
       userId,
       type: { in: [...MODULE_EVENT_TYPES] },
-      occurredAt: { gte: session.startedAt, lte: closedAt },
+      occurredAt: { gte: session.startedAt, lte: session.closedAt },
     },
     orderBy: { occurredAt: 'asc' },
     select: { moduleSlug: true },
@@ -137,7 +164,8 @@ async function readModules(userId: string, session: Session, closedAt: Date): Pr
  * slug the notes panel shows (`getNotes` has already withheld hidden slots and
  * voice leanings) that is neither removed, nor withheld as special category,
  * nor in a special-category slot today. Each is listed at the latest version
- * the session wrote.
+ * the session wrote. `getNotes` reads all of the person's notes to decide
+ * visibility the one way the panel does, rather than a second copy of its rule.
  */
 async function readNoteRefs(userId: string, turnIds: string[]): Promise<JourneyNoteRef[]> {
   if (turnIds.length === 0) return [];
@@ -166,32 +194,20 @@ async function readNoteRefs(userId: string, turnIds: string[]): Promise<JourneyN
   return [...latest].map(([slotSlug, version]) => ({ slotSlug, version }));
 }
 
-/** How many exchanges a session held. Asked first, alone: most short sessions stop here. */
-export async function countExchanges(userId: string, sessionId: string): Promise<number> {
-  return prisma.appTurn.count({
-    where: { userId, sessionId, status: 'completed', userMessageId: { not: null } },
-  });
-}
-
-/** Everything a closed session gives its synopsis. */
+/** Everything a closed session gives its synopsis, from the turns already read. */
 export async function readSynopsisMaterial(
   userId: string,
-  session: Session,
-  closedAt: Date
+  session: ClosedSession,
+  turns: readonly SessionTurn[]
 ): Promise<SynopsisMaterial> {
-  const turns = await readExchangeTurns(userId, session.id);
   const [lines, modules, notes] = await Promise.all([
-    readLines(userId, turns),
-    readModules(userId, session, closedAt),
+    readLines(userId, exchangesOf(turns)),
+    readModules(userId, session),
     // Every turn of the session, not only its exchanges: a note can be written on any.
-    prisma.appTurn
-      .findMany({ where: { userId, sessionId: session.id }, select: { id: true } })
-      .then((rows) =>
-        readNoteRefs(
-          userId,
-          rows.map((row) => row.id)
-        )
-      ),
+    readNoteRefs(
+      userId,
+      turns.map((turn) => turn.id)
+    ),
   ]);
-  return { exchanges: turns.length, lines, modules, notes };
+  return { lines, modules, notes };
 }

@@ -194,7 +194,9 @@ describe('runRecordedTurn — someone in danger', () => {
       const out = await frames(await runRecordedTurn(turn('I want to kill myself'), vi.fn()));
 
       expect(out[0]).toMatchObject({ type: 'error', code: 'crisis' });
-      expect(mocks.arriveSessionQuietly).toHaveBeenCalledWith(turn('x').userId);
+      expect(mocks.arriveSessionQuietly).toHaveBeenCalledWith(turn('x').userId, undefined, {
+        keepAlive: expect.any(Function),
+      });
     });
 
     it('answers with the resource while generation is paused', async () => {
