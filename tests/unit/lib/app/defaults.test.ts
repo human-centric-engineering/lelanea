@@ -101,6 +101,7 @@ vi.mock('@/lib/db/client', () => ({
     appTurn: { findMany: vi.fn(async () => []) },
     appSafetyEvent: { findMany: vi.fn(async () => []), create: vi.fn(async () => ({})) },
     appMemoryEmbedding: { findMany: vi.fn(async () => []) },
+    appJourneyEntry: { findMany: vi.fn(async () => []) },
     // f-slots t-70 — the taxonomy the global slot provider reads. Empty is the
     // useful return here: the framework's global pass treats "provider supplied
     // nothing" as a fluke and returns before it opens a transaction, so the
@@ -602,6 +603,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'AppFoundationalDocument',
         'AppFoundationalDocumentRevision',
         'AppJourney',
+        'AppJourneyEntry',
         'AppJourneyModule',
         'AppJourneyModuleRevision',
         'AppJourneyTier',
@@ -681,6 +683,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // is about them, so it is exported to them (never the vectors).
       const memory = sources.find((entry) => entry.model === 'AppMemoryEmbedding');
       expect(memory).toMatchObject({ section: 'memory', disposition: 'export' });
+      // f-journey-record t-145 — the journey record is the person's, drafts
+      // included, so it is exported to them.
+      const journeyRecord = sources.find((entry) => entry.model === 'AppJourneyEntry');
+      expect(journeyRecord).toMatchObject({ section: 'journeyRecord', disposition: 'export' });
       // Eight of ours are excluded, and only those eight. `AppKnowledgeDesignation`
       // holds a note about a FILE she uploaded — what it is for, and on what terms
       // we may use it; the two `AppVoiceComparison*` tables hold which version of
