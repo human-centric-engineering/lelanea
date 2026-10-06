@@ -61,6 +61,31 @@ describe('ceilingEnding', () => {
     );
   });
 
+  it('states no amounts for a limit under half a cent — both would print as $0.00 (t-140)', () => {
+    expect(ceilingEnding({ spentUsd: 0.004, ceilingUsd: 0.004, resetsAt: RESET })).toBe(
+      "That's this month's conversations used up.\n" +
+        'I can reply again from 1 October.\n' +
+        STILL_WORKS
+    );
+    // Half a cent prints as a cent, so from there the amounts say something true.
+    expect(ceilingEnding({ spentUsd: 0.005, ceilingUsd: 0.005, resetsAt: RESET })).toContain(
+      '$0.01 of your $0.01 limit'
+    );
+  });
+
+  it('says the spend is at least the figure when some replies had no price (t-140)', () => {
+    expect(
+      ceilingEnding({ spentUsd: 4.07, unpricedRows: 2, ceilingUsd: 4, resetsAt: RESET })
+    ).toContain('— at least $4.07 of your $4.00 limit.');
+    // None unpriced, or a count that did not parse, is said as before.
+    expect(
+      ceilingEnding({ spentUsd: 4.07, unpricedRows: 0, ceilingUsd: 4, resetsAt: RESET })
+    ).toContain('— $4.07 of your $4.00 limit.');
+    expect(ceilingEnding({ spentUsd: 4.07, ceilingUsd: 4, resetsAt: RESET })).toContain(
+      '— $4.07 of your $4.00 limit.'
+    );
+  });
+
   it('has no words without the limit, so the frame\u2019s true ones are shown', () => {
     expect(ceilingEnding({ spentUsd: 4, resetsAt: RESET })).toBeNull();
     expect(ceilingEnding({})).toBeNull();

@@ -38,6 +38,11 @@ export type TurnAllowance =
       reason: 'ceiling_reached';
       /** Spent this UTC month — may exceed the ceiling by the turn that crossed it. */
       spentUsd: number;
+      /**
+       * Rows in that spend with no price on file. Above zero, `spentUsd` is a
+       * floor and the real spend is higher (budget.md, ruling 4).
+       */
+      unpricedRows: number;
       ceilingUsd: number;
       /** When the month resets: the first instant of the next UTC month. */
       resetsAt: Date;
@@ -64,6 +69,7 @@ export async function mayStartGeneratedTurn(
       allowed: false,
       reason: 'ceiling_reached',
       spentUsd: usage.costUsd,
+      unpricedRows: usage.unpricedRows,
       ceilingUsd: usage.ceiling.ceilingUsd,
       resetsAt: nextMonthlyReset(now),
     };

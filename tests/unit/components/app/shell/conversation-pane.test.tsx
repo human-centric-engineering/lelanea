@@ -348,6 +348,7 @@ describe('when the agent can\u2019t answer (t-65)', () => {
   describe('the monthly limit', () => {
     const frame = ceilingReachedFrame({
       spentUsd: 4.07,
+      unpricedRows: 0,
       ceilingUsd: 4,
       resetsAt: new Date('2026-10-01T00:00:00.000Z'),
     });
@@ -378,6 +379,18 @@ describe('when the agent can\u2019t answer (t-65)', () => {
       expect(words).toContain("That's this month's conversations used up.");
       expect(words).toContain('I can reply again from 1 October.');
       expect(words).not.toMatch(/undefined|NaN|Invalid Date|\$/);
+    });
+
+    it('says the spend is at least the figure when some replies had no price (t-140)', async () => {
+      const floor = ceilingReachedFrame({
+        spentUsd: 4.07,
+        unpricedRows: 2,
+        ceilingUsd: 4,
+        resetsAt: new Date('2026-10-01T00:00:00.000Z'),
+      });
+      await endOn(floor.code, floor.message, { ceiling: floor.ceiling });
+
+      expect(endingRow().textContent).toContain('at least $4.07 of your $4.00 limit');
     });
 
     it('shows the frame\u2019s own true words when the limit did not parse', async () => {

@@ -50,6 +50,7 @@
  * @see .context/app/agent.md — "When the agent can't answer"
  */
 
+import { floorLabel, money, spendFloor } from '@/lib/app/usage/usage-view';
 import type { ChatEvent } from '@/types/orchestration';
 
 /** The four ways a turn ends without the agent's answer. */
@@ -130,6 +131,8 @@ export function endingFrame(ending: TurnEnding): Extract<ChatEvent, { type: 'err
 /** The figures a `ceiling_reached` frame carries. `resetsAt` is an ISO instant, UTC. */
 export interface CeilingReached {
   spentUsd: number;
+  /** Rows in `spentUsd` with no price on file; above zero, the spend is a floor. */
+  unpricedRows: number;
   ceilingUsd: number;
   resetsAt: string;
 }
@@ -139,7 +142,6 @@ export type CeilingReachedFrame = Extract<ChatEvent, { type: 'error' }> & {
   ceiling: CeilingReached;
 };
 
-const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const resetDay = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'long',
@@ -176,30 +178,54 @@ export function isNothingLimit(ceilingUsd: number): boolean {
 }
 
 /**
+ * A limit too small to state in cents: above nothing, below half a cent.
+ *
+ * The gate lets a turn through under one, so it is not {@link isNothingLimit},
+ * and the reset date stands. But both it and the spend that reached it print
+ * as `$0.00`, and "$0.00 of $0.00" says something false twice. The words leave
+ * the amounts out instead (t-140). Asked by the frame's neutral words and the
+ * copy in Lelañea Fulton's register alike.
+ */
+export function isSubCentLimit(ceilingUsd: number): boolean {
+  return ceilingUsd > 0 && ceilingUsd < 0.005;
+}
+
+/**
  * The frame a turn ends on when the person has used their month's budget.
  *
  * The default copy says why, and what they can do that exists: keep reading
  * and writing, or wait for the reset (`HB10`). It offers no "ask for more" —
  * there is no mechanism behind one (`B31`). On a limit of nothing it names no
  * reset: waiting for one would not bring replies back ({@link isNothingLimit}).
+ *
+ * The spend says "at least" when some of it had no price on file, as every
+ * other figure of spend does (budget.md, ruling 4): the real figure is higher,
+ * and the limit was reached all the same. On a limit too small to state in
+ * cents the amounts are left out ({@link isSubCentLimit}).
  */
 export function ceilingReachedFrame(figures: {
   spentUsd: number;
+  unpricedRows: number;
   ceilingUsd: number;
   resetsAt: Date;
 }): CeilingReachedFrame {
+  const spent = floorLabel(money(figures.spentUsd), spendFloor(figures));
+  const amounts = isSubCentLimit(figures.ceilingUsd)
+    ? ''
+    : ` (${spent} of ${money(figures.ceilingUsd)})`;
   const message = isNothingLimit(figures.ceilingUsd)
     ? 'Your conversation budget is set to nothing, so there are no replies for now. ' +
       'Everything you can read and write in the app still works.'
-    : `You've used this month's conversation budget (${usd.format(figures.spentUsd)} of ` +
-      `${usd.format(figures.ceilingUsd)}), so there are no more replies until it resets on ` +
-      `${formatResetDay(figures.resetsAt)}. Everything you can read and write in the app still works.`;
+    : `You've used this month's conversation budget${amounts}, so there are no more replies ` +
+      `until it resets on ${formatResetDay(figures.resetsAt)}. ` +
+      'Everything you can read and write in the app still works.';
   return {
     type: 'error',
     code: ENDING_CEILING_REACHED,
     message,
     ceiling: {
       spentUsd: figures.spentUsd,
+      unpricedRows: figures.unpricedRows,
       ceilingUsd: figures.ceilingUsd,
       resetsAt: figures.resetsAt.toISOString(),
     },
