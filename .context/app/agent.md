@@ -642,8 +642,8 @@ Every frame from the agent's seats reaches the browser through `toClientStream()
 - **And `ceiling_reached` ends a turn but is not mapped either** (f-safety t-59).
   The turn seam builds it when the person has used their month's budget — see
   [The monthly limit](#the-monthly-limit) — and it carries figures the three do
-  not: `ceiling: { spentUsd, ceilingUsd, resetsAt }` (`resetsAt` an ISO instant,
-  UTC). A platform frame that said `ceiling_reached` would still map to
+  not: `ceiling: { spentUsd, unpricedRows, ceilingUsd, resetsAt }` (`resetsAt` an
+  ISO instant, UTC; `unpricedRows` above zero makes `spentUsd` a floor, t-140). A platform frame that said `ceiling_reached` would still map to
   `unavailable`.
 
 ### The deadlines
