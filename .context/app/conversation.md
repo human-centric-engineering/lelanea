@@ -245,7 +245,8 @@ there is no "ask for more" behind either (owner, 22 Sept 2026; `B31`).
     month's `unpricedRows` onto the frame; above zero, `ceilingEnding` says "at
     least $4.07 of your $4.00 limit" and the frame "(at least $4.07 of
     $4.00)" — the same floor rule as every other figure of spend (`budget.md`,
-    ruling 4). An absent or unusable count reads as none.
+    ruling 4). An absent or unusable count reads as a floor too:
+    "at least" is true of an exact figure, and an exact figure may be short.
   - **A limit under half a cent is not stated**, because it prints as `$0.00`:
     the spend is, "against a limit of less than a cent". The crossing turn
     completes, so that spend can be a real $0.12. A spend under half a cent

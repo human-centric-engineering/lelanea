@@ -19,6 +19,12 @@
  * well past a ceiling in the admin cost view — then count the person's running
  * turns here before allowing another.
  *
+ * **It compares a floor as if it were exact.** Replies with no price on file
+ * count $0 here, so a month of them can run past the limit unrefused. Nothing
+ * can close that — the price is missing, not wrong (budget.md, "Where the
+ * figures come from"); what this module can do is carry the count, so the
+ * words say "at least" once it does refuse (t-140).
+ *
  * **Fails open.** A read that errors counts as under the ceiling, as the pause
  * switch does: a database that cannot be read fails the turn by itself a moment
  * later, as `unavailable`, and a meter hiccup should not read as "you have used

@@ -67,7 +67,7 @@ const resourceField = crisisResourceSchema.optional().catch(undefined);
  */
 export const ceilingFiguresSchema = z.object({
   spentUsd: z.number().min(0).optional().catch(undefined),
-  /** Above zero, `spentUsd` is a floor. Absent or unusable reads as none — the words then say what they did before t-140. */
+  /** Above zero, `spentUsd` is a floor. Absent or unusable is unknown, which the words also read as a floor (`ceilingAmounts`). */
   unpricedRows: z.number().int().min(0).optional().catch(undefined),
   ceilingUsd: z.number().min(0).optional().catch(undefined),
   resetsAt: z.iso.datetime().optional().catch(undefined),

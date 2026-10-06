@@ -65,6 +65,9 @@ interface CostRow {
   userId: string;
   model: string;
   costUsd: number;
+  /** What the real meter's unpriced filter reads, besides the cost. */
+  tokens: number;
+  isLocal: boolean;
   metadata: Record<string, unknown> | undefined;
 }
 
@@ -344,8 +347,8 @@ vi.mock('@/lib/db/client', () => {
       },
       // The month-to-date read: every cost row the fake model wrote is this
       // month's, so it sums the person's rows. Its only value that is a user id
-      // is the first interpolation. A $0 row is unpriced, as the real query
-      // counts one: the fake model always reports tokens.
+      // is the first interpolation. Unpriced is the real query's own test: $0,
+      // not local, and tokens used.
       $queryRaw: vi.fn(async (_sql: TemplateStringsArray, userId: string) => {
         const rows = db.costs.filter((c) => c.userId === userId);
         return [
@@ -354,7 +357,7 @@ vi.mock('@/lib/db/client', () => {
             input_tokens: 0,
             output_tokens: 0,
             cost_rows: rows.length,
-            unpriced_rows: rows.filter((c) => c.costUsd === 0).length,
+            unpriced_rows: rows.filter((c) => c.costUsd === 0 && !c.isLocal && c.tokens > 0).length,
           },
         ];
       }),
@@ -477,6 +480,8 @@ function fakeRun(
         userId: turn.userId,
         model: behaviour.model,
         costUsd: behaviour.costUsd,
+        tokens: 3300,
+        isLocal: db.providers.some((p) => p.slug === behaviour.provider && p.isLocal),
         metadata: extras.costLogMetadata,
       });
       const reply = `The answer to: ${turn.message}`;

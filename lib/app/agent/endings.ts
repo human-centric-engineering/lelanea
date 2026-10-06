@@ -186,7 +186,9 @@ export function isNothingLimit(ceilingUsd: number): boolean {
  * what a figure says (t-140):
  *
  * - **The spend says "at least"** when some of it had no price on file, as
- *   every other figure of spend does (budget.md, ruling 4).
+ *   every other figure of spend does (budget.md, ruling 4) — **and when the
+ *   count is unknown**: "at least" is true of an exact figure too, and stating
+ *   a figure as exact that may be short is not (/code-review round 2).
  * - **A limit under half a cent is `limit: null`**: it prints as `$0.00`, and
  *   "$0.12 of $0.00" is false. The gate still lets a reply through under it,
  *   so it is not {@link isNothingLimit} and the reset date stands.
@@ -201,7 +203,10 @@ export function ceilingAmounts(figures: {
   const { spentUsd, ceilingUsd } = figures;
   if (spentUsd === undefined || roundsToNoCents(spentUsd)) return null;
   return {
-    spent: floorLabel(money(spentUsd), spendFloor({ unpricedRows: figures.unpricedRows ?? 0 })),
+    spent: floorLabel(
+      money(spentUsd),
+      figures.unpricedRows === undefined || spendFloor({ unpricedRows: figures.unpricedRows })
+    ),
     limit: roundsToNoCents(ceilingUsd) ? null : money(ceilingUsd),
   };
 }
@@ -223,23 +228,10 @@ export function ceilingReachedFrame(figures: {
   ceilingUsd: number;
   resetsAt: Date;
 }): CeilingReachedFrame {
-  const said = ceilingAmounts(figures);
-  const amounts =
-    said === null
-      ? ''
-      : said.limit === null
-        ? ` (${said.spent}, against a limit of less than a cent)`
-        : ` (${said.spent} of ${said.limit})`;
-  const message = isNothingLimit(figures.ceilingUsd)
-    ? 'Your conversation budget is set to nothing, so there are no replies for now. ' +
-      'Everything you can read and write in the app still works.'
-    : `You've used this month's conversation budget${amounts}, so there are no more replies ` +
-      `until it resets on ${formatResetDay(figures.resetsAt)}. ` +
-      'Everything you can read and write in the app still works.';
   return {
     type: 'error',
     code: ENDING_CEILING_REACHED,
-    message,
+    message: ceilingMessage(figures),
     ceiling: {
       spentUsd: figures.spentUsd,
       unpricedRows: figures.unpricedRows,
@@ -247,6 +239,33 @@ export function ceilingReachedFrame(figures: {
       resetsAt: figures.resetsAt.toISOString(),
     },
   };
+}
+
+/** The frame's own words: the fallback for a pane that cannot read the figures. */
+function ceilingMessage(figures: {
+  spentUsd: number;
+  unpricedRows: number;
+  ceilingUsd: number;
+  resetsAt: Date;
+}): string {
+  if (isNothingLimit(figures.ceilingUsd)) {
+    return (
+      'Your conversation budget is set to nothing, so there are no replies for now. ' +
+      'Everything you can read and write in the app still works.'
+    );
+  }
+  const said = ceilingAmounts(figures);
+  const amounts =
+    said === null
+      ? ''
+      : said.limit === null
+        ? ` (${said.spent}, against a limit of less than a cent)`
+        : ` (${said.spent} of ${said.limit})`;
+  return (
+    `You've used this month's conversation budget${amounts}, so there are no more replies ` +
+    `until it resets on ${formatResetDay(figures.resetsAt)}. ` +
+    'Everything you can read and write in the app still works.'
+  );
 }
 
 /** Sent once, when no words have come by the first-words deadline. The turn carries on. */
