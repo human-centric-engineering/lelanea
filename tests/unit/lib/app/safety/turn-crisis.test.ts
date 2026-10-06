@@ -94,6 +94,7 @@ vi.mock('@/lib/app/voice/register-store', () => ({
           : { register: 'teaching', source: 'module', moduleSlug: 'values' }
   ),
 }));
+vi.mock('@/lib/app/sessions/store', () => ({ arriveSessionQuietly: vi.fn(async () => null) }));
 vi.mock('@/lib/app/agent/turn-record', () => ({
   claimTurn: mocks.claimTurn,
   classifyPricing: vi.fn(async () => 'priced'),

@@ -17,8 +17,9 @@ import { mockAuthenticatedUser, mockUnauthenticatedUser } from '@/tests/helpers/
 const ME = 'cmjbv4i3x00003wsloputgwul';
 const OTHER = 'cmu7other0000000000000000';
 
-const { store, readTranscript, routeLog, openingDue } = vi.hoisted(() => ({
+const { store, readTranscript, routeLog, openingDue, arriveSessionQuietly } = vi.hoisted(() => ({
   openingDue: vi.fn(),
+  arriveSessionQuietly: vi.fn(),
   store: new Map<string, { seat: string; conversationId: string | null; entries: unknown[] }>(),
   readTranscript: vi.fn(),
   routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -33,6 +34,7 @@ vi.mock('@/lib/app/conversation/transcript', async (importOriginal) => {
 });
 
 vi.mock('@/lib/app/conversation/opening', () => ({ openingDue }));
+vi.mock('@/lib/app/sessions/store', () => ({ arriveSessionQuietly }));
 
 import { auth } from '@/lib/auth/config';
 import { GET } from '@/app/api/v1/app/conversation/route';
@@ -51,6 +53,10 @@ beforeEach(() => {
   });
   vi.mocked(auth.api.getSession).mockResolvedValue(mockAuthenticatedUser('USER'));
   openingDue.mockResolvedValue(false);
+  arriveSessionQuietly.mockResolvedValue({
+    session: { id: 'ses-1', ordinal: 1, startedAt: new Date(), closedAt: null },
+    opened: false,
+  });
 });
 
 describe('GET /api/v1/app/conversation', () => {
@@ -170,5 +176,54 @@ describe('the opening flag (t-122)', () => {
     const body = await (await GET(request('/api/v1/app/conversation?seat=onboarding'))).json();
     expect(body.data).not.toHaveProperty('opening');
     expect(openingDue).not.toHaveBeenCalled();
+  });
+});
+
+describe('arriving (f-recap t-141)', () => {
+  it.each(['facilitator', 'onboarding'])(
+    'opens or resumes the caller’s session on the %s seat, before the transcript is read',
+    async (seat) => {
+      const order: string[] = [];
+      arriveSessionQuietly.mockImplementationOnce(async () => {
+        order.push('arrive');
+        return null;
+      });
+      readTranscript.mockImplementationOnce(async () => {
+        order.push('read');
+        return { seat, conversationId: null, entries: [] };
+      });
+
+      await GET(request(`/api/v1/app/conversation?seat=${seat}`));
+
+      expect(arriveSessionQuietly).toHaveBeenCalledWith(ME);
+      expect(arriveSessionQuietly).not.toHaveBeenCalledWith(OTHER);
+      expect(order).toEqual(['arrive', 'read']);
+    }
+  );
+
+  it('still answers the conversation when the session could not be written', async () => {
+    arriveSessionQuietly.mockResolvedValueOnce(null);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    expect(routeLog.info).toHaveBeenCalledWith(
+      'Own conversation read',
+      expect.objectContaining({ sessionOpened: false })
+    );
+  });
+
+  it('logs when this read began a session', async () => {
+    arriveSessionQuietly.mockResolvedValueOnce({
+      session: { id: 'ses-2', ordinal: 2, startedAt: new Date(), closedAt: null },
+      opened: true,
+    });
+
+    await GET(request());
+
+    expect(routeLog.info).toHaveBeenCalledWith(
+      'Own conversation read',
+      expect.objectContaining({ sessionOpened: true })
+    );
   });
 });
