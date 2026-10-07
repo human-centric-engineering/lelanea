@@ -555,8 +555,8 @@ model AppTurn {
   /// sessions, deliberately not backfilled: those sittings were never recorded.
   sessionId          String?
   /// The module the turn was taken in (f-forget-session t-152): the slug the
-  /// register read as the person's current module at claim, so the two never
-  /// disagree. What makes "everything I said in this module" a lookup. Null on a
+  /// register read as the person's current module at claim (`resolveRegister`),
+  /// so the two agree. What makes "everything I said in this module" a lookup. Null on a
   /// seat with no register, with no module current, or when the journey could
   /// not be read. Deliberately not backfilled: nothing recorded it before, and a
   /// reconstruction from node states would be a guess.

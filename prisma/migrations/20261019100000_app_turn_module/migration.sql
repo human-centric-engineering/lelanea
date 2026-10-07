@@ -1,8 +1,8 @@
 -- f-forget-session t-152: the module a turn was taken in, on its turn row.
 --
 -- The slug of the module the person was in when the turn was claimed: the
--- module the register read (`readCurrentModuleSlug`,
--- `lib/app/voice/register-store.ts`). It is what makes "everything I said in
+-- module the register read (`resolveRegister`, which catches a failed journey
+-- read and stamps null; `lib/app/voice/register-store.ts`). It is what makes "everything I said in
 -- this module" a lookup (owner ruling 2, 7 Oct 2026, journal on §23).
 --
 -- Nullable, and NOT backfilled: nothing recorded which module an earlier turn

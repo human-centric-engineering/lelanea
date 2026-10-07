@@ -124,15 +124,23 @@ vi.mock('@/lib/logging', () => ({
 const registers = vi.hoisted(
   (): {
     next: { register: 'guiding' | 'teaching'; source: 'module' | 'safety' } | null;
-    /** The module the register read as current (t-152). */
+    /** The module the register read as current (t-152), unless `moduleByUser` names one. */
     moduleSlug: string | null;
-  } => ({ next: null, moduleSlug: 'values' })
+    /** Per person, so a test can show the stamp follows whose journey was read. */
+    moduleByUser: Record<string, string | null>;
+  } => ({ next: null, moduleSlug: 'values', moduleByUser: {} })
 );
 vi.mock('@/lib/app/voice/register-store', () => ({
   hasRegister: (seat: string) => seat === 'facilitator',
-  resolveRegister: vi.fn(async (_userId: string, seat: string) =>
+  resolveRegister: vi.fn(async (userId: string, seat: string) =>
     seat === 'facilitator' && registers.next
-      ? { ...registers.next, moduleSlug: registers.moduleSlug }
+      ? {
+          ...registers.next,
+          moduleSlug:
+            userId in registers.moduleByUser
+              ? registers.moduleByUser[userId]
+              : registers.moduleSlug,
+        }
       : null
   ),
 }));
@@ -1902,6 +1910,7 @@ describe('the module a turn was taken in (f-forget-session t-152)', () => {
   beforeEach(() => {
     registers.next = { register: 'teaching', source: 'module' };
     registers.moduleSlug = 'values';
+    registers.moduleByUser = {};
   });
 
   it('stamps the claim with the module the register read', async () => {
@@ -1918,7 +1927,7 @@ describe('the module a turn was taken in (f-forget-session t-152)', () => {
 
     expect(events.at(-1)?.type).toBe('done');
     expect(db.turns).toHaveLength(1);
-    expect(db.turns[0].moduleSlug).toBeNull();
+    expect(db.turns[0].moduleSlug ?? null).toBeNull();
   });
 
   it('stamps null on a seat with no register, never a guess', async () => {
@@ -1926,7 +1935,7 @@ describe('the module a turn was taken in (f-forget-session t-152)', () => {
 
     expect(db.turns).toHaveLength(1);
     expect(db.turns[0].seat).toBe('onboarding');
-    expect(db.turns[0].moduleSlug).toBeNull();
+    expect(db.turns[0].moduleSlug ?? null).toBeNull();
   });
 
   it('re-stamps a re-run with the module it re-runs in, as the register is', async () => {
@@ -1946,10 +1955,25 @@ describe('the module a turn was taken in (f-forget-session t-152)', () => {
     });
   });
 
-  it('keeps one person’s module off another’s turn', async () => {
+  it('keeps a re-run’s known module when its journey read fails', async () => {
+    behaviour.outcome = 'error';
     await take(facilitator());
-    registers.moduleSlug = 'boundaries';
+    expect(db.turns[0]).toMatchObject({ status: 'failed', moduleSlug: 'values' });
+
+    behaviour.outcome = 'answer';
+    registers.moduleSlug = null;
+    await take(facilitator());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0]).toMatchObject({ status: 'completed', attempts: 2, moduleSlug: 'values' });
+  });
+
+  it('stamps each person’s turn with the module read for that person', async () => {
+    registers.moduleSlug = 'not-read-for-anyone';
+    registers.moduleByUser = { 'user-1': 'values', 'user-2': 'boundaries' };
+
     await take(facilitator({ userId: 'user-2', clientTurnId: 'turn-2' }));
+    await take(facilitator());
 
     expect(db.turns).toHaveLength(2);
     expect(db.turns.find((t) => t.userId === 'user-1')?.moduleSlug).toBe('values');

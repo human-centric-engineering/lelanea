@@ -541,7 +541,9 @@ timestamps would invent them.
 **Each turn is stamped with its module too** (f-forget-session t-152).
 `app_turn.moduleSlug` is the module the register read as current at the claim
 ([`voice.md`](./voice.md)). It is taken from the same read, so a turn's module
-and its steering never disagree, and a re-run re-stamps both. That makes
+and its steering agree. A re-run that reads a module re-stamps it; one that
+reads none (the journey read failed) keeps what its first attempt recorded, as
+`sessionId` does, so a turn never drops out of its module's deletion. That makes
 "everything I said in this module" a lookup. It is null on a seat with no
 register, with no module current, or when the journey could not be read, and
 null is never a guess. Turns from before the stamp stay null: a module was
