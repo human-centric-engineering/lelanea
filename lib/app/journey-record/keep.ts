@@ -70,7 +70,7 @@ import { logger } from '@/lib/logging';
 import { getSlotHeads, SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots';
 import type { Note } from '@/lib/app/slots/notes-view';
 import { CORRECTION_CONFIDENCE, correctNote, getNotes } from '@/lib/app/slots/notes';
-import { forgetJourneyEntry, queueJourneyEntryIndex } from '@/lib/app/memory/memory-index';
+import { queueJourneyEntryIndex } from '@/lib/app/memory/memory-index';
 import type { JourneyEntry, JourneyNoteRef } from '@/lib/app/journey-record/entry';
 import {
   claimSynopsisKeep,
@@ -394,8 +394,9 @@ export async function keepSynopsis(
     // knowing a keep ran that long.
     logger.warn('A synopsis keep outlived its lease', { userId, entryId: id });
   }
-  // Kept, or kept with new words: what she reads of it is replaced (t-149).
-  await forgetJourneyEntry({ userId }, id);
+  // Kept, or kept with new words: what she reads of it is brought up to date
+  // off the request (t-149). A keep that failed before here leaves a stale
+  // vector that no search returns, and the backfill replaces it.
   queueJourneyEntryIndex({ userId }, id);
   const { entry: after } = await readOwnSynopsis(userId, id);
   return { entry: after, notes: settled.outcomes, notesUnread: settled.notesUnread };

@@ -45,11 +45,51 @@ function insertedDefinition(): unknown {
   return JSON.parse(statements.slice(opened + '$json$'.length, closed));
 }
 
+/**
+ * The migration that moved the definition on (f-journey-record t-149): an
+ * UPDATE from exactly what the INSERT above wrote, to what the class says now.
+ * Applied migrations are frozen, so a definition that moves gets a new one of
+ * these, never an edit to the INSERT.
+ */
+const revised = readFileSync(
+  join(
+    process.cwd(),
+    'prisma/migrations/20261018100200_app_search_person_memory_journey/migration.sql'
+  ),
+  'utf8'
+);
+
+function dollarQuoted(source: string, tag: string): unknown {
+  const marker = `$${tag}$`;
+  const opened = source.indexOf(marker);
+  const closed = source.indexOf(marker, opened + marker.length);
+  if (opened === -1 || closed === -1) {
+    throw new Error(`The revision no longer carries a ${marker} literal`);
+  }
+  return JSON.parse(source.slice(opened + marker.length, closed));
+}
+
 describe('the definition it inserts', () => {
-  it('is the one the class advertises, and the one the seed writes', () => {
-    expect(insertedDefinition()).toEqual(SEARCH_PERSON_MEMORY_DEFINITION);
-    expect(insertedDefinition()).toEqual(SEARCH_PERSON_MEMORY_IMPL.functionDefinition);
+  it('is the one the t-149 revision moves on from, exactly', () => {
+    expect(insertedDefinition()).toEqual(dollarQuoted(revised, 'definition_from'));
     expect(statements).toContain('$json$::jsonb');
+  });
+
+  it('is moved on, by the revision, to the one the class advertises and the seed writes', () => {
+    const to = dollarQuoted(revised, 'definition_to');
+    expect(to).toEqual(SEARCH_PERSON_MEMORY_DEFINITION);
+    expect(to).toEqual(SEARCH_PERSON_MEMORY_IMPL.functionDefinition);
+  });
+
+  it('is revised only where it is still what the INSERT wrote, so an operator’s edit stands', () => {
+    expect(revised).toMatch(
+      /WHERE "slug" = 'search_person_memory'\s+AND "functionDefinition"::jsonb = \$definition_from\$/
+    );
+    const sqlOnly = revised
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+    expect(sqlOnly.match(/\b(INSERT|DELETE|DROP)\b/g)).toBeNull();
   });
 });
 

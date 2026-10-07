@@ -51,6 +51,8 @@ interface Embedding {
   id: string;
   userId: string;
   journeyEntryId: string;
+  /** The entry's `updatedAt` the vector was made from (`journeyEntryUpdatedAt`); null before t-149's stamp. */
+  stamp: Date | null;
   embedding: number[];
   embeddingModel: string;
   orgId: string;
@@ -118,7 +120,17 @@ function qualifies(e: JourneyEntryRow): boolean {
   return e.state === 'kept' && e.withheldFromAgent === false && e.sourceRemovedAt === null;
 }
 
-/** Remove a journey entry and its vector together, as the hand-written FK cascade does. */
+/** The stamp of the vector at `index`, read fresh (a test may have just changed it). */
+function stampOf(index: number): Date | null {
+  return world.embeddings[index]?.stamp ?? null;
+}
+
+/** A vector made from the version of its entry that is there now. */
+function current(em: Embedding, entry: JourneyEntryRow): boolean {
+  return em.stamp !== null && em.stamp.getTime() === entry.updatedAt.getTime();
+}
+
+/** Remove a journey entry and its vector together, as the FK cascade does. */
 function removeEntryCascade(id: string): void {
   world.entries = world.entries.filter((e) => e.id !== id);
   world.embeddings = world.embeddings.filter((em) => em.journeyEntryId !== id);
@@ -132,13 +144,18 @@ const prismaFake = {
     if (text.includes('LEFT JOIN')) {
       // backfill list: [orgId, given, limit]
       const [orgId, given, limit] = v;
-      return world.entries
-        .filter((e) => e.orgId === orgId && qualifies(e))
-        .filter((e) => !(given as string[]).includes(e.id))
-        .filter((e) => !world.embeddings.some((em) => em.journeyEntryId === e.id))
-        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-        .slice(0, Number(limit))
-        .map((e) => ({ id: e.id, userId: e.userId }));
+      return (
+        world.entries
+          .filter((e) => e.orgId === orgId && qualifies(e))
+          .filter((e) => !(given as string[]).includes(e.id))
+          // The LEFT JOIN matches only a vector of the current version.
+          .filter(
+            (e) => !world.embeddings.some((em) => em.journeyEntryId === e.id && current(em, e))
+          )
+          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+          .slice(0, Number(limit))
+          .map((e) => ({ id: e.id, userId: e.userId }))
+      );
     }
 
     if (text.includes('JOIN app_journey_entry j ON j.id = e."journeyEntryId"')) {
@@ -149,7 +166,10 @@ const prismaFake = {
       return world.embeddings
         .filter((em) => em.userId === userE && em.orgId === orgId && em.embeddingModel === model)
         .map((em) => ({ em, entry: entryOf(em.journeyEntryId) }))
-        .filter(({ entry }) => entry !== undefined && entry.userId === userJ && qualifies(entry))
+        .filter(
+          ({ em, entry }) =>
+            entry !== undefined && entry.userId === userJ && qualifies(entry) && current(em, entry)
+        )
         .map(({ em, entry }) => ({
           journeyEntryId: entry!.id,
           kind: entry!.kind,
@@ -197,12 +217,30 @@ const prismaFake = {
         id: `emb-${world.embeddings.length + 1}`,
         userId: row.userId,
         journeyEntryId: row.id,
+        // Copied from the row in the INSERT, never from a bound value.
+        stamp: row.updatedAt,
         embedding: parseVector(vec),
         embeddingModel: String(model),
         orgId: row.orgId,
         createdAt: new Date(),
       });
       return 1;
+    }
+
+    if (text.includes('"sourceRemovedAt" IS NOT NULL')) {
+      // forgetSourceRemovedJourneyEntries: [userId(e), userId(j)]
+      const [userE, userJ] = v;
+      const before = world.embeddings.length;
+      world.embeddings = world.embeddings.filter((em) => {
+        const entry = entryOf(em.journeyEntryId);
+        return !(
+          em.userId === userE &&
+          entry !== undefined &&
+          entry.userId === userJ &&
+          entry.sourceRemovedAt !== null
+        );
+      });
+      return before - world.embeddings.length;
     }
 
     // The prune (forgetUnqualifiedJourneyEntries): [orgId]
@@ -214,26 +252,53 @@ const prismaFake = {
       const entry = entryOf(em.journeyEntryId);
       // Gone already (the cascade got there first): nothing left for the prune to do.
       if (!entry) return true;
-      return qualifies(entry);
+      return qualifies(entry) && current(em, entry);
     });
     return before - world.embeddings.length;
   }),
   slotDefinition: { findMany: vi.fn(async () => []) },
   appSlotDefinition: { findMany: vi.fn(async () => []) },
   appMemoryEmbedding: {
-    findFirst: vi.fn(async ({ where }: { where: { journeyEntryId?: string; userId: string } }) => {
-      const row = world.embeddings.find(
-        (em) => em.userId === where.userId && em.journeyEntryId === where.journeyEntryId
-      );
-      return row ? { id: row.id } : null;
-    }),
-    deleteMany: vi.fn(async ({ where }: { where: { userId: string; journeyEntryId: string } }) => {
-      const before = world.embeddings.length;
-      world.embeddings = world.embeddings.filter(
-        (em) => !(em.userId === where.userId && em.journeyEntryId === where.journeyEntryId)
-      );
-      return { count: before - world.embeddings.length };
-    }),
+    findFirst: vi.fn(
+      async ({
+        where,
+      }: {
+        where: { journeyEntryId?: string; userId: string; journeyEntryUpdatedAt?: Date };
+      }) => {
+        const row = world.embeddings.find(
+          (em) =>
+            em.userId === where.userId &&
+            em.journeyEntryId === where.journeyEntryId &&
+            (where.journeyEntryUpdatedAt === undefined ||
+              em.stamp?.getTime() === where.journeyEntryUpdatedAt.getTime())
+        );
+        return row ? { id: row.id } : null;
+      }
+    ),
+    deleteMany: vi.fn(
+      async ({
+        where,
+      }: {
+        where: {
+          userId: string;
+          journeyEntryId: string;
+          OR?: [{ journeyEntryUpdatedAt: null }, { journeyEntryUpdatedAt: { not: Date } }];
+        };
+      }) => {
+        const keep = where.OR?.[1].journeyEntryUpdatedAt.not;
+        const before = world.embeddings.length;
+        world.embeddings = world.embeddings.filter(
+          (em) =>
+            !(
+              em.userId === where.userId &&
+              em.journeyEntryId === where.journeyEntryId &&
+              // With OR: only a vector of another version (or none recorded).
+              (keep === undefined || em.stamp === null || em.stamp.getTime() !== keep.getTime())
+            )
+        );
+        return { count: before - world.embeddings.length };
+      }
+    ),
   },
 };
 
@@ -249,7 +314,7 @@ vi.mock('@/lib/logging', () => ({
 const {
   indexJourneyEntry,
   queueJourneyEntryIndex,
-  forgetJourneyEntry,
+  forgetSourceRemovedJourneyEntries,
   journeyEntryText,
   backfillMemoryIndex,
   searchMemory,
@@ -429,20 +494,88 @@ describe('what a search never returns', () => {
   });
 });
 
-describe('forgetting a journey entry', () => {
-  it('removes only the caller’s vector for that entry, and never another person’s id or another entry of theirs', async () => {
-    const mine = journeyRow('shared-id', { body: MY_FATHER });
-    const mineOther = journeyRow('mine-other', { body: 'a different entry entirely of mine' });
-    await indexJourneyEntry({ userId: ME }, mine.id);
-    await indexJourneyEntry({ userId: ME }, mineOther.id);
-    expect(world.embeddings).toHaveLength(2);
+describe('a vector of another version of the entry is stale (review round 1)', () => {
+  it('is never returned once the entry’s words change, before anything replaces it', async () => {
+    const entry = journeyRow('stale-1', { body: MY_FATHER });
+    await indexJourneyEntry({ userId: ME }, entry.id);
+    expect(world.embeddings).toHaveLength(1);
 
-    // Someone else's id against my entry removes nothing.
-    expect(await forgetJourneyEntry({ userId: THEM }, mine.id)).toBe(0);
-    expect(world.embeddings).toHaveLength(2);
+    // Edited, and nothing has re-indexed it yet (a writer that failed part way).
+    entry.updatedAt = new Date(entry.updatedAt.getTime() + 1000);
+    entry.body = 'now about the mountains, nothing else';
 
-    expect(await forgetJourneyEntry({ userId: ME }, mine.id)).toBe(1);
-    expect(world.embeddings.map((e) => e.journeyEntryId)).toEqual(['mine-other']);
+    const hits = await searchMemory({ userId: ME }, MY_FATHER, { limit: 5 });
+    expect(hits.map((h) => h.sourceId)).not.toContain(entry.id);
+  });
+
+  it('is replaced by the next index of the entry, which finds it by its new words', async () => {
+    const entry = journeyRow('stale-2', { body: MY_FATHER });
+    await indexJourneyEntry({ userId: ME }, entry.id);
+    entry.updatedAt = new Date(entry.updatedAt.getTime() + 1000);
+    entry.body = 'climbing the mountains with my sister';
+
+    expect(await indexJourneyEntry({ userId: ME }, entry.id)).toBe('indexed');
+
+    expect(world.embeddings).toHaveLength(1);
+    expect(world.embeddings[0]?.stamp?.getTime()).toBe(entry.updatedAt.getTime());
+    const hits = await searchMemory({ userId: ME }, 'mountains sister', { limit: 5 });
+    expect(hits.map((h) => h.sourceId)).toContain(entry.id);
+  });
+
+  it('is dropped by the next index when she may no longer read the entry', async () => {
+    const entry = journeyRow('stale-3', { body: MY_FATHER });
+    await indexJourneyEntry({ userId: ME }, entry.id);
+    entry.withheldFromAgent = true;
+
+    expect(await indexJourneyEntry({ userId: ME }, entry.id)).toBe('skipped');
+    expect(world.embeddings).toEqual([]);
+  });
+
+  it('is re-embedded by the backfill, and the prune drops the stale one first', async () => {
+    const entry = journeyRow('stale-4', { body: MY_FATHER });
+    await indexJourneyEntry({ userId: ME }, entry.id);
+    entry.updatedAt = new Date(entry.updatedAt.getTime() + 1000);
+    entry.body = 'the orchard behind the house';
+
+    await backfillMemoryIndex();
+
+    expect(world.embeddings).toHaveLength(1);
+    expect(world.embeddings[0]?.stamp?.getTime()).toBe(entry.updatedAt.getTime());
+  });
+
+  it('a vector made before the stamp existed matches no version, and is replaced', async () => {
+    const entry = journeyRow('stale-5', { body: MY_FATHER });
+    await indexJourneyEntry({ userId: ME }, entry.id);
+    world.embeddings[0].stamp = null;
+
+    expect(await searchMemory({ userId: ME }, MY_FATHER, { limit: 5 })).toEqual([]);
+    expect(await indexJourneyEntry({ userId: ME }, entry.id)).toBe('indexed');
+    expect(stampOf(0)?.getTime()).toBe(entry.updatedAt.getTime());
+  });
+});
+
+describe('an account written from an exchange since deleted', () => {
+  it('loses its vector in the deletion’s own transaction, only the caller’s', async () => {
+    const mine = journeyRow('flag-mine', { kind: 'synopsis', summary: 'S', body: MY_FATHER });
+    const mineOther = journeyRow('flag-other', { body: 'a different entry of mine' });
+    const theirs = journeyRow('flag-theirs', {
+      userId: THEM,
+      kind: 'synopsis',
+      summary: 'S',
+      body: THEIR_FATHER,
+    });
+    for (const e of [mine, mineOther]) await indexJourneyEntry({ userId: ME }, e.id);
+    await indexJourneyEntry({ userId: THEM }, theirs.id);
+    expect(world.embeddings).toHaveLength(3);
+
+    mine.sourceRemovedAt = new Date();
+    theirs.sourceRemovedAt = new Date();
+    expect(await forgetSourceRemovedJourneyEntries(prismaFake as never, { userId: ME })).toBe(1);
+
+    expect(world.embeddings.map((e) => e.journeyEntryId).sort()).toEqual([
+      'flag-other',
+      'flag-theirs',
+    ]);
   });
 });
 

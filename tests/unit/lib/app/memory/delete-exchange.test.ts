@@ -38,13 +38,20 @@ const { forgetWipedNotes, queueNoteIndex } = vi.hoisted(() => ({
   forgetWipedNotes: vi.fn(async () => 0),
   queueNoteIndex: vi.fn(),
 }));
+const { forgetSourceRemovedJourneyEntries } = vi.hoisted(() => ({
+  forgetSourceRemovedJourneyEntries: vi.fn(async () => 0),
+}));
 // The index itself is `memory-index.test.ts`'s; here, only that a wipe drops
 // its notes' vectors inside its own transaction, and a write queues one (t-107).
 const { clearStoredSearchResults } = vi.hoisted(() => ({
   clearStoredSearchResults: vi.fn(async () => 0),
 }));
 vi.mock('@/lib/app/memory/stored-results', () => ({ clearStoredSearchResults }));
-vi.mock('@/lib/app/memory/memory-index', () => ({ forgetWipedNotes, queueNoteIndex }));
+vi.mock('@/lib/app/memory/memory-index', () => ({
+  forgetWipedNotes,
+  queueNoteIndex,
+  forgetSourceRemovedJourneyEntries,
+}));
 
 vi.mock('@/lib/db/client', async () => ({
   prisma: (await import('@/tests/unit/lib/app/slots/notes-fake')).prismaFake,
@@ -347,6 +354,11 @@ describe('the synopsis of the session it was in (t-147)', () => {
       sourceRemovedAt: DELETED_AT,
     });
     expect(entry(theirs.id)?.sourceRemovedAt).toBeNull();
+    // Its vector goes with the deletion, in the same transaction, and only mine (t-149).
+    expect(forgetSourceRemovedJourneyEntries).toHaveBeenCalledTimes(1);
+    expect(forgetSourceRemovedJourneyEntries).toHaveBeenCalledWith(expect.anything(), {
+      userId: ME,
+    });
   });
 
   it('settles every session the deleted exchanges were in', async () => {

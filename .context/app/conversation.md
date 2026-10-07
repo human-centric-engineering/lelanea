@@ -170,12 +170,12 @@ and never sees the turn. It is read inside the turn's run, which the hook calls
 only for the request that claimed it, so a replay or an in-flight refusal reads
 none of it. Read for this person only, fenced, and bounded (`MAX_RECAP_*`):
 
-| Material                      | Read from                                                                                                                                                                                                                    |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The account they kept         | that session's kept synopsis (`readKeptSynopsisOfSession`, f-journey-record t-149): its line and words quoted, cut to the words' budget, its outcomes on unquoted lines. When there is one, it stands in for their raw words |
-| Their own words, oldest first | only when they kept no account of that session: the user messages of their turns stamped with it, joined under their own conversation; the latest few (`MAX_RECAP_MESSAGES`), each cut                                       |
-| Notes captured since          | `getNotes()`, so hidden slots and leanings are already gone; removed notes left out; the stored reading on one line, so a special-category one is its sentinel and none can forge a `> ` line                                |
-| The journey since             | `node_entered` / `node_completed` in `framework_journey_event` since that session began; "began" / "moved on from" a module, never "completed" (§6.12)                                                                       |
+| Material                      | Read from                                                                                                                                                                                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The account they kept         | that session's kept synopsis (`readKeptSynopsisOfSession`, f-journey-record t-149): its line, its account and its outcomes, each on one unquoted line, cut, and said to be an account and not their words. When there is one, it stands in for their raw words |
+| Their own words, oldest first | only when they kept no account of that session: the user messages of their turns stamped with it, joined under their own conversation; the latest few (`MAX_RECAP_MESSAGES`), each cut                                                                         |
+| Notes captured since          | `getNotes()`, so hidden slots and leanings are already gone; removed notes left out; the stored reading on one line, so a special-category one is its sentinel and none can forge a `> ` line                                                                  |
+| The journey since             | `node_entered` / `node_completed` in `framework_journey_event` since that session began; "began" / "moved on from" a module, never "completed" (§6.12)                                                                                                         |
 
 A deleted exchange's words are gone from the message table, so they never
 come back here. The material is reference, not instructions, and the ask says
@@ -186,9 +186,15 @@ account included.
 ruling 4 at planning). The raw words were f-recap's deterministic stand-in
 until the record existed. Now, when the person kept an account of the session
 looked back to, the recap reads that instead: they approved it, or rewrote it,
-so it is what they hold to be true of that session. Its lines are the `> `
-lines, so the fixed ask ("quote a few of their words, from the `> ` lines
-only") is unchanged and the ledger's hash still holds. Never read:
+so it is what they hold to be true of that session. **It is never put on a
+`> ` line.** The fixed ask quotes "their words" from those lines only, and a
+kept account is often her draft kept as written, so quoting it as something
+they said would put her words in their mouth (review round 1). It is carried as
+reference, said to be an account and not their words, for the recap to name in
+its own words; the ask is unchanged and the ledger's hash still holds. Known
+limit: the ask still says to quote, so a recap may quote an outcome's phrase
+anyway (seen once in the smoke). Changing the ask means a new version in the
+recap's turn id. Never read:
 
 - **a draft**, which is not in the record until they keep it;
 - **an account flagged as written from an exchange they have since deleted**
@@ -260,8 +266,10 @@ said and do not ask for the note; the row keeps the account; the transcript
 stands it as its own reply with the account naming it; asked again, it replays
 with no second model call. Then (t-149) they speak in the second session and an
 account of it is drafted: the third session's material does not read the
-draft. Once they keep it, the material quotes it instead of their words, and
-the real model's recap names a phrase only the kept account holds.
+draft. Once they keep it, the material carries it, on no quotable line,
+instead of their words; it is in the memory index and search finds it on
+Postgres (which proves the version stamp round-trips); and the real model's
+recap names a phrase only the kept account holds.
 
 ## The turn — `streamTurn()`
 

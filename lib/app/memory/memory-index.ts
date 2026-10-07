@@ -67,9 +67,10 @@
  * exchange the person has since deleted (t-147): it may quote what they
  * deleted, and deletion is real (§12), so she does not read it until they
  * change it, which clears the flag. The entry's line, words and outcomes are embedded
- * together. Editing an entry or keeping it from her drops its vector in the
- * write's own path ({@link forgetJourneyEntry}) and queues a fresh one;
- * removing it, or erasure, takes it through the foreign key.
+ * together. Each vector carries the version of the entry it was made from, so
+ * one made from words since changed is never returned and is replaced
+ * ({@link indexJourneyEntry}); removing an entry, or erasure, takes it through
+ * the foreign key.
  *
  * All three are embedded on write where the write is ours (the turn, a
  * capture, a correction, a discovery answer, a keep, an own entry), and a
@@ -519,14 +520,17 @@ export function journeyEntryText(
 
 /**
  * Embed one entry of the person's journey record, if it is one she may read:
- * kept, and not kept from her (t-149). A draft, or an entry kept from her, is
- * `skipped`.
+ * kept, not kept from her, and not written from an exchange since deleted
+ * (t-149). Anything else is `skipped`.
  *
- * The INSERT is conditional on the entry's `updatedAt` as it was read, so an
- * embedding of words since edited never lands over the newer ones: each write
- * that changes an entry drops its vector first ({@link forgetJourneyEntry}) and
- * queues this again. Idempotent: one already indexed is not embedded again, and
- * `journeyEntryId` is unique.
+ * **A vector carries the version it was made from.** The INSERT copies the
+ * entry's `updatedAt` into `journeyEntryUpdatedAt`, and is conditional on the
+ * `updatedAt` this call read, so an embedding of words edited meanwhile never
+ * lands. Every journey statement compares the two, so a vector made from any
+ * other version is stale: a search never returns it, and this call (from the
+ * write's queue or the backfill) replaces it. No writer has to drop a vector
+ * itself, and a writer that fails part way leaves nothing searchable by words
+ * the entry no longer holds (review round 1).
  *
  * Throws when the embedder does; {@link queueJourneyEntryIndex} is the caller
  * that must not.
@@ -548,12 +552,32 @@ export async function indexJourneyEntry(
        AND j."withheldFromAgent" = false
        AND j."sourceRemovedAt" IS NULL
   `;
+  // Whatever the entry is now, a vector of another version of it, or of an
+  // entry she may no longer read, goes first.
+  await prisma.appMemoryEmbedding.deleteMany({
+    where: {
+      userId: subject.userId,
+      journeyEntryId: entryId,
+      ...(entry
+        ? {
+            OR: [
+              { journeyEntryUpdatedAt: null },
+              { journeyEntryUpdatedAt: { not: entry.updatedAt } },
+            ],
+          }
+        : {}),
+    },
+  });
   if (!entry) return 'skipped';
   const text = journeyEntryText(entry);
   if (text.length === 0) return 'skipped';
 
   const existing = await prisma.appMemoryEmbedding.findFirst({
-    where: { journeyEntryId: entry.id, userId: subject.userId },
+    where: {
+      journeyEntryId: entry.id,
+      userId: subject.userId,
+      journeyEntryUpdatedAt: entry.updatedAt,
+    },
     select: { id: true },
   });
   if (existing) return 'already_indexed';
@@ -584,12 +608,12 @@ export async function indexJourneyEntry(
 
   const inserted = await prisma.$executeRaw`
     INSERT INTO app_memory_embedding (
-      id, "userId", "sourceKind", "journeyEntryId", embedding,
+      id, "userId", "sourceKind", "journeyEntryId", "journeyEntryUpdatedAt", embedding,
       "embeddingModel", "embeddingProvider", "embeddingDimension", "orgId"
     )
     SELECT gen_random_uuid()::text, j."userId",
            (CASE WHEN j.kind::text = 'synopsis' THEN 'synopsis' ELSE 'own_entry' END)::app_memory_source_kind,
-           j.id, ${toVector(embedding)}::vector,
+           j.id, j."updatedAt", ${toVector(embedding)}::vector,
            ${model}, ${provider}, ${dimensions}, j."orgId"
       FROM app_journey_entry j
      WHERE j.id = ${entry.id}
@@ -607,8 +631,11 @@ export async function indexJourneyEntry(
 }
 
 /**
- * Index a journey entry without holding anyone up: the write that changed it
- * has already answered. A miss is picked up by the backfill.
+ * Bring a journey entry's vector up to date without holding anyone up: embed
+ * it if she may read it, drop it if not. Every write that changes an entry's
+ * words, its opt-out or its state calls this after it commits. It never
+ * throws, so index upkeep can never fail the person's write; a miss is picked
+ * up by the backfill, and a search ignores a stale vector meanwhile.
  */
 export function queueJourneyEntryIndex(subject: MemorySubject, entryId: string): void {
   void indexJourneyEntry(subject, entryId).catch((err: unknown) => {
@@ -617,20 +644,6 @@ export function queueJourneyEntryIndex(subject: MemorySubject, entryId: string):
       error: err instanceof Error ? err.message : String(err),
     });
   });
-}
-
-/**
- * Drop the vector of one of the person's journey entries, now: its words were
- * changed, or they kept it from her. Called by every write that changes an
- * entry's words or its opt-out, before it queues a fresh index. Scoped to the
- * person: another person's id removes nothing. Removing the entry needs no
- * call; the foreign key takes the vector.
- */
-export async function forgetJourneyEntry(subject: MemorySubject, entryId: string): Promise<number> {
-  const { count } = await prisma.appMemoryEmbedding.deleteMany({
-    where: { userId: subject.userId, journeyEntryId: entryId },
-  });
-  return count;
 }
 
 /** The client a transaction hands its callback, as far as this module needs it. */
@@ -651,6 +664,28 @@ export async function forgetWipedNotes(tx: MemoryTx, subject: MemorySubject): Pr
        AND e."userId" = ${subject.userId}
        AND v."userId" = ${subject.userId}
        AND v."sourceType" = ${REMOVED_SOURCE_TYPE}
+  `;
+}
+
+/**
+ * Drop the vector of every kept synopsis of this person's flagged as written
+ * from an exchange they have since deleted. Called inside the transaction that
+ * deleted the exchange or the conversation and flagged them
+ * (`settleSynopsesOfDeletedExchanges`), so the vector of an account that may
+ * quote what they deleted goes with the deletion, not at the next prune
+ * (§12, review round 1). Scoped to the person.
+ */
+export async function forgetSourceRemovedJourneyEntries(
+  tx: MemoryTx,
+  subject: MemorySubject
+): Promise<number> {
+  return tx.$executeRaw`
+    DELETE FROM app_memory_embedding e
+     USING app_journey_entry j
+     WHERE e."journeyEntryId" = j.id
+       AND e."userId" = ${subject.userId}
+       AND j."userId" = ${subject.userId}
+       AND j."sourceRemovedAt" IS NOT NULL
   `;
 }
 
@@ -764,7 +799,10 @@ export async function backfillMemoryIndex(
   const entries = await prisma.$queryRaw<Array<{ id: string; userId: string }>>`
     SELECT j.id, j."userId"
       FROM app_journey_entry j
-      LEFT JOIN app_memory_embedding e ON e."journeyEntryId" = j.id
+      -- A vector of another version of the entry is no vector: it is re-embedded.
+      LEFT JOIN app_memory_embedding e
+        ON e."journeyEntryId" = j.id
+       AND e."journeyEntryUpdatedAt" IS NOT DISTINCT FROM j."updatedAt"
      WHERE j."orgId" = ${orgId}
        -- JOURNEY QUALIFIES: kept, not kept from her, and not written from an
        -- exchange the person has since deleted. The same three lines in every
@@ -846,10 +884,10 @@ async function forgetUnqualifiedNotes(orgId: string): Promise<number> {
 }
 
 /**
- * Drop the vectors of an org's journey entries that no longer qualify: a draft
- * (one redrafted, say), one kept from her, or one written from an exchange
- * since deleted. The writes that change an entry
- * drop its vector themselves; this is the floor under them. A search applies
+ * Drop the vectors of an org's journey entries that no longer qualify (a draft,
+ * one kept from her, one written from an exchange since deleted) or are stale
+ * (made from another version of the entry). The queued index after each write
+ * does this for its own entry; this is the floor under it. A search applies
  * the same predicate, so such a vector never reaches a prompt meanwhile.
  */
 async function forgetUnqualifiedJourneyEntries(orgId: string): Promise<number> {
@@ -863,6 +901,8 @@ async function forgetUnqualifiedJourneyEntries(orgId: string): Promise<number> {
          j.state::text = 'kept'
          AND j."withheldFromAgent" = false
          AND j."sourceRemovedAt" IS NULL
+         -- And current: made from the version of the entry that is there now.
+         AND e."journeyEntryUpdatedAt" IS NOT DISTINCT FROM j."updatedAt"
        )
   `;
 }
@@ -1003,6 +1043,8 @@ export async function searchMemory(
       JOIN app_journey_entry j ON j.id = e."journeyEntryId"
      WHERE e."userId" = ${subject.userId}
        AND j."userId" = ${subject.userId}
+       -- Only a vector of the version that is there now: never one of words since changed.
+       AND e."journeyEntryUpdatedAt" IS NOT DISTINCT FROM j."updatedAt"
        AND e."orgId" = ${orgId}
        AND e."embeddingModel" = ${model}
        -- JOURNEY QUALIFIES: kept, not kept from her, and not written from an

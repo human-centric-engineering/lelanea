@@ -65,7 +65,7 @@ vi.mock('@/lib/logging', () => ({
 const { getNotes } = vi.hoisted(() => ({ getNotes: vi.fn() }));
 vi.mock('@/lib/app/slots/notes', () => ({ getNotes }));
 const index = vi.hoisted(() => ({
-  forgetJourneyEntry: vi.fn(async () => 0),
+  forgetSourceRemovedJourneyEntries: vi.fn(async () => 0),
   queueJourneyEntryIndex: vi.fn(),
 }));
 vi.mock('@/lib/app/memory/memory-index', () => index);
@@ -533,7 +533,6 @@ describe('createOwnEntry', () => {
 
     expect(index.queueJourneyEntryIndex).toHaveBeenCalledTimes(1);
     expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith({ userId: ME }, entry.id);
-    expect(index.forgetJourneyEntry).not.toHaveBeenCalled();
   });
 });
 
@@ -565,27 +564,14 @@ describe('editOwnEntry', () => {
     );
   });
 
-  it('forgets the old vector before queuing a fresh one, in that order (t-149)', async () => {
-    const order: string[] = [];
-    index.forgetJourneyEntry.mockImplementation(async () => {
-      order.push('forget');
-      return 0;
-    });
-    index.queueJourneyEntryIndex.mockImplementation(() => {
-      order.push('queue');
-    });
-
+  it('queues the edited entry for the index, off the request, by its own id (t-149)', async () => {
     await editOwnEntry(ME, 'cmmine00000000000000000000', { body: 'mine, rewritten' });
 
-    expect(index.forgetJourneyEntry).toHaveBeenCalledWith(
-      { userId: ME },
-      'cmmine00000000000000000000'
-    );
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledTimes(1);
     expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith(
       { userId: ME },
       'cmmine00000000000000000000'
     );
-    expect(order).toEqual(['forget', 'queue']);
   });
 
   it('answers another person’s entry as not found, and leaves it alone', async () => {
@@ -594,7 +580,6 @@ describe('editOwnEntry', () => {
     ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(db.entries.find((r) => r.id === 'cmtheirs000000000000000000')?.body).toBe('theirs');
-    expect(index.forgetJourneyEntry).not.toHaveBeenCalled();
     expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
   });
 
@@ -607,7 +592,6 @@ describe('editOwnEntry', () => {
       body: 'her account',
       withheldFromAgent: false,
     });
-    expect(index.forgetJourneyEntry).not.toHaveBeenCalled();
     expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
   });
 });

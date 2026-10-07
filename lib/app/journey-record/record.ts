@@ -56,7 +56,10 @@ import {
   type JourneyRecordQuery,
 } from '@/lib/app/journey-record/query';
 import { getNotes } from '@/lib/app/slots/notes';
-import { forgetJourneyEntry, queueJourneyEntryIndex } from '@/lib/app/memory/memory-index';
+import {
+  forgetSourceRemovedJourneyEntries,
+  queueJourneyEntryIndex,
+} from '@/lib/app/memory/memory-index';
 import type { OwnEntryCreate, OwnEntryEdit } from '@/lib/app/journey-record/validation';
 
 /**
@@ -570,9 +573,8 @@ export async function editOwnEntry(
     if (!existing) throw new NotFoundError('Entry not found');
     throw new ConflictError('A session synopsis is changed by keeping it, not by editing it here');
   }
-  // Its words or its opt-out changed: the old vector goes now, and a fresh one
-  // is queued if she may still read it (t-149).
-  await forgetJourneyEntry({ userId }, id);
+  // Its words or its opt-out changed: its vector is brought up to date off the
+  // request, so index upkeep can never fail the edit (t-149).
   queueJourneyEntryIndex({ userId }, id);
   return readOwnEntry(userId, id);
 }
@@ -628,6 +630,9 @@ export async function settleSynopsesOfDeletedExchanges(
     where: { ...where, state: 'kept', sourceRemovedAt: null },
     data: { sourceRemovedAt: input.at },
   });
+  // A flagged account may quote what was deleted: its vector goes with the
+  // deletion, in this transaction (t-149; §12).
+  if (flagged.count > 0) await forgetSourceRemovedJourneyEntries(tx, { userId: input.userId });
   return { removed: removed.count, flagged: flagged.count };
 }
 

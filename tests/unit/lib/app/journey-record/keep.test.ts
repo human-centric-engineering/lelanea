@@ -43,13 +43,11 @@ vi.mock('@/lib/db/utils', async () => {
   };
 });
 const index = vi.hoisted(() => ({
-  forgetJourneyEntry: vi.fn(async () => 0),
   queueJourneyEntryIndex: vi.fn(),
 }));
 vi.mock('@/lib/app/memory/memory-index', () => ({
   queueNoteIndex,
   forgetWipedNotes: vi.fn(),
-  forgetJourneyEntry: index.forgetJourneyEntry,
   queueJourneyEntryIndex: index.queueJourneyEntryIndex,
 }));
 vi.mock('@/lib/app/journey-record/synopsis/seat', () => seat);
@@ -680,32 +678,20 @@ describe('discarding a draft', () => {
 });
 
 describe('the memory index on a keep (t-149)', () => {
-  it('forgets the old vector and queues a fresh one, in that order, at the end of a successful keep', async () => {
-    const order: string[] = [];
-    index.forgetJourneyEntry.mockImplementation(async () => {
-      order.push('forget');
-      return 0;
-    });
-    index.queueJourneyEntryIndex.mockImplementation(() => {
-      order.push('queue');
-    });
-
+  it('queues the kept synopsis for the index at the end of a successful keep, and nothing else', async () => {
     await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
 
-    expect(index.forgetJourneyEntry).toHaveBeenCalledWith({ userId: ME }, draft.id);
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledTimes(1);
     expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith({ userId: ME }, draft.id);
-    expect(order).toEqual(['forget', 'queue']);
   });
 
-  it('does neither on the early-return double submit: nothing changed, so nothing is re-indexed', async () => {
+  it('queues nothing on the early-return double submit: nothing changed', async () => {
     await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
-    index.forgetJourneyEntry.mockClear();
     index.queueJourneyEntryIndex.mockClear();
 
     const again = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
 
     expect(again.notes).toEqual([]);
-    expect(index.forgetJourneyEntry).not.toHaveBeenCalled();
     expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
   });
 });

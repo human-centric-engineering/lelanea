@@ -38,10 +38,11 @@ smoke:app-search-memory` (the tool, notes, and each way a note goes).
   note must too.
 - **Never embed a note's `reasoningNote`.** It is not masked (daybreak#269).
   Only `value` is read.
-- **Never change a journey entry's words or opt-out without
-  `forgetJourneyEntry()` and a fresh `queueJourneyEntryIndex()`.** A vector
-  holds no words, so nothing else notices it is stale. `editOwnEntry()` and
-  `keepSynopsis()` both do; a third writer must too.
+- **Never await index upkeep in a journey write.** A change to an entry's
+  words, opt-out or state calls `queueJourneyEntryIndex()` after it commits,
+  which never throws: upkeep can never fail the person's write. Correctness
+  does not depend on it either, because a stale vector is never returned
+  (below).
 - **Never apply its migrations with `migrate dev`.** Three FKs, two CHECKs and
   the HNSW index are hand-written, so the generated SQL drops them (`B13`). Author
   with `--create-only`, strip the drops, apply with `npm run db:migrate:deploy`,
@@ -131,13 +132,24 @@ equal by a unit test:
 What is embedded is the entry's line, its words and its outcomes, one to a
 line (`journeyEntryText`).
 
-- **On write:** writing an own entry queues its index. Editing one, changing
-  whether she may read it, and keeping a synopsis (as written or changed) each
-  drop the entry's vector at once (`forgetJourneyEntry`) and queue a fresh one.
-  The insert is conditional on the `updatedAt` it read, so an embedding of
-  words edited mid-embed never lands over the newer ones.
+**A vector carries the version it was made from** (`journeyEntryUpdatedAt`,
+migration `20261018100100_app_memory_journey_source_stamp`; review round 1).
+The INSERT copies the entry's `updatedAt` from the row, and every journey
+statement compares the two with `IS NOT DISTINCT FROM`. A vector of any other
+version is stale: a search never returns it, the next index of the entry
+replaces it, and the backfill re-embeds and the prune drops it. So no writer has
+to remember to drop a vector, and a writer that fails part way leaves nothing
+searchable by words the entry no longer holds.
+
+- **On write:** writing, editing or changing the opt-out of an own entry, and
+  keeping a synopsis, each queue `indexJourneyEntry` after the write commits.
+  It drops a stale or no-longer-readable vector and embeds the current version.
+- **On deleting an exchange:** a kept synopsis flagged as written from it loses
+  its vector in the deletion's own transaction
+  (`forgetSourceRemovedJourneyEntries`), because it may quote what was deleted.
 - **By the backfill**, alongside messages and notes: qualifying entries with no
-  vector. Its prune drops the vector of any entry that stopped qualifying.
+  vector of their current version. Its prune drops any vector whose entry
+  stopped qualifying or moved on.
 
 ## Who can find it
 
@@ -175,9 +187,12 @@ answered and its block is cached for 60 seconds.
   quoted as something they said; an account they kept is what they hold true of
   that session, perhaps not their wording, so never "you said" word for word.
   A journey entry's words are cut at `MAX_REMEMBERED_ENTRY_CHARS`.
-- **Its published definition did not change for t-149.** The new kinds explain
-  themselves through `whose`, so no reseed or client reconnect is owed
-  (`sunrise.mcp-reseed`).
+- **Its published definition names the new kinds** (t-149, review round 1):
+  the class, seed 024's literal, and a guarded `UPDATE` in
+  `20261018100200_app_search_person_memory_journey` for databases that never
+  run the seed (only where the definition is still what the original INSERT
+  wrote). The guide's agent reads its capabilities from the database per turn,
+  so the migration is the whole of it; no MCP client holds this tool.
 - **Leaves out the message the turn is answering** (`app_turn.userMessageId`),
   which is already in front of the AI and would otherwise be the nearest hit.
 - **At most `MEMORY_RESULTS_PER_CALL`, within `MEMORY_MAX_DISTANCE`.** The
@@ -218,19 +233,20 @@ and is indexed like any other.
 
 ## What takes it out
 
-| When                                                                                         | How                                                         |
-| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| A message is deleted, including by deleting an exchange (`slots.md`, "Deleting an exchange") | `messageId` → `ai_message`, `ON DELETE CASCADE`             |
-| A conversation is deleted (Sunrise's route, retention)                                       | its messages cascade, and their vectors with them           |
-| The account is erased (`eraseUser()`)                                                        | `userId` → `user`, `ON DELETE CASCADE`                      |
-| The org is deleted                                                                           | `orgId` → `org`, `ON DELETE CASCADE`                        |
-| A note version is deleted outright (erasure's cascade to slot values)                        | `slotValueId` → `framework_slot_value`, `ON DELETE CASCADE` |
-| A note is removed, or the exchange that wrote it is deleted (`slots.md`)                     | `forgetWipedNotes(tx, …)` in the wipe's own transaction     |
-| A note is revised                                                                            | `indexNote()` drops the earlier version's vector            |
-| A note stops qualifying any other way (hidden since, a race)                                 | the backfill's prune; a search never returns it meanwhile   |
-| A journey entry is removed (`DELETE`, or its session forgotten)                              | `journeyEntryId` → `app_journey_entry`, `ON DELETE CASCADE` |
-| A journey entry is edited, kept from her, or a synopsis kept again                           | `forgetJourneyEntry()` in the write, then a fresh index     |
-| A journey entry stops qualifying any other way (flagged source-removed, a race)              | the backfill's prune; a search never returns it meanwhile   |
+| When                                                                                         | How                                                                          |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| A message is deleted, including by deleting an exchange (`slots.md`, "Deleting an exchange") | `messageId` → `ai_message`, `ON DELETE CASCADE`                              |
+| A conversation is deleted (Sunrise's route, retention)                                       | its messages cascade, and their vectors with them                            |
+| The account is erased (`eraseUser()`)                                                        | `userId` → `user`, `ON DELETE CASCADE`                                       |
+| The org is deleted                                                                           | `orgId` → `org`, `ON DELETE CASCADE`                                         |
+| A note version is deleted outright (erasure's cascade to slot values)                        | `slotValueId` → `framework_slot_value`, `ON DELETE CASCADE`                  |
+| A note is removed, or the exchange that wrote it is deleted (`slots.md`)                     | `forgetWipedNotes(tx, …)` in the wipe's own transaction                      |
+| A note is revised                                                                            | `indexNote()` drops the earlier version's vector                             |
+| A note stops qualifying any other way (hidden since, a race)                                 | the backfill's prune; a search never returns it meanwhile                    |
+| A journey entry is removed (`DELETE`, or its session forgotten)                              | `journeyEntryId` → `app_journey_entry`, `ON DELETE CASCADE`                  |
+| A journey entry is edited, kept from her, or a synopsis kept again                           | its queued index replaces or drops it; never returned while stale            |
+| A kept synopsis is flagged as written from an exchange since deleted                         | `forgetSourceRemovedJourneyEntries(tx, …)` in the deletion's own transaction |
+| A journey entry stops qualifying or moves on any other way (a race, a failed write)          | the backfill's prune; a search never returns it meanwhile                    |
 
 ## Data rights
 

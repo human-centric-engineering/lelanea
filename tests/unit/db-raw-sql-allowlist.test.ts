@@ -113,7 +113,7 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
   // t-149 journey entries), same ledger row.
   {
     file: 'lib/app/memory/memory-index.ts',
-    calls: 16,
+    calls: 17,
     why: 'pgvector writes, deletes and cosine search over app_memory_embedding joined to ai_message/ai_conversation (messages), framework_slot_value (notes) or app_journey_entry (journey entries), which Prisma cannot express (Unsupported vector column, <=> ordering, DELETE … USING); every table carries org_isolation, the searches, the backfill and the prune bind the org, and every per-person statement binds the person on both the index row and its source',
   },
   {

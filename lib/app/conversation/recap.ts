@@ -48,7 +48,8 @@
  * message. Read for this person only, and bounded:
  *
  * - **The account of that session they kept** (f-journey-record t-149), when
- *   there is one: its line and words quoted, its outcomes listed. Never a
+ *   there is one: as reference to name, never on a `> ` line to quote, because
+ *   it is often her draft kept as written. Never a
  *   draft, and never one flagged as written from an exchange they have since
  *   deleted (`readKeptSynopsisOfSession`). Otherwise:
  * - **Their own words** from the session looked back to, oldest first: the
@@ -434,23 +435,25 @@ async function readJourneySteps(userId: string, prior: PriorSession): Promise<st
 /**
  * The account of last time the person kept, as the material carries it (t-149).
  *
- * Its line and its words are quoted, `> ` on every line, because the recap may
- * quote only those lines and this is what the person kept as true of that
- * session: they approved it, or rewrote it. Cut to the same budget as their
- * words. The outcomes follow on lines of their own, unquoted: they name what
- * came of it, and are not something to read back.
+ * **Never on a `> ` line.** The fixed ask quotes "their words" from those lines
+ * only, and a kept account is often the synopsis seat's draft kept as written:
+ * quoting it in quotation marks as something they said would put her words in
+ * their mouth (review round 1). So it is carried as reference, said to be the
+ * account they kept and not their words, for the recap to name in its own
+ * words. With no `> ` lines in the material there is nothing it may quote. The
+ * line and the account are each kept to one line of their own, so neither can
+ * forge a `> ` line, and cut to the words' budget.
  */
 function keptAccountSection(kept: KeptSynopsisText): string {
-  const line = unfenced(kept.summary).replace(/\s+/g, ' ').trim();
-  const body = cut(unfenced(kept.body).trim(), MAX_RECAP_WORDS_CHARS);
+  const oneLine = (text: string, max: number) =>
+    cut(unfenced(text).replace(/\s+/g, ' ').trim(), max);
   const outcomes = kept.outcomes.map(
-    (outcome) =>
-      `- ${outcome.kind}: ${cut(unfenced(outcome.text).replace(/\s+/g, ' ').trim(), MAX_RECAP_NOTE_CHARS)}`
+    (outcome) => `- ${outcome.kind}: ${oneLine(outcome.text, MAX_RECAP_NOTE_CHARS)}`
   );
   return [
-    'The account of their last session that they kept, having read it and approved it or rewritten it themselves:',
-    quoted(line),
-    quoted(body),
+    'The account of their last session that they kept, having read it and approved it or rewritten it. It is an account of what they said, not their words: name what it holds in your own words, never in quotation marks.',
+    `Its line: ${oneLine(kept.summary, MAX_RECAP_NOTE_CHARS)}`,
+    `The account: ${oneLine(kept.body, MAX_RECAP_WORDS_CHARS)}`,
     ...(outcomes.length > 0 ? ['What they kept as coming out of it:', ...outcomes] : []),
   ].join('\n');
 }
@@ -463,14 +466,16 @@ export async function readRecapMaterial(
   userId: string,
   prior: PriorSession
 ): Promise<RecapMaterial> {
-  const [kept, notes, steps] = await Promise.all([
+  const [kept, said, notes, steps] = await Promise.all([
     readKeptSynopsisOfSession(userId, prior.id),
+    // Read alongside, not after: a session with no kept account, most of them
+    // today, should not wait a round trip longer to open.
+    readWords(userId, prior),
     readNotes(userId, prior),
     readJourneySteps(userId, prior),
   ]);
-  // What they kept of last time stands in for their raw words (t-149): the
-  // words are read only when they kept no account of that session.
-  const words = kept ? [] : await readWords(userId, prior);
+  // What they kept of last time stands in for their raw words (t-149).
+  const words = kept ? [] : said;
 
   const sections = [
     kept

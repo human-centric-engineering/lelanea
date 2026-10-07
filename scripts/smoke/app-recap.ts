@@ -18,7 +18,8 @@
  * 5. Reloads: the recap stands and is not owed again.
  * 6. They speak in the second session and keep an account of it (t-149). A
  *    draft is never read; once kept, the third session's recap opens from it,
- *    and names its phrase.
+ *    names its phrase without quoting it as theirs, and the account is in the
+ *    memory index and found by search on the real database.
  *
  * Whether it reads like a coach opening a session is a human judgement, made
  * by the owner at ship; this asserts what a script can: that it names the
@@ -66,6 +67,11 @@ import { prepareRecap, readRecapMaterial, recapDue, runRecap } from '@/lib/app/c
 import { arriveSession } from '@/lib/app/sessions/store';
 import { writeSynopsisDraft } from '@/lib/app/journey-record/record';
 import { keepSynopsis } from '@/lib/app/journey-record/keep';
+import {
+  indexJourneyEntry,
+  listMemoryEntriesForSubject,
+  searchMemory,
+} from '@/lib/app/memory/memory-index';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
 import { DEFAULT_USER_ROLE } from '@/lib/auth/roles';
 import { runAsOrg } from '@/lib/tenancy/context';
@@ -406,8 +412,34 @@ async function main(): Promise<void> {
     check(kept.entry.state === 'kept', 'they keep it, as written');
     const keptMaterial = await readRecapMaterial(user.id, draftMaterial.ready.prior);
     check(
-      keptMaterial.text.includes(`> ${KEPT_LINE}`) && keptMaterial.account.source === 'synopsis',
-      'the material now carries the account they kept, quoted, instead of their words'
+      keptMaterial.text.includes(`Its line: ${KEPT_LINE}`) &&
+        keptMaterial.account.source === 'synopsis',
+      'the material now carries the account they kept instead of their words'
+    );
+    check(
+      !/^> .*plough/im.test(keptMaterial.text),
+      'never on a line the recap may quote: it is an account, not their words'
+    );
+    // The index, on the real database: the stamp the INSERT copies from the row
+    // must equal the `updatedAt` it read back, or nothing would ever be stored.
+    const indexed = await runAsOrg(INSTALL_ORG_ID, () =>
+      indexJourneyEntry({ userId: user.id }, drafted.id)
+    );
+    check(
+      indexed === 'indexed' || indexed === 'already_indexed',
+      `the kept account is in the memory index (${indexed})`
+    );
+    const entries = await listMemoryEntriesForSubject({ userId: user.id });
+    check(
+      entries.some((row) => row.journeyEntryId === drafted.id && row.sourceKind === 'synopsis'),
+      'as a synopsis source'
+    );
+    const found = await runAsOrg(INSTALL_ORG_ID, () =>
+      searchMemory({ userId: user.id }, 'the constellation my father looked for', { limit: 5 })
+    );
+    check(
+      found.some((hit) => hit.sourceId === drafted.id),
+      'and search finds it by meaning, through the stamp, on Postgres'
     );
     check(!keptMaterial.text.includes(SAID_SECOND), 'and not the raw words it stands in for');
     const third = await runAsOrg(INSTALL_ORG_ID, async () =>
