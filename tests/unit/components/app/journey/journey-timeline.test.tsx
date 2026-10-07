@@ -16,15 +16,9 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const router = vi.hoisted(() => ({
-  push: vi.fn(),
-  replace: vi.fn(),
-  refresh: vi.fn(),
-  back: vi.fn(),
-  forward: vi.fn(),
-  prefetch: vi.fn(),
-  bfcacheId: 'test-bfcache-id',
-}));
+import { createMockRouter } from '@/tests/types/mocks';
+
+const router = createMockRouter();
 vi.mock('next/navigation', () => ({
   usePathname: () => '/app/journey',
   useRouter: () => router,
