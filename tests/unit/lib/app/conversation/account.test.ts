@@ -286,6 +286,19 @@ describe('the parts', () => {
     );
   });
 
+  it('names the account of last time they kept when the recap drew on it, not their words (t-149)', () => {
+    const parts = accountParts(
+      input({
+        turn: turn({
+          recap: { since: 'x', source: 'synopsis', words: 0, notes: ['life wealth'], journey: 0 },
+        }),
+      })
+    );
+    expect(parts[0]?.detail).toBe(
+      'Opened this session with a recap of the last one, drawing on the account of last time you kept and your notes on life wealth.'
+    );
+  });
+
   it('sets the sources apart with semicolons when the notes are a list of their own', () => {
     const parts = accountParts(
       input({
