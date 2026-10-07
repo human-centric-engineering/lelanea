@@ -1,15 +1,17 @@
 # The memory index
 
-What a person says, and the notes the app keeps about them, embedded so a
-conversation now can find what they said months ago by meaning, for that person
-only (f-memory t-129, t-107; product description §5, §3.19, §12 "Deletion is
+What a person says, the notes the app keeps about them, and what they kept in
+their journey record, embedded so a conversation now can find what they said
+months ago by meaning, for that person only (f-memory t-129, t-107;
+f-journey-record t-149; product description §5, §3.19, §12 "Deletion is
 real"). The AI reaches it through one tool, `search_person_memory` (t-130).
 
 **The code:** `lib/app/memory/memory-index.ts` (the index) and
 `lib/app/memory/search-capability.ts` (the tool). **The table:**
 `app_memory_embedding` (`prisma/schema/app.prisma`, migrations
-`20261008100000_app_memory_embedding` and
-`20261009100100_app_memory_note_source`). **The proof on a real database:**
+`20261008100000_app_memory_embedding`,
+`20261009100100_app_memory_note_source` and
+`20261018100000_app_memory_journey_source`). **The proof on a real database:**
 `npm run smoke:app-memory-index` (the index) and `npm run
 smoke:app-search-memory` (the tool, notes, and each way a note goes).
 
@@ -24,8 +26,9 @@ smoke:app-search-memory` (the tool, notes, and each way a note goes).
   function takes a `MemorySubject` (`{ userId }`), and the caller fills it from
   its own context: the turn, the session, a capability's execution context.
 - **Never copy words into the table.** A row holds a vector and the id of its
-  source. A search reads the words from `ai_message` or `framework_slot_value`,
-  so deleting the source deletes the words everywhere at once.
+  source. A search reads the words from `ai_message`, `framework_slot_value` or
+  `app_journey_entry`, so deleting the source deletes the words everywhere at
+  once.
 - **Never add a source kind without its own cascading foreign key.** "An
   embedding goes with its source" (owner ruling 2, journal on `f-memory`) is
   carried by `ON DELETE CASCADE` wherever a source is deleted.
@@ -35,6 +38,11 @@ smoke:app-search-memory` (the tool, notes, and each way a note goes).
   note must too.
 - **Never embed a note's `reasoningNote`.** It is not masked (daybreak#269).
   Only `value` is read.
+- **Never await index upkeep in a journey write.** A change to an entry's
+  words, opt-out or state calls `queueJourneyEntryIndex()` after it commits,
+  which never throws: upkeep can never fail the person's write. Correctness
+  does not depend on it either, because a stale vector is never returned
+  (below).
 - **Never apply its migrations with `migrate dev`.** Three FKs, two CHECKs and
   the HNSW index are hand-written, so the generated SQL drops them (`B13`). Author
   with `--create-only`, strip the drops, apply with `npm run db:migrate:deploy`,
@@ -105,15 +113,54 @@ or our `app_slot_definition`, the stricter of the two, as the panel reads them).
   first drops the vector of any note that stopped qualifying (superseded,
   hidden since, or wiped in a race with its own embedding).
 
+### What they kept in their journey (t-149)
+
+A **kept synopsis** and an **entry they wrote themselves**, as two source kinds
+(`synopsis`, `own_entry`) on one column, `journeyEntryId`, with a cascading
+foreign key to `app_journey_entry`. Both tables are ours, so that key is
+modelled in the schema. Owner ruling 4 at planning: she reads kept synopses
+and own entries unless an entry is kept from her, and never reads drafts.
+Every journey statement carries the same three `JOURNEY QUALIFIES` lines, held
+equal by a unit test:
+
+- **kept**: a draft is not in the record until the person keeps it;
+- **not kept from her** (`withheldFromAgent`);
+- **not written from an exchange they have since deleted** (`sourceRemovedAt`).
+  Such an account may quote what they deleted, and deletion is real, so it is
+  not read until they change it, which clears the flag.
+
+What is embedded is the entry's line, its words and its outcomes, one to a
+line (`journeyEntryText`).
+
+**A vector carries the version it was made from** (`journeyEntryUpdatedAt`,
+migration `20261018100100_app_memory_journey_source_stamp`; review round 1).
+The INSERT copies the entry's `updatedAt` from the row, and every journey
+statement compares the two with `IS NOT DISTINCT FROM`. A vector of any other
+version is stale: a search never returns it, the next index of the entry
+replaces it, and the backfill re-embeds and the prune drops it. So no writer has
+to remember to drop a vector, and a writer that fails part way leaves nothing
+searchable by words the entry no longer holds.
+
+- **On write:** writing, editing or changing the opt-out of an own entry, and
+  keeping a synopsis, each queue `indexJourneyEntry` after the write commits.
+  It drops a stale or no-longer-readable vector and embeds the current version.
+- **On deleting an exchange:** a kept synopsis flagged as written from it loses
+  its vector in the deletion's own transaction
+  (`forgetSourceRemovedJourneyEntries`), because it may quote what was deleted.
+- **By the backfill**, alongside messages and notes: qualifying entries with no
+  vector of their current version. Its prune drops any vector whose entry
+  stopped qualifying or moved on.
+
 ## Who can find it
 
 `searchMemory(subject, query, { limit, maxDistance?, excludeMessageIds?,
 attribution? })` returns the person's own messages and notes nearest in meaning,
-with their words, merged by distance. Each kind's SQL requires the person on
-the index row **and** on its source (the message's conversation, the note
-version), and the org; the note query also carries the `QUALIFIES` lines, so a
-placeholder or a hidden note is never returned even before its vector is
-dropped. It compares only vectors made by the model that embedded the query, so
+and journey entries, with their words, merged by distance. Each kind's SQL
+requires the person on the index row **and** on its source (the message's
+conversation, the note version, the journey entry), and the org; the note query
+also carries the `QUALIFIES` lines and the journey query the `JOURNEY
+QUALIFIES` lines, so a placeholder, a hidden note, a draft or an entry kept
+from her is never returned even before its vector is dropped. It compares only vectors made by the model that embedded the query, so
 after the embedding model changes, older entries are unsearchable until
 re-embedded.
 
@@ -133,10 +180,19 @@ answered and its block is cached for 60 seconds.
 - **Its only argument is the query.** The person is `context.userId`.
 - **Facilitator seat only.** A call from the onboarding seat or from no turn is
   refused with a message the AI can speak past.
-- **Labelled.** Each result carries `kind` (`their_words` or `note`), `when`
-  (a date in words, UTC) and `whose`, a sentence telling the model how to use
-  it: their words are quoted only as theirs; a note is its understanding of
-  them, never quoted as something they said.
+- **Labelled.** Each result carries `kind` (`their_words`, `note`,
+  `their_entry` or `kept_account`), `when` (a date in words, UTC) and `whose`,
+  a sentence telling the model how to use it: their words, and an entry they
+  wrote, are quoted only as theirs; a note is its understanding of them, never
+  quoted as something they said; an account they kept is what they hold true of
+  that session, perhaps not their wording, so never "you said" word for word.
+  A journey entry's words are cut at `MAX_REMEMBERED_ENTRY_CHARS`.
+- **Its published definition names the new kinds** (t-149, review round 1):
+  the class, seed 024's literal, and a guarded `UPDATE` in
+  `20261018100200_app_search_person_memory_journey` for databases that never
+  run the seed (only where the definition is still what the original INSERT
+  wrote). The guide's agent reads its capabilities from the database per turn,
+  so the migration is the whole of it; no MCP client holds this tool.
 - **Leaves out the message the turn is answering** (`app_turn.userMessageId`),
   which is already in front of the AI and would otherwise be the nearest hit.
 - **At most `MEMORY_RESULTS_PER_CALL`, within `MEMORY_MAX_DISTANCE`.** The
@@ -177,21 +233,25 @@ and is indexed like any other.
 
 ## What takes it out
 
-| When                                                                                         | How                                                         |
-| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| A message is deleted, including by deleting an exchange (`slots.md`, "Deleting an exchange") | `messageId` → `ai_message`, `ON DELETE CASCADE`             |
-| A conversation is deleted (Sunrise's route, retention)                                       | its messages cascade, and their vectors with them           |
-| The account is erased (`eraseUser()`)                                                        | `userId` → `user`, `ON DELETE CASCADE`                      |
-| The org is deleted                                                                           | `orgId` → `org`, `ON DELETE CASCADE`                        |
-| A note version is deleted outright (erasure's cascade to slot values)                        | `slotValueId` → `framework_slot_value`, `ON DELETE CASCADE` |
-| A note is removed, or the exchange that wrote it is deleted (`slots.md`)                     | `forgetWipedNotes(tx, …)` in the wipe's own transaction     |
-| A note is revised                                                                            | `indexNote()` drops the earlier version's vector            |
-| A note stops qualifying any other way (hidden since, a race)                                 | the backfill's prune; a search never returns it meanwhile   |
+| When                                                                                         | How                                                                          |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| A message is deleted, including by deleting an exchange (`slots.md`, "Deleting an exchange") | `messageId` → `ai_message`, `ON DELETE CASCADE`                              |
+| A conversation is deleted (Sunrise's route, retention)                                       | its messages cascade, and their vectors with them                            |
+| The account is erased (`eraseUser()`)                                                        | `userId` → `user`, `ON DELETE CASCADE`                                       |
+| The org is deleted                                                                           | `orgId` → `org`, `ON DELETE CASCADE`                                         |
+| A note version is deleted outright (erasure's cascade to slot values)                        | `slotValueId` → `framework_slot_value`, `ON DELETE CASCADE`                  |
+| A note is removed, or the exchange that wrote it is deleted (`slots.md`)                     | `forgetWipedNotes(tx, …)` in the wipe's own transaction                      |
+| A note is revised                                                                            | `indexNote()` drops the earlier version's vector                             |
+| A note stops qualifying any other way (hidden since, a race)                                 | the backfill's prune; a search never returns it meanwhile                    |
+| A journey entry is removed (`DELETE`, or its session forgotten)                              | `journeyEntryId` → `app_journey_entry`, `ON DELETE CASCADE`                  |
+| A journey entry is edited, kept from her, or a synopsis kept again                           | its queued index replaces or drops it; never returned while stale            |
+| A kept synopsis is flagged as written from an exchange since deleted                         | `forgetSourceRemovedJourneyEntries(tx, …)` in the deletion's own transaction |
+| A journey entry stops qualifying or moves on any other way (a race, a failed write)          | the backfill's prune; a search never returns it meanwhile                    |
 
 ## Data rights
 
 - **Art. 15:** the `memory` section of the subject-access export lists which of
-  the person's messages and note versions are indexed, when, and by which
+  the person's messages, note versions and journey entries are indexed, when, and by which
   model. Never the vector,
   which means nothing to the person it describes; the words are in their
   conversations section (`lib/app/leaf-data-export.ts`).

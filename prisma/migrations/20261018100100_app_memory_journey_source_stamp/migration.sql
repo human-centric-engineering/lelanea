@@ -1,0 +1,29 @@
+-- f-journey-record t-149, review round 1 — a journey entry's vector carries the
+-- version of the entry it was made from.
+--
+-- A vector holds no words, so nothing could tell that one made from an entry's
+-- old words was stale: every writer had to remember to drop it, and a writer
+-- that failed between saving the words and dropping the vector left it
+-- searchable by words the entry no longer held, which no prune could find.
+-- Now the INSERT copies the entry's "updatedAt" into "journeyEntryUpdatedAt",
+-- and every journey statement compares the two: a search returns only a vector
+-- whose stamp matches, the backfill re-embeds an entry with no matching vector,
+-- and the prune drops any vector whose stamp no longer matches.
+--
+-- Nullable: a vector made before this migration has no stamp, which matches no
+-- entry, so the next backfill replaces it.
+--
+-- CORRECTS 20261018100000_app_memory_journey_source's header, which said an
+-- edit drops the vector "in the write's own transaction (`forgetJourneyEntry`)".
+-- That helper is gone: a write queues the entry's index after it commits, the
+-- stamp makes any vector it has not yet replaced invisible, and only deleting
+-- an exchange drops a vector in its own transaction
+-- (`forgetSourceRemovedJourneyEntries`). An applied migration is never edited.
+--
+-- Generated with `prisma migrate diff --from-config-datasource --to-schema
+-- prisma/schema`; the one statement kept is ours. The rest were the drops of
+-- objects Prisma cannot model (`B13`), as in
+-- 20261018100000_app_memory_journey_source.
+
+-- AlterTable
+ALTER TABLE "app_memory_embedding" ADD COLUMN "journeyEntryUpdatedAt" TIMESTAMP(3);

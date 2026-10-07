@@ -2,8 +2,9 @@
  * What a session recap drew on, as its turn row keeps it (f-recap t-142).
  *
  * The recap is the AI's own opening of a new session (`recap.ts`), steered by
- * material the person never sees: their words from the last session, the
- * notes that changed since, and where their journey moved. "Nothing is
+ * material the person never sees: the account of the last session they kept
+ * (or, with none kept, their words from it), the notes that changed since,
+ * and where their journey moved. "Nothing is
  * understood invisibly", so the account under the reply says what it drew on
  * (`account.ts`), and this is what it reads — stored on `app_turn.recap` when
  * the recap is claimed, sent on its `done` frame, and read back on reload.
@@ -20,7 +21,13 @@ import { z } from 'zod';
 export const recapAccountSchema = z.object({
   /** When the session the recap looked back to began — ISO. */
   since: z.string(),
-  /** How many of the person's own messages from that session it was given. */
+  /**
+   * What it drew on for last time (f-journey-record t-149): the account of
+   * that session the person kept, or, when they kept none, their own words
+   * from it. An account stored before t-149 has no source, and was words.
+   */
+  source: z.enum(['synopsis', 'words']).default('words'),
+  /** How many of the person's own messages from that session it was given. 0 when it drew on the kept account. */
   words: z.number().int().nonnegative(),
   /** The headings of the notes captured since, as the notes panel files them. */
   notes: z.array(z.string()),

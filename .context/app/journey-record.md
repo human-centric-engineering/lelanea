@@ -57,7 +57,9 @@ So this is the "element does not fit" case of the scaffolding rule
 [`daybreak#293`](https://github.com/human-centric-engineering/daybreak/issues/293)
 proposing the element it stands in for.
 
-**Only `lib/app/journey-record/` reads or writes the table.** The two
+**Only `lib/app/journey-record/` writes the table.** The memory index reads it
+(t-149), as it reads messages and notes, to embed and search what she may
+read. The two
 hand-written foreign keys both cascade:
 
 - `userId` → `user`: erasure takes the record.
@@ -74,9 +76,9 @@ the CHECK are drift-probed in `lib/app/leaf-db-drift.ts`.
   (`lib/app/journey-record/ownership.ts`). Another person's entry id answers
   404, the same as an id that never existed. There is no admin door to it.
 - **She reads it by default; the person can keep an entry from her** (owner
-  ruling 4). `withheldFromAgent` marks an own entry no agent may read. t-149
-  makes the recap and memory search honour it. Until then, no agent reads
-  the record at all.
+  ruling 4). `withheldFromAgent` marks an own entry no agent may read. Since
+  t-149 she reads the record in two places, both honouring it (see
+  [What she reads](#what-she-reads)).
 - **A synopsis is changed by keeping it, never by editing it in place.** The
   edit route refuses a synopsis with 409, because what keeping does to the
   person's notes (owner rulings 2 and 3) belongs to keeping. A kept synopsis
@@ -413,6 +415,17 @@ prototype's `renderJourney`.
 - **A stop with no module is the usual case in release 1**, and says so
   rather than looking empty.
 
-## Not yet
+## What she reads
 
-- The recap and memory search reading the record (t-149).
+t-149, owner ruling 4 at planning. Two readers, and neither ever reads a
+draft:
+
+- **The recap** opens a new session from the account of the last one the
+  person kept, falling back to their raw words when they kept none
+  ([`conversation.md`](./conversation.md#the-recap--the-ai-opens-each-new-session-f-recap-t-142)).
+- **Memory search** finds kept synopses and own entries not kept from her
+  ([`memory.md`](./memory.md#what-they-kept-in-their-journey-t-149)).
+
+Neither reads a synopsis flagged as written from an exchange the person has
+since deleted (`sourceRemoved`): it may quote what they deleted, so it waits
+until they change it, which clears the flag.

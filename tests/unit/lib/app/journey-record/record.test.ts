@@ -64,6 +64,11 @@ vi.mock('@/lib/logging', () => ({
  */
 const { getNotes } = vi.hoisted(() => ({ getNotes: vi.fn() }));
 vi.mock('@/lib/app/slots/notes', () => ({ getNotes }));
+const index = vi.hoisted(() => ({
+  forgetSourceRemovedJourneyEntries: vi.fn(async () => 0),
+  queueJourneyEntryIndex: vi.fn(),
+}));
+vi.mock('@/lib/app/memory/memory-index', () => index);
 
 vi.mock('@/lib/db/client', () => {
   type Where = Record<string, unknown>;
@@ -522,6 +527,13 @@ describe('createOwnEntry', () => {
     expect(db.entries).toHaveLength(1);
     expect(db.entries[0].userId).toBe(ME);
   });
+
+  it('queues the fresh entry for the memory index, by its own id (t-149)', async () => {
+    const entry = await createOwnEntry(ME, { body: 'Woke at three.' });
+
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledTimes(1);
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith({ userId: ME }, entry.id);
+  });
 });
 
 describe('editOwnEntry', () => {
@@ -552,15 +564,26 @@ describe('editOwnEntry', () => {
     );
   });
 
+  it('queues the edited entry for the index, off the request, by its own id (t-149)', async () => {
+    await editOwnEntry(ME, 'cmmine00000000000000000000', { body: 'mine, rewritten' });
+
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledTimes(1);
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith(
+      { userId: ME },
+      'cmmine00000000000000000000'
+    );
+  });
+
   it('answers another person’s entry as not found, and leaves it alone', async () => {
     await expect(
       editOwnEntry(ME, 'cmtheirs000000000000000000', { body: 'overwritten' })
     ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(db.entries.find((r) => r.id === 'cmtheirs000000000000000000')?.body).toBe('theirs');
+    expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
   });
 
-  it('refuses a synopsis: it is changed by keeping it', async () => {
+  it('refuses a synopsis: it is changed by keeping it, and never touches the index', async () => {
     await expect(
       editOwnEntry(ME, 'cmsyn000000000000000000000', { withheldFromAgent: true })
     ).rejects.toBeInstanceOf(ConflictError);
@@ -569,6 +592,7 @@ describe('editOwnEntry', () => {
       body: 'her account',
       withheldFromAgent: false,
     });
+    expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
   });
 });
 

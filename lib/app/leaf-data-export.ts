@@ -464,7 +464,7 @@ const ORG_SOURCES: OrgDataSource[] = [
     section: 'appMemoryEmbeddings',
     disposition: 'export',
     description:
-      'Which of each member’s messages are in the memory index, when and by which model. Not the vectors, and no words.',
+      'Which of each member’s messages, notes and kept journey entries are in the memory index, when and by which model. Not the vectors, and no words.',
     fetch: ({ orgId }) => listMemoryEntriesForOrg(orgId),
   },
   {

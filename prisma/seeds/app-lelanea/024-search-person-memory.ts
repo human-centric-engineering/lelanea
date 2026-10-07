@@ -43,7 +43,7 @@ export const SEARCH_PERSON_MEMORY_IMPL = {
   functionDefinition: {
     name: 'search_person_memory',
     description:
-      'Search what this person has said to you before, and the notes kept about them, by meaning. Call it when they mention someone or something they may have spoken about before, or when remembering it would help you meet them now. Each result says whether it is their own words or a note, and when. Quote their words back only as theirs, never as yours or as Lelañea’s material. A note is your understanding of them, not something they said. If nothing comes back, do not claim to remember.',
+      'Search what this person has said to you before, the notes kept about them, and what they kept in their journey, by meaning. Call it when they mention someone or something they may have spoken about before, or when remembering it would help you meet them now. Each result says what it is (their own words, a note, something they wrote in their journey, or an account of a session they kept), when, and how to use it. Quote their words, and what they wrote, back only as theirs, never as yours or as Lelañea’s material. A note is your understanding of them, and an account they kept is what they hold true of a session: neither is something they said word for word. If nothing comes back, do not claim to remember.',
     parameters: {
       type: 'object',
       properties: {

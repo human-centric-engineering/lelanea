@@ -15,6 +15,11 @@
  * 3. Arrives, as the pane's read does: a second session opens and the recap
  *    is owed.
  * 4. Runs the recap through the real hook and model, and prints it.
+ * 5. Reloads: the recap stands and is not owed again.
+ * 6. They speak in the second session and keep an account of it (t-149). A
+ *    draft is never read; once kept, the third session's recap opens from it,
+ *    names its phrase without quoting it as theirs, and the account is in the
+ *    memory index and found by search on the real database.
  *
  * Whether it reads like a coach opening a session is a human judgement, made
  * by the owner at ship; this asserts what a script can: that it names the
@@ -60,6 +65,13 @@ import { accountParts } from '@/lib/app/conversation/account';
 import { recapTurnId } from '@/lib/app/conversation/opening-id';
 import { prepareRecap, readRecapMaterial, recapDue, runRecap } from '@/lib/app/conversation/recap';
 import { arriveSession } from '@/lib/app/sessions/store';
+import { writeSynopsisDraft } from '@/lib/app/journey-record/record';
+import { keepSynopsis } from '@/lib/app/journey-record/keep';
+import {
+  indexJourneyEntry,
+  listMemoryEntriesForSubject,
+  searchMemory,
+} from '@/lib/app/memory/memory-index';
 import type { AuthenticatedSession } from '@/lib/auth/guards';
 import { DEFAULT_USER_ROLE } from '@/lib/auth/roles';
 import { runAsOrg } from '@/lib/tenancy/context';
@@ -76,6 +88,19 @@ const PHRASE_WORD = 'lighthouse';
 /** The note captured in that session: what she must not ask for again. */
 const NOTE_SLUG = 'life_wealth';
 const NOTE_VALUE = 'They are saving to buy a narrowboat and live on the canals.';
+/** What they say in the second session, which the account they keep stands in for. */
+const SAID_SECOND =
+  'My father had a brass telescope in the attic and he only ever used it when he could not sleep.';
+/**
+ * The account of the second session they keep, rewritten in their own words,
+ * and the word the next recap must name. It is a word they never said in the
+ * conversation, so finding it in the recap can only mean it read what they
+ * kept, not their raw words or the history.
+ */
+const KEPT_LINE = 'Your father, the Plough, and the nights he could not sleep';
+const KEPT_ACCOUNT =
+  'I realised it was the Plough he looked for every time, the one constellation he ever taught me, and that he wanted company more than the stars.';
+const KEPT_WORD = 'plough';
 /** Thirteen hours: past the twelve-hour gap. */
 const QUIET_MS = 13 * 60 * 60 * 1000;
 
@@ -96,6 +121,9 @@ function check(cond: boolean, msg: string): void {
 async function cleanup(userId: string): Promise<void> {
   const journeys = await prisma.userJourney.findMany({ where: { userId }, select: { id: true } });
   const journeyIds = journeys.map((j) => j.id);
+  // Its journey record and the vectors on it go with the user too; named first
+  // so a failed run leaves nothing behind whatever the cascade order.
+  await prisma.appJourneyEntry.deleteMany({ where: { userId } }).catch(() => undefined);
   // Turns first: their session FK points at the event rows.
   await prisma.aiCostLog.deleteMany({ where: { userId } }).catch(() => undefined);
   await prisma.appTurn.deleteMany({ where: { userId } }).catch(() => undefined);
@@ -335,6 +363,101 @@ async function main(): Promise<void> {
     });
     check(replay.text === recap.text, 'asked again, it is the same reply');
     check(replayed?.attempts === 1, 'with no second model call');
+
+    console.log('\n6. They keep an account of this session; the next recap opens from it (t-149)');
+    const spoken = await takeTurn(user.id, `${PREFIX}-${stamp}-second`, SAID_SECOND);
+    console.log(`    her reply: ${spoken.text.replace(/\s+/g, ' ').slice(0, 300)}`);
+    // Written and kept here rather than drafted by the seat: the seat's own
+    // wiring is smoke:app-synopsis's, and the account must carry a phrase this
+    // script can look for. Kept as written, so no model reads it.
+    check(
+      await writeSynopsisDraft(user.id, {
+        sessionId: second.session.id,
+        occurredAt: second.session.startedAt,
+        summary: KEPT_LINE,
+        body: KEPT_ACCOUNT,
+        outcomes: [{ kind: 'insight', text: 'The Plough was how he asked for company.' }],
+        modules: [],
+        notes: [],
+      }),
+      'an account of the second session is drafted'
+    );
+    const drafted = await prisma.appJourneyEntry.findFirstOrThrow({
+      where: { userId: user.id, sessionId: second.session.id },
+    });
+    const draftMaterial = await runAsOrg(INSTALL_ORG_ID, async () => {
+      await moveIntoThePast(user.id, QUIET_MS);
+      const third = await arriveSession(user.id);
+      const draftReady = await prepareRecap(subject);
+      if (!draftReady.ready) throw new Error(`the third recap was not ready: ${draftReady.reason}`);
+      return {
+        third,
+        ready: draftReady,
+        material: await readRecapMaterial(user.id, draftReady.prior),
+      };
+    });
+    check(
+      draftMaterial.third.session.ordinal === 3 &&
+        draftMaterial.ready.prior.id === second.session.id,
+      'a third session looks back to the second'
+    );
+    check(
+      !draftMaterial.material.text.toLowerCase().includes(KEPT_WORD) &&
+        draftMaterial.material.account.source === 'words',
+      'a draft is never read: the material falls back to their words'
+    );
+    const kept = await runAsOrg(INSTALL_ORG_ID, () =>
+      keepSynopsis(user.id, drafted.id, { seen: drafted.updatedAt, confirm: [] })
+    );
+    check(kept.entry.state === 'kept', 'they keep it, as written');
+    const keptMaterial = await runAsOrg(INSTALL_ORG_ID, () =>
+      readRecapMaterial(user.id, draftMaterial.ready.prior)
+    );
+    check(
+      keptMaterial.text.includes(`Its line: ${KEPT_LINE}`) &&
+        keptMaterial.account.source === 'synopsis',
+      'the material now carries the account they kept instead of their words'
+    );
+    check(
+      !/^> .*plough/im.test(keptMaterial.text),
+      'never on a line the recap may quote: it is an account, not their words'
+    );
+    // The index, on the real database: the stamp the INSERT copies from the row
+    // must equal the `updatedAt` it read back, or nothing would ever be stored.
+    const indexed = await runAsOrg(INSTALL_ORG_ID, () =>
+      indexJourneyEntry({ userId: user.id }, drafted.id)
+    );
+    check(
+      indexed === 'indexed' || indexed === 'already_indexed',
+      `the kept account is in the memory index (${indexed})`
+    );
+    const entries = await runAsOrg(INSTALL_ORG_ID, () =>
+      listMemoryEntriesForSubject({ userId: user.id })
+    );
+    check(
+      entries.some((row) => row.journeyEntryId === drafted.id && row.sourceKind === 'synopsis'),
+      'as a synopsis source'
+    );
+    const found = await runAsOrg(INSTALL_ORG_ID, () =>
+      searchMemory({ userId: user.id }, 'the constellation my father looked for', { limit: 5 })
+    );
+    check(
+      found.some((hit) => hit.sourceId === drafted.id),
+      'and search finds it by meaning, through the stamp, on Postgres'
+    );
+    check(!keptMaterial.text.includes(SAID_SECOND), 'and not the raw words it stands in for');
+    const third = await runAsOrg(INSTALL_ORG_ID, async () =>
+      drain(await runRecap(draftMaterial.ready, { user: subject }))
+    );
+    console.log(`\n    THE NEXT RECAP:\n    ${third.text.replace(/\n+/g, '\n    ')}\n`);
+    check(
+      third.text.toLowerCase().includes(KEPT_WORD),
+      `the next recap names what they kept ("${KEPT_WORD}")`
+    );
+    check(
+      isDeepStrictEqual(third.done.recap, keptMaterial.account),
+      'and its done frame says it drew on the kept account'
+    );
 
     console.log('\n✓ smoke:app-recap passed');
   } finally {

@@ -56,6 +56,10 @@ import {
   type JourneyRecordQuery,
 } from '@/lib/app/journey-record/query';
 import { getNotes } from '@/lib/app/slots/notes';
+import {
+  forgetSourceRemovedJourneyEntries,
+  queueJourneyEntryIndex,
+} from '@/lib/app/memory/memory-index';
 import type { OwnEntryCreate, OwnEntryEdit } from '@/lib/app/journey-record/validation';
 
 /**
@@ -156,6 +160,47 @@ export async function getJourneyRecord(
   return { ...view, notes: await readListedNotes(userId, view.entries) };
 }
 
+/** A session's account as the person kept it: what the recap opens from (t-149). */
+export interface KeptSynopsisText {
+  summary: string;
+  body: string;
+  outcomes: JourneyOutcome[];
+}
+
+/**
+ * The account of one of the person's sessions as they kept it, or null when
+ * there is none she may read (t-149, owner ruling 4). A draft is never
+ * returned: it is not in the record until they keep it. Nor is a synopsis
+ * written from an exchange they have since deleted (`sourceRemovedAt`): it may
+ * quote what they deleted, so it waits for them to change it. Synopses are
+ * never kept from her, but the opt-out is honoured here all the same.
+ */
+export async function readKeptSynopsisOfSession(
+  userId: string,
+  sessionId: string
+): Promise<KeptSynopsisText | null> {
+  const row = await prisma.appJourneyEntry.findFirst({
+    where: {
+      userId,
+      sessionId,
+      kind: 'synopsis',
+      state: 'kept',
+      withheldFromAgent: false,
+      sourceRemovedAt: null,
+    },
+    select: { id: true, summary: true, body: true, outcomes: true },
+  });
+  if (!row) return null;
+  const outcomes = journeyOutcomesSchema.safeParse(row.outcomes);
+  if (!outcomes.success) logger.error('Journey entry has unreadable outcomes', { entryId: row.id });
+  return {
+    // A synopsis always has its line (the table's CHECK); `''` only satisfies the type.
+    summary: row.summary ?? '',
+    body: row.body,
+    outcomes: outcomes.success ? outcomes.data : [],
+  };
+}
+
 async function readOwnEntry(userId: string, id: string): Promise<JourneyEntry> {
   const row = await prisma.appJourneyEntry.findFirst({ where: { id, userId } });
   if (!row) throw new NotFoundError('Entry not found');
@@ -177,6 +222,8 @@ export async function createOwnEntry(userId: string, entry: OwnEntryCreate): Pro
       keptAt: now,
     },
   });
+  // She reads it unless they kept it from her (t-149); the index decides.
+  queueJourneyEntryIndex({ userId }, row.id);
   return toEntry(row, undefined);
 }
 
@@ -527,6 +574,9 @@ export async function editOwnEntry(
     if (!existing) throw new NotFoundError('Entry not found');
     throw new ConflictError('A session synopsis is changed by keeping it, not by editing it here');
   }
+  // Its words or its opt-out changed: its vector is brought up to date off the
+  // request, so index upkeep can never fail the edit (t-149).
+  queueJourneyEntryIndex({ userId }, id);
   return readOwnEntry(userId, id);
 }
 
@@ -581,6 +631,9 @@ export async function settleSynopsesOfDeletedExchanges(
     where: { ...where, state: 'kept', sourceRemovedAt: null },
     data: { sourceRemovedAt: input.at },
   });
+  // A flagged account may quote what was deleted: its vector goes with the
+  // deletion, in this transaction (t-149; §12).
+  if (flagged.count > 0) await forgetSourceRemovedJourneyEntries(tx, { userId: input.userId });
   return { removed: removed.count, flagged: flagged.count };
 }
 

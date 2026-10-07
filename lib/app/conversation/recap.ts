@@ -47,6 +47,11 @@
  * turn, so the material travels with the opening itself, as its system
  * message. Read for this person only, and bounded:
  *
+ * - **The account of that session they kept** (f-journey-record t-149), when
+ *   there is one: as reference to name, never on a `> ` line to quote, because
+ *   it is often her draft kept as written. Never a
+ *   draft, and never one flagged as written from an exchange they have since
+ *   deleted (`readKeptSynopsisOfSession`). Otherwise:
  * - **Their own words** from the session looked back to, oldest first: the
  *   messages of their turns stamped with it. A deleted exchange's words are
  *   gone from the message table, so they never come back here.
@@ -60,8 +65,9 @@
  * The material is not instructions, and the framing says so. The words are the
  * person's own, in their own conversation, already in the history the model
  * reads; quoting them in a system message is what makes them reachable when
- * the history window has moved past them. This is the deterministic stand-in
- * for the kept synopses f-journey-record will replace it with.
+ * the history window has moved past them. The raw words were f-recap's
+ * deterministic stand-in until the record existed; now they are the fallback
+ * for a session the person kept no account of.
  *
  * ## Nothing understood invisibly
  *
@@ -107,6 +113,7 @@ import {
 } from '@/lib/app/sessions/store';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
 import { getNotes } from '@/lib/app/slots/notes';
+import { readKeptSynopsisOfSession, type KeptSynopsisText } from '@/lib/app/journey-record/record';
 import { fallbackModuleName } from '@/lib/app/modules/definitions';
 
 /**
@@ -308,7 +315,32 @@ export async function recapDue(user: GateSubject, session: Session): Promise<str
 
 /** Anything the person wrote, with the fence markers taken out so it cannot close the fence. */
 function unfenced(text: string): string {
-  return text.replaceAll(MATERIAL_START, '').replaceAll(MATERIAL_END, '');
+  // Until nothing changes: taking one marker out of `[Material [Material ends]ends]`
+  // joins another (review round 2, t-149).
+  let current = text;
+  for (;;) {
+    const next = current.replaceAll(MATERIAL_START, '').replaceAll(MATERIAL_END, '');
+    if (next === current) return current;
+    current = next;
+  }
+}
+
+/**
+ * One line of anything the person wrote, with no fence marker left in it.
+ *
+ * Collapsing whitespace and taking markers out each can make what the other
+ * then misses: a marker split across a line break is joined by the collapse,
+ * and taking out a nested marker leaves a double space the collapse then
+ * closes (review rounds 2 and 3, t-149). So both run together until neither
+ * changes anything.
+ */
+function fenceSafeLine(text: string): string {
+  let current = text;
+  for (;;) {
+    const next = unfenced(current.replace(/\s+/g, ' '));
+    if (next === current) return current.trim();
+    current = next;
+  }
 }
 
 /** At most `max` characters, said to be cut where it was. */
@@ -426,6 +458,31 @@ async function readJourneySteps(userId: string, prior: PriorSession): Promise<st
 }
 
 /**
+ * The account of last time the person kept, as the material carries it (t-149).
+ *
+ * **Never on a `> ` line.** The fixed ask quotes "their words" from those lines
+ * only, and a kept account is often the synopsis seat's draft kept as written:
+ * quoting it in quotation marks as something they said would put her words in
+ * their mouth (review round 1). So it is carried as reference, said to be the
+ * account they kept and not their words, for the recap to name in its own
+ * words. With no `> ` lines in the material there is nothing it may quote. The
+ * line and the account are each kept to one line of their own, so neither can
+ * forge a `> ` line, and cut to the words' budget.
+ */
+function keptAccountSection(kept: KeptSynopsisText): string {
+  const oneLine = (text: string, max: number) => cut(fenceSafeLine(text), max);
+  const outcomes = kept.outcomes.map(
+    (outcome) => `- ${outcome.kind}: ${oneLine(outcome.text, MAX_RECAP_NOTE_CHARS)}`
+  );
+  return [
+    'The account of their last session that they kept, having read it and approved it or rewritten it. It is an account of what they said, not their words: name what it holds in your own words, never in quotation marks.',
+    `Its line: ${oneLine(kept.summary, MAX_RECAP_NOTE_CHARS)}`,
+    `The account: ${oneLine(kept.body, MAX_RECAP_WORDS_CHARS)}`,
+    ...(outcomes.length > 0 ? ['What they kept as coming out of it:', ...outcomes] : []),
+  ].join('\n');
+}
+
+/**
  * The recap's material for this person, and what its account will say it drew
  * on. Every read names `userId`; nothing here takes another subject.
  */
@@ -433,16 +490,23 @@ export async function readRecapMaterial(
   userId: string,
   prior: PriorSession
 ): Promise<RecapMaterial> {
-  const [words, notes, steps] = await Promise.all([
+  const [kept, said, notes, steps] = await Promise.all([
+    readKeptSynopsisOfSession(userId, prior.id),
+    // Read alongside, not after: a session with no kept account, most of them
+    // today, should not wait a round trip longer to open.
     readWords(userId, prior),
     readNotes(userId, prior),
     readJourneySteps(userId, prior),
   ]);
+  // What they kept of last time stands in for their raw words (t-149).
+  const words = kept ? [] : said;
 
   const sections = [
-    words.length > 0
-      ? `What they said last time, in their own words, oldest first:\n${words.map(quoted).join('\n')}`
-      : 'Nothing they said last time was kept.',
+    kept
+      ? keptAccountSection(kept)
+      : words.length > 0
+        ? `What they said last time, in their own words, oldest first:\n${words.map(quoted).join('\n')}`
+        : 'Nothing they said last time was kept.',
     notes.length > 0
       ? `Notes captured since then (the heading, then the reading as kept):\n${notes
           .map((note) => `- ${note.heading}: ${note.value}`)
@@ -457,6 +521,7 @@ export async function readRecapMaterial(
     text: [MATERIAL_START, ...sections, MATERIAL_END].join('\n\n'),
     account: {
       since: prior.startedAt.toISOString(),
+      source: kept ? 'synopsis' : 'words',
       words: words.length,
       notes: notes.map((note) => note.heading),
       journey: steps.length,

@@ -654,6 +654,10 @@ model AppTurnSlotWrite {
 enum AppMemorySourceKind {
   message
   note
+  /// A kept synopsis in the journey record (f-journey-record t-149).
+  synopsis
+  /// Something the person wrote in their journey themselves (t-149).
+  own_entry
 
   @@map("app_memory_source_kind")
 }
@@ -685,25 +689,35 @@ enum AppMemorySourceKind {
 /// deleting them (`lib/app/slots/wipe.ts`), so each drops the vectors of the
 /// versions it wipes, in the same transaction (`forgetWipedNotes`).
 model AppMemoryEmbedding {
-  id                 String                      @id @default(cuid())
+  id                    String                      @id @default(cuid())
   /// Hand-written FK → `user`, `ON DELETE CASCADE`. The person the words are
   /// theirs; every search filters on it.
-  userId             String
-  sourceKind         AppMemorySourceKind
+  userId                String
+  sourceKind            AppMemorySourceKind
   /// Hand-written FK → `ai_message`, `ON DELETE CASCADE`. Set when
   /// `sourceKind` is `message`; one embedding per message.
-  messageId          String?                     @unique
+  messageId             String?                     @unique
   /// Hand-written FK → `framework_slot_value`, `ON DELETE CASCADE`. Set when
   /// `sourceKind` is `note`; one embedding per version, and only the head
   /// version keeps one (t-107).
-  slotValueId        String?                     @unique
-  embedding          Unsupported("vector(1536)")
+  slotValueId           String?                     @unique
+  /// Set when `sourceKind` is `synopsis` or `own_entry` (t-149): a kept entry
+  /// of the journey record the person has not kept from her. Both tables are
+  /// ours, so this one is modelled. Removing the entry, or erasure, takes it.
+  journeyEntryId        String?                     @unique
+  journeyEntry          AppJourneyEntry?            @relation(fields: [journeyEntryId], references: [id], onDelete: Cascade)
+  /// The entry's `updatedAt` this vector was made from, copied from the row in
+  /// the INSERT. A vector whose stamp no longer matches its entry is stale: a
+  /// search never returns it, the backfill re-embeds the entry, and the prune
+  /// drops it. So no writer has to remember to drop it (t-149, review round 1).
+  journeyEntryUpdatedAt DateTime?
+  embedding             Unsupported("vector(1536)")
   /// The model that made the vector. A search compares only vectors made by
   /// the model that embedded the query: two models' vectors are not comparable.
-  embeddingModel     String
-  embeddingProvider  String
-  embeddingDimension Int
-  createdAt          DateTime                    @default(now())
+  embeddingModel        String
+  embeddingProvider     String
+  embeddingDimension    Int
+  createdAt             DateTime                    @default(now())
 
   /// The org this row belongs to (Sunrise §107, t-112), taken from the source row.
   orgId String?
@@ -829,6 +843,9 @@ model AppJourneyEntry {
   /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  /// Its vector in the memory index, while it is kept and not kept from her (t-149).
+  memoryEmbedding AppMemoryEmbedding?
 
   @@index([userId, occurredAt])
   @@index([orgId])

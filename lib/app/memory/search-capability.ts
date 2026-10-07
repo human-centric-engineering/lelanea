@@ -88,7 +88,7 @@ export const MEMORY_MAX_DISTANCE = 0.75;
 export const SEARCH_PERSON_MEMORY_DEFINITION: CapabilityFunctionDefinition = {
   name: SEARCH_PERSON_MEMORY_SLUG,
   description:
-    'Search what this person has said to you before, and the notes kept about them, by meaning. Call it when they mention someone or something they may have spoken about before, or when remembering it would help you meet them now. Each result says whether it is their own words or a note, and when. Quote their words back only as theirs, never as yours or as Lelañea’s material. A note is your understanding of them, not something they said. If nothing comes back, do not claim to remember.',
+    'Search what this person has said to you before, the notes kept about them, and what they kept in their journey, by meaning. Call it when they mention someone or something they may have spoken about before, or when remembering it would help you meet them now. Each result says what it is (their own words, a note, something they wrote in their journey, or an account of a session they kept), when, and how to use it. Quote their words, and what they wrote, back only as theirs, never as yours or as Lelañea’s material. A note is your understanding of them, and an account they kept is what they hold true of a session: neither is something they said word for word. If nothing comes back, do not claim to remember.',
   parameters: {
     type: 'object',
     properties: {
@@ -108,8 +108,11 @@ type SearchPersonMemoryArgs = z.infer<typeof argsSchema>;
 
 /** One thing found, as the model reads it. */
 export interface RememberedItem {
-  /** What it is: something the person said, or a note kept about them. */
-  kind: 'their_words' | 'note';
+  /**
+   * What it is: something the person said, a note kept about them, an entry
+   * they wrote in their journey, or an account of a session they kept (t-149).
+   */
+  kind: 'their_words' | 'note' | 'their_entry' | 'kept_account';
   /** The words, as they were said or as the note holds them. */
   words: string;
   /** When, as a date the model can say aloud ("3 October 2026"). */
@@ -142,13 +145,48 @@ export function whoseNote(when: string): string {
   return `A note kept about the person, written from what they shared, last updated on ${when}. It is your understanding of them, not their words: never quote it as something they said.`;
 }
 
+/** The sentence that tells the model a hit is something the person wrote in their journey (t-149). */
+export function whoseEntry(when: string): string {
+  return `Something the person wrote in their journey themselves, on ${when}. Quote it only as theirs.`;
+}
+
+/**
+ * The sentence that tells the model a hit is an account of a session the
+ * person kept (t-149). They approved it or rewrote it, so it is what they hold
+ * to be true of that session, but it may not be their wording.
+ */
+export function whoseAccount(when: string): string {
+  return `An account of the person’s session on ${when}, which they read and kept as true, perhaps in their own words. Say it is what they kept, never that they said it word for word.`;
+}
+
+/** How much of a journey entry one result carries: an entry can run to pages. */
+export const MAX_REMEMBERED_ENTRY_CHARS = 2000;
+
+function cutEntry(text: string): string {
+  return text.length <= MAX_REMEMBERED_ENTRY_CHARS
+    ? text
+    : `${text.slice(0, MAX_REMEMBERED_ENTRY_CHARS).trimEnd()} …`;
+}
+
 function asRemembered(hit: MemoryHit): RememberedItem {
-  if (hit.sourceKind === 'note') {
-    const when = spokenDate(hit.notedAt);
-    return { kind: 'note', words: hit.text, when, whose: whoseNote(when) };
+  switch (hit.sourceKind) {
+    case 'synopsis': {
+      const when = spokenDate(hit.occurredAt);
+      return { kind: 'kept_account', words: cutEntry(hit.text), when, whose: whoseAccount(when) };
+    }
+    case 'own_entry': {
+      const when = spokenDate(hit.occurredAt);
+      return { kind: 'their_entry', words: cutEntry(hit.text), when, whose: whoseEntry(when) };
+    }
+    case 'note': {
+      const when = spokenDate(hit.notedAt);
+      return { kind: 'note', words: hit.text, when, whose: whoseNote(when) };
+    }
+    case 'message': {
+      const when = spokenDate(hit.saidAt);
+      return { kind: 'their_words', words: hit.text, when, whose: whoseWords(when) };
+    }
   }
-  const when = spokenDate(hit.saidAt);
-  return { kind: 'their_words', words: hit.text, when, whose: whoseWords(when) };
 }
 
 const turnStampSchema = z.object({ seat: z.string(), turnId: z.string().min(1).optional() });

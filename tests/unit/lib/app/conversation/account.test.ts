@@ -256,6 +256,7 @@ describe('the parts', () => {
         turn: turn({
           recap: {
             since: '2026-09-18T09:00:00.000Z',
+            source: 'words',
             words: 3,
             notes: ['life wealth', 'life family'],
             journey: 1,
@@ -276,17 +277,34 @@ describe('the parts', () => {
 
   it('says one thing in the singular, and only what a recap drew on', () => {
     const parts = accountParts(
-      input({ turn: turn({ recap: { since: 'x', words: 1, notes: [], journey: 0 } }) })
+      input({
+        turn: turn({ recap: { since: 'x', source: 'words', words: 1, notes: [], journey: 0 } }),
+      })
     );
     expect(parts[0]?.detail).toBe(
       'Opened this session with a recap of the last one, drawing on one thing you said last time.'
     );
   });
 
+  it('names the account of last time they kept when the recap drew on it, not their words (t-149)', () => {
+    const parts = accountParts(
+      input({
+        turn: turn({
+          recap: { since: 'x', source: 'synopsis', words: 0, notes: ['life wealth'], journey: 0 },
+        }),
+      })
+    );
+    expect(parts[0]?.detail).toBe(
+      'Opened this session with a recap of the last one, drawing on the account of last time you kept and your notes on life wealth.'
+    );
+  });
+
   it('sets the sources apart with semicolons when the notes are a list of their own', () => {
     const parts = accountParts(
       input({
-        turn: turn({ recap: { since: 'x', words: 2, notes: ['a', 'b', 'c'], journey: 1 } }),
+        turn: turn({
+          recap: { since: 'x', source: 'words', words: 2, notes: ['a', 'b', 'c'], journey: 1 },
+        }),
       })
     );
     expect(parts[0]?.detail).toBe(

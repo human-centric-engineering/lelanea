@@ -42,7 +42,14 @@ vi.mock('@/lib/db/utils', async () => {
     executeTransaction: (work: (tx: typeof prismaFake) => Promise<unknown>) => work(prismaFake),
   };
 });
-vi.mock('@/lib/app/memory/memory-index', () => ({ queueNoteIndex, forgetWipedNotes: vi.fn() }));
+const index = vi.hoisted(() => ({
+  queueJourneyEntryIndex: vi.fn(),
+}));
+vi.mock('@/lib/app/memory/memory-index', () => ({
+  queueNoteIndex,
+  forgetWipedNotes: vi.fn(),
+  queueJourneyEntryIndex: index.queueJourneyEntryIndex,
+}));
 vi.mock('@/lib/app/journey-record/synopsis/seat', () => seat);
 vi.mock('@/lib/app/journey-record/synopsis/reread', () => reread);
 vi.mock('@/lib/app/slots/notes', async (importOriginal) => {
@@ -649,6 +656,8 @@ describe('a note written to while keeping', () => {
       notesPending: 'confirm',
       workingSince: null,
     });
+    // The words were kept, so what she reads of them is queued anyway (t-149, round 2).
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith({ userId: ME }, draft.id);
 
     const retried = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
     expect(retried.notes[0]).toEqual({ slotSlug: 'life_work', outcome: 'confirmed' });
@@ -667,6 +676,25 @@ describe('discarding a draft', () => {
       NotFoundError
     );
     expect(world.values).toHaveLength(before);
+  });
+});
+
+describe('the memory index on a keep (t-149)', () => {
+  it('queues the kept synopsis for the index at the end of a successful keep, and nothing else', async () => {
+    await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledTimes(1);
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith({ userId: ME }, draft.id);
+  });
+
+  it('queues nothing on the early-return double submit: nothing changed', async () => {
+    await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+    index.queueJourneyEntryIndex.mockClear();
+
+    const again = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+
+    expect(again.notes).toEqual([]);
+    expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
   });
 });
 
