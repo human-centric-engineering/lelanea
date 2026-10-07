@@ -171,11 +171,14 @@ function StopFrame({ tone, thread, open, onToggle, when, line, pills, children }
           )}
         />
       </button>
-      {open ? (
-        <div id={bodyId} className="pt-0.5 pr-3 pb-1.5 pl-2.5">
-          {children}
-        </div>
-      ) : null}
+      {/*
+        Mounted while closed, only hidden: the body holds the person's unsent
+        work (unticked notes, a half-written change), and opening another stop
+        must not throw it away.
+      */}
+      <div id={bodyId} hidden={!open} className="pt-0.5 pr-3 pb-1.5 pl-2.5">
+        {children}
+      </div>
     </li>
   );
 }
@@ -392,17 +395,30 @@ function SynopsisBody({
     setTicksFor(listedKey);
     setTicked(allTicked(notes));
   }
-  /** Why the last keep could not read a changed account against the notes. */
-  const [unread, setUnread] = useState<string | null>(null);
+  /*
+   * The version a change was started from. Keeping is conditional on what the
+   * person was shown, and an editor holds the text it opened with, so a change
+   * started before a redraft (another tab) must not keep over the redraft once
+   * the page has refreshed. When the entry moves on underneath an open editor,
+   * the editor closes, and the page shows the version that is there now.
+   */
+  const [editingFrom, setEditingFrom] = useState<string | null>(null);
+  if (mode === 'editing' && editingFrom !== null && editingFrom !== entry.updatedAt) {
+    setEditingFrom(null);
+    setMode('reading');
+  }
+  const startEditing = () => {
+    setEditingFrom(entry.updatedAt);
+    setMode('editing');
+  };
   const keep = (edit?: SynopsisText) =>
-    action.run(async () => {
-      const kept = await keepSynopsis(entry.id, {
-        seen: entry.updatedAt,
+    action.run(() =>
+      keepSynopsis(entry.id, {
+        seen: edit && editingFrom ? editingFrom : entry.updatedAt,
         confirm: tickedRefs(notes, ticked),
         ...(edit ? { edit } : {}),
-      });
-      setUnread(kept.notesUnread);
-    });
+      })
+    );
   const draft = entry.state === 'draft';
   const toggle = (key: string) =>
     setTicked((all) => {
@@ -452,10 +468,18 @@ function SynopsisBody({
       <Outcomes entry={entry} />
       <Modules modules={entry.modules} labels={moduleLabels} />
       {draft ? ticks : <ConfirmedNotes notes={notes} />}
-      {unread ? (
+      {entry.notesPending ? (
         <Banner tone="warning" className="mt-3" role="status">
-          Your account was kept, but Lelañea could not read it against your notes just now, so they
-          were left as they were. Keep it again later and it will finish.
+          Your account is kept, but Lelañea has not yet confirmed the notes listed with it, so they
+          are as they were.{' '}
+          <button
+            type="button"
+            disabled={action.busy}
+            onClick={() => void keep()}
+            className="underline underline-offset-[3px]"
+          >
+            Try the notes again
+          </button>
         </Banner>
       ) : null}
 
@@ -491,7 +515,7 @@ function SynopsisBody({
             size="sm"
             variant={draft ? 'secondary' : 'ghost'}
             disabled={action.busy}
-            onClick={() => setMode('editing')}
+            onClick={startEditing}
           >
             {draft ? 'Change it' : 'Change this account'}
           </Button>

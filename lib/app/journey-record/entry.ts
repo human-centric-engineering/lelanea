@@ -110,6 +110,13 @@ export interface JourneyEntry {
    * it may still describe or quote it. Cleared when they change it.
    */
   sourceRemoved: boolean;
+  /**
+   * A kept synopsis whose notes a keep still owes: the re-read could not run,
+   * or the settling was interrupted (t-147, `notesPending`). Its notes are
+   * listed but not yet confirmed, and the next keep of it, even one changing
+   * nothing, finishes the work (t-148 shows this).
+   */
+  notesPending: boolean;
   /** Where it sits in time: a synopsis at its session's start, an own entry when written. */
   occurredAt: string;
   keptAt: string | null;

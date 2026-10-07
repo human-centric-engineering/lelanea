@@ -94,6 +94,7 @@ function toEntry(row: AppJourneyEntry, session: Session | undefined): JourneyEnt
         ? Math.max(0, MAX_SYNOPSIS_REGENERATIONS - row.regenerations)
         : null,
     sourceRemoved: row.sourceRemovedAt !== null,
+    notesPending: row.state === 'kept' && row.notesPending !== null,
     occurredAt: row.occurredAt.toISOString(),
     keptAt: row.keptAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),

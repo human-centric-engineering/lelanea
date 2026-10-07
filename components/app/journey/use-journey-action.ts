@@ -27,8 +27,8 @@ export interface JourneyAction {
  *
  * Every change ends in `router.refresh()`: the server page reads the record
  * again, and what is on screen is that read, never a patch made up here. A
- * refusal for `changed_meanwhile` refreshes too, since its whole meaning is
- * that the page is behind. The refresh runs in a transition, and the action
+ * refusal for `changed_meanwhile`, or a 404 for an entry gone since, refreshes
+ * too, since its whole meaning is that the page is behind. The refresh runs in a transition, and the action
  * stays busy until it lands: otherwise a stop just removed or kept is briefly
  * live again, and a second click acts on a row that has already changed.
  */
@@ -49,7 +49,9 @@ export function useJourneyAction(): JourneyAction {
     } catch (caught: unknown) {
       if (caught instanceof JourneyRefused) {
         setError(caught.message);
-        if (caught.code === 'changed_meanwhile') refresh();
+        // The page is behind: the entry changed, or is gone (removed or kept
+        // in another tab). Either way the stop on screen is stale.
+        if (caught.code === 'changed_meanwhile' || caught.status === 404) refresh();
       } else {
         logger.warn('Journey record change failed', {
           error: caught instanceof Error ? caught.message : String(caught),

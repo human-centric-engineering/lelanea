@@ -241,6 +241,11 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
     }
     sent.current = [];
     target.current = committed;
+    // A search still pausing belongs to where the reader just left.
+    if (pending.current) {
+      clearTimeout(pending.current);
+      pending.current = null;
+    }
     const moved = readJourneySearch(committed).q ?? '';
     // Not trimmed out from under the caret when the words already agree.
     setTyped((current) => (current.trim() === moved ? current : moved));
@@ -352,6 +357,12 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
               onChange={(value) => go({ module: value || undefined })}
             >
               <option value="">Every module</option>
+              {/* A module the URL names that no kept entry touches still gets an option, so the picker says what is filtering. */}
+              {query.module && !record.modules.includes(query.module) ? (
+                <option value={query.module}>
+                  {moduleLabels[query.module] ?? query.module.replace(/[_-]/g, ' ')}
+                </option>
+              ) : null}
               {record.modules.map((slug) => (
                 <option key={slug} value={slug}>
                   {moduleLabels[slug] ?? slug.replace(/[_-]/g, ' ')}

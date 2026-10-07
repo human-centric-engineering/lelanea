@@ -36,7 +36,7 @@ Each entry carries:
 - the `notes` its session wrote, each `{ slotSlug, version }`: references for keeping to confirm, never a reading (`journeyNoteRefsSchema`);
 - `occurredAt`, which is a synopsis's session start, or when an own entry was written;
 - `withheldFromAgent`, below;
-- on the wire, `regenerationsLeft` (a draft's remaining redrafts, else null) and `sourceRemoved` (a kept synopsis written from an exchange since deleted).
+- on the wire, `regenerationsLeft` (a draft's remaining redrafts, else null), `sourceRemoved` (a kept synopsis written from an exchange since deleted) and `notesPending` (a kept synopsis whose notes a keep still owes).
 
 ## Where it lives, and why not in Daybreak's stream
 
@@ -387,9 +387,18 @@ prototype's `renderJourney`.
   it. That list is not headed "confirmed": a keep whose re-read could not run
   leaves its notes listed but unconfirmed, and the wire does not tell the two
   apart. An own entry can be edited, removed, or kept from Lelañea.
-- **A keep that could not read the notes says so.** The keep route's
-  `notesUnread` is shown under the stop: the account was kept and the notes
-  were left alone, and keeping it again finishes the read.
+- **Notes still owed say so, and can be finished.** A kept synopsis whose
+  keep could not settle its notes carries `notesPending` on the wire, so the
+  stop says the notes are not yet confirmed on every read, not only straight
+  after the keep, and offers "Try the notes again": a keep that changes
+  nothing, which finishes what is owed.
+- **Unsent work survives closing a stop.** A stop's body stays mounted while
+  it is closed, so unticked notes and a half-written change are still there
+  when it is opened again.
+- **A change cannot keep over a newer draft.** It is sent with the version it
+  was started from, and if the entry moves on under an open editor (a redraft
+  in another tab), the editor closes and the page shows what is there now.
+  A 404 refreshes the page too, since the entry is gone.
 - **The ticks follow the notes.** Keeping moves each confirmed note on a
   version, so when the listed notes change the ticks start again from every
   usable note ticked. Without that, a second change after a keep would send

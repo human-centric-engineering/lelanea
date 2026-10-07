@@ -45,6 +45,7 @@ function entry(overrides: Partial<JourneyEntry> & Pick<JourneyEntry, 'id'>): Jou
     withheldFromAgent: false,
     regenerationsLeft: null,
     sourceRemoved: false,
+    notesPending: false,
     occurredAt: '2026-10-01T09:00:00.000Z',
     keptAt: '2026-10-01T09:05:00.000Z',
     updatedAt: '2026-10-01T09:05:00.000Z',
@@ -73,15 +74,13 @@ function stat(label: string): HTMLElement {
 }
 
 /**
- * Only the thread's own stop heads — each carries `aria-expanded`, which no
- * button inside an OPEN stop's body does, so an open synopsis's "Change this
- * account" / "Remove" controls never get counted as a stop.
+ * Only the thread's own stop heads: the button that is a direct child of each
+ * stop. A stop's body stays mounted while closed, and its controls (an ⓘ help
+ * trigger carries `aria-expanded` too) must never be counted as a stop.
  */
 function stopHeads(): HTMLElement[] {
   const list = screen.getByRole('list', { name: /your journey, newest first/i });
-  return within(list)
-    .getAllByRole('button')
-    .filter((button) => button.hasAttribute('aria-expanded'));
+  return Array.from(list.querySelectorAll<HTMLElement>(':scope > li > button'));
 }
 
 interface Call {
@@ -254,7 +253,12 @@ describe('one stop open at a time', () => {
     expect(a.getAttribute('aria-expanded')).toBe('true');
     expect(b.getAttribute('aria-expanded')).toBe('false');
     expect(c.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.getByText('Nothing written yet.')).toBeTruthy();
+    // Every body stays mounted (it holds unsent work); only the open one is shown.
+    const body = (head: HTMLElement) =>
+      document.getElementById(head.getAttribute('aria-controls') ?? '') as HTMLElement;
+    expect(body(a).hidden).toBe(false);
+    expect(body(b).hidden).toBe(true);
+    expect(body(c).hidden).toBe(true);
   });
 
   it('opening another stop closes the one that was open', async () => {
@@ -407,6 +411,30 @@ describe('finding your way around', () => {
     );
   });
 
+  it('drops a search still pausing when the reader goes somewhere else (Back)', async () => {
+    const view = populated({ q: 'work' });
+    await userEvent.type(screen.getByRole('searchbox', { name: /search your journey/i }), 's');
+
+    // Back, before the pause is out: the page re-renders for a URL we never asked for.
+    view.rerender(
+      <JourneyTimeline record={record({ total: 1 })} query={{}} next={null} moduleLabels={{}} />
+    );
+    await new Promise((resolve) => setTimeout(resolve, SEARCH_PAUSE_MS + 100));
+
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByRole('searchbox', { name: /search your journey/i })).toHaveProperty(
+      'value',
+      ''
+    );
+  });
+
+  it('offers the module the URL names even when no kept entry touches it', () => {
+    populated({ module: 'grief' });
+    const picker = screen.getByRole('combobox', { name: /show entries about a module/i });
+    expect(picker).toHaveProperty('value', 'grief');
+    expect(within(picker).getByRole('option', { name: 'grief' })).toBeTruthy();
+  });
+
   it('says how many matched while filtering, and nothing extra otherwise', () => {
     const { rerender } = populated({ q: 'brother' });
     expect(screen.getByRole('status').textContent).toBe('1 entry found');
@@ -454,6 +482,63 @@ describe('empty states', () => {
     expect(screen.getByText('Nothing in your journey matches that.')).toBeTruthy();
     expect(screen.queryByText('Nothing is recorded here yet')).toBeNull();
     expect(stat('sessions kept')).toBeTruthy();
+  });
+});
+
+describe('unsent work survives closing a stop', () => {
+  it('keeps an unticked note unticked across opening another stop and coming back', async () => {
+    const draftEntry = entry({
+      id: 'cmdraft00000000000000000001',
+      state: 'draft',
+      keptAt: null,
+      regenerationsLeft: 3,
+      summary: 'The draft',
+      occurredAt: '2026-10-05T09:00:00.000Z',
+      notes: [
+        { slotSlug: 'life_work', version: 1 },
+        { slotSlug: 'life_money', version: 2 },
+      ],
+    });
+    const older = entry({ id: 'cmolder00000000000000000002', summary: 'Older' });
+    render(
+      <JourneyTimeline
+        record={record({
+          entries: [draftEntry, older],
+          total: 1,
+          drafts: 1,
+          matched: 2,
+          notes: [
+            {
+              slotSlug: 'life_work',
+              label: 'life work',
+              reading: 'A.',
+              version: 1,
+              confirmable: true,
+            },
+            {
+              slotSlug: 'life_money',
+              label: 'life money',
+              reading: 'B.',
+              version: 2,
+              confirmable: true,
+            },
+          ],
+        })}
+        query={NO_QUERY}
+        next={null}
+        moduleLabels={{}}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /life money/ }));
+    const [draftHead, olderHead] = stopHeads();
+    await userEvent.click(olderHead);
+    await userEvent.click(draftHead);
+    await userEvent.click(screen.getByRole('button', { name: 'Keep this' }));
+
+    expect(world.calls[0]?.body).toMatchObject({
+      confirm: [{ slotSlug: 'life_work', version: 1 }],
+    });
   });
 });
 

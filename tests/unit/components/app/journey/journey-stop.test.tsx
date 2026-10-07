@@ -42,6 +42,7 @@ function entry(overrides: Partial<JourneyEntry> = {}): JourneyEntry {
     withheldFromAgent: false,
     regenerationsLeft: null,
     sourceRemoved: false,
+    notesPending: false,
     occurredAt: '2026-10-01T09:00:00.000Z',
     keptAt: '2026-10-01T09:05:00.000Z',
     updatedAt: '2026-10-01T09:05:00.000Z',
@@ -272,29 +273,37 @@ describe('a draft synopsis', () => {
     });
   });
 
-  it('says so when a changed account was kept but could not be read against the notes', async () => {
-    world.nextResponse = new Response(
-      JSON.stringify({ success: true, data: { entry: {}, notes: [], notesUnread: 'paused' } }),
-      { status: 200, headers: { 'content-type': 'application/json' } }
-    );
-    renderDraft();
-
+  it('closes a change started before the draft moved on, so it cannot keep over the newer one', async () => {
+    const e = draft();
+    const view = renderDraft();
     await userEvent.click(screen.getByRole('button', { name: 'Change it' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Keep my version' }));
+    expect(screen.getByRole('button', { name: 'Keep my version' })).toBeTruthy();
 
-    expect(await screen.findByText(/could not read it against your notes just now/)).toBeTruthy();
+    // Redrafted in another tab; the page refreshes underneath the open editor.
+    view.rerender(
+      <JourneyStop
+        entry={draft({ body: 'A newer draft.', updatedAt: '2026-10-01T11:00:00.000Z' })}
+        notes={notesPanel}
+        moduleLabels={{}}
+        thread="dashed"
+        open
+        onToggle={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Keep my version' })).toBeNull();
+    expect(screen.getByText('A newer draft.')).toBeTruthy();
+    expect(world.calls).toHaveLength(0);
+    expect(e.updatedAt).not.toBe('2026-10-01T11:00:00.000Z');
   });
 
-  it('says nothing about the notes when the keep read them', async () => {
-    world.nextResponse = new Response(
-      JSON.stringify({ success: true, data: { entry: {}, notes: [], notesUnread: null } }),
-      { status: 200, headers: { 'content-type': 'application/json' } }
-    );
+  it('refreshes when the entry is gone (404), so a dead stop does not stay live', async () => {
+    world.nextResponse = refusal(404, 'NOT_FOUND', 'Entry not found');
     renderDraft();
 
     await userEvent.click(screen.getByRole('button', { name: 'Keep this' }));
 
-    expect(screen.queryByText(/could not read it against your notes/)).toBeNull();
+    expect(router.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('changes it, then keeps the edited version with its outcomes', async () => {
@@ -387,6 +396,48 @@ describe('a draft synopsis', () => {
 });
 
 describe('a kept synopsis', () => {
+  const listed: JourneyListedNote[] = [
+    {
+      slotSlug: 'life_work',
+      label: 'life work',
+      reading: 'Better.',
+      version: 2,
+      confirmable: true,
+    },
+  ];
+  function renderKept(overrides: Partial<JourneyEntry> = {}) {
+    return render(
+      <JourneyStop
+        entry={entry({ notes: [{ slotSlug: 'life_work', version: 2 }], ...overrides })}
+        notes={listed}
+        moduleLabels={{}}
+        thread="none"
+        open
+        onToggle={vi.fn()}
+      />
+    );
+  }
+
+  it('says when its notes are still owed, and finishes them with a keep that changes nothing', async () => {
+    const kept = entry({ notes: [{ slotSlug: 'life_work', version: 2 }], notesPending: true });
+    renderKept({ notesPending: true });
+
+    expect(screen.getByText(/has not yet confirmed the notes listed with it/)).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Try the notes again' }));
+
+    expect(world.calls[0]).toMatchObject({
+      method: 'POST',
+      path: `/api/v1/app/journey-record/${kept.id}/keep`,
+      body: { seen: kept.updatedAt, confirm: [{ slotSlug: 'life_work', version: 2 }] },
+    });
+    expect(world.calls[0]?.body).not.toHaveProperty('edit');
+  });
+
+  it('says nothing about owed notes when none are owed', () => {
+    renderKept();
+    expect(screen.queryByText(/has not yet confirmed/)).toBeNull();
+  });
+
   it('lists its notes as kept with it, not as confirmed, and says when one has changed since', () => {
     render(
       <JourneyStop
