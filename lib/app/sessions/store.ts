@@ -99,8 +99,9 @@ const ordinalPayloadSchema = z.object({ ordinal: z.number().int().positive() });
  * The id of a session's started or closed row: a digest of the person, the
  * ordinal and the kind, so two writers deciding to open the same session write
  * the same id. Hashed so the row id does not spell out the user id; it is not
- * a secret, and anyone holding a user id can recompute it. Nothing takes a
- * session id as input, so nothing needs it to be one.
+ * a secret, and anyone holding a user id can recompute it. Deleting a session
+ * takes one as input (t-153), and reads it under the caller's own id, so
+ * knowing someone else's reaches nothing.
  */
 export async function sessionEventId(
   userId: string,

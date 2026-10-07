@@ -59,13 +59,24 @@
  * placeholder rather than a copy of the note up to a minute old. Process-local,
  * like the cache itself.
  *
+ * **The recaps given the note** (f-recap t-156; owner ruling, 7 Oct 2026,
+ * journal on `f-recap`). A session recap is given the notes captured since the
+ * session it looks back on, may say them back, and lists their headings in the
+ * account under it. Each recap whose account lists this note's heading goes as
+ * an exchange does (`delete-turns.ts`), in the same transaction, so a recap
+ * still being answered refuses the removal with the deletion's own 409. Which
+ * recaps is `readRecapsGivenNote` in `recap-lookback.ts`.
+ *
  * @see lib/app/slots/removed.ts — the placeholder
  * @see lib/app/slots/wipe.ts — the write, shared with deleting an exchange
  * @see .context/app/slots.md — "Removing a note"
  */
 
+import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
 import { NotFoundError } from '@/lib/api/errors';
+import { readRecapsGivenNote } from '@/lib/app/conversation/recap-lookback';
+import { applyTurnDeletion, planTurnDeletion } from '@/lib/app/memory/delete-turns';
 import { forgetWipedNotes } from '@/lib/app/memory/memory-index';
 import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
 import { readSlotVerdict } from '@/lib/app/slots/notes';
@@ -85,6 +96,8 @@ export interface NoteRemoval {
 export interface RemovedNote {
   /** How many versions were wiped — every one that was not already a placeholder. */
   versions: number;
+  /** Recaps that were given the note, deleted with it (t-156). Logged, never sent. */
+  recaps: number;
 }
 
 /**
@@ -100,12 +113,28 @@ export interface RemovedNote {
  * The write is one statement, scoped by `userId` from the session and never by
  * anything in the request, and it touches only versions not already removed —
  * so a second removal racing the first changes nothing and reports nothing.
+ *
+ * A second refusal, the deletion's: a recap that has to go with the note while
+ * it is still being answered gets a 409 that says to wait (`planTurnDeletion`),
+ * and nothing is written.
  */
 export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
   const { definition, ours, isHidden } = await readSlotVerdict(input.slotSlug);
   if (isHidden) throw nothingToRemove();
   // No definition in either tier: the AI coined this heading, so it goes too.
   const renamedTo = definition === null && ours === null ? opaqueRemovedSlug() : null;
+
+  // The recaps given the note, read under its heading before it can move.
+  // Nothing left to remove reads none, and the write below answers the 404.
+  const first = await prisma.slotValue.findFirst({
+    where: { userId: input.userId, slotSlug: input.slotSlug, ...NOT_YET_REMOVED },
+    orderBy: { capturedAt: 'asc' },
+    select: { capturedAt: true },
+  });
+  const recaps = first
+    ? await readRecapsGivenNote(input.userId, input.slotSlug, first.capturedAt)
+    : [];
+  const plan = recaps.length > 0 ? await planTurnDeletion(input.userId, recaps) : null;
 
   const removedAt = new Date();
   const count = await executeTransaction(async (tx) => {
@@ -135,11 +164,12 @@ export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
     await forgetWipedNotes(tx, { userId: input.userId });
     // A memory search may hold a copy of the note in a conversation (t-130).
     await clearStoredSearchResults(tx, { userId: input.userId });
+    if (plan) await applyTurnDeletion(tx, plan, removedAt);
     return written.count;
   });
 
   forgetCachedContext(input.userId);
-  return { versions: count };
+  return { versions: count, recaps: recaps.length };
 }
 
 function nothingToRemove(): NotFoundError {

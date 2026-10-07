@@ -37,6 +37,15 @@ export const recapAccountSchema = z.object({
 
 export type RecapAccount = z.infer<typeof recapAccountSchema>;
 
+/**
+ * A note's heading as a recap is given it and its account lists it: the slug,
+ * spaced. One spelling, so removing a note can find the recaps that named it
+ * (f-recap t-156).
+ */
+export function recapNoteHeading(slotSlug: string): string {
+  return slotSlug.replace(/_/g, ' ');
+}
+
 /** A stored or sent recap account, or null when there is none or it does not parse. */
 export function parseRecapAccount(raw: unknown): RecapAccount | null {
   const parsed = recapAccountSchema.safeParse(raw);

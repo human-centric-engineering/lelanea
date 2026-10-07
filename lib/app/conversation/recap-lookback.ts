@@ -34,14 +34,65 @@
  *
  * A crisis or safety turn is never a recap, so this cannot reach one.
  *
+ * ## The recaps given a note
+ *
+ * A recap is also given the notes captured since the session it looked back
+ * on, and may say them back. So removing a note takes every recap whose
+ * account lists its heading (f-recap t-156; owner ruling, 7 Oct 2026, journal
+ * on `f-recap`): {@link readRecapsGivenNote}. Keeping the recap and scrubbing
+ * only the heading was rejected, because the recap is the AI restating the
+ * note, not the person's own conversation.
+ *
  * @see lib/app/memory/delete-exchange.ts — the deletion that takes them
+ * @see lib/app/memory/delete-session.ts — a whole session's
  * @see lib/app/journey-record/record.ts — `removeJourneyEntry`
+ * @see lib/app/journey-record/keep.ts — changing a kept account
+ * @see lib/app/slots/delete-note.ts — removing a note
  */
 
 import { prisma } from '@/lib/db/client';
 import { RECAP_TURN_ID_PREFIX } from '@/lib/app/conversation/opening-id';
-import { parseRecapAccount, type RecapAccount } from '@/lib/app/conversation/recap-account';
+import {
+  parseRecapAccount,
+  recapNoteHeading,
+  type RecapAccount,
+} from '@/lib/app/conversation/recap-account';
 import { OWNED_TURN_SELECT, type OwnedTurn } from '@/lib/app/memory/delete-turns';
+
+/** Every recap turn of the person's, with the account it keeps. */
+function readRecapTurns(userId: string) {
+  return prisma.appTurn.findMany({
+    where: { userId, turnId: { startsWith: RECAP_TURN_ID_PREFIX } },
+    select: { ...OWNED_TURN_SELECT, recap: true },
+  });
+}
+
+/**
+ * The person's recap turns that were given the note under `slotSlug`: every one
+ * whose account lists its heading. A recap with no account it can read is taken
+ * if it was claimed after `firstCapturedAt`, when the note's first version was
+ * captured: before that it could not have been given it, and after it nothing
+ * says it was not. Wrongly taking one costs the AI's opening words; wrongly
+ * keeping one breaks §12.
+ *
+ * Read with the heading as the note had it **before** removal, since a heading
+ * the AI coined moves to an opaque slug as the note goes.
+ */
+export async function readRecapsGivenNote(
+  userId: string,
+  slotSlug: string,
+  firstCapturedAt: Date
+): Promise<OwnedTurn[]> {
+  const heading = recapNoteHeading(slotSlug);
+  const recaps = await readRecapTurns(userId);
+  return recaps
+    .filter((turn) => {
+      const account = parseRecapAccount(turn.recap);
+      if (account === null) return turn.startedAt.getTime() > firstCapturedAt.getTime();
+      return account.notes.includes(heading);
+    })
+    .map(({ recap: _recap, ...turn }) => turn);
+}
 
 export interface RecapLookback {
   /** Only recaps drawn from this. Omitted: every recap, whatever it drew on. */
@@ -68,10 +119,7 @@ export async function readRecapsLookingBackOn(
   const began = new Set(starts.map((start) => start.occurredAt.getTime()));
   const earliest = Math.min(...began);
 
-  const recaps = await prisma.appTurn.findMany({
-    where: { userId, turnId: { startsWith: RECAP_TURN_ID_PREFIX } },
-    select: { ...OWNED_TURN_SELECT, recap: true },
-  });
+  const recaps = await readRecapTurns(userId);
   return recaps
     .filter((turn) => {
       const account = parseRecapAccount(turn.recap);

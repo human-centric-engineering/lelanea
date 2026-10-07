@@ -78,10 +78,11 @@
  * ## When what it drew on is deleted
  *
  * The reply is a stored message the model reads as history, and it may repeat
- * what the person said. So deleting an exchange takes every recap that looked
- * back on its session, and removing a kept account takes the recaps drawn from
- * it (t-151). The account's `since` is how they are found
- * (`recap-lookback.ts`).
+ * what the person said. So deleting an exchange or a whole session takes every
+ * recap that looked back on its session, and removing or changing a kept
+ * account takes the recaps drawn from it (t-151, t-157). The account's `since`
+ * is how they are found. Removing a note takes the recaps given it, found by
+ * the headings the account lists (t-156; `recap-lookback.ts` for both).
  *
  * @see lib/app/conversation/opening.ts — the welcome this is built on
  * @see lib/app/conversation/recap-lookback.ts — the recaps a deletion takes
@@ -108,7 +109,11 @@ import { handedOffFrom } from '@/lib/app/onboarding/hand-off-state';
 import { hasPassedGate, type GateSubject } from '@/lib/app/gateway/gate';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import { recapTurnId } from '@/lib/app/conversation/opening-id';
-import { parseRecapAccount, type RecapAccount } from '@/lib/app/conversation/recap-account';
+import {
+  parseRecapAccount,
+  recapNoteHeading,
+  type RecapAccount,
+} from '@/lib/app/conversation/recap-account';
 import {
   MAX_OPENING_ATTEMPTS,
   OPENING_NOT_DUE,
@@ -426,7 +431,7 @@ async function readNotes(userId: string, prior: PriorSession): Promise<NoteLine[
     .sort((a, b) => a.capturedAt.localeCompare(b.capturedAt))
     .slice(-MAX_RECAP_NOTES)
     .map((note) => ({
-      heading: note.slotSlug.replace(/_/g, ' '),
+      heading: recapNoteHeading(note.slotSlug),
       // One line, so a reading with line breaks cannot start a `> ` line of
       // its own: those are the only lines the recap may quote as theirs.
       value: cut(unfenced(note.value).replace(/\s+/g, ' ').trim(), MAX_RECAP_NOTE_CHARS),
