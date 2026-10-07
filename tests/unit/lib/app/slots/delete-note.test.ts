@@ -65,6 +65,9 @@ vi.mock('@/lib/orchestration/chat/context-builder', () => ({ invalidateContext }
 vi.mock('@/lib/framework/modules/registry', () => ({
   getRegisteredModules: () => [{ slug: 'values' }, { slug: 'onboarding' }],
 }));
+vi.mock('@/lib/app/agent/settings', () => ({
+  getAgentDeadlines: async () => ({ firstWordsDeadlineMs: 30_000, turnDeadlineMs: 120_000 }),
+}));
 
 const { deleteNote } = await import('@/lib/app/slots/delete-note');
 const { prismaFake } = await import('@/tests/unit/lib/app/slots/notes-fake');
@@ -80,6 +83,8 @@ const {
   REMOVED_VALUE,
   REMOVED_VALUE_JSON,
 } = await import('@/lib/app/slots/removed');
+const { recapTurnId } = await import('@/lib/app/conversation/opening-id');
+const { ConflictError } = await import('@/lib/api/errors');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -130,7 +135,7 @@ describe('removing a note', () => {
 
     const result = await deleteNote({ userId: ME, slotSlug: 'life_work' });
 
-    expect(result).toEqual({ versions: 3 });
+    expect(result).toEqual({ versions: 3, recaps: 0 });
     const mine = rowsOf(ME, 'life_work');
     // The rows stay, with their numbers — the placeholder is a row, not a hole.
     expect(mine.map((row) => row.version)).toEqual([1, 2, 3]);
@@ -448,5 +453,111 @@ describe('after a removal', () => {
     ]) {
       expect(evaluateCondition(condition, against(placeholder))).toBe(false);
     }
+  });
+});
+
+describe('the recaps given the note (f-recap t-156)', () => {
+  const MINTED = 'leaving_my_husband';
+  const ids = <T extends { id: string }>(rows: T[]) => rows.map((row) => row.id).sort();
+
+  /** A recap of mine, whose reply is one message, listing these headings. */
+  function recap(
+    id: string,
+    notes: string[] | null,
+    { userId = ME, startedAt = 100_000 }: { userId?: string; startedAt?: number } = {}
+  ): void {
+    const conversationId = userId === ME ? 'conv-mine' : 'conv-theirs';
+    world.turns.push({
+      id,
+      userId,
+      turnId: recapTurnId(`ses_${id}`),
+      status: 'completed',
+      startedAt: new Date(startedAt),
+      conversationId,
+      userMessageId: null,
+      sessionId: `ses_${id}`,
+      recap:
+        notes === null
+          ? null
+          : { since: new Date(0).toISOString(), source: 'words', words: 1, notes, journey: 0 },
+    });
+    world.messages.push({
+      id: `reply-${id}`,
+      conversationId,
+      ownerId: userId,
+      role: 'assistant',
+      content: `The recap ${id}, saying back ${notes?.join(', ') ?? 'something'}.`,
+      createdAt: new Date(startedAt + 500),
+    });
+  }
+
+  /**
+   * My `life_work` (three versions, first captured at 1s) and `life_rhythm`;
+   * their `life_work`; and recaps of mine and theirs listing them.
+   */
+  function withRecaps(): void {
+    threeVersions();
+    world.values.push(
+      value(ME, 'life_rhythm', { value: 'early riser' }),
+      value(THEM, 'life_work', { value: 'their own words' })
+    );
+    recap('named-it', ['life work', 'life rhythm']);
+    recap('named-other', ['life rhythm'], { startedAt: 200_000 });
+    recap('theirs', ['life work'], { userId: THEM });
+  }
+
+  it('takes my recap that listed its heading, with its reply, and no other', async () => {
+    withRecaps();
+    expect(world.turns).toHaveLength(3);
+
+    const result = await deleteNote({ userId: ME, slotSlug: 'life_work' });
+
+    expect(result).toEqual({ versions: 3, recaps: 1 });
+    expect(ids(world.turns)).toEqual(['named-other', 'theirs']);
+    expect(ids(world.messages)).toEqual(['reply-named-other', 'reply-theirs']);
+    // Theirs listed the same heading, and stays word for word.
+    expect(world.messages.find((row) => row.id === 'reply-theirs')?.content).toBe(
+      'The recap theirs, saying back life work.'
+    );
+    expect(rowsOf(THEM, 'life_work')[0].value).toBe('their own words');
+  });
+
+  it('takes the recap that listed a heading the AI made up, though the heading moves', async () => {
+    world.values.push(value(ME, MINTED, { value: 'said once' }));
+    recap('named-minted', ['leaving my husband']);
+    recap('named-other', ['life rhythm']);
+
+    const result = await deleteNote({ userId: ME, slotSlug: MINTED });
+
+    expect(result.recaps).toBe(1);
+    expect(ids(world.turns)).toEqual(['named-other']);
+    expect(world.values.find((row) => row.userId === ME)?.slotSlug).toMatch(
+      new RegExp(`^${REMOVED_SLUG_PREFIX}`)
+    );
+  });
+
+  it('takes a recap with no account it can read if it began after the note was first captured', async () => {
+    threeVersions(); // first captured at 1s
+    recap('unreadable-after', null, { startedAt: 100_000 });
+    recap('unreadable-before', null, { startedAt: 500 });
+
+    const result = await deleteNote({ userId: ME, slotSlug: 'life_work' });
+
+    expect(result.recaps).toBe(1);
+    expect(ids(world.turns)).toEqual(['unreadable-before']);
+  });
+
+  it('refuses while a recap that has to go is still being answered, and changes nothing', async () => {
+    withRecaps();
+    const running = world.turns.find((row) => row.id === 'named-it')!;
+    running.status = 'running';
+    running.startedAt = new Date();
+    const before = JSON.stringify(world);
+
+    const refused = deleteNote({ userId: ME, slotSlug: 'life_work' });
+
+    await expect(refused).rejects.toBeInstanceOf(ConflictError);
+    await expect(refused).rejects.toThrow(/Try again/);
+    expect(JSON.stringify(world)).toBe(before);
   });
 });

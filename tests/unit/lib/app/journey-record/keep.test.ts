@@ -50,6 +50,16 @@ vi.mock('@/lib/app/memory/memory-index', () => ({
   forgetWipedNotes: vi.fn(),
   queueJourneyEntryIndex: index.queueJourneyEntryIndex,
 }));
+// Changing a kept account deletes the recaps drawn from it (t-157): the turn
+// deletion runs for real against the fake; only its edges are stubbed.
+const { invalidateContext } = vi.hoisted(() => ({ invalidateContext: vi.fn() }));
+vi.mock('@/lib/orchestration/chat/context-builder', () => ({ invalidateContext }));
+vi.mock('@/lib/app/memory/stored-results', () => ({
+  clearStoredSearchResults: vi.fn(async () => 0),
+}));
+vi.mock('@/lib/app/agent/settings', () => ({
+  getAgentDeadlines: async () => ({ firstWordsDeadlineMs: 30_000, turnDeadlineMs: 120_000 }),
+}));
 vi.mock('@/lib/app/journey-record/synopsis/seat', () => seat);
 vi.mock('@/lib/app/journey-record/synopsis/reread', () => reread);
 vi.mock('@/lib/app/slots/notes', async (importOriginal) => {
@@ -84,6 +94,7 @@ function keepSynopsis(userId: string, id: string, input: KeepInput, now: Date) {
 const { removeJourneyEntry } = await import('@/lib/app/journey-record/record');
 const { NotFoundError, ConflictError } = await import('@/lib/api/errors');
 const { redactedString } = await import('@/lib/security/redact');
+const { recapTurnId } = await import('@/lib/app/conversation/opening-id');
 
 const NOW = new Date('2026-10-06T12:00:00.000Z');
 const AGENT = { id: 'agent-synopsis' };
@@ -751,5 +762,108 @@ describe('whose synopsis it is', () => {
       status: 409,
       details: { reason: 'not_a_synopsis' },
     });
+  });
+});
+
+describe('changing a kept account takes the recaps written from it (t-157)', () => {
+  const EDIT = { summary: 'Teaching', body: 'It was about teaching, not the shop.', outcomes: [] };
+  const ids = <T extends { id: string }>(rows: T[]) => rows.map((row) => row.id).sort();
+
+  /** A recap looking back on a session begun at 1s, its reply one message. */
+  function recap(id: string, source: 'synopsis' | 'words', userId = ME, startedAt = 100_000) {
+    const conversationId = userId === ME ? 'conv-mine' : 'conv-theirs';
+    world.turns.push({
+      id,
+      userId,
+      turnId: recapTurnId(`ses_after_${id}`),
+      status: 'completed',
+      startedAt: new Date(startedAt),
+      conversationId,
+      userMessageId: null,
+      sessionId: `ses_after_${id}`,
+      recap: { since: new Date(1_000).toISOString(), source, words: 0, notes: [], journey: 0 },
+    });
+    world.messages.push({
+      id: `reply-${id}`,
+      conversationId,
+      ownerId: userId,
+      role: 'assistant',
+      content: `You kept that it was about the shop (${id}).`,
+      createdAt: new Date(startedAt + 500),
+    });
+  }
+
+  /**
+   * My kept account of ses_one, a recap drawn from it and one from my words,
+   * and the other person's recap drawn from their own account of a session
+   * begun at the same moment.
+   */
+  async function keptWithRecaps() {
+    await keepSynopsis(ME, draft.id, { confirm: [] }, NOW);
+    world.sessions.push(
+      { id: 'ses_one', userId: ME, occurredAt: new Date(1_000) },
+      { id: 'their_one', userId: THEM, occurredAt: new Date(1_000) }
+    );
+    world.entries.push(
+      synopsisEntry({ userId: THEM, sessionId: 'their_one', state: 'kept', keptAt: NOW })
+    );
+    recap('from-account', 'synopsis');
+    recap('from-words', 'words', ME, 200_000);
+    recap('theirs', 'synopsis', THEM);
+    expect(world.turns).toHaveLength(3);
+  }
+
+  it('takes the recap drawn from the old words, and leaves one from their words and another person’s', async () => {
+    await keptWithRecaps();
+
+    const changed = await keepSynopsis(ME, draft.id, { confirm: [], edit: EDIT }, NOW);
+
+    expect(changed.entry).toMatchObject({ state: 'kept', body: EDIT.body });
+    expect(ids(world.turns)).toEqual(['from-words', 'theirs']);
+    expect(ids(world.messages)).toEqual(['reply-from-words', 'reply-theirs']);
+    expect(invalidateContext).toHaveBeenCalled();
+  });
+
+  it('takes none when the text does not change', async () => {
+    await keptWithRecaps();
+
+    await keepSynopsis(ME, draft.id, { confirm: [] }, NOW);
+    // The same words sent as an edit are no change either.
+    await keepSynopsis(
+      ME,
+      draft.id,
+      {
+        confirm: [],
+        edit: { summary: draft.summary ?? '', body: draft.body, outcomes: [] },
+      },
+      NOW
+    );
+
+    expect(world.turns).toHaveLength(3);
+  });
+
+  it('takes none when the change loses to one made since the page was read', async () => {
+    await keptWithRecaps();
+    const stale = new Date(0);
+
+    await expect(
+      keepSynopsis(ME, draft.id, { confirm: [], edit: EDIT, seen: stale }, NOW)
+    ).rejects.toBeInstanceOf(ConflictError);
+
+    expect(world.turns).toHaveLength(3);
+    expect(entry(draft.id).body).toBe('You talked about the shop.');
+  });
+
+  it('refuses while a recap that has to go is still being answered, and keeps nothing', async () => {
+    await keptWithRecaps();
+    const running = world.turns.find((row) => row.id === 'from-account')!;
+    running.status = 'running';
+    running.startedAt = new Date();
+
+    const refused = keepSynopsis(ME, draft.id, { confirm: [], edit: EDIT }, NOW);
+
+    await expect(refused).rejects.toThrow(/Try again/);
+    expect(entry(draft.id).body).toBe('You talked about the shop.');
+    expect(world.turns).toHaveLength(3);
   });
 });

@@ -71,7 +71,8 @@ export const world = {
   /** `app_journey_entry`: what keeping a synopsis and deleting an exchange touch (t-147). */
   entries: [] as EntryRow[],
   /** `framework_journey_event` `session.started` rows: what a recap looked back on (t-151). */
-  sessions: [] as { id: string; userId: string; occurredAt: Date }[],
+  /** `ordinal` makes the row readable as a session (`readSessionsById`, t-153). */
+  sessions: [] as { id: string; userId: string; occurredAt: Date; ordinal?: number }[],
   nextId: 0,
 };
 
@@ -288,12 +289,26 @@ export const prismaFake = {
         return rows.map((row) => ({ ...row }));
       }
     ),
-    findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
-      const rows = world.values
-        .filter((row) => matches(row, where))
-        .sort((a, b) => b.version - a.version);
-      return rows[0] ? { ...rows[0] } : null;
-    }),
+    // Newest version first; or, asked `{ capturedAt: 'asc' }`, the earliest
+    // capture, as removing a note reads when it was first captured (t-156).
+    findFirst: vi.fn(
+      async ({
+        where,
+        orderBy,
+      }: {
+        where: Record<string, unknown>;
+        orderBy?: { capturedAt?: 'asc' };
+      }) => {
+        const rows = world.values
+          .filter((row) => matches(row, where))
+          .sort((a, b) =>
+            orderBy?.capturedAt === 'asc'
+              ? a.capturedAt.getTime() - b.capturedAt.getTime()
+              : b.version - a.version
+          );
+        return rows[0] ? { ...rows[0] } : null;
+      }
+    ),
     update: vi.fn(
       async ({ where, data }: { where: { id: string }; data: { supersededAt: Date } }) => {
         const row = world.values.find((candidate) => candidate.id === where.id);
@@ -378,6 +393,35 @@ export const prismaFake = {
     ),
   },
   appTurn: {
+    // The next turn the agent opened in a conversation, which ends a deleted
+    // turn's window (`delete-turns.ts`): `{ userId, conversationId, startedAt:
+    // { gt }, OR: [{ turnId: { startsWith } }, …] }`, earliest first.
+    findFirst: vi.fn(
+      async ({
+        where,
+      }: {
+        where: {
+          userId: string;
+          conversationId: string;
+          startedAt: { gt: Date };
+          OR: { turnId: { startsWith: string } }[];
+        };
+      }) => {
+        if (Object.keys(where).sort().join() !== 'OR,conversationId,startedAt,userId') {
+          throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+        }
+        const [row] = world.turns
+          .filter(
+            (candidate) =>
+              candidate.userId === where.userId &&
+              candidate.conversationId === where.conversationId &&
+              candidate.startedAt.getTime() > where.startedAt.gt.getTime() &&
+              where.OR.some((clause) => candidate.turnId.startsWith(clause.turnId.startsWith))
+          )
+          .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+        return row ? { startedAt: row.startedAt } : null;
+      }
+    ),
     // The exchange deletion's read (t-127): `{ id: { in }, userId }`; and the
     // conversation deletion's (t-128): `{ conversationId: { in } }`, with or
     // without `userId`. Each with its ledger rows as `slotWrites`.
@@ -390,9 +434,23 @@ export const prismaFake = {
           conversationId?: { in: string[] };
           userId?: string;
           turnId?: { startsWith?: string };
+          sessionId?: string;
         };
       }) => {
         const keys = Object.keys(where).sort().join();
+        // A session deletion's turns (t-153): `{ userId, sessionId }`.
+        if (keys === 'sessionId,userId') {
+          return world.turns
+            .filter((row) => row.userId === where.userId && row.sessionId === where.sessionId)
+            .map((row) => ({
+              ...row,
+              sessionId: row.sessionId ?? null,
+              recap: row.recap ?? null,
+              slotWrites: world.ledger
+                .filter((write) => write.turnId === row.id)
+                .map((write) => ({ slotSlug: write.slotSlug, version: write.version })),
+            }));
+        }
         // The conversation deletion's "the turns this deletes" (t-147) is the
         // id read narrowed to a deleted conversation.
         const byId =
@@ -541,9 +599,14 @@ export const prismaFake = {
     findMany: vi.fn(async ({ where }: { where: { userId?: string; id?: { in: string[] } } }) => {
       if (!where.userId) throw new Error(`the fake does not model ${JSON.stringify(where)}`);
       if (!where.id?.in) return [];
+      // A row with an ordinal carries it as its payload, as a started row does,
+      // so `readSessionsById` reads it (t-153); without one it reads as corrupt.
       return world.sessions
         .filter((row) => row.userId === where.userId && where.id!.in.includes(row.id))
-        .map((row) => ({ ...row }));
+        .map(({ ordinal, ...row }) => ({
+          ...row,
+          payload: ordinal === undefined ? null : { ordinal },
+        }));
     }),
   },
   appJourneyEntry: {
@@ -585,6 +648,11 @@ export const prismaFake = {
       world.entries = world.entries.filter((row) => !gone.includes(row));
       return { count: gone.length };
     }),
+    // Whether a session's kept account stays (t-153).
+    count: vi.fn(
+      async ({ where }: { where: Record<string, unknown> }) =>
+        world.entries.filter((row) => entryMatches(row, where)).length
+    ),
   },
   slotDefinition: {
     findMany: vi.fn(async () => world.projections.map((row) => ({ ...row }))),
