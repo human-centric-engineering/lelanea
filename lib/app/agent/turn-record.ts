@@ -141,6 +141,12 @@ export interface TurnStamp {
    * the session it re-runs in, which a re-run after the gap makes a new one.
    */
   sessionId: string | null;
+  /**
+   * The module the turn was taken in (f-forget-session t-152): the one the
+   * register read as current, or null when it read none. Re-stamped on a re-run
+   * like the register, so the two always name the same module.
+   */
+  moduleSlug: string | null;
 }
 
 /**
@@ -161,6 +167,7 @@ export async function claimTurn(
     fingerprintVersion: stamp.fingerprintVersion,
     register: stamp.register?.register ?? null,
     registerSource: stamp.register?.source ?? null,
+    moduleSlug: stamp.moduleSlug,
     // Left out when there are none, so the column stays SQL NULL: writing it
     // back to NULL takes `Prisma.DbNull`, which `lib/app/**` may not import.
     // A re-run never has to clear one: whether a turn has leanings follows

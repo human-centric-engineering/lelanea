@@ -522,7 +522,14 @@ async function runGeneratedTurn(
       agentSlug: turn.agentSlug,
       requestHash,
     },
-    { fingerprintVersion, register, leanings, sessionId: arrival?.session.id ?? null },
+    {
+      fingerprintVersion,
+      register,
+      leanings,
+      sessionId: arrival?.session.id ?? null,
+      // The module the register read, so the turn and its steering agree (t-152).
+      moduleSlug: register?.moduleSlug ?? null,
+    },
     staleClaimMs(deadlines.turnDeadlineMs)
   );
   // The context block is cached per person for a minute, built for the last

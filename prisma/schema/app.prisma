@@ -554,6 +554,13 @@ model AppTurn {
   /// a reverse field to Daybreak's `JourneyEvent`. Null on every turn from before
   /// sessions, deliberately not backfilled: those sittings were never recorded.
   sessionId          String?
+  /// The module the turn was taken in (f-forget-session t-152): the slug the
+  /// register read as the person's current module at claim, so the two never
+  /// disagree. What makes "everything I said in this module" a lookup. Null on a
+  /// seat with no register, with no module current, or when the journey could
+  /// not be read. Deliberately not backfilled: nothing recorded it before, and a
+  /// reconstruction from node states would be a guess.
+  moduleSlug         String?
   /// What a session recap drew on (f-recap t-142): counts and note headings,
   /// never the material — `recapAccountSchema` in
   /// `lib/app/conversation/recap-account.ts`. Written when the recap is
@@ -590,6 +597,7 @@ model AppTurn {
   @@index([userId, startedAt])
   @@index([conversationId])
   @@index([sessionId])
+  @@index([userId, moduleSlug])
   /// The status read: the most recent turn anyone finished (§08 t-55).
   @@index([completedAt])
   @@map("app_turn")

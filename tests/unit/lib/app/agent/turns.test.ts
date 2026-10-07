@@ -42,6 +42,7 @@ interface TurnRow {
   registerSource?: string | null;
   leanings?: unknown;
   sessionId?: string | null;
+  moduleSlug?: string | null;
   conversationId: string | null;
   userMessageId: string | null;
   assistantMessageId: string | null;
@@ -122,11 +123,15 @@ vi.mock('@/lib/logging', () => ({
  */
 const registers = vi.hoisted(() => ({
   next: null as { register: 'guiding' | 'teaching'; source: 'module' | 'safety' } | null,
+  /** The module the register read as current (t-152). */
+  moduleSlug: 'values',
 }));
 vi.mock('@/lib/app/voice/register-store', () => ({
   hasRegister: (seat: string) => seat === 'facilitator',
   resolveRegister: vi.fn(async (_userId: string, seat: string) =>
-    seat === 'facilitator' && registers.next ? { ...registers.next, moduleSlug: 'values' } : null
+    seat === 'facilitator' && registers.next
+      ? { ...registers.next, moduleSlug: registers.moduleSlug }
+      : null
   ),
 }));
 /**
@@ -1375,7 +1380,13 @@ describe('the edges of a claim', () => {
 
     const claim = await claimTurn(
       request,
-      { fingerprintVersion: '1.0', register: null, leanings: null, sessionId: null },
+      {
+        fingerprintVersion: '1.0',
+        register: null,
+        leanings: null,
+        sessionId: null,
+        moduleSlug: null,
+      },
       staleClaimMs(60_000)
     );
 
@@ -1396,7 +1407,13 @@ describe('the edges of a claim', () => {
           agentSlug: 'lelanea-guide',
           requestHash: 'x',
         },
-        { fingerprintVersion: null, register: null, leanings: null, sessionId: null },
+        {
+          fingerprintVersion: null,
+          register: null,
+          leanings: null,
+          sessionId: null,
+          moduleSlug: null,
+        },
         staleClaimMs(60_000)
       )
     ).rejects.toThrow(/lost its row/);
@@ -1873,6 +1890,68 @@ describe('the register a turn is steered to (f-registers t-125)', () => {
     expect(db.turns[0].register ?? null).toBeNull();
     expect(doneOf(events)).not.toHaveProperty('register');
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe('the module a turn was taken in (f-forget-session t-152)', () => {
+  const facilitator = (overrides: Partial<FacilitationTurn> = {}) =>
+    turnFor({ role: 'facilitator', ...overrides });
+
+  beforeEach(() => {
+    registers.next = { register: 'teaching', source: 'module' };
+    registers.moduleSlug = 'values';
+  });
+
+  it('stamps the claim with the module the register read', async () => {
+    await take(facilitator());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0]).toMatchObject({ moduleSlug: 'values', register: 'teaching' });
+  });
+
+  it('stamps null when the register read no module current', async () => {
+    registers.moduleSlug = null;
+
+    const events = await take(facilitator());
+
+    expect(events.at(-1)?.type).toBe('done');
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0].moduleSlug).toBeNull();
+  });
+
+  it('stamps null on a seat with no register, never a guess', async () => {
+    await take(turnFor());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0].seat).toBe('onboarding');
+    expect(db.turns[0].moduleSlug).toBeNull();
+  });
+
+  it('re-stamps a re-run with the module it re-runs in, as the register is', async () => {
+    behaviour.outcome = 'error';
+    await take(facilitator());
+    expect(db.turns[0]).toMatchObject({ status: 'failed', moduleSlug: 'values' });
+
+    behaviour.outcome = 'answer';
+    registers.moduleSlug = 'boundaries';
+    await take(facilitator());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0]).toMatchObject({
+      status: 'completed',
+      attempts: 2,
+      moduleSlug: 'boundaries',
+    });
+  });
+
+  it('keeps one person’s module off another’s turn', async () => {
+    await take(facilitator());
+    registers.moduleSlug = 'boundaries';
+    await take(facilitator({ userId: 'user-2', clientTurnId: 'turn-2' }));
+
+    expect(db.turns).toHaveLength(2);
+    expect(db.turns.find((t) => t.userId === 'user-1')?.moduleSlug).toBe('values');
+    expect(db.turns.find((t) => t.userId === 'user-2')?.moduleSlug).toBe('boundaries');
   });
 });
 

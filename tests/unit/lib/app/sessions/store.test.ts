@@ -302,7 +302,13 @@ async function takeTurn(userId: string, now: Date, seat = 'facilitator') {
       agentSlug: 'her',
       requestHash: `hash-${now.getTime()}`,
     },
-    { fingerprintVersion: null, register: null, leanings: null, sessionId: arrival.session.id },
+    {
+      fingerprintVersion: null,
+      register: null,
+      leanings: null,
+      sessionId: arrival.session.id,
+      moduleSlug: null,
+    },
     60_000,
     now
   );
