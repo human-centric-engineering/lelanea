@@ -23,7 +23,11 @@ import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { readJourneyNodeStates } from '@/lib/app/onboarding/first-run-store';
 import { getModuleConfigForm } from '@/lib/framework/modules/config';
-import { readCurrentModuleSlug, resolveRegister } from '@/lib/app/voice/register-store';
+import {
+  readCurrentModuleSlug,
+  readTurnModuleSlug,
+  resolveRegister,
+} from '@/lib/app/voice/register-store';
 
 const nodes = vi.mocked(readJourneyNodeStates);
 const config = vi.mocked(getModuleConfigForm);
@@ -80,6 +84,28 @@ describe('readCurrentModuleSlug', () => {
     await expect(readCurrentModuleSlug('u1')).resolves.toBeNull();
     nodes.mockResolvedValue([node('onboarding', 'completed', null)]);
     await expect(readCurrentModuleSlug('u1')).resolves.toBeNull();
+  });
+});
+
+describe('readTurnModuleSlug (f-forget-session t-152)', () => {
+  it('is the current module, read for a seat with no register', async () => {
+    await expect(readTurnModuleSlug('u1')).resolves.toBe('values');
+    expect(nodes).toHaveBeenCalledWith('u1');
+  });
+
+  it('is null, logged and never thrown, when the journey cannot be read', async () => {
+    nodes.mockRejectedValue(new Error('down'));
+
+    await expect(readTurnModuleSlug('u1')).resolves.toBeNull();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('the turn is stamped with none'),
+      { error: 'down' }
+    );
+  });
+
+  it('reads nothing for no person', async () => {
+    await expect(readTurnModuleSlug('')).resolves.toBeNull();
+    expect(nodes).not.toHaveBeenCalled();
   });
 });
 

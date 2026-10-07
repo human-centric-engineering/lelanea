@@ -128,10 +128,13 @@ const registers = vi.hoisted(
     moduleSlug: string | null;
     /** Per person, so a test can show the stamp follows whose journey was read. */
     moduleByUser: Record<string, string | null>;
-  } => ({ next: null, moduleSlug: 'values', moduleByUser: {} })
+    /** What a seat with no register reads for its stamp alone. */
+    unsteered: string | null;
+  } => ({ next: null, moduleSlug: 'values', moduleByUser: {}, unsteered: null })
 );
 vi.mock('@/lib/app/voice/register-store', () => ({
   hasRegister: (seat: string) => seat === 'facilitator',
+  readTurnModuleSlug: vi.fn(async () => registers.unsteered),
   resolveRegister: vi.fn(async (userId: string, seat: string) =>
     seat === 'facilitator' && registers.next
       ? {
@@ -1911,6 +1914,7 @@ describe('the module a turn was taken in (f-forget-session t-152)', () => {
     registers.next = { register: 'teaching', source: 'module' };
     registers.moduleSlug = 'values';
     registers.moduleByUser = {};
+    registers.unsteered = null;
   });
 
   it('stamps the claim with the module the register read', async () => {
@@ -1930,12 +1934,30 @@ describe('the module a turn was taken in (f-forget-session t-152)', () => {
     expect(db.turns[0].moduleSlug ?? null).toBeNull();
   });
 
-  it('stamps null on a seat with no register, never a guess', async () => {
+  it('stamps a seat with no register with the module read for it alone', async () => {
+    registers.unsteered = 'boundaries';
+
+    await take(turnFor());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0].seat).toBe('onboarding');
+    expect(db.turns[0].moduleSlug).toBe('boundaries');
+  });
+
+  it('stamps null on a seat with no register when no module is current, never a guess', async () => {
     await take(turnFor());
 
     expect(db.turns).toHaveLength(1);
     expect(db.turns[0].seat).toBe('onboarding');
     expect(db.turns[0].moduleSlug ?? null).toBeNull();
+  });
+
+  it('takes a seat with a register’s module from the register, never the separate read', async () => {
+    registers.unsteered = 'not-the-register';
+
+    await take(facilitator());
+
+    expect(db.turns[0].moduleSlug).toBe('values');
   });
 
   it('re-stamps a re-run with the module it re-runs in, as the register is', async () => {

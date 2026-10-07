@@ -544,9 +544,11 @@ timestamps would invent them.
 and its steering agree. A re-run that reads a module re-stamps it; one that
 reads none (the journey read failed) keeps what its first attempt recorded, as
 `sessionId` does, so a turn never drops out of its module's deletion. That makes
-"everything I said in this module" a lookup. It is null on a seat with no
-register, with no module current, or when the journey could not be read, and
-null is never a guess. Turns from before the stamp stay null: a module was
+"everything I said in this module" a lookup. A seat with no register (today only
+onboarding, which precedes any active module) reads the current module for the
+stamp alone (`readTurnModuleSlug`), so a future seat taking turns inside a
+module is never stamped null by omission. It is null with no module current, or
+when the journey could not be read, and null is never a guess. Turns from before the stamp stay null: a module was
 never recorded for them, and node states have no exit time to reconstruct one
 from. There is no FK, because a retired module's turns are still the person's.
 
