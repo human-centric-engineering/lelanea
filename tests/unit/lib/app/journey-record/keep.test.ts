@@ -679,6 +679,37 @@ describe('discarding a draft', () => {
   });
 });
 
+describe('the memory index on a keep (t-149)', () => {
+  it('forgets the old vector and queues a fresh one, in that order, at the end of a successful keep', async () => {
+    const order: string[] = [];
+    index.forgetJourneyEntry.mockImplementation(async () => {
+      order.push('forget');
+      return 0;
+    });
+    index.queueJourneyEntryIndex.mockImplementation(() => {
+      order.push('queue');
+    });
+
+    await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+
+    expect(index.forgetJourneyEntry).toHaveBeenCalledWith({ userId: ME }, draft.id);
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith({ userId: ME }, draft.id);
+    expect(order).toEqual(['forget', 'queue']);
+  });
+
+  it('does neither on the early-return double submit: nothing changed, so nothing is re-indexed', async () => {
+    await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+    index.forgetJourneyEntry.mockClear();
+    index.queueJourneyEntryIndex.mockClear();
+
+    const again = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+
+    expect(again.notes).toEqual([]);
+    expect(index.forgetJourneyEntry).not.toHaveBeenCalled();
+    expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
+  });
+});
+
 describe('two changes to a kept synopsis at once', () => {
   it('stores one and refuses the other, rather than the later silently winning', async () => {
     await keepSynopsis(ME, draft.id, { confirm: [] }, NOW);

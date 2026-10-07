@@ -527,6 +527,14 @@ describe('createOwnEntry', () => {
     expect(db.entries).toHaveLength(1);
     expect(db.entries[0].userId).toBe(ME);
   });
+
+  it('queues the fresh entry for the memory index, by its own id (t-149)', async () => {
+    const entry = await createOwnEntry(ME, { body: 'Woke at three.' });
+
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledTimes(1);
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith({ userId: ME }, entry.id);
+    expect(index.forgetJourneyEntry).not.toHaveBeenCalled();
+  });
 });
 
 describe('editOwnEntry', () => {
@@ -557,15 +565,40 @@ describe('editOwnEntry', () => {
     );
   });
 
+  it('forgets the old vector before queuing a fresh one, in that order (t-149)', async () => {
+    const order: string[] = [];
+    index.forgetJourneyEntry.mockImplementation(async () => {
+      order.push('forget');
+      return 0;
+    });
+    index.queueJourneyEntryIndex.mockImplementation(() => {
+      order.push('queue');
+    });
+
+    await editOwnEntry(ME, 'cmmine00000000000000000000', { body: 'mine, rewritten' });
+
+    expect(index.forgetJourneyEntry).toHaveBeenCalledWith(
+      { userId: ME },
+      'cmmine00000000000000000000'
+    );
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith(
+      { userId: ME },
+      'cmmine00000000000000000000'
+    );
+    expect(order).toEqual(['forget', 'queue']);
+  });
+
   it('answers another person’s entry as not found, and leaves it alone', async () => {
     await expect(
       editOwnEntry(ME, 'cmtheirs000000000000000000', { body: 'overwritten' })
     ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(db.entries.find((r) => r.id === 'cmtheirs000000000000000000')?.body).toBe('theirs');
+    expect(index.forgetJourneyEntry).not.toHaveBeenCalled();
+    expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
   });
 
-  it('refuses a synopsis: it is changed by keeping it', async () => {
+  it('refuses a synopsis: it is changed by keeping it, and never touches the index', async () => {
     await expect(
       editOwnEntry(ME, 'cmsyn000000000000000000000', { withheldFromAgent: true })
     ).rejects.toBeInstanceOf(ConflictError);
@@ -574,6 +607,8 @@ describe('editOwnEntry', () => {
       body: 'her account',
       withheldFromAgent: false,
     });
+    expect(index.forgetJourneyEntry).not.toHaveBeenCalled();
+    expect(index.queueJourneyEntryIndex).not.toHaveBeenCalled();
   });
 });
 
