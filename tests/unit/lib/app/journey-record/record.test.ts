@@ -617,6 +617,7 @@ describe('removeJourneyEntry', () => {
     expect(await removeJourneyEntry(ME, 'cmmine00000000000000000000')).toEqual({
       id: 'cmmine00000000000000000000',
       kind: 'own',
+      recaps: 0,
     });
     expect(await removeJourneyEntry(ME, 'cmdraft00000000000000000000')).toMatchObject({
       kind: 'synopsis',

@@ -6,18 +6,23 @@
  * prove is the wiring underneath it: that deleting an `ai_message` takes its
  * Sunrise embedding by the real FK cascade, that deleting an `app_turn` takes
  * its ledger rows the same way, that the conversation row's summary and title
- * clear on a real round trip, and that what the AI reads next (the
- * conversation's messages and the note heads `get_state` reads) holds nothing
- * of the deleted exchange while the kept one is all still there.
+ * clear on a real round trip, that the recap which looked back on the
+ * exchange's session is found by its account on a real `app_turn` row (t-151),
+ * and that what the AI reads next (the conversation's messages and the note
+ * heads `get_state` reads) holds nothing of the deleted exchange while the kept
+ * one is all still there.
  *
  * Flow:
  *   1. A throwaway person with a conversation of two exchanges: the first calls
  *      a tool and writes a note, the second revises it. A reply embedding on
  *      the first exchange, a stored summary pinned inside it, and the title its
- *      first message gave.
+ *      first message gave. Both in a first session; a second session opened by
+ *      a recap that repeats the first exchange's words, then an exchange of its
+ *      own; a third opened by a recap looking back on the second.
  *   2. Delete the first exchange. Assert its messages, its embedding, its turn
- *      and its ledger rows are gone, the version it wrote is a placeholder, and
- *      the summary and title are cleared.
+ *      and its ledger rows are gone, the version it wrote is a placeholder, the
+ *      summary and title are cleared, and the recap that repeated it is gone
+ *      with its reply while the third session's recap stays.
  *   3. Assert what the AI reads next: the conversation's messages hold only the
  *      kept exchange, and the note's head is the kept exchange's reading.
  *   4. Assert the panel offers nothing more for the deleted exchange and still
@@ -39,6 +44,8 @@ import { appendSlotValue, getSlotHeads } from '@/lib/framework/data-slots';
 import { deleteExchanges } from '@/lib/app/memory/delete-exchange';
 import { getNotes } from '@/lib/app/slots/notes';
 import { isRemoved } from '@/lib/app/slots/removed';
+import { recapTurnId } from '@/lib/app/conversation/opening-id';
+import { SESSION_EVENT_TYPE } from '@/lib/app/sessions/store';
 
 const PREFIX = 'smoke-app-delete-exchange';
 const stamp = Date.now();
@@ -46,6 +53,7 @@ const stamp = Date.now();
 const SLUG = 'current_circumstances';
 const SAID_FIRST = 'my father has been ill since the spring';
 const SAID_SECOND = 'he is home again now';
+const SAID_THIRD = 'I start the evening course in March';
 
 async function dbReachable(): Promise<boolean> {
   try {
@@ -99,6 +107,12 @@ async function main(): Promise<void> {
     const m4 = await say('assistant', 'That sounds like a hard season.', 4);
     const m5 = await say('user', SAID_SECOND, 10);
     const m6 = await say('assistant', 'I am glad to hear it.', 11);
+    // The second session: its recap repeats the first exchange, then they speak.
+    const r1 = await say('assistant', `Last time you said "${SAID_FIRST}". What has shifted?`, 101);
+    const m7 = await say('user', SAID_THIRD, 110);
+    const m8 = await say('assistant', 'That is a big step.', 111);
+    // The third: its recap looks back on the second.
+    const r2 = await say('assistant', `You mentioned "${SAID_THIRD}". How is it going?`, 201);
 
     await prisma.$executeRawUnsafe(
       `INSERT INTO ai_message_embedding (id, "messageId", embedding)
@@ -112,7 +126,20 @@ async function main(): Promise<void> {
       data: { summary: `They told Lelañea: ${SAID_FIRST}.`, summaryUpToMessageId: m2.id },
     });
 
-    const turn = (turnId: string, userMessageId: string, assistantMessageId: string) =>
+    const session = (seconds: number) =>
+      prisma.journeyEvent.create({
+        data: { userId: user.id, type: SESSION_EVENT_TYPE.started, occurredAt: at(seconds) },
+      });
+    const [one, two, three] = [await session(0), await session(100), await session(200)];
+
+    const turn = (
+      turnId: string,
+      userMessageId: string | null,
+      assistantMessageId: string,
+      sessionId: string,
+      seconds: number,
+      recap?: { since: Date }
+    ) =>
       prisma.appTurn.create({
         data: {
           userId: user.id,
@@ -122,13 +149,34 @@ async function main(): Promise<void> {
           seat: 'facilitator',
           agentSlug: agent.slug,
           status: 'completed',
+          startedAt: at(seconds),
           conversationId: conversation.id,
           userMessageId,
           assistantMessageId,
+          sessionId,
+          ...(recap
+            ? {
+                recap: {
+                  since: recap.since.toISOString(),
+                  source: 'words',
+                  words: 1,
+                  notes: [],
+                  journey: 0,
+                },
+              }
+            : {}),
         },
       });
-    const first = await turn(`${PREFIX}-${stamp}-a`, m1.id, m4.id);
-    const second = await turn(`${PREFIX}-${stamp}-b`, m5.id, m6.id);
+    const first = await turn(`${PREFIX}-${stamp}-a`, m1.id, m4.id, one.id, 1);
+    const second = await turn(`${PREFIX}-${stamp}-b`, m5.id, m6.id, one.id, 10);
+    const recapTwo = await turn(recapTurnId(two.id), null, r1.id, two.id, 100.5, {
+      since: one.occurredAt,
+    });
+    await turn(`${PREFIX}-${stamp}-c`, m7.id, m8.id, two.id, 110);
+    const recapThree = await turn(recapTurnId(three.id), null, r2.id, three.id, 200.5, {
+      since: two.occurredAt,
+    });
+    check(r1.content.includes(SAID_FIRST), 'the second session’s recap repeats the first exchange');
 
     const capture = (value: string) =>
       appendSlotValue({
@@ -158,16 +206,24 @@ async function main(): Promise<void> {
     console.log('\n2. Delete the first exchange');
     const result = await deleteExchanges({ userId: user.id, exchangeIds: [first.id] });
     check(
-      result.exchanges === 1 && result.messages === 4 && result.versions === 1,
-      'one exchange, its four messages and one version'
+      result.exchanges === 1 &&
+        result.messages === 5 &&
+        result.versions === 1 &&
+        result.recaps === 1,
+      'one exchange, its four messages, one version, and the recap that looked back with its reply'
     );
     const left = await prisma.aiMessage.findMany({
       where: { conversationId: conversation.id },
       orderBy: { createdAt: 'asc' },
     });
     check(
-      left.map((row) => row.id).join() === [m5.id, m6.id].join(),
-      'every message in its window went, and the next exchange stayed'
+      left.map((row) => row.id).join() === [m5.id, m6.id, m7.id, m8.id, r2.id].join(),
+      'every message in its window and the recap’s reply went, and everything else stayed'
+    );
+    check(
+      (await prisma.appTurn.count({ where: { id: recapTwo.id } })) === 0 &&
+        (await prisma.appTurn.count({ where: { id: recapThree.id } })) === 1,
+      'the recap that looked back on its session is gone, and one that looked back on another stays'
     );
     check(
       (await prisma.aiMessage.count({ where: { id: m3.id } })) === 0,
@@ -208,6 +264,10 @@ async function main(): Promise<void> {
       'nothing of the deleted exchange is in the conversation, the note or the conversation row'
     );
     check(everything.includes(SAID_SECOND), 'the kept exchange is all still there');
+    check(
+      left.some((message) => message.content === r2.content),
+      'the recap of the other session is still there, word for word'
+    );
     const [head] = await getSlotHeads(user.id, { slotSlugs: [SLUG] });
     check(head?.value === SAID_SECOND, 'the note’s head is the kept exchange’s reading');
 

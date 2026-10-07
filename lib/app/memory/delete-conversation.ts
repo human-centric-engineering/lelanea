@@ -56,7 +56,7 @@ import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { requireOrgId, runAsSystem } from '@/lib/tenancy/context';
-import { stillAnswering } from '@/lib/app/memory/delete-exchange';
+import { stillAnswering } from '@/lib/app/memory/delete-turns';
 import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
 import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
 import { settleSynopsesOfDeletedExchanges } from '@/lib/app/journey-record/record';

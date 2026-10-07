@@ -75,7 +75,16 @@
  * turn row (`app_turn.recap`) and sent on its `done` frame, so the account
  * under the reply names it live and on reload (`recap-account.ts`).
  *
+ * ## When what it drew on is deleted
+ *
+ * The reply is a stored message the model reads as history, and it may repeat
+ * what the person said. So deleting an exchange takes every recap that looked
+ * back on its session, and removing a kept account takes the recaps drawn from
+ * it (t-151). The account's `since` is how they are found
+ * (`recap-lookback.ts`).
+ *
  * @see lib/app/conversation/opening.ts — the welcome this is built on
+ * @see lib/app/conversation/recap-lookback.ts — the recaps a deletion takes
  * @see .context/app/conversation.md — "The recap"
  */
 

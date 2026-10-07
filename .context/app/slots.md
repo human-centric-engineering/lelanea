@@ -1151,7 +1151,9 @@ it** (owner ruling 4, 3 Oct 2026). `DELETE /api/v1/app/exchanges` with
 `exchanges`. All or nothing. An id that isn't the caller's gets the same 404 as
 one that doesn't exist, and a turn still being answered gets a 409 that says to
 wait. A claim left `running` past `staleClaimMs()` was abandoned, not being
-answered, so it is deleted rather than refused forever. The store is `lib/app/memory/delete-exchange.ts`.
+answered, so it is deleted rather than refused forever. The store is
+`lib/app/memory/delete-exchange.ts`, over the mechanism every deletion of
+turns shares (`delete-turns.ts`).
 
 **An exchange is one turn's window**, not two messages. A turn that calls a
 tool is stored as several assistant passes and tool results, and a `fill_slot`
@@ -1187,6 +1189,20 @@ included. The latest turn's window runs to the end of the conversation.
   written from something since deleted, never taken (t-147;
   [`journey-record.md`](./journey-record.md), "When the person deletes what a
   synopsis was written from").
+- **every recap that looked back on its session** (f-recap t-151; owner ruling,
+  7 Oct 2026). A recap is a stored assistant message the model reads as
+  history, and it may repeat what the person said in the session it looked back
+  on. It is found by its account (`app_turn.recap.since`, the start of that
+  session) and deleted as an exchange is, its reply being its window, in the
+  same transaction. That includes a recap drawn from the session's kept
+  account, which the deletion only flags: the account may quote what went, and
+  so may the recap. A recap whose account could not be kept is taken if it was
+  claimed after the session began, since nothing else says what it looked
+  back on. A recap still being answered refuses the deletion with the same 409.
+  Deleting a recap itself takes no other recap: they are drawn from the
+  person's words, never from each other. Removing a kept account from the
+  journey record takes the recaps drawn from it too (`removeJourneyEntry`).
+  The lookup is `lib/app/conversation/recap-lookback.ts`.
 - the person's cached context blocks.
 
 **The response counts exchanges and messages, never note versions.** A turn
@@ -1194,8 +1210,9 @@ can write a hidden slot, and a count including it would tell the person one
 exists and was filled (§12). The route logs it for the operator.
 
 `npm run smoke:app-delete-exchange` proves the wiring on the dev database: the
-embedding cascade, the ledger cascade, the summary and title, and that what the
-AI reads next holds nothing of the deleted exchange and all of the kept one.
+embedding cascade, the ledger cascade, the summary and title, the recap found
+by its account and taken while another session's stays, and that what the AI
+reads next holds nothing of the deleted exchange and all of the kept one.
 
 ## Deleting a conversation (f-memory t-128)
 
