@@ -8,9 +8,9 @@ description: The journey record — a person's session synopses and their own en
 The journey record holds the app's account of the work and the person's own
 writing, together and in time order (product description §3.16). Feature
 `f-journey-record` (§19) builds it in five tasks. **t-145**, the store and its
-API, **t-146**, [drafting a synopsis](#drafting-a-synopsis), and **t-147**,
-[keeping one](#keeping-a-synopsis), are the parts described here. Later tasks
-add their sections as they land.
+API, **t-146**, [drafting a synopsis](#drafting-a-synopsis), **t-147**,
+[keeping one](#keeping-a-synopsis), and **t-148**, [the view](#the-view), are
+the parts described here. Later tasks add their sections as they land.
 
 ## What is in it
 
@@ -85,15 +85,15 @@ the CHECK are drift-probed in `lib/app/leaf-db-drift.ts`.
 
 ## The API
 
-| Route                                            | Does                                                                                                                                                                                      |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/app/journey-record`                 | The kept record, newest first, each synopsis with its session's window, plus totals over all of it. `?q=` `?module=` `?outcome=` `?kind=` narrow it; `?drafts=true` adds what is waiting. |
-| `POST /api/v1/app/journey-record`                | `{ body, summary?, withheldFromAgent? }`: an own entry.                                                                                                                                   |
-| `PATCH /api/v1/app/journey-record/:id`           | Change an own entry's words, summary or `withheldFromAgent`.                                                                                                                              |
-| `DELETE /api/v1/app/journey-record/:id`          | Remove any entry, words and all. Removing a synopsis does not redraft it. This is how a draft is discarded.                                                                               |
-| `POST /api/v1/app/journey-record/:id/keep`       | `{ seen, confirm, edit? }`: keep a synopsis, as written or changed, or change one already kept. Returns the entry and what it did to each listed note.                                    |
-| `POST /api/v1/app/journey-record/:id/regenerate` | `{ steer? }`: another draft in place of this one. Returns the new draft.                                                                                                                  |
-| `GET /api/v1/app/journey-record/export`          | The kept record as a Markdown download, oldest first.                                                                                                                                     |
+| Route                                            | Does                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/app/journey-record`                 | The kept record, newest first, each synopsis with its session's window, plus totals over all of it, and `notes`: each note an entry on the page lists, as the notes panel holds it now. `?q=` `?module=` `?outcome=` `?kind=` narrow it; `?drafts=true` adds what is waiting. |
+| `POST /api/v1/app/journey-record`                | `{ body, summary?, withheldFromAgent? }`: an own entry.                                                                                                                                                                                                                       |
+| `PATCH /api/v1/app/journey-record/:id`           | Change an own entry's words, summary or `withheldFromAgent`.                                                                                                                                                                                                                  |
+| `DELETE /api/v1/app/journey-record/:id`          | Remove any entry, words and all. Removing a synopsis does not redraft it. This is how a draft is discarded.                                                                                                                                                                   |
+| `POST /api/v1/app/journey-record/:id/keep`       | `{ seen, confirm, edit? }`: keep a synopsis, as written or changed, or change one already kept. Returns the entry and what it did to each listed note.                                                                                                                        |
+| `POST /api/v1/app/journey-record/:id/regenerate` | `{ steer? }`: another draft in place of this one. Returns the new draft.                                                                                                                                                                                                      |
+| `GET /api/v1/app/journey-record/export`          | The kept record as a Markdown download, oldest first.                                                                                                                                                                                                                         |
 
 **Search and filters run in memory** over the person's whole record
 (`lib/app/journey-record/query.ts`), as the notes do. The totals need all of it
@@ -363,7 +363,35 @@ Daybreak doesn't have:
 with `reread.ts` as the reference implementation. When it lands, delete
 `reread.ts` and call Daybreak's.
 
+## The view
+
+`/app/journey` (`app/(lelanea)/app/journey/page.tsx`,
+`components/app/journey/`) is the record as a timeline, after the
+prototype's `renderJourney`.
+
+- **One read, on the server.** The page calls `getJourneyRecord` (with
+  drafts) and the map, and hands both to the timeline. The search and the
+  filters live in the URL, so narrowing re-renders the page; every change ends
+  in `router.refresh()`. Nothing patches the page in the browser.
+- **The notes travel with the record.** The read lists, once, each note any
+  entry on the page names: its heading, current reading and version, and
+  whether keeping may still write to it. It comes from `getNotes`, so a note
+  hidden or removed since it was listed is not on the page at all, and one
+  withheld at capture shows no reading. A note that has moved on since the
+  session wrote it is shown unticked and cannot be ticked, because keeping
+  would leave it alone anyway.
+- **Stops, newest first, one open at a time.** The newest starts open. A
+  waiting draft is its session's own stop, with keep, change, ask for another
+  (while any are left) and discard. A kept synopsis lists the notes it
+  confirmed. An own entry can be edited, removed, or kept from Lelañea.
+- **"What's next" is pinned last and never counted.** It points at the
+  module the person is in, or the first on the map they have not finished
+  (`lib/app/journey/next.ts`). Every module stays open, and the copy says so.
+- **The stats are the record's totals**, before any narrowing. There is no
+  "module closed": sessions close, modules do not (§6.12).
+- **A stop with no module is the usual case in release 1**, and says so
+  rather than looking empty.
+
 ## Not yet
 
-- The timeline at `/app/journey` (t-148), and the recap and memory search
-  reading the record (t-149).
+- The recap and memory search reading the record (t-149).
