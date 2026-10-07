@@ -94,6 +94,8 @@ vi.mock('@/lib/app/voice/register-store', () => ({
           ? { register: 'guiding', source: 'safety', moduleSlug: 'values' }
           : { register: 'teaching', source: 'module', moduleSlug: 'values' }
   ),
+  // A seat without a register reads its module here instead (t-152).
+  readTurnModuleSlug: vi.fn(async () => 'values'),
 }));
 vi.mock('@/lib/app/sessions/store', () => ({
   arriveSessionQuietly: mocks.arriveSessionQuietly,

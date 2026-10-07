@@ -42,6 +42,7 @@ interface TurnRow {
   registerSource?: string | null;
   leanings?: unknown;
   sessionId?: string | null;
+  moduleSlug?: string | null;
   conversationId: string | null;
   userMessageId: string | null;
   assistantMessageId: string | null;
@@ -120,13 +121,30 @@ vi.mock('@/lib/logging', () => ({
  * reads are `register-store.test.ts`'s; here it is set per case, and the seam
  * is asked what it does with it.
  */
-const registers = vi.hoisted(() => ({
-  next: null as { register: 'guiding' | 'teaching'; source: 'module' | 'safety' } | null,
-}));
+const registers = vi.hoisted(
+  (): {
+    next: { register: 'guiding' | 'teaching'; source: 'module' | 'safety' } | null;
+    /** The module the register read as current (t-152), unless `moduleByUser` names one. */
+    moduleSlug: string | null;
+    /** Per person, so a test can show the stamp follows whose journey was read. */
+    moduleByUser: Record<string, string | null>;
+    /** What a seat with no register reads for its stamp alone. */
+    unsteered: string | null;
+  } => ({ next: null, moduleSlug: 'values', moduleByUser: {}, unsteered: null })
+);
 vi.mock('@/lib/app/voice/register-store', () => ({
   hasRegister: (seat: string) => seat === 'facilitator',
-  resolveRegister: vi.fn(async (_userId: string, seat: string) =>
-    seat === 'facilitator' && registers.next ? { ...registers.next, moduleSlug: 'values' } : null
+  readTurnModuleSlug: vi.fn(async () => registers.unsteered),
+  resolveRegister: vi.fn(async (userId: string, seat: string) =>
+    seat === 'facilitator' && registers.next
+      ? {
+          ...registers.next,
+          moduleSlug:
+            userId in registers.moduleByUser
+              ? registers.moduleByUser[userId]
+              : registers.moduleSlug,
+        }
+      : null
   ),
 }));
 /**
@@ -1375,7 +1393,13 @@ describe('the edges of a claim', () => {
 
     const claim = await claimTurn(
       request,
-      { fingerprintVersion: '1.0', register: null, leanings: null, sessionId: null },
+      {
+        fingerprintVersion: '1.0',
+        register: null,
+        leanings: null,
+        sessionId: null,
+        moduleSlug: null,
+      },
       staleClaimMs(60_000)
     );
 
@@ -1396,7 +1420,13 @@ describe('the edges of a claim', () => {
           agentSlug: 'lelanea-guide',
           requestHash: 'x',
         },
-        { fingerprintVersion: null, register: null, leanings: null, sessionId: null },
+        {
+          fingerprintVersion: null,
+          register: null,
+          leanings: null,
+          sessionId: null,
+          moduleSlug: null,
+        },
         staleClaimMs(60_000)
       )
     ).rejects.toThrow(/lost its row/);
@@ -1873,6 +1903,103 @@ describe('the register a turn is steered to (f-registers t-125)', () => {
     expect(db.turns[0].register ?? null).toBeNull();
     expect(doneOf(events)).not.toHaveProperty('register');
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe('the module a turn was taken in (f-forget-session t-152)', () => {
+  const facilitator = (overrides: Partial<FacilitationTurn> = {}) =>
+    turnFor({ role: 'facilitator', ...overrides });
+
+  beforeEach(() => {
+    registers.next = { register: 'teaching', source: 'module' };
+    registers.moduleSlug = 'values';
+    registers.moduleByUser = {};
+    registers.unsteered = null;
+  });
+
+  it('stamps the claim with the module the register read', async () => {
+    await take(facilitator());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0]).toMatchObject({ moduleSlug: 'values', register: 'teaching' });
+  });
+
+  it('stamps null when the register read no module current', async () => {
+    registers.moduleSlug = null;
+
+    const events = await take(facilitator());
+
+    expect(events.at(-1)?.type).toBe('done');
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0].moduleSlug ?? null).toBeNull();
+  });
+
+  it('stamps a seat with no register with the module read for it alone', async () => {
+    registers.unsteered = 'boundaries';
+
+    await take(turnFor());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0].seat).toBe('onboarding');
+    expect(db.turns[0].moduleSlug).toBe('boundaries');
+  });
+
+  it('stamps null on a seat with no register when no module is current, never a guess', async () => {
+    await take(turnFor());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0].seat).toBe('onboarding');
+    expect(db.turns[0].moduleSlug ?? null).toBeNull();
+  });
+
+  it('takes a seat with a register’s module from the register, never the separate read', async () => {
+    registers.unsteered = 'not-the-register';
+
+    await take(facilitator());
+
+    expect(db.turns[0].moduleSlug).toBe('values');
+  });
+
+  it('re-stamps a re-run with the module it re-runs in, as the register is', async () => {
+    behaviour.outcome = 'error';
+    await take(facilitator());
+    expect(db.turns[0]).toMatchObject({ status: 'failed', moduleSlug: 'values' });
+
+    behaviour.outcome = 'answer';
+    registers.moduleSlug = 'boundaries';
+    await take(facilitator());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0]).toMatchObject({
+      status: 'completed',
+      attempts: 2,
+      moduleSlug: 'boundaries',
+    });
+  });
+
+  it('keeps a re-run’s known module when its journey read fails', async () => {
+    behaviour.outcome = 'error';
+    await take(facilitator());
+    expect(db.turns[0]).toMatchObject({ status: 'failed', moduleSlug: 'values' });
+
+    behaviour.outcome = 'answer';
+    registers.moduleSlug = null;
+    await take(facilitator());
+
+    expect(db.turns).toHaveLength(1);
+    expect(db.turns[0]).toMatchObject({ status: 'completed', attempts: 2, moduleSlug: 'values' });
+  });
+
+  it('stamps each person’s turn with the module read for that person', async () => {
+    registers.moduleSlug = 'not-read-for-anyone';
+    registers.moduleByUser = { 'user-1': 'values', 'user-2': 'boundaries' };
+
+    await take(facilitator({ userId: 'user-2', clientTurnId: 'turn-2' }));
+    await take(facilitator());
+
+    expect(db.turns).toHaveLength(2);
+    expect(db.turns.find((t) => t.userId === 'user-1')?.moduleSlug).toBe('values');
+    expect(db.turns.find((t) => t.userId === 'user-2')?.moduleSlug).toBe('boundaries');
   });
 });
 

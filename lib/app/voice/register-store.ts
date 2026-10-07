@@ -61,6 +61,29 @@ export async function readCurrentModuleSlug(userId: string): Promise<string | nu
   return (await readCurrentModuleNode(userId))?.nodeKey ?? null;
 }
 
+/**
+ * The module a turn on `seat` was taken in, for its stamp (f-forget-session
+ * t-152), on a seat with **no** register. Never throws: a failed read is null,
+ * as {@link resolveRegister} treats it. A seat with a register takes the
+ * module from its register instead, so its steering and its stamp agree; this
+ * covers every other seat, so a future seat taking turns inside a module
+ * never stamps null for a module it knew, which no backfill could recover.
+ */
+export async function readTurnModuleSlug(userId: string): Promise<string | null> {
+  if (userId === '') return null;
+  try {
+    return await readCurrentModuleSlug(userId);
+  } catch (err) {
+    logger.error(
+      'readTurnModuleSlug: the journey could not be read; the turn is stamped with none',
+      {
+        error: err instanceof Error ? err.message : String(err),
+      }
+    );
+    return null;
+  }
+}
+
 /** The current module's node state: its key and its `progress` ledger (where a lean lives). */
 async function readCurrentModuleNode(
   userId: string

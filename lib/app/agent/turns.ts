@@ -102,7 +102,7 @@ import {
   toClientStream,
 } from '@/lib/app/agent/endings';
 import { detectCrisis, recordCrisisShown } from '@/lib/app/safety/assess';
-import { hasRegister, resolveRegister } from '@/lib/app/voice/register-store';
+import { hasRegister, readTurnModuleSlug, resolveRegister } from '@/lib/app/voice/register-store';
 import { parseRegister, parseRegisterSource } from '@/lib/app/voice/register';
 import { leaningsFrom, readLeaningInputs } from '@/lib/app/voice/leanings-store';
 import { proposedRecently } from '@/lib/app/voice/leaning-proposals';
@@ -498,19 +498,30 @@ async function runGeneratedTurn(
     return only(held);
   }
 
-  const [deadlines, fingerprintVersion, register, last, leaningInputs, proposed, arrival] =
-    await Promise.all([
-      getAgentDeadlines(),
-      readAgentFingerprintVersion(turn.agentSlug),
-      resolveRegister(turn.userId, turn.role, { crisisNow: options.crisisNow }),
-      readLastStamp(turn.userId, turn.role),
-      readLeaningInputs(turn.userId, turn.role),
-      // Only the seat with leanings has a proposal to carry (f-leanings t-137).
-      hasRegister(turn.role) ? proposedRecently(turn.userId, turn.role) : false,
-      // Before the claim writes the turn row, which would otherwise be its own
-      // last activity and keep every sitting open (f-recap t-141).
-      options.arrival,
-    ]);
+  const [
+    deadlines,
+    fingerprintVersion,
+    register,
+    last,
+    leaningInputs,
+    proposed,
+    arrival,
+    unsteeredModule,
+  ] = await Promise.all([
+    getAgentDeadlines(),
+    readAgentFingerprintVersion(turn.agentSlug),
+    resolveRegister(turn.userId, turn.role, { crisisNow: options.crisisNow }),
+    readLastStamp(turn.userId, turn.role),
+    readLeaningInputs(turn.userId, turn.role),
+    // Only the seat with leanings has a proposal to carry (f-leanings t-137).
+    hasRegister(turn.role) ? proposedRecently(turn.userId, turn.role) : false,
+    // Before the claim writes the turn row, which would otherwise be its own
+    // last activity and keep every sitting open (f-recap t-141).
+    options.arrival,
+    // A seat with a register takes its module from the register (below); any
+    // other seat reads it here, so its stamp is never null by omission (t-152).
+    hasRegister(turn.role) ? Promise.resolve(null) : readTurnModuleSlug(turn.userId),
+  ]);
   // Against the register's source: under a crisis hold the harder poles are held at rest.
   const leanings = leaningsFrom(leaningInputs, register?.source ?? null);
   const claim = await claimTurn(
@@ -522,7 +533,15 @@ async function runGeneratedTurn(
       agentSlug: turn.agentSlug,
       requestHash,
     },
-    { fingerprintVersion, register, leanings, sessionId: arrival?.session.id ?? null },
+    {
+      fingerprintVersion,
+      register,
+      leanings,
+      sessionId: arrival?.session.id ?? null,
+      // The module the register read, so the turn and its steering agree; on a
+      // seat with no register, the module read for the stamp alone (t-152).
+      moduleSlug: hasRegister(turn.role) ? (register?.moduleSlug ?? null) : unsteeredModule,
+    },
     staleClaimMs(deadlines.turnDeadlineMs)
   );
   // The context block is cached per person for a minute, built for the last
