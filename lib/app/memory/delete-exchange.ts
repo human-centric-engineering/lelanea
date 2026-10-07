@@ -131,11 +131,11 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
   const result = await executeTransaction(async (tx) => {
     const applied = await applyTurnDeletion(tx, plan, removedAt);
     // The exchanges' sessions' synopses (t-147): a draft goes, a kept one is
-    // flagged. Not a recap's own session: a synopsis is never drafted from a
-    // recap (`synopsis/material.ts`).
+    // flagged. Not a recap's own session, even for a recap asked for: a
+    // synopsis is never drafted from a recap (`synopsis/material.ts`).
     await settleSynopsesOfDeletedExchanges(tx, {
       userId: input.userId,
-      sessionIds: turns.map((turn) => turn.sessionId),
+      sessionIds: spoken.map((turn) => turn.sessionId),
       at: removedAt,
     });
     return applied;

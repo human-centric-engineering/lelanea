@@ -692,6 +692,19 @@ describe('the recaps that looked back on its session (t-151)', () => {
     expect(world.turns.some((row) => row.id === 'recap-three')).toBe(true);
   });
 
+  it('settles no synopsis of the session a recap asked for opened, which no synopsis reads', async () => {
+    threeSessions();
+    const draft = synopsisEntry({ sessionId: 'ses_two' });
+    const kept = synopsisEntry({ sessionId: 'ses_two', state: 'kept', keptAt: new Date(150_000) });
+    world.entries.push(draft, kept);
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['recap-two'] });
+
+    expect(world.turns.some((row) => row.id === 'recap-two')).toBe(false);
+    expect(world.entries.find((row) => row.id === draft.id)).toMatchObject({ state: 'draft' });
+    expect(world.entries.find((row) => row.id === kept.id)?.sourceRemovedAt).toBeNull();
+  });
+
   it('refuses while a recap that has to go is still being answered, and changes nothing', async () => {
     threeSessions();
     const running = world.turns.find((row) => row.id === 'recap-two')!;
