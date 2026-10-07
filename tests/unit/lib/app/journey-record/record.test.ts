@@ -56,6 +56,15 @@ vi.mock('@/lib/logging', () => ({
   logger: { error, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
+/**
+ * `readListedNotes` reads through `getNotes` rather than the raw table, so a
+ * note the panel no longer shows (hidden, or removed since) follows the same
+ * rule here — mocked rather than run for real, because what that rule IS is
+ * `tests/unit/lib/app/slots/notes.test.ts`'s job, not this file's.
+ */
+const { getNotes } = vi.hoisted(() => ({ getNotes: vi.fn() }));
+vi.mock('@/lib/app/slots/notes', () => ({ getNotes }));
+
 vi.mock('@/lib/db/client', () => {
   type Where = Record<string, unknown>;
   const matches = <T extends object>(row: T, where: Where): boolean =>
@@ -150,6 +159,7 @@ import {
   replaceSynopsisDraft,
 } from '@/lib/app/journey-record/record';
 import { sessionEventId } from '@/lib/app/sessions/store';
+import type { Note } from '@/lib/app/slots/notes-view';
 
 const ME = 'cmjbv4i3x00003wsloputgwul';
 const THEM = 'cmu7other0000000000000000';
@@ -320,6 +330,179 @@ describe('getJourneyRecord', () => {
     expect(error).toHaveBeenCalledWith('Journey entry has unreadable outcomes', {
       entryId: 'cmbad000000000000000000000',
     });
+  });
+});
+
+/**
+ * `getJourneyRecord` enrichment: the notes its entries list, read as the notes
+ * panel holds them now (t-148). `getNotes` is mocked here; what it decides to
+ * withhold or drop is proven in `tests/unit/lib/app/slots/notes.test.ts` — this
+ * file only proves `readListedNotes` follows what it is told.
+ */
+describe('getJourneyRecord’s notes enrichment', () => {
+  function note(overrides: Partial<Note> = {}): Note {
+    return {
+      slotSlug: 'life_work',
+      asking: 'How work stands.',
+      value: 'Work is going badly.',
+      withheld: false,
+      removed: false,
+      confidence: 6,
+      sourceType: 'inferred',
+      reasoningNote: 'Said in passing.',
+      version: 1,
+      capturedAt: '2026-10-01T09:00:00.000Z',
+      conversationId: 'c1',
+      sensitivity: 'standard',
+      retired: false,
+      correctable: true,
+      removable: true,
+      exchanges: [],
+      previous: null,
+      group: 'life_areas',
+      ...overrides,
+    };
+  }
+
+  it('never calls getNotes when no entry lists a note', async () => {
+    db.entries.push(row({ id: 'cmmine00000000000000000000', userId: ME, notes: [] }));
+
+    const { notes } = await getJourneyRecord(ME);
+
+    expect(notes).toEqual([]);
+    expect(getNotes).not.toHaveBeenCalled();
+  });
+
+  it('reads once, with the listed notes mapped to what the panel holds now', async () => {
+    getNotes.mockResolvedValue({
+      notes: [note(), note({ slotSlug: 'life_money', value: 'Tight this month.', version: 3 })],
+    });
+    db.entries.push(
+      row({
+        id: 'cmsyn000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_x',
+        notes: [{ slotSlug: 'life_work', version: 1 }],
+      })
+    );
+
+    const { notes } = await getJourneyRecord(ME);
+
+    expect(getNotes).toHaveBeenCalledTimes(1);
+    expect(getNotes).toHaveBeenCalledWith(ME);
+    // Only the note the entry actually listed, not every note the panel holds.
+    expect(notes).toEqual([
+      {
+        slotSlug: 'life_work',
+        label: 'life work',
+        reading: 'Work is going badly.',
+        version: 1,
+        confirmable: true,
+      },
+    ]);
+  });
+
+  it('omits a listed note the panel no longer shows at all (hidden, or gone)', async () => {
+    getNotes.mockResolvedValue({ notes: [] });
+    db.entries.push(
+      row({
+        id: 'cmsyn000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_x',
+        notes: [{ slotSlug: 'life_work', version: 1 }],
+      })
+    );
+
+    const { notes } = await getJourneyRecord(ME);
+
+    expect(notes).toEqual([]);
+  });
+
+  it('omits a listed note the person has since removed, rather than showing it blank', async () => {
+    getNotes.mockResolvedValue({ notes: [note({ removed: true })] });
+    db.entries.push(
+      row({
+        id: 'cmsyn000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_x',
+        notes: [{ slotSlug: 'life_work', version: 1 }],
+      })
+    );
+
+    const { notes } = await getJourneyRecord(ME);
+
+    expect(notes).toEqual([]);
+  });
+
+  it('never offers a withheld note to keep, even one the panel would let them correct', async () => {
+    // A note still holding the sentinel after its slot left special category
+    // (t-84): correctable, but keep.ts will not write to it, so neither may the tick.
+    getNotes.mockResolvedValue({ notes: [note({ withheld: true, correctable: true })] });
+    db.entries.push(
+      row({
+        id: 'cmsyn000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_x',
+        notes: [{ slotSlug: 'life_work', version: 1 }],
+      })
+    );
+
+    const { notes } = await getJourneyRecord(ME);
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.confirmable).toBe(false);
+  });
+
+  it('gives a withheld note a null reading, never the sentinel value', async () => {
+    getNotes.mockResolvedValue({
+      notes: [note({ withheld: true, value: '<redacted: special_category>' })],
+    });
+    db.entries.push(
+      row({
+        id: 'cmsyn000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_x',
+        notes: [{ slotSlug: 'life_work', version: 1 }],
+      })
+    );
+
+    const [listed] = (await getJourneyRecord(ME)).notes;
+
+    expect(listed).toMatchObject({ slotSlug: 'life_work', reading: null });
+  });
+
+  it('calls getNotes once for the whole page, even when several entries list notes', async () => {
+    getNotes.mockResolvedValue({
+      notes: [note(), note({ slotSlug: 'life_money', version: 1 })],
+    });
+    db.entries.push(
+      row({
+        id: 'cmsyn1000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_1',
+        occurredAt: new Date('2026-10-01T09:00:00Z'),
+        notes: [{ slotSlug: 'life_work', version: 1 }],
+      }),
+      row({
+        id: 'cmsyn2000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_2',
+        occurredAt: new Date('2026-10-02T09:00:00Z'),
+        notes: [{ slotSlug: 'life_money', version: 1 }],
+      })
+    );
+
+    const { notes } = await getJourneyRecord(ME);
+
+    expect(getNotes).toHaveBeenCalledTimes(1);
+    expect(notes.map((n) => n.slotSlug).sort()).toEqual(['life_money', 'life_work']);
   });
 });
 

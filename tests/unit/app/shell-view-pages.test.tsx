@@ -52,7 +52,7 @@ import { describe, expect, it } from 'vitest';
 import { ACCOUNT_MENU_LINKS } from '@/components/app/shell/account-menu';
 import { isNavItem, SHELL_NAV } from '@/components/app/shell/nav-items';
 
-import JourneyPage, { metadata as journeyMeta } from '@/app/(lelanea)/app/journey/page';
+import { metadata as journeyMeta } from '@/app/(lelanea)/app/journey/page';
 import { metadata as settingsMeta } from '@/app/(lelanea)/app/settings/page';
 import SharePage, { metadata as shareMeta } from '@/app/(lelanea)/app/share/page';
 import SituationsPage, { metadata as situationsMeta } from '@/app/(lelanea)/app/situations/page';
@@ -81,7 +81,10 @@ const LABELS: Record<string, string> = Object.fromEntries(
 
 const MODULES = {
   '/app/workspace': { Page: WorkspacePage, metadata: workspaceMeta, placeholder: true },
-  '/app/journey': { Page: JourneyPage, metadata: journeyMeta, placeholder: true },
+  // Real from f-journey-record t-148, and async because it reads the session
+  // and the person's record. `tests/unit/app/journey-page.test.tsx` renders it
+  // with both stood up; the metadata row is still checked here.
+  '/app/journey': { Page: null, metadata: journeyMeta, placeholder: false },
   '/app/situations': { Page: SituationsPage, metadata: situationsMeta, placeholder: true },
   '/app/share': { Page: SharePage, metadata: shareMeta, placeholder: true },
   // Real from §13 t-94, and async because it reads the session the way the

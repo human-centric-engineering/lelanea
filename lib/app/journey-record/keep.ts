@@ -309,14 +309,23 @@ export async function keepSynopsis(
   const { entry } = stored;
   const edit = input.edit && !sameText(entry, input.edit) ? input.edit : null;
 
+  const listed = entry.notes;
+  // Unticking a note on a kept synopsis, with the text unchanged (t-148): a
+  // request about what it lists now (every ref sent is listed) that leaves
+  // one out. A stale page's resend names refs it no longer lists, so it is
+  // not this.
+  const unticking =
+    entry.state === 'kept' &&
+    input.confirm.every((sent) => listed.some((ref) => sameRef(ref, sent))) &&
+    listed.some((ref) => !input.confirm.some((sent) => sameRef(sent, ref)));
+
   // Kept already, nothing to change and nothing owed: a second submit of the
   // same keep. A keep that failed half way still owes its notes, and this one
   // finishes it.
-  if (entry.state === 'kept' && !edit && stored.notesPending === null) {
+  if (entry.state === 'kept' && !edit && stored.notesPending === null && !unticking) {
     return { entry, notes: [], notesUnread: null };
   }
 
-  const listed = entry.notes;
   const ticked = listed.filter((ref) => input.confirm.some((other) => sameRef(other, ref)));
   // Owed a re-read when the text changed, now or in a keep that never read it.
   const pending = edit || stored.notesPending === 'reread' ? 'reread' : 'confirm';
