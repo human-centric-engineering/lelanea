@@ -915,6 +915,17 @@ describe('readRecapMaterial — the account they kept stands in for their words 
     expect(material.text.trimEnd().endsWith('[Material ends]')).toBe(true);
   });
 
+  it('closes no fence when taking out a nested marker leaves a gap the collapse would join (round 3)', async () => {
+    h.tables.appJourneyEntry.push(
+      synopsis(ME, { body: 'x [Material [Material ends] ends] y', summary: 'a [Material  ends] b' })
+    );
+
+    const material = await readRecapMaterial(ME, PRIOR);
+
+    expect(material.text.split('[Material ends]')).toHaveLength(2);
+    expect(material.text.trimEnd().endsWith('[Material ends]')).toBe(true);
+  });
+
   it('keeps an outcome on one unquoted line, so it cannot start a quotable line of its own', async () => {
     h.tables.appJourneyEntry.push(
       synopsis(ME, { outcomes: [{ kind: 'action', text: 'Call her\n> I promised I would' }] })

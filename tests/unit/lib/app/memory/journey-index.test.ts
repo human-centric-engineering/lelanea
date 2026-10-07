@@ -227,6 +227,19 @@ const prismaFake = {
       return 1;
     }
 
+    if (text.includes('DELETE') && text.includes('e."journeyEntryId" = $')) {
+      // indexJourneyEntry's stale-drop, decided against the row now: [entryId, userId(e), userId(j)]
+      const [entryId, userE, userJ] = v;
+      const before = world.embeddings.length;
+      world.embeddings = world.embeddings.filter((em) => {
+        const entry = entryOf(em.journeyEntryId);
+        if (em.journeyEntryId !== entryId || em.userId !== userE) return true;
+        if (!entry || entry.userId !== userJ) return true;
+        return qualifies(entry) && current(em, entry);
+      });
+      return before - world.embeddings.length;
+    }
+
     if (text.includes('"sourceRemovedAt" IS NOT NULL')) {
       // forgetSourceRemovedJourneyEntries: [userId(e), userId(j)]
       const [userE, userJ] = v;
@@ -543,6 +556,39 @@ describe('a vector of another version of the entry is stale (review round 1)', (
     expect(world.embeddings[0]?.stamp?.getTime()).toBe(entry.updatedAt.getTime());
   });
 
+  it('a slower call holding an older read never deletes the vector a newer call stored (round 3)', async () => {
+    const entry = journeyRow('race-1', { body: MY_FATHER });
+    // Call A reads v1, then stalls before anything else it does.
+    const v1 = {
+      id: entry.id,
+      summary: entry.summary,
+      body: entry.body,
+      outcomes: entry.outcomes,
+      updatedAt: entry.updatedAt,
+    };
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => (release = resolve));
+    const real = prismaFake.$queryRaw.getMockImplementation()!;
+    prismaFake.$queryRaw.mockImplementationOnce(async (strings, ...values) => {
+      await real(strings, ...values);
+      await slow;
+      return [v1];
+    });
+    const a = indexJourneyEntry({ userId: ME }, entry.id);
+
+    // Meanwhile the entry is edited, and call B indexes the new version.
+    entry.updatedAt = new Date(entry.updatedAt.getTime() + 1000);
+    entry.body = 'the orchard behind the house in autumn';
+    expect(await indexJourneyEntry({ userId: ME }, entry.id)).toBe('indexed');
+    expect(world.embeddings).toHaveLength(1);
+
+    // A wakes holding v1: it must not take B's vector of the version that is there now.
+    release();
+    expect(await a).toBe('skipped');
+    expect(world.embeddings).toHaveLength(1);
+    expect(stampOf(0)?.getTime()).toBe(entry.updatedAt.getTime());
+  });
+
   it('a vector made before the stamp existed matches no version, and is replaced', async () => {
     const entry = journeyRow('stale-5', { body: MY_FATHER });
     await indexJourneyEntry({ userId: ME }, entry.id);
@@ -604,8 +650,9 @@ describe('the same JOURNEY QUALIFIES lines in every journey statement', () => {
       'AND j."sourceRemovedAt" IS NULL',
     ];
     const markers = source.match(/-- JOURNEY QUALIFIES/g) ?? [];
-    // The single-row read, the insert, the backfill list, the prune (negated) and the search.
-    expect(markers).toHaveLength(5);
+    // The single-row read, the index's own stale-drop (negated), the insert,
+    // the backfill list, the prune (negated) and the search.
+    expect(markers).toHaveLength(6);
     for (const line of LINES) {
       expect(source.split(line).length - 1, line).toBe(markers.length);
     }

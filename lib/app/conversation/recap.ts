@@ -325,6 +325,24 @@ function unfenced(text: string): string {
   }
 }
 
+/**
+ * One line of anything the person wrote, with no fence marker left in it.
+ *
+ * Collapsing whitespace and taking markers out each can make what the other
+ * then misses: a marker split across a line break is joined by the collapse,
+ * and taking out a nested marker leaves a double space the collapse then
+ * closes (review rounds 2 and 3, t-149). So both run together until neither
+ * changes anything.
+ */
+function fenceSafeLine(text: string): string {
+  let current = text;
+  for (;;) {
+    const next = unfenced(current.replace(/\s+/g, ' '));
+    if (next === current) return current.trim();
+    current = next;
+  }
+}
+
 /** At most `max` characters, said to be cut where it was. */
 function cut(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max).trimEnd()} …`;
@@ -452,10 +470,7 @@ async function readJourneySteps(userId: string, prior: PriorSession): Promise<st
  * forge a `> ` line, and cut to the words' budget.
  */
 function keptAccountSection(kept: KeptSynopsisText): string {
-  // Collapsed first, then unfenced: a marker split across a line break or a
-  // tab would otherwise slip past and be joined by the collapse (round 2).
-  const oneLine = (text: string, max: number) =>
-    cut(unfenced(text.replace(/\s+/g, ' ')).replace(/\s+/g, ' ').trim(), max);
+  const oneLine = (text: string, max: number) => cut(fenceSafeLine(text), max);
   const outcomes = kept.outcomes.map(
     (outcome) => `- ${outcome.kind}: ${oneLine(outcome.text, MAX_RECAP_NOTE_CHARS)}`
   );

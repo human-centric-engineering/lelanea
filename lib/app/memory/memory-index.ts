@@ -551,21 +551,27 @@ export async function indexJourneyEntry(
        AND j."sourceRemovedAt" IS NULL
   `;
   // Whatever the entry is now, a vector of another version of it, or of an
-  // entry she may no longer read, goes first.
-  await prisma.appMemoryEmbedding.deleteMany({
-    where: {
-      userId: subject.userId,
-      journeyEntryId: entryId,
-      ...(entry
-        ? {
-            OR: [
-              { journeyEntryUpdatedAt: null },
-              { journeyEntryUpdatedAt: { not: entry.updatedAt } },
-            ],
-          }
-        : {}),
-    },
-  });
+  // entry she may no longer read, goes first. Decided against the row at
+  // delete time, never against the version this call read: a slower call
+  // holding an older read would otherwise delete the vector a newer call just
+  // stored (review round 3; `forgetSupersededVersions` avoids the same for
+  // notes). A vector of an entry removed outright goes with it by the FK.
+  await prisma.$executeRaw`
+    DELETE FROM app_memory_embedding e
+     USING app_journey_entry j
+     WHERE e."journeyEntryId" = j.id
+       AND e."journeyEntryId" = ${entryId}
+       AND e."userId" = ${subject.userId}
+       AND j."userId" = ${subject.userId}
+       AND NOT (
+         -- JOURNEY QUALIFIES, negated: the same three lines as every other journey statement.
+         j.state::text = 'kept'
+         AND j."withheldFromAgent" = false
+         AND j."sourceRemovedAt" IS NULL
+         -- And current: made from the version of the entry that is there now.
+         AND e."journeyEntryUpdatedAt" IS NOT DISTINCT FROM j."updatedAt"
+       )
+  `;
   if (!entry) return 'skipped';
   const text = journeyEntryText(entry);
   if (text.length === 0) return 'skipped';
