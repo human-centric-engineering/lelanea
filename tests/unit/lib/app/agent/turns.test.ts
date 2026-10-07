@@ -121,11 +121,13 @@ vi.mock('@/lib/logging', () => ({
  * reads are `register-store.test.ts`'s; here it is set per case, and the seam
  * is asked what it does with it.
  */
-const registers = vi.hoisted(() => ({
-  next: null as { register: 'guiding' | 'teaching'; source: 'module' | 'safety' } | null,
-  /** The module the register read as current (t-152). */
-  moduleSlug: 'values',
-}));
+const registers = vi.hoisted(
+  (): {
+    next: { register: 'guiding' | 'teaching'; source: 'module' | 'safety' } | null;
+    /** The module the register read as current (t-152). */
+    moduleSlug: string | null;
+  } => ({ next: null, moduleSlug: 'values' })
+);
 vi.mock('@/lib/app/voice/register-store', () => ({
   hasRegister: (seat: string) => seat === 'facilitator',
   resolveRegister: vi.fn(async (_userId: string, seat: string) =>
