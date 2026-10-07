@@ -35,18 +35,21 @@ export function listedNotes(
   });
 }
 
-/** The key a ticked note is held under. */
+/** The key a note is listed under on the page. */
 export const noteKey = (ref: JourneyNoteRef): string => `${ref.slotSlug}@${ref.version}`;
 
-/** Every usable note ticked: what a draft starts with. */
-export function allTicked(notes: readonly ListedNote[]): Set<string> {
-  return new Set(notes.filter((note) => note.usable).map((note) => noteKey(note.ref)));
-}
-
-/** What the keep route is sent: the listed notes still ticked. */
-export function tickedRefs(notes: readonly ListedNote[], ticked: ReadonlySet<string>) {
+/**
+ * What the keep route is sent: the listed notes the person has not unticked.
+ *
+ * The ticks are held as the slugs the person UNticked, not as versioned keys:
+ * keeping moves a confirmed note on a version, and a note can drop off the
+ * page between reads, so a key that named a version would go stale and a
+ * reset would re-tick what the person had unticked. A slug unticked stays
+ * unticked for as long as the stop is mounted, whatever moved underneath it.
+ */
+export function tickedRefs(notes: readonly ListedNote[], unticked: ReadonlySet<string>) {
   return notes
-    .filter((note) => note.usable && ticked.has(noteKey(note.ref)))
+    .filter((note) => note.usable && !unticked.has(note.ref.slotSlug))
     .map((note) => note.ref);
 }
 
@@ -72,8 +75,9 @@ function Reading({ note, caveat }: { note: ListedNote; caveat: boolean }) {
 
 export interface NoteTicksProps {
   notes: ListedNote[];
-  ticked: ReadonlySet<string>;
-  onToggle: (key: string) => void;
+  /** The slugs the person unticked. Every other usable note is ticked. */
+  unticked: ReadonlySet<string>;
+  onToggle: (slotSlug: string) => void;
   disabled?: boolean;
 }
 
@@ -81,7 +85,7 @@ export interface NoteTicksProps {
  * The notes a synopsis lists, as ticked checkboxes. Keeping confirms the ones
  * still ticked; an unticked note is left exactly as it was (owner ruling 2).
  */
-export function NoteTicks({ notes, ticked, onToggle, disabled }: NoteTicksProps) {
+export function NoteTicks({ notes, unticked, onToggle, disabled }: NoteTicksProps) {
   const headingId = useId();
   if (notes.length === 0) return null;
   return (
@@ -103,9 +107,9 @@ export function NoteTicks({ notes, ticked, onToggle, disabled }: NoteTicksProps)
             <input
               type="checkbox"
               className="mt-[3px] size-4 flex-none accent-[var(--color-accent-ink)]"
-              checked={note.usable && ticked.has(key)}
+              checked={note.usable && !unticked.has(note.ref.slotSlug)}
               disabled={disabled || !note.usable}
-              onChange={() => onToggle(key)}
+              onChange={() => onToggle(note.ref.slotSlug)}
             />
             <Reading note={note} caveat />
           </label>

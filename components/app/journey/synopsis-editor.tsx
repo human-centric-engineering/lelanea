@@ -34,6 +34,8 @@ export interface SynopsisEditorProps {
   /** The note ticks, which keeping sends with the change. */
   notes?: React.ReactNode;
   busy: boolean;
+  /** The text can still be edited and copied, but not kept: the entry moved on underneath it. */
+  locked?: boolean;
   /** "Keep my version" on a draft; "Keep this change" on a kept synopsis. */
   submitLabel: string;
   onSubmit: (text: SynopsisText) => void;
@@ -49,6 +51,7 @@ export function SynopsisEditor({
   initial,
   notes,
   busy,
+  locked = false,
   submitLabel,
   onSubmit,
   onCancel,
@@ -71,7 +74,9 @@ export function SynopsisEditor({
       className="mt-2 flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
-        if (ready) onSubmit({ summary: summary.trim(), body: body.trim(), outcomes: kept });
+        if (ready && !locked) {
+          onSubmit({ summary: summary.trim(), body: body.trim(), outcomes: kept });
+        }
       }}
     >
       <div className="flex flex-col gap-1">
@@ -172,7 +177,7 @@ export function SynopsisEditor({
       {notes}
 
       <div className="flex flex-wrap gap-2 pt-1">
-        <Button type="submit" size="sm" disabled={busy || !ready}>
+        <Button type="submit" size="sm" disabled={busy || locked || !ready}>
           {submitLabel}
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>

@@ -540,6 +540,87 @@ describe('unsent work survives closing a stop', () => {
       confirm: [{ slotSlug: 'life_work', version: 1 }],
     });
   });
+  it('keeps an unticked note unticked when a search that still finds the draft commits', async () => {
+    const draftEntry = entry({
+      id: 'cmdraft00000000000000000001',
+      state: 'draft',
+      keptAt: null,
+      regenerationsLeft: 3,
+      summary: 'The draft',
+      occurredAt: '2026-10-05T09:00:00.000Z',
+      notes: [
+        { slotSlug: 'life_work', version: 1 },
+        { slotSlug: 'life_money', version: 2 },
+      ],
+    });
+    const older = entry({ id: 'cmolder00000000000000000002', summary: 'Older' });
+    const view = render(
+      <JourneyTimeline
+        record={record({
+          entries: [draftEntry, older],
+          total: 1,
+          drafts: 1,
+          matched: 2,
+          notes: [
+            {
+              slotSlug: 'life_work',
+              label: 'life work',
+              reading: 'A.',
+              version: 1,
+              confirmable: true,
+            },
+            {
+              slotSlug: 'life_money',
+              label: 'life money',
+              reading: 'B.',
+              version: 2,
+              confirmable: true,
+            },
+          ],
+        })}
+        query={NO_QUERY}
+        next={null}
+        moduleLabels={{}}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /life money/ }));
+    // The search commits: the page re-renders for ?q=draft, and the draft still matches.
+    view.rerender(
+      <JourneyTimeline
+        record={record({
+          entries: [draftEntry],
+          total: 1,
+          drafts: 1,
+          matched: 1,
+          notes: [
+            {
+              slotSlug: 'life_work',
+              label: 'life work',
+              reading: 'A.',
+              version: 1,
+              confirmable: true,
+            },
+            {
+              slotSlug: 'life_money',
+              label: 'life money',
+              reading: 'B.',
+              version: 2,
+              confirmable: true,
+            },
+          ],
+        })}
+        query={{ q: 'draft' }}
+        next={null}
+        moduleLabels={{}}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Keep this' }));
+
+    expect(world.calls[0]?.body).toMatchObject({
+      confirm: [{ slotSlug: 'life_work', version: 1 }],
+    });
+  });
 });
 
 describe('writing an entry yourself', () => {

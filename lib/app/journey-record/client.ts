@@ -2,8 +2,7 @@
  * The journey record's routes, as the timeline at `/app/journey` calls them
  * (f-journey-record t-148).
  *
- * A call answers nothing on success (keeping says only what it could not do
- * to the notes): the page re-reads the whole record
+ * Every call answers nothing on success: the page re-reads the whole record
  * afterwards (`router.refresh()`), the way the notes panel re-reads after a
  * correction, so what is on screen is always one server read and never a
  * patch the browser made up. A refusal throws {@link JourneyRefused}, whose
@@ -84,7 +83,7 @@ async function send(
   method: 'POST' | 'PATCH' | 'DELETE',
   body: unknown,
   options: Options
-): Promise<Response> {
+): Promise<void> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(path, {
     method,
@@ -93,7 +92,6 @@ async function send(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) throw await refusalOf(response);
-  return response;
 }
 
 const entryPath = (id: string) => `${JOURNEY_RECORD_ENDPOINT}/${encodeURIComponent(id)}`;
@@ -132,28 +130,17 @@ export interface SynopsisKeepRequest {
   edit?: { summary: string; body: string; outcomes: JourneyOutcome[] };
 }
 
-const keptEnvelopeSchema = z.object({
-  success: z.literal(true),
-  data: z.object({ notesUnread: z.string().nullable() }),
-});
-
 /**
- * Keep a synopsis as written or changed, or change one already kept.
- *
- * Resolves with why a changed account was not read against the notes
- * (`paused`, `ceiling_reached`, `failed`…), or null when it was or nothing
- * needed reading. The text is kept either way, and the notes are left alone
- * until a later keep finishes the read (t-147), so the page says so.
+ * Keep a synopsis as written or changed, or change one already kept. What it
+ * did to the notes reaches the page through the re-read after it: a keep that
+ * could not settle them leaves the entry `notesPending`, which the stop shows.
  */
 export async function keepSynopsis(
   id: string,
   keep: SynopsisKeepRequest,
   options: Options = {}
-): Promise<{ notesUnread: string | null }> {
-  const response = await send(`${entryPath(id)}/keep`, 'POST', keep, options);
-  const parsed = keptEnvelopeSchema.safeParse(await response.json().catch(() => null));
-  // A kept reply we cannot read still kept the text; claim nothing about the notes.
-  return { notesUnread: parsed.success ? parsed.data.data.notesUnread : null };
+): Promise<void> {
+  await send(`${entryPath(id)}/keep`, 'POST', keep, options);
 }
 
 /** Another draft in place of this one, optionally saying what was wrong. */

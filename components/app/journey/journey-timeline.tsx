@@ -146,19 +146,30 @@ function Composer() {
 
 interface StopsProps {
   record: JourneyRecordPage;
+  /** The committed search, as its URL: a new one opens the newest stop again. */
+  query: string;
   next: JourneySignpost | null;
   moduleLabels: Readonly<Record<string, string>>;
 }
 
 /**
  * The thread itself. One stop open at a time: the newest starts open, opening
- * another closes it, and opening the open one shuts it. Keyed on the query by
- * its parent, so a new search opens the newest of what it found.
+ * another closes it, and opening the open one shuts it.
  */
-function Stops({ record, next, moduleLabels }: StopsProps) {
-  const [open, setOpen] = useState<string | null>(
-    () => record.entries[0]?.id ?? (next ? NEXT_STOP : null)
-  );
+function Stops({ record, next, moduleLabels, query }: StopsProps) {
+  const newest = () => record.entries[0]?.id ?? (next ? NEXT_STOP : null);
+  const [open, setOpen] = useState<string | null>(newest);
+  /*
+   * A new search opens the newest of what it found. Adjusted during render,
+   * not by remounting the list: each stop's body holds the person's unsent
+   * work (unticked notes, a change half-written), and a search that still
+   * matches that stop must not throw it away.
+   */
+  const [openedFor, setOpenedFor] = useState(query);
+  if (openedFor !== query) {
+    setOpenedFor(query);
+    setOpen(newest());
+  }
   const toggle = (id: string) => setOpen((current) => (current === id ? null : id));
   const last = record.entries.length - 1;
 
@@ -276,6 +287,8 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
   const onType = (text: string) => {
     setTyped(text);
     cancelPending();
+    // Words that already match the last URL asked for (a trailing space) move nothing.
+    if ((text.trim() || undefined) === readJourneySearch(target.current).q) return;
     pending.current = setTimeout(() => {
       pending.current = null;
       navigate({ q: text.trim() || undefined }, 'replace');
@@ -445,7 +458,7 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
 
       {record.entries.length > 0 || (next && !filtering) ? (
         <Stops
-          key={journeySearch(query)}
+          query={committed}
           record={record}
           next={filtering ? null : next}
           moduleLabels={moduleLabels}

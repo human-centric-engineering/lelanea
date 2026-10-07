@@ -11,6 +11,7 @@
  * @see lib/app/journey-record/keep.ts
  */
 
+import { journeyNoteRefsSchema } from '@/lib/app/journey-record/entry';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -384,6 +385,33 @@ describe('changing a synopsis already kept', () => {
 
     expect(world.values).toHaveLength(before);
     expect(again.notes).toEqual([]);
+  });
+});
+
+describe('unticking a note on a synopsis already kept, text unchanged (t-148)', () => {
+  it('unlists the unticked note and leaves it exactly as it was', async () => {
+    await keepSynopsis(ME, draft.id, { confirm: [LISTED[0], LISTED[1]] }, NOW);
+    const listedNow = journeyNoteRefsSchema.parse(entry(draft.id).notes);
+    expect(listedNow.length).toBeGreaterThan(1);
+    const before = world.values.length;
+
+    const kept = await keepSynopsis(ME, draft.id, { confirm: [listedNow[0]] }, NOW);
+
+    expect(entry(draft.id).notes).toEqual([listedNow[0]]);
+    expect(kept.notes).toContainEqual({ slotSlug: listedNow[1].slotSlug, outcome: 'unticked' });
+    // Nothing written to any note: the one still ticked is already confirmed.
+    expect(world.values).toHaveLength(before);
+  });
+
+  it('is not fooled by a stale page resending refs the synopsis no longer lists', async () => {
+    await keepSynopsis(ME, draft.id, { confirm: [LISTED[0], LISTED[1]] }, NOW);
+    const listedNow = journeyNoteRefsSchema.parse(entry(draft.id).notes);
+
+    // The draft's own refs, from before the keep moved them on.
+    const again = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
+
+    expect(again.notes).toEqual([]);
+    expect(entry(draft.id).notes).toEqual(listedNow);
   });
 });
 

@@ -7,9 +7,7 @@ import { useId, useState } from 'react';
 import {
   ConfirmedNotes,
   NoteTicks,
-  allTicked,
   listedNotes,
-  noteKey,
   tickedRefs,
   type ListedNote,
 } from '@/components/app/journey/journey-notes';
@@ -380,33 +378,18 @@ function SynopsisBody({
 }) {
   const action = useJourneyAction();
   const [mode, setMode] = useState<SynopsisMode>('reading');
-  const [ticked, setTicked] = useState<Set<string>>(() => allTicked(notes));
-  /*
-   * The ticks are keyed on each note's version, and keeping moves a confirmed
-   * note on a version, so after a keep every key would be stale and the next
-   * change would send `confirm: []`, unlisting every note. When the notes the
-   * page lists change, the ticks start again from "every usable note ticked".
-   * Adjusted during render rather than by remounting, so the notice below
-   * survives the refresh that changed them.
-   */
-  const listedKey = notes.map((note) => noteKey(note.ref)).join(' ');
-  const [ticksFor, setTicksFor] = useState(listedKey);
-  if (ticksFor !== listedKey) {
-    setTicksFor(listedKey);
-    setTicked(allTicked(notes));
-  }
+  /** The slugs the person unticked (`journey-notes.tsx`, `tickedRefs`). */
+  const [unticked, setUnticked] = useState<Set<string>>(() => new Set());
   /*
    * The version a change was started from. Keeping is conditional on what the
    * person was shown, and an editor holds the text it opened with, so a change
-   * started before a redraft (another tab) must not keep over the redraft once
-   * the page has refreshed. When the entry moves on underneath an open editor,
-   * the editor closes, and the page shows the version that is there now.
+   * started before a redraft (another tab) must not keep over the redraft. When
+   * the entry moves on underneath an open editor, the editor keeps the
+   * person's words but can no longer keep them: it says so, and Cancel shows
+   * the version that is there now.
    */
   const [editingFrom, setEditingFrom] = useState<string | null>(null);
-  if (mode === 'editing' && editingFrom !== null && editingFrom !== entry.updatedAt) {
-    setEditingFrom(null);
-    setMode('reading');
-  }
+  const overtaken = mode === 'editing' && editingFrom !== null && editingFrom !== entry.updatedAt;
   const startEditing = () => {
     setEditingFrom(entry.updatedAt);
     setMode('editing');
@@ -415,20 +398,33 @@ function SynopsisBody({
     action.run(() =>
       keepSynopsis(entry.id, {
         seen: edit && editingFrom ? editingFrom : entry.updatedAt,
-        confirm: tickedRefs(notes, ticked),
+        confirm: tickedRefs(notes, unticked),
         ...(edit ? { edit } : {}),
       })
     );
+  /**
+   * Finish the notes an earlier keep still owes: every listed note the person
+   * has not unticked, as listed. keep.ts decides what each one needs (one an
+   * interrupted keep already confirmed is recognised there), so the page does
+   * not filter by version here.
+   */
+  const finishNotes = () =>
+    action.run(() =>
+      keepSynopsis(entry.id, {
+        seen: entry.updatedAt,
+        confirm: entry.notes.filter((ref) => !unticked.has(ref.slotSlug)),
+      })
+    );
   const draft = entry.state === 'draft';
-  const toggle = (key: string) =>
-    setTicked((all) => {
+  const toggle = (slotSlug: string) =>
+    setUnticked((all) => {
       const next = new Set(all);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      if (next.has(slotSlug)) next.delete(slotSlug);
+      else next.add(slotSlug);
       return next;
     });
   const ticks = (
-    <NoteTicks notes={notes} ticked={ticked} onToggle={toggle} disabled={action.busy} />
+    <NoteTicks notes={notes} unticked={unticked} onToggle={toggle} disabled={action.busy} />
   );
   const done = (went: boolean) => {
     if (went) setMode('reading');
@@ -437,12 +433,22 @@ function SynopsisBody({
   if (mode === 'editing') {
     return (
       <>
+        {overtaken ? (
+          <Banner tone="warning" className="mt-2" role="status">
+            This account changed since you started, perhaps in another tab, so your version can’t be
+            kept over it. Copy anything you want to keep, then cancel to see the new version.
+          </Banner>
+        ) : null}
         <SynopsisEditor
           initial={{ summary: entry.summary ?? '', body: entry.body, outcomes: entry.outcomes }}
           notes={ticks}
           busy={action.busy}
+          locked={overtaken}
           submitLabel={draft ? 'Keep my version' : 'Keep this change'}
-          onCancel={() => setMode('reading')}
+          onCancel={() => {
+            setEditingFrom(null);
+            setMode('reading');
+          }}
           onSubmit={(edit) => void keep(edit).then(done)}
         />
         <Refusal action={action} />
@@ -475,7 +481,7 @@ function SynopsisBody({
           <button
             type="button"
             disabled={action.busy}
-            onClick={() => void keep()}
+            onClick={() => void finishNotes()}
             className="underline underline-offset-[3px]"
           >
             Try the notes again

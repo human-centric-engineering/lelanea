@@ -273,11 +273,12 @@ describe('a draft synopsis', () => {
     });
   });
 
-  it('closes a change started before the draft moved on, so it cannot keep over the newer one', async () => {
-    const e = draft();
+  it('keeps a change started before the draft moved on, but will not keep it over the newer one', async () => {
     const view = renderDraft();
     await userEvent.click(screen.getByRole('button', { name: 'Change it' }));
-    expect(screen.getByRole('button', { name: 'Keep my version' })).toBeTruthy();
+    const body = screen.getByLabelText('What happened');
+    await userEvent.clear(body);
+    await userEvent.type(body, 'My careful rewrite.');
 
     // Redrafted in another tab; the page refreshes underneath the open editor.
     view.rerender(
@@ -291,10 +292,18 @@ describe('a draft synopsis', () => {
       />
     );
 
-    expect(screen.queryByRole('button', { name: 'Keep my version' })).toBeNull();
-    expect(screen.getByText('A newer draft.')).toBeTruthy();
+    // The person's words are still there to copy, and cannot be kept over the redraft.
+    expect(screen.getByLabelText('What happened')).toHaveProperty('value', 'My careful rewrite.');
+    expect(screen.getByText(/changed since you started/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Keep my version' })).toHaveProperty(
+      'disabled',
+      true
+    );
     expect(world.calls).toHaveLength(0);
-    expect(e.updatedAt).not.toBe('2026-10-01T11:00:00.000Z');
+
+    // Cancel shows the version that is there now.
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByText('A newer draft.')).toBeTruthy();
   });
 
   it('refreshes when the entry is gone (404), so a dead stop does not stay live', async () => {

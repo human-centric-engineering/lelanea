@@ -14,7 +14,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ConfirmedNotes,
   NoteTicks,
-  allTicked,
   listedNotes,
   noteKey,
   tickedRefs,
@@ -83,25 +82,6 @@ describe('listedNotes', () => {
   });
 });
 
-describe('allTicked', () => {
-  it('ticks every usable note and leaves out every unusable one', () => {
-    const notes: ListedNote[] = [
-      {
-        ref: ref({ slotSlug: 'life_work' }),
-        detail: detail({ slotSlug: 'life_work' }),
-        usable: true,
-      },
-      {
-        ref: ref({ slotSlug: 'life_money', version: 2 }),
-        detail: detail({ slotSlug: 'life_money', version: 1 }),
-        usable: false,
-      },
-    ];
-
-    expect(allTicked(notes)).toEqual(new Set(['life_work@1']));
-  });
-});
-
 describe('tickedRefs', () => {
   const usable: ListedNote = {
     ref: ref({ slotSlug: 'life_work' }),
@@ -119,20 +99,29 @@ describe('tickedRefs', () => {
     usable: false,
   };
 
-  it('sends only the refs still ticked, among the usable notes', () => {
-    expect(tickedRefs([usable, other, unusable], new Set([noteKey(usable.ref)]))).toEqual([
+  it('sends every usable note the person has not unticked', () => {
+    expect(tickedRefs([usable, other, unusable], new Set([other.ref.slotSlug]))).toEqual([
       usable.ref,
     ]);
   });
 
-  it('never sends an unusable note, even if its key is in the ticked set', () => {
-    // Nothing should put an unusable key into a ticked set in practice, but the
-    // function itself must still be the one guarding this, not its callers.
-    expect(tickedRefs([unusable], new Set([noteKey(unusable.ref)]))).toEqual([]);
+  it('never sends an unusable note, though nothing unticked it', () => {
+    expect(tickedRefs([unusable], new Set())).toEqual([]);
   });
 
-  it('sends nothing when nothing is ticked', () => {
-    expect(tickedRefs([usable, other], new Set())).toEqual([]);
+  it('sends nothing when every note is unticked', () => {
+    expect(tickedRefs([usable, other], new Set([usable.ref.slotSlug, other.ref.slotSlug]))).toEqual(
+      []
+    );
+  });
+
+  it('holds an untick by slug, so it survives the note moving on a version', () => {
+    const movedOn: ListedNote = {
+      ref: ref({ slotSlug: 'life_money', version: 3 }),
+      detail: detail({ slotSlug: 'life_money', version: 3 }),
+      usable: true,
+    };
+    expect(tickedRefs([usable, movedOn], new Set(['life_money']))).toEqual([usable.ref]);
   });
 });
 
@@ -149,18 +138,12 @@ describe('NoteTicks', () => {
   };
 
   it('renders nothing at all when there is nothing to tick', () => {
-    const { container } = render(<NoteTicks notes={[]} ticked={new Set()} onToggle={vi.fn()} />);
+    const { container } = render(<NoteTicks notes={[]} unticked={new Set()} onToggle={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('checks a usable ticked note, and leaves an unusable one unchecked and disabled', () => {
-    render(
-      <NoteTicks
-        notes={[usable, stale]}
-        ticked={new Set([noteKey(usable.ref)])}
-        onToggle={vi.fn()}
-      />
-    );
+    render(<NoteTicks notes={[usable, stale]} unticked={new Set()} onToggle={vi.fn()} />);
 
     const boxes = screen.getAllByRole<HTMLInputElement>('checkbox');
     expect(boxes).toHaveLength(2);
@@ -173,24 +156,20 @@ describe('NoteTicks', () => {
     expect(screen.getByText(/This note has changed since/)).toBeTruthy();
   });
 
-  it('calls onToggle with the clicked note’s key', async () => {
+  it('shows an unticked note unchecked, and calls onToggle with its slug', async () => {
     const onToggle = vi.fn();
-    render(<NoteTicks notes={[usable]} ticked={new Set()} onToggle={onToggle} />);
+    render(
+      <NoteTicks notes={[usable]} unticked={new Set([usable.ref.slotSlug])} onToggle={onToggle} />
+    );
+    expect(screen.getByRole<HTMLInputElement>('checkbox').checked).toBe(false);
 
     await userEvent.click(screen.getByRole('checkbox'));
 
-    expect(onToggle).toHaveBeenCalledWith(noteKey(usable.ref));
+    expect(onToggle).toHaveBeenCalledWith('life_work');
   });
 
   it('disables every box when the whole fieldset is disabled, whatever is ticked', () => {
-    render(
-      <NoteTicks
-        notes={[usable]}
-        ticked={new Set([noteKey(usable.ref)])}
-        onToggle={vi.fn()}
-        disabled
-      />
-    );
+    render(<NoteTicks notes={[usable]} unticked={new Set()} onToggle={vi.fn()} disabled />);
 
     expect(screen.getByRole<HTMLInputElement>('checkbox').disabled).toBe(true);
   });

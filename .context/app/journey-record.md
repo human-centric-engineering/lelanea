@@ -396,13 +396,12 @@ prototype's `renderJourney`.
   it is closed, so unticked notes and a half-written change are still there
   when it is opened again.
 - **A change cannot keep over a newer draft.** It is sent with the version it
-  was started from, and if the entry moves on under an open editor (a redraft
-  in another tab), the editor closes and the page shows what is there now.
-  A 404 refreshes the page too, since the entry is gone.
-- **The ticks follow the notes.** Keeping moves each confirmed note on a
-  version, so when the listed notes change the ticks start again from every
-  usable note ticked. Without that, a second change after a keep would send
-  `confirm: []` and unlist every note.
+  was started from. If the entry moves on under an open editor (a redraft in
+  another tab), the editor keeps the person's words to copy but can no longer
+  keep them, and Cancel shows what is there now. A 404 refreshes the page,
+  since the entry is gone.
+- **A search does not throw unsent work away.** A new search opens the
+  newest stop again without remounting the list.
 - **Nothing is live while the page catches up.** An action stays busy until
   the refresh after it lands, so a stop just kept or removed cannot be acted
   on again from its old state.
