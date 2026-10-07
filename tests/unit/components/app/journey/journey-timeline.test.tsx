@@ -350,6 +350,63 @@ describe('finding your way around', () => {
     expect(router.push).toHaveBeenCalledWith('/app/journey', { scroll: false });
   });
 
+  it('a pick made while a search is pausing carries the typed words and cancels the pending search', async () => {
+    populated();
+
+    await userEvent.type(screen.getByRole('searchbox', { name: /search your journey/i }), 'grief');
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: /show entries about a module/i }),
+      'values'
+    );
+    await new Promise((resolve) => setTimeout(resolve, SEARCH_PAUSE_MS + 100));
+
+    expect(router.push).toHaveBeenCalledWith('/app/journey?q=grief&module=values', {
+      scroll: false,
+    });
+    // The search that was pausing never lands on top and throws the module away.
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it('follows the URL when it moves without us (Back, a link): the box takes its search', () => {
+    const view = populated({ q: 'work' });
+    const box = screen.getByRole('searchbox', { name: /search your journey/i });
+    expect(box).toHaveProperty('value', 'work');
+
+    view.rerender(
+      <JourneyTimeline
+        record={record({ total: 1 })}
+        query={{ q: 'family' }}
+        next={null}
+        moduleLabels={{}}
+      />
+    );
+    expect(box).toHaveProperty('value', 'family');
+
+    view.rerender(
+      <JourneyTimeline record={record({ total: 1 })} query={{}} next={null} moduleLabels={{}} />
+    );
+    expect(box).toHaveProperty('value', '');
+  });
+
+  it('builds a pick on the last URL asked for, not the one still committing', async () => {
+    populated({ module: 'values' });
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: /show entries with an outcome/i }),
+      'action'
+    );
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: /show entries of this kind/i }),
+      'own'
+    );
+
+    // The second pick keeps the first, though the page has not re-rendered for it yet.
+    expect(router.push).toHaveBeenLastCalledWith(
+      '/app/journey?module=values&outcome=action&kind=own',
+      { scroll: false }
+    );
+  });
+
   it('says how many matched while filtering, and nothing extra otherwise', () => {
     const { rerender } = populated({ q: 'brother' });
     expect(screen.getByRole('status').textContent).toBe('1 entry found');

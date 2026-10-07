@@ -15,6 +15,7 @@ import { JOURNEY_RECORD_EXPORT, writeOwnEntry } from '@/lib/app/journey-record/c
 import { JOURNEY_OUTCOME_KINDS, type JourneyEntryKind } from '@/lib/app/journey-record/entry';
 import {
   JOURNEY_SEARCH_MAX,
+  journeyRecordQuerySchema,
   type JourneyRecordPage,
   type JourneyRecordQuery,
 } from '@/lib/app/journey-record/query';
@@ -71,6 +72,20 @@ function Picker({
       />
     </label>
   );
+}
+
+/** A query string the page wrote back into a query; anything unreadable is left out. */
+export function readJourneySearch(search: string): JourneyRecordQuery {
+  const params = new URLSearchParams(search);
+  const parsed = journeyRecordQuerySchema.safeParse({
+    q: params.get('q') ?? undefined,
+    module: params.get('module') ?? undefined,
+    outcome: params.get('outcome') ?? undefined,
+    kind: params.get('kind') ?? undefined,
+  });
+  if (!parsed.success) return {};
+  const { q, module, outcome, kind } = parsed.data;
+  return { q, module, outcome, kind };
 }
 
 /** The query as the page's URL, defaults left out. */
@@ -201,28 +216,71 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
   const pathname = usePathname();
   const searchId = useId();
   const [typed, setTyped] = useState(query.q ?? '');
-  const pause = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /*
+   * The search box and the URL, kept in step the way the notes panel keeps
+   * them (`notes-panel.tsx`, and its review rounds). `committed` is the URL the
+   * page was rendered for. Every navigation is built from `target`, the last
+   * URL asked for, never from `committed`, so a pick made while a search is
+   * still in flight keeps it. `sent` holds what was asked for and not yet seen
+   * commit: a committed URL found there is our own echo and changes nothing;
+   * one not there (Back, Forward, a followed link) is the reader going
+   * somewhere else, and the box follows it.
+   */
+  const committed = journeySearch(query);
+  const target = useRef(committed);
+  const sent = useRef<string[]>([]);
+  /** The search waiting out its pause, so a choice made meanwhile can cancel it. */
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const echo = sent.current.indexOf(committed);
+    if (echo !== -1) {
+      sent.current.splice(0, echo + 1);
+      return;
+    }
+    sent.current = [];
+    target.current = committed;
+    const moved = readJourneySearch(committed).q ?? '';
+    // Not trimmed out from under the caret when the words already agree.
+    setTyped((current) => (current.trim() === moved ? current : moved));
+  }, [committed]);
 
   useEffect(
     () => () => {
-      if (pause.current) clearTimeout(pause.current);
+      if (pending.current) clearTimeout(pending.current);
     },
     []
   );
 
-  const go = (change: Partial<JourneyRecordQuery>, how: 'push' | 'replace') => {
-    const target = `${pathname}${journeySearch({ ...query, ...change })}`;
-    if (how === 'push') router.push(target, { scroll: false });
-    else router.replace(target, { scroll: false });
+  const cancelPending = () => {
+    if (pending.current) {
+      clearTimeout(pending.current);
+      pending.current = null;
+    }
+  };
+
+  /** Move the URL: `push` for a choice Back should undo, `replace` for typing. */
+  const navigate = (change: Partial<JourneyRecordQuery>, how: 'push' | 'replace') => {
+    const search = journeySearch({ ...readJourneySearch(target.current), ...change });
+    target.current = search;
+    sent.current.push(search);
+    router[how](`${pathname}${search}`, { scroll: false });
   };
 
   const onType = (text: string) => {
     setTyped(text);
-    if (pause.current) clearTimeout(pause.current);
-    pause.current = setTimeout(
-      () => go({ q: text.trim() || undefined }, 'replace'),
-      SEARCH_PAUSE_MS
-    );
+    cancelPending();
+    pending.current = setTimeout(() => {
+      pending.current = null;
+      navigate({ q: text.trim() || undefined }, 'replace');
+    }, SEARCH_PAUSE_MS);
+  };
+
+  /** A picker: pushes, carrying the box's current text, and cancels a search still pausing. */
+  const go = (change: Partial<JourneyRecordQuery>) => {
+    cancelPending();
+    navigate({ q: typed.trim() || undefined, ...change }, 'push');
   };
 
   const filtering =
@@ -231,9 +289,9 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
     query.outcome !== undefined ||
     query.kind !== undefined;
   const clear = () => {
-    if (pause.current) clearTimeout(pause.current);
+    cancelPending();
     setTyped('');
-    router.push(pathname, { scroll: false });
+    navigate({ q: undefined, module: undefined, outcome: undefined, kind: undefined }, 'push');
   };
 
   const empty = record.total === 0 && record.drafts === 0;
@@ -291,7 +349,7 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
             <Picker
               label="Show entries about a module"
               value={query.module ?? ''}
-              onChange={(value) => go({ module: value || undefined }, 'push')}
+              onChange={(value) => go({ module: value || undefined })}
             >
               <option value="">Every module</option>
               {record.modules.map((slug) => (
@@ -304,7 +362,7 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
               label="Show entries with an outcome of this kind"
               value={query.outcome ?? ''}
               onChange={(value) =>
-                go({ outcome: JOURNEY_OUTCOME_KINDS.find((kind) => kind === value) }, 'push')
+                go({ outcome: JOURNEY_OUTCOME_KINDS.find((kind) => kind === value) })
               }
             >
               <option value="">Every outcome</option>
@@ -318,7 +376,7 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
               label="Show entries of this kind"
               value={query.kind ?? ''}
               onChange={(value) =>
-                go({ kind: value === 'synopsis' || value === 'own' ? value : undefined }, 'push')
+                go({ kind: value === 'synopsis' || value === 'own' ? value : undefined })
               }
             >
               <option value="">Everything</option>

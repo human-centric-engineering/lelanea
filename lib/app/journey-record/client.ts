@@ -2,7 +2,8 @@
  * The journey record's routes, as the timeline at `/app/journey` calls them
  * (f-journey-record t-148).
  *
- * Every call answers nothing on success: the page re-reads the whole record
+ * A call answers nothing on success (keeping says only what it could not do
+ * to the notes): the page re-reads the whole record
  * afterwards (`router.refresh()`), the way the notes panel re-reads after a
  * correction, so what is on screen is always one server read and never a
  * patch the browser made up. A refusal throws {@link JourneyRefused}, whose
@@ -83,7 +84,7 @@ async function send(
   method: 'POST' | 'PATCH' | 'DELETE',
   body: unknown,
   options: Options
-): Promise<void> {
+): Promise<Response> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(path, {
     method,
@@ -92,6 +93,7 @@ async function send(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) throw await refusalOf(response);
+  return response;
 }
 
 const entryPath = (id: string) => `${JOURNEY_RECORD_ENDPOINT}/${encodeURIComponent(id)}`;
@@ -103,22 +105,22 @@ export interface OwnEntryWords {
 }
 
 /** Something the person writes themselves. */
-export function writeOwnEntry(entry: OwnEntryWords, options: Options = {}): Promise<void> {
-  return send(JOURNEY_RECORD_ENDPOINT, 'POST', entry, options);
+export async function writeOwnEntry(entry: OwnEntryWords, options: Options = {}): Promise<void> {
+  await send(JOURNEY_RECORD_ENDPOINT, 'POST', entry, options);
 }
 
 /** Change an own entry's words, or whether Lelañea may read it. */
-export function changeOwnEntry(
+export async function changeOwnEntry(
   id: string,
   change: Partial<OwnEntryWords>,
   options: Options = {}
 ): Promise<void> {
-  return send(entryPath(id), 'PATCH', change, options);
+  await send(entryPath(id), 'PATCH', change, options);
 }
 
 /** Remove any entry, words and all. How a draft is discarded. */
-export function removeEntry(id: string, options: Options = {}): Promise<void> {
-  return send(entryPath(id), 'DELETE', undefined, options);
+export async function removeEntry(id: string, options: Options = {}): Promise<void> {
+  await send(entryPath(id), 'DELETE', undefined, options);
 }
 
 export interface SynopsisKeepRequest {
@@ -130,20 +132,35 @@ export interface SynopsisKeepRequest {
   edit?: { summary: string; body: string; outcomes: JourneyOutcome[] };
 }
 
-/** Keep a synopsis as written or changed, or change one already kept. */
-export function keepSynopsis(
+const keptEnvelopeSchema = z.object({
+  success: z.literal(true),
+  data: z.object({ notesUnread: z.string().nullable() }),
+});
+
+/**
+ * Keep a synopsis as written or changed, or change one already kept.
+ *
+ * Resolves with why a changed account was not read against the notes
+ * (`paused`, `ceiling_reached`, `failed`…), or null when it was or nothing
+ * needed reading. The text is kept either way, and the notes are left alone
+ * until a later keep finishes the read (t-147), so the page says so.
+ */
+export async function keepSynopsis(
   id: string,
   keep: SynopsisKeepRequest,
   options: Options = {}
-): Promise<void> {
-  return send(`${entryPath(id)}/keep`, 'POST', keep, options);
+): Promise<{ notesUnread: string | null }> {
+  const response = await send(`${entryPath(id)}/keep`, 'POST', keep, options);
+  const parsed = keptEnvelopeSchema.safeParse(await response.json().catch(() => null));
+  // A kept reply we cannot read still kept the text; claim nothing about the notes.
+  return { notesUnread: parsed.success ? parsed.data.data.notesUnread : null };
 }
 
 /** Another draft in place of this one, optionally saying what was wrong. */
-export function regenerateSynopsis(
+export async function regenerateSynopsis(
   id: string,
   steer: string,
   options: Options = {}
 ): Promise<void> {
-  return send(`${entryPath(id)}/regenerate`, 'POST', { steer }, options);
+  await send(`${entryPath(id)}/regenerate`, 'POST', { steer }, options);
 }

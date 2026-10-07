@@ -236,6 +236,67 @@ describe('a draft synopsis', () => {
     });
   });
 
+  it('ticks the notes afresh once keeping has moved them on, so a later change still confirms them', async () => {
+    const e = draft();
+    const view = renderDraft();
+    await userEvent.click(screen.getByRole('button', { name: 'Keep this' }));
+
+    // The refresh: kept, and each note now at the version keeping wrote.
+    const kept = entry({
+      id: e.id,
+      updatedAt: '2026-10-01T10:00:00.000Z',
+      notes: [
+        { slotSlug: 'life_work', version: 2 },
+        { slotSlug: 'life_money', version: 3 },
+      ],
+    });
+    view.rerender(
+      <JourneyStop
+        entry={kept}
+        notes={notesPanel.map((note) => ({ ...note, version: note.version + 1 }))}
+        moduleLabels={{}}
+        thread="dashed"
+        open
+        onToggle={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Change this account' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Keep this change' }));
+
+    expect(world.calls[1]?.body).toMatchObject({
+      seen: kept.updatedAt,
+      confirm: [
+        { slotSlug: 'life_work', version: 2 },
+        { slotSlug: 'life_money', version: 3 },
+      ],
+    });
+  });
+
+  it('says so when a changed account was kept but could not be read against the notes', async () => {
+    world.nextResponse = new Response(
+      JSON.stringify({ success: true, data: { entry: {}, notes: [], notesUnread: 'paused' } }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    );
+    renderDraft();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Change it' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Keep my version' }));
+
+    expect(await screen.findByText(/could not read it against your notes just now/)).toBeTruthy();
+  });
+
+  it('says nothing about the notes when the keep read them', async () => {
+    world.nextResponse = new Response(
+      JSON.stringify({ success: true, data: { entry: {}, notes: [], notesUnread: null } }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    );
+    renderDraft();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Keep this' }));
+
+    expect(screen.queryByText(/could not read it against your notes/)).toBeNull();
+  });
+
   it('changes it, then keeps the edited version with its outcomes', async () => {
     const e = draft();
     renderDraft();
@@ -322,6 +383,46 @@ describe('a draft synopsis', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('That did not make sense.');
     expect(router.refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe('a kept synopsis', () => {
+  it('lists its notes as kept with it, not as confirmed, and says when one has changed since', () => {
+    render(
+      <JourneyStop
+        entry={entry({
+          notes: [
+            { slotSlug: 'life_work', version: 2 },
+            { slotSlug: 'life_money', version: 3 },
+          ],
+        })}
+        notes={[
+          {
+            slotSlug: 'life_work',
+            label: 'life work',
+            reading: 'Better.',
+            version: 2,
+            confirmable: true,
+          },
+          {
+            slotSlug: 'life_money',
+            label: 'life money',
+            reading: 'Newer.',
+            version: 4,
+            confirmable: true,
+          },
+        ]}
+        moduleLabels={{}}
+        thread="none"
+        open
+        onToggle={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Notes kept with this account')).toBeTruthy();
+    expect(screen.queryByText(/confirmed/i)).toBeNull();
+    expect(screen.getByText(/Newer\. This note has changed since\./)).toBeTruthy();
+    expect(screen.getByText('Better.')).toBeTruthy();
   });
 });
 

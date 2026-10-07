@@ -140,7 +140,9 @@ async function readListedNotes(
       label: note.slotSlug.replace(/_/g, ' '),
       reading: note.withheld ? null : note.value,
       version: note.version,
-      confirmable: note.correctable,
+      // keep.ts's own rule: one the panel lets the person correct, holding
+      // words rather than the special-category sentinel.
+      confirmable: note.correctable && !note.withheld,
     }));
 }
 

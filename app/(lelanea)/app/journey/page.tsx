@@ -73,16 +73,17 @@ export default async function JourneyPage({
   if (!session) clearInvalidSession('/app/journey');
 
   const query = readQuery(await searchParams);
-  const record = await getJourneyRecord(session.user.id, query);
-
   // The map decorates the record (module names, the signpost). Without it the
   // record still reads, with module slugs for names and no signpost.
-  const map = await getJourneyMap(session.user.id).catch((error: unknown) => {
-    logger.warn('Journey map unreadable on the journey view', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  });
+  const [record, map] = await Promise.all([
+    getJourneyRecord(session.user.id, query),
+    getJourneyMap(session.user.id).catch((error: unknown) => {
+      logger.warn('Journey map unreadable on the journey view', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }),
+  ]);
   const moduleLabels = Object.fromEntries(
     (map?.modules ?? []).map((module) => [module.slug, moduleLabel(module)])
   );

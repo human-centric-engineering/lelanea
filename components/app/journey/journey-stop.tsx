@@ -9,12 +9,17 @@ import {
   NoteTicks,
   allTicked,
   listedNotes,
+  noteKey,
   tickedRefs,
   type ListedNote,
 } from '@/components/app/journey/journey-notes';
 import { FIELD, LABEL } from '@/components/app/journey/fields';
 import { OwnEntryForm } from '@/components/app/journey/own-entry-form';
-import { OUTCOME_WORDS, SynopsisEditor } from '@/components/app/journey/synopsis-editor';
+import {
+  OUTCOME_WORDS,
+  SynopsisEditor,
+  type SynopsisText,
+} from '@/components/app/journey/synopsis-editor';
 import { useJourneyAction, type JourneyAction } from '@/components/app/journey/use-journey-action';
 import { Banner } from '@/components/app/ui/banner';
 import { Button } from '@/components/app/ui/button';
@@ -373,6 +378,31 @@ function SynopsisBody({
   const action = useJourneyAction();
   const [mode, setMode] = useState<SynopsisMode>('reading');
   const [ticked, setTicked] = useState<Set<string>>(() => allTicked(notes));
+  /*
+   * The ticks are keyed on each note's version, and keeping moves a confirmed
+   * note on a version, so after a keep every key would be stale and the next
+   * change would send `confirm: []`, unlisting every note. When the notes the
+   * page lists change, the ticks start again from "every usable note ticked".
+   * Adjusted during render rather than by remounting, so the notice below
+   * survives the refresh that changed them.
+   */
+  const listedKey = notes.map((note) => noteKey(note.ref)).join(' ');
+  const [ticksFor, setTicksFor] = useState(listedKey);
+  if (ticksFor !== listedKey) {
+    setTicksFor(listedKey);
+    setTicked(allTicked(notes));
+  }
+  /** Why the last keep could not read a changed account against the notes. */
+  const [unread, setUnread] = useState<string | null>(null);
+  const keep = (edit?: SynopsisText) =>
+    action.run(async () => {
+      const kept = await keepSynopsis(entry.id, {
+        seen: entry.updatedAt,
+        confirm: tickedRefs(notes, ticked),
+        ...(edit ? { edit } : {}),
+      });
+      setUnread(kept.notesUnread);
+    });
   const draft = entry.state === 'draft';
   const toggle = (key: string) =>
     setTicked((all) => {
@@ -397,17 +427,7 @@ function SynopsisBody({
           busy={action.busy}
           submitLabel={draft ? 'Keep my version' : 'Keep this change'}
           onCancel={() => setMode('reading')}
-          onSubmit={(edit) =>
-            void action
-              .run(() =>
-                keepSynopsis(entry.id, {
-                  seen: entry.updatedAt,
-                  confirm: tickedRefs(notes, ticked),
-                  edit,
-                })
-              )
-              .then(done)
-          }
+          onSubmit={(edit) => void keep(edit).then(done)}
         />
         <Refusal action={action} />
       </>
@@ -432,6 +452,12 @@ function SynopsisBody({
       <Outcomes entry={entry} />
       <Modules modules={entry.modules} labels={moduleLabels} />
       {draft ? ticks : <ConfirmedNotes notes={notes} />}
+      {unread ? (
+        <Banner tone="warning" className="mt-3" role="status">
+          Your account was kept, but Lelañea could not read it against your notes just now, so they
+          were left as they were. Keep it again later and it will finish.
+        </Banner>
+      ) : null}
 
       {mode === 'steering' && entry.regenerationsLeft ? (
         <SteerForm
@@ -457,18 +483,7 @@ function SynopsisBody({
       ) : (
         <div className="mt-4 flex flex-wrap gap-2">
           {draft ? (
-            <Button
-              size="sm"
-              disabled={action.busy}
-              onClick={() =>
-                void action.run(() =>
-                  keepSynopsis(entry.id, {
-                    seen: entry.updatedAt,
-                    confirm: tickedRefs(notes, ticked),
-                  })
-                )
-              }
-            >
+            <Button size="sm" disabled={action.busy} onClick={() => void keep()}>
               Keep this
             </Button>
           ) : null}

@@ -375,15 +375,28 @@ prototype's `renderJourney`.
   in `router.refresh()`. Nothing patches the page in the browser.
 - **The notes travel with the record.** The read lists, once, each note any
   entry on the page names: its heading, current reading and version, and
-  whether keeping may still write to it. It comes from `getNotes`, so a note
+  whether keeping may still write to it (keep.ts's own rule: correctable, and
+  holding words rather than the special-category sentinel). It comes from `getNotes`, so a note
   hidden or removed since it was listed is not on the page at all, and one
   withheld at capture shows no reading. A note that has moved on since the
   session wrote it is shown unticked and cannot be ticked, because keeping
   would leave it alone anyway.
 - **Stops, newest first, one open at a time.** The newest starts open. A
   waiting draft is its session's own stop, with keep, change, ask for another
-  (while any are left) and discard. A kept synopsis lists the notes it
-  confirmed. An own entry can be edited, removed, or kept from Lelañea.
+  (while any are left) and discard. A kept synopsis lists the notes kept with
+  it. That list is not headed "confirmed": a keep whose re-read could not run
+  leaves its notes listed but unconfirmed, and the wire does not tell the two
+  apart. An own entry can be edited, removed, or kept from Lelañea.
+- **A keep that could not read the notes says so.** The keep route's
+  `notesUnread` is shown under the stop: the account was kept and the notes
+  were left alone, and keeping it again finishes the read.
+- **The ticks follow the notes.** Keeping moves each confirmed note on a
+  version, so when the listed notes change the ticks start again from every
+  usable note ticked. Without that, a second change after a keep would send
+  `confirm: []` and unlist every note.
+- **Nothing is live while the page catches up.** An action stays busy until
+  the refresh after it lands, so a stop just kept or removed cannot be acted
+  on again from its old state.
 - **"What's next" is pinned last and never counted.** It points at the
   module the person is in, or the first on the map they have not finished
   (`lib/app/journey/next.ts`). Every module stays open, and the copy says so.

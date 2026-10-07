@@ -437,6 +437,26 @@ describe('getJourneyRecord’s notes enrichment', () => {
     expect(notes).toEqual([]);
   });
 
+  it('never offers a withheld note to keep, even one the panel would let them correct', async () => {
+    // A note still holding the sentinel after its slot left special category
+    // (t-84): correctable, but keep.ts will not write to it, so neither may the tick.
+    getNotes.mockResolvedValue({ notes: [note({ withheld: true, correctable: true })] });
+    db.entries.push(
+      row({
+        id: 'cmsyn000000000000000000000',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: 'ses_x',
+        notes: [{ slotSlug: 'life_work', version: 1 }],
+      })
+    );
+
+    const { notes } = await getJourneyRecord(ME);
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.confirmable).toBe(false);
+  });
+
   it('gives a withheld note a null reading, never the sentinel value', async () => {
     getNotes.mockResolvedValue({
       notes: [note({ withheld: true, value: '<redacted: special_category>' })],

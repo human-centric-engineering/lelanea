@@ -58,11 +58,13 @@ function Reading({ note, caveat }: { note: ListedNote; caveat: boolean }) {
       </span>
       <span className="text-muted-foreground text-[13px] leading-[1.55]">
         {note.detail.reading ?? 'Lelañea kept a summary of this rather than your exact words.'}
-        {!caveat || note.usable
-          ? null
-          : note.detail.version !== note.ref.version
+        {note.detail.version !== note.ref.version
+          ? caveat
             ? ' This note has changed since, so keeping leaves it alone.'
-            : ' This note can’t be confirmed now, so keeping leaves it alone.'}
+            : ' This note has changed since.'
+          : caveat && !note.usable
+            ? ' This note can’t be confirmed now, so keeping leaves it alone.'
+            : null}
       </span>
     </span>
   );
@@ -113,14 +115,19 @@ export function NoteTicks({ notes, ticked, onToggle, disabled }: NoteTicksProps)
   );
 }
 
-/** The notes a kept synopsis confirmed, read-only. */
+/**
+ * The notes a kept synopsis lists, read-only.
+ *
+ * Not headed "confirmed": a keep whose re-read could not run leaves its ticked
+ * notes listed but unconfirmed (t-147), and the wire does not tell the two
+ * apart. A note that has moved on since says so, rather than showing a newer
+ * reading as if it were the one kept.
+ */
 export function ConfirmedNotes({ notes }: { notes: ListedNote[] }) {
   if (notes.length === 0) return null;
   return (
     <div className="mt-4 flex flex-col gap-2">
-      <p className="text-[12.5px] text-[var(--color-heading)]">
-        Notes you confirmed by keeping this
-      </p>
+      <p className="text-[12.5px] text-[var(--color-heading)]">Notes kept with this account</p>
       <ul className="flex flex-col gap-2">
         {notes.map((note) => (
           <li key={noteKey(note.ref)} className="flex items-start gap-2.5">
