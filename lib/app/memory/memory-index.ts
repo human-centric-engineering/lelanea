@@ -60,9 +60,21 @@
  * the value is embedded, never the reasoning note, which is not masked
  * (daybreak#269). A revision replaces the previous version's vector.
  *
- * Both are embedded on write where the write is ours (the turn, a capture, a
- * correction, a discovery answer), and a backfill job takes anything missed
- * and drops vectors whose source stopped qualifying (`lib/app/jobs.ts`).
+ * **What the person kept in their journey** (f-journey-record t-149): a kept
+ * synopsis, and an entry they wrote themselves, unless they kept it from her
+ * (owner ruling 4 at planning). A draft is never embedded: it is not in the
+ * record until they keep it. Nor is a synopsis flagged as written from an
+ * exchange the person has since deleted (t-147): it may quote what they
+ * deleted, and deletion is real (§12), so she does not read it until they
+ * change it, which clears the flag. The entry's line, words and outcomes are embedded
+ * together. Editing an entry or keeping it from her drops its vector in the
+ * write's own path ({@link forgetJourneyEntry}) and queues a fresh one;
+ * removing it, or erasure, takes it through the foreign key.
+ *
+ * All three are embedded on write where the write is ours (the turn, a
+ * capture, a correction, a discovery answer, a keep, an own entry), and a
+ * backfill job takes anything missed and drops vectors whose source stopped
+ * qualifying (`lib/app/jobs.ts`).
  *
  * ## What it costs
  *
@@ -84,6 +96,7 @@ import { FACILITATION_SURFACE_CONTEXT_TYPE } from '@/lib/framework/facilitation/
 import { SLOT_SENSITIVITY, SLOT_VISIBILITY } from '@/lib/framework/data-slots/vocabulary';
 import { redactedString } from '@/lib/security/redact';
 import { REMOVED_SOURCE_TYPE } from '@/lib/app/slots/removed';
+import { journeyOutcomesSchema } from '@/lib/app/journey-record/entry';
 
 /** Shorter than this, a message is not embedded. See the module header. */
 export const MIN_INDEXED_CHARS = 12;
@@ -137,7 +150,24 @@ export interface NoteHit {
   distance: number;
 }
 
-export type MemoryHit = MessageHit | NoteHit;
+/**
+ * Something in the person's journey record, found by meaning (t-149): an
+ * account of a session they kept, or an entry they wrote.
+ */
+export interface JourneyEntryHit {
+  sourceKind: 'synopsis' | 'own_entry';
+  /** The `app_journey_entry` id. */
+  sourceId: string;
+  /** Its line, an own entry's only if the person gave one. */
+  summary: string | null;
+  /** What was embedded: the line, the words and the outcomes, read from the entry itself. */
+  text: string;
+  /** When it sits in time: a synopsis at its session's start, an own entry when written. */
+  occurredAt: Date;
+  distance: number;
+}
+
+export type MemoryHit = MessageHit | NoteHit | JourneyEntryHit;
 
 /** What `fill_slot` stores for a special-category capture: the words never land. */
 const MASKED_VALUE = redactedString(SLOT_SENSITIVITY.special_category);
@@ -458,6 +488,151 @@ export function queueNoteIndex(
   });
 }
 
+/** An entry of the journey record, as this module reads it. */
+interface JourneyEntrySource {
+  id: string;
+  summary: string | null;
+  body: string;
+  outcomes: unknown;
+  updatedAt: Date;
+}
+
+/**
+ * What an entry's vector is made from, and what a hit on it reads back: its
+ * line, its words, and each outcome, one to a line. Outcomes are read
+ * defensively, as the record reads them: an unreadable value costs the entry
+ * its outcomes, not its place in the index.
+ */
+export function journeyEntryText(
+  entry: Pick<JourneyEntrySource, 'summary' | 'body' | 'outcomes'>
+): string {
+  const outcomes = journeyOutcomesSchema.safeParse(entry.outcomes);
+  return [
+    entry.summary ?? '',
+    entry.body,
+    ...(outcomes.success ? outcomes.data.map((outcome) => outcome.text) : []),
+  ]
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .join('\n');
+}
+
+/**
+ * Embed one entry of the person's journey record, if it is one she may read:
+ * kept, and not kept from her (t-149). A draft, or an entry kept from her, is
+ * `skipped`.
+ *
+ * The INSERT is conditional on the entry's `updatedAt` as it was read, so an
+ * embedding of words since edited never lands over the newer ones: each write
+ * that changes an entry drops its vector first ({@link forgetJourneyEntry}) and
+ * queues this again. Idempotent: one already indexed is not embedded again, and
+ * `journeyEntryId` is unique.
+ *
+ * Throws when the embedder does; {@link queueJourneyEntryIndex} is the caller
+ * that must not.
+ */
+export async function indexJourneyEntry(
+  subject: MemorySubject,
+  entryId: string,
+  options: IndexOptions = {}
+): Promise<IndexOutcome> {
+  const [entry] = await prisma.$queryRaw<JourneyEntrySource[]>`
+    SELECT j.id, j.summary, j.body, j.outcomes, j."updatedAt"
+      FROM app_journey_entry j
+     WHERE j.id = ${entryId}
+       AND j."userId" = ${subject.userId}
+       -- JOURNEY QUALIFIES: kept, not kept from her, and not written from an
+       -- exchange the person has since deleted. The same three lines in every
+       -- journey statement, held equal by a unit test.
+       AND j.state::text = 'kept'
+       AND j."withheldFromAgent" = false
+       AND j."sourceRemovedAt" IS NULL
+  `;
+  if (!entry) return 'skipped';
+  const text = journeyEntryText(entry);
+  if (text.length === 0) return 'skipped';
+
+  const existing = await prisma.appMemoryEmbedding.findFirst({
+    where: { journeyEntryId: entry.id, userId: subject.userId },
+    select: { id: true },
+  });
+  if (existing) return 'already_indexed';
+  const fit = await embeddingFit();
+  if (!fit.ok) return 'skipped';
+
+  const { embedding, model, provider, dimensions } = await embedText(
+    text.slice(0, MAX_INDEXED_CHARS),
+    'document',
+    {
+      userId: subject.userId,
+      metadata: {
+        kind: MEMORY_EMBEDDING_COST_KIND,
+        journeyEntryId: entry.id,
+        ...(options.turnId ? { turnId: options.turnId } : {}),
+      },
+    }
+  );
+  if (embedding.length !== MEMORY_EMBEDDING_DIMENSION) {
+    unstorableModels.add(fit.key);
+    logger.warn('Memory index stopped using an embedding model it cannot store', {
+      model,
+      dimension: embedding.length,
+      stores: MEMORY_EMBEDDING_DIMENSION,
+    });
+    return 'skipped';
+  }
+
+  const inserted = await prisma.$executeRaw`
+    INSERT INTO app_memory_embedding (
+      id, "userId", "sourceKind", "journeyEntryId", embedding,
+      "embeddingModel", "embeddingProvider", "embeddingDimension", "orgId"
+    )
+    SELECT gen_random_uuid()::text, j."userId",
+           (CASE WHEN j.kind::text = 'synopsis' THEN 'synopsis' ELSE 'own_entry' END)::app_memory_source_kind,
+           j.id, ${toVector(embedding)}::vector,
+           ${model}, ${provider}, ${dimensions}, j."orgId"
+      FROM app_journey_entry j
+     WHERE j.id = ${entry.id}
+       AND j."userId" = ${subject.userId}
+       AND j."updatedAt" = ${entry.updatedAt}
+       -- JOURNEY QUALIFIES: kept, not kept from her, and not written from an
+       -- exchange the person has since deleted. The same three lines in every
+       -- journey statement, held equal by a unit test.
+       AND j.state::text = 'kept'
+       AND j."withheldFromAgent" = false
+       AND j."sourceRemovedAt" IS NULL
+    ON CONFLICT ("journeyEntryId") DO NOTHING
+  `;
+  return inserted === 1 ? 'indexed' : 'skipped';
+}
+
+/**
+ * Index a journey entry without holding anyone up: the write that changed it
+ * has already answered. A miss is picked up by the backfill.
+ */
+export function queueJourneyEntryIndex(subject: MemorySubject, entryId: string): void {
+  void indexJourneyEntry(subject, entryId).catch((err: unknown) => {
+    logger.warn('Memory index could not embed a journey entry; the backfill will retry it', {
+      entryId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
+
+/**
+ * Drop the vector of one of the person's journey entries, now: its words were
+ * changed, or they kept it from her. Called by every write that changes an
+ * entry's words or its opt-out, before it queues a fresh index. Scoped to the
+ * person: another person's id removes nothing. Removing the entry needs no
+ * call; the foreign key takes the vector.
+ */
+export async function forgetJourneyEntry(subject: MemorySubject, entryId: string): Promise<number> {
+  const { count } = await prisma.appMemoryEmbedding.deleteMany({
+    where: { userId: subject.userId, journeyEntryId: entryId },
+  });
+  return count;
+}
+
 /** The client a transaction hands its callback, as far as this module needs it. */
 type MemoryTx = Pick<Prisma.TransactionClient, '$executeRaw'>;
 
@@ -533,7 +708,8 @@ export async function backfillMemoryIndex(
   batchSize: number = MEMORY_BACKFILL_BATCH
 ): Promise<MemoryBackfillResult> {
   const orgId = requireOrgId();
-  const forgotten = await forgetUnqualifiedNotes(orgId);
+  const forgotten =
+    (await forgetUnqualifiedNotes(orgId)) + (await forgetUnqualifiedJourneyEntries(orgId));
   if (!(await embeddingFit()).ok) {
     logger.warn(
       'Memory backfill skipped: the active embedding model is not the size the index stores',
@@ -585,6 +761,22 @@ export async function backfillMemoryIndex(
      ORDER BY v."capturedAt" DESC
      LIMIT ${batchSize}
   `;
+  const entries = await prisma.$queryRaw<Array<{ id: string; userId: string }>>`
+    SELECT j.id, j."userId"
+      FROM app_journey_entry j
+      LEFT JOIN app_memory_embedding e ON e."journeyEntryId" = j.id
+     WHERE j."orgId" = ${orgId}
+       -- JOURNEY QUALIFIES: kept, not kept from her, and not written from an
+       -- exchange the person has since deleted. The same three lines in every
+       -- journey statement, held equal by a unit test.
+       AND j.state::text = 'kept'
+       AND j."withheldFromAgent" = false
+       AND j."sourceRemovedAt" IS NULL
+       AND e.id IS NULL
+       AND j.id <> ALL(${given}::text[])
+     ORDER BY j."updatedAt" DESC
+     LIMIT ${batchSize}
+  `;
   const sources: Array<{ id: string; index: () => Promise<IndexOutcome> }> = [
     ...messages.map((m) => ({
       id: m.id,
@@ -593,6 +785,10 @@ export async function backfillMemoryIndex(
     ...notes.map((n) => ({
       id: n.id,
       index: () => indexNote({ userId: n.userId }, n.slotSlug),
+    })),
+    ...entries.map((j) => ({
+      id: j.id,
+      index: () => indexJourneyEntry({ userId: j.userId }, j.id),
     })),
   ];
 
@@ -649,6 +845,28 @@ async function forgetUnqualifiedNotes(orgId: string): Promise<number> {
   `;
 }
 
+/**
+ * Drop the vectors of an org's journey entries that no longer qualify: a draft
+ * (one redrafted, say), one kept from her, or one written from an exchange
+ * since deleted. The writes that change an entry
+ * drop its vector themselves; this is the floor under them. A search applies
+ * the same predicate, so such a vector never reaches a prompt meanwhile.
+ */
+async function forgetUnqualifiedJourneyEntries(orgId: string): Promise<number> {
+  return prisma.$executeRaw`
+    DELETE FROM app_memory_embedding e
+     USING app_journey_entry j
+     WHERE e."journeyEntryId" = j.id
+       AND e."orgId" = ${orgId}
+       AND NOT (
+         -- JOURNEY QUALIFIES, negated: the same three lines as every other journey statement.
+         j.state::text = 'kept'
+         AND j."withheldFromAgent" = false
+         AND j."sourceRemovedAt" IS NULL
+       )
+  `;
+}
+
 /** How a search is bounded, and whom its query embedding is charged to. */
 export interface MemorySearchOptions {
   /** At most this many hits; capped at {@link MAX_SEARCH_RESULTS}. */
@@ -676,9 +894,10 @@ export interface MemorySearchOptions {
  * The person's own words, and the notes kept about them, nearest in meaning to
  * `query`, nearest first.
  *
- * Two statements, one per source kind, each limited and then merged: a note's
- * text lives in a different table from a message's, and each is joined back to
- * its source to be filtered by the person there too. A note is returned only
+ * Three statements, one per source table, each limited and then merged: a
+ * message's text, a note's and a journey entry's live in different tables, and
+ * each is joined back to its source to be filtered by the person there too. A
+ * journey entry is returned only while it is kept and not kept from her. A note is returned only
  * while it is a live, visible head (the QUALIFIES lines), so a vector the
  * prune has not reached yet still never reaches a prompt.
  *
@@ -767,7 +986,36 @@ export async function searchMemory(
      ORDER BY e.embedding <=> ${vector}::vector ASC
      LIMIT ${limit}
   `;
-  const [messages, notes] = await Promise.all([messageRows, noteRows]);
+  const entryRows = prisma.$queryRaw<
+    Array<{
+      journeyEntryId: string;
+      kind: string;
+      summary: string | null;
+      body: string;
+      outcomes: unknown;
+      occurredAt: Date;
+      distance: number;
+    }>
+  >`
+    SELECT e."journeyEntryId", j.kind::text AS kind, j.summary, j.body, j.outcomes, j."occurredAt",
+           (e.embedding <=> ${vector}::vector) AS distance
+      FROM app_memory_embedding e
+      JOIN app_journey_entry j ON j.id = e."journeyEntryId"
+     WHERE e."userId" = ${subject.userId}
+       AND j."userId" = ${subject.userId}
+       AND e."orgId" = ${orgId}
+       AND e."embeddingModel" = ${model}
+       -- JOURNEY QUALIFIES: kept, not kept from her, and not written from an
+       -- exchange the person has since deleted. The same three lines in every
+       -- journey statement, held equal by a unit test.
+       AND j.state::text = 'kept'
+       AND j."withheldFromAgent" = false
+       AND j."sourceRemovedAt" IS NULL
+       AND (${maxDistance}::float8 IS NULL OR (e.embedding <=> ${vector}::vector) < ${maxDistance}::float8)
+     ORDER BY e.embedding <=> ${vector}::vector ASC
+     LIMIT ${limit}
+  `;
+  const [messages, notes, entries] = await Promise.all([messageRows, noteRows, entryRows]);
 
   const hits: MemoryHit[] = [
     ...messages.map((row): MessageHit => ({
@@ -784,6 +1032,14 @@ export async function searchMemory(
       slotSlug: row.slotSlug,
       text: row.value,
       notedAt: row.capturedAt,
+      distance: Number(row.distance),
+    })),
+    ...entries.map((row): JourneyEntryHit => ({
+      sourceKind: row.kind === 'synopsis' ? 'synopsis' : 'own_entry',
+      sourceId: row.journeyEntryId,
+      summary: row.summary,
+      text: journeyEntryText(row),
+      occurredAt: row.occurredAt,
       distance: Number(row.distance),
     })),
   ];
@@ -815,13 +1071,14 @@ export async function forgetMemory(
 }
 
 /**
- * What a subject-access export returns: which of their messages and note
- * versions are indexed, never the vector.
+ * What a subject-access export returns: which of their messages, note
+ * versions and journey entries are indexed, never the vector.
  */
 export interface MemoryEntry {
   sourceKind: string;
   messageId: string | null;
   slotValueId: string | null;
+  journeyEntryId: string | null;
   embeddingModel: string;
   createdAt: Date;
 }
@@ -830,6 +1087,7 @@ const ENTRY_SELECT = {
   sourceKind: true,
   messageId: true,
   slotValueId: true,
+  journeyEntryId: true,
   embeddingModel: true,
   createdAt: true,
 } as const;

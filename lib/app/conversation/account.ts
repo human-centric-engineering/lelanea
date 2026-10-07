@@ -100,16 +100,18 @@ const NAMED_CAPABILITIES = new Set([
  * it drew on.
  *
  * The recap is steered by material the person never sees, so this is the
- * guardrail's line for it: their words from last time, the notes captured
- * since (by the heading the notes panel files them under) and the journey's
- * steps. The words themselves are not repeated: they are in the transcript,
+ * guardrail's line for it: the account of last time they kept, or their words
+ * from it when they kept none (t-149), the notes captured since (by the
+ * heading the notes panel files them under) and the journey's steps. The words themselves are not repeated: they are in the transcript,
  * and the notes are in the notes. First, because it is what the turn was.
  */
 const recapped: AccountSource = (input) => {
   const recap = input.turn?.recap;
   if (!recap) return null;
   const drew: string[] = [];
-  if (recap.words > 0) {
+  // The account of last time they kept (t-149), or, with none kept, their words.
+  if (recap.source === 'synopsis') drew.push('the account of last time you kept');
+  else if (recap.words > 0) {
     drew.push(
       recap.words === 1
         ? 'one thing you said last time'

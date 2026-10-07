@@ -23,6 +23,7 @@ const h = vi.hoisted(() => ({
     aiMessage: [] as Row[],
     appSafetyEvent: [] as Row[],
     journeyEvent: [] as Row[],
+    appJourneyEntry: [] as Row[],
   },
   hasPassedGate: vi.fn(),
   readJourneyNodeStates: vi.fn(),
@@ -91,7 +92,13 @@ vi.mock('@/lib/db/client', () => ({
     aiMessage: model('aiMessage'),
     appSafetyEvent: model('appSafetyEvent'),
     journeyEvent: model('journeyEvent'),
+    appJourneyEntry: model('appJourneyEntry'),
   },
+}));
+// The record's reads run for real against the fake above; its index is not this file's.
+vi.mock('@/lib/app/memory/memory-index', () => ({
+  forgetJourneyEntry: vi.fn(),
+  queueJourneyEntryIndex: vi.fn(),
 }));
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -409,6 +416,7 @@ describe('readRecapMaterial — what it carries, for this person only', () => {
     expect(h.getNotes).not.toHaveBeenCalledWith(OTHER);
     expect(material.account).toEqual({
       since: S1.startedAt.toISOString(),
+      source: 'words',
       words: 2,
       notes: ['life wealth'],
       journey: 1,
@@ -618,7 +626,13 @@ describe('runRecap', () => {
     claims();
     const events = await drain(await runRecap(await ready(), { user: USER }));
 
-    const account = { since: S1.startedAt.toISOString(), words: 1, notes: [], journey: 0 };
+    const account = {
+      since: S1.startedAt.toISOString(),
+      source: 'words',
+      words: 1,
+      notes: [],
+      journey: 0,
+    };
     expect(h.updateMany).toHaveBeenCalledWith({
       where: { userId: ME, turnId: RECAP_ID, status: 'running' },
       data: { recap: account },
@@ -627,7 +641,13 @@ describe('runRecap', () => {
   });
 
   it('reads no material for a replay, and says what the answering attempt drew on', async () => {
-    const stored = { since: S1.startedAt.toISOString(), words: 3, notes: ['earlier'], journey: 2 };
+    const stored = {
+      since: S1.startedAt.toISOString(),
+      source: 'words',
+      words: 3,
+      notes: ['earlier'],
+      journey: 2,
+    };
     h.tables.appTurn.push({ id: 'turn-recap', userId: ME, turnId: RECAP_ID, recap: stored });
     replays();
 
@@ -639,7 +659,13 @@ describe('runRecap', () => {
   });
 
   it('says nothing of an earlier attempt’s account when this run could not keep its own', async () => {
-    const earlier = { since: S1.startedAt.toISOString(), words: 3, notes: ['old'], journey: 2 };
+    const earlier = {
+      since: S1.startedAt.toISOString(),
+      source: 'words',
+      words: 3,
+      notes: ['old'],
+      journey: 2,
+    };
     h.tables.appTurn.push({ id: 'turn-recap', userId: ME, turnId: RECAP_ID, recap: earlier });
     claims();
     h.updateMany.mockResolvedValue({ count: 0 });

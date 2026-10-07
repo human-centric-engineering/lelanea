@@ -191,6 +191,9 @@ function dropNoteVectors(drop: (e: Embedding, v: SlotValueRow) => boolean): numb
 const prismaFake = {
   $queryRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const { text, values: v } = sqlOf(strings, values);
+    // The journey record's statements (t-149) are faked in journey-index.test.ts;
+    // here the person has no journey record.
+    if (text.includes('app_journey_entry')) return [];
     if (text.includes('e."slotValueId" = v.id') && text.includes('LEFT JOIN')) {
       // note backfill: [orgId, ...qualifies(4), given-up ids, limit]
       const [orgId] = v;
@@ -275,6 +278,7 @@ const prismaFake = {
   }),
   $executeRaw: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const { text, values: v } = sqlOf(strings, values);
+    if (text.includes('app_journey_entry')) return 0;
     if (text.includes('INSERT') && text.includes('"slotValueId"')) {
       // note insert: [vec, model, provider, dimension, slotValueId, userId, ...qualifies(4)]
       const [vec, model, , , slotValueId, userId] = v;

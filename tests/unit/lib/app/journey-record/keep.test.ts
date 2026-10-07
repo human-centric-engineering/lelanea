@@ -42,7 +42,16 @@ vi.mock('@/lib/db/utils', async () => {
     executeTransaction: (work: (tx: typeof prismaFake) => Promise<unknown>) => work(prismaFake),
   };
 });
-vi.mock('@/lib/app/memory/memory-index', () => ({ queueNoteIndex, forgetWipedNotes: vi.fn() }));
+const index = vi.hoisted(() => ({
+  forgetJourneyEntry: vi.fn(async () => 0),
+  queueJourneyEntryIndex: vi.fn(),
+}));
+vi.mock('@/lib/app/memory/memory-index', () => ({
+  queueNoteIndex,
+  forgetWipedNotes: vi.fn(),
+  forgetJourneyEntry: index.forgetJourneyEntry,
+  queueJourneyEntryIndex: index.queueJourneyEntryIndex,
+}));
 vi.mock('@/lib/app/journey-record/synopsis/seat', () => seat);
 vi.mock('@/lib/app/journey-record/synopsis/reread', () => reread);
 vi.mock('@/lib/app/slots/notes', async (importOriginal) => {

@@ -654,6 +654,10 @@ model AppTurnSlotWrite {
 enum AppMemorySourceKind {
   message
   note
+  /// A kept synopsis in the journey record (f-journey-record t-149).
+  synopsis
+  /// Something the person wrote in their journey themselves (t-149).
+  own_entry
 
   @@map("app_memory_source_kind")
 }
@@ -697,6 +701,11 @@ model AppMemoryEmbedding {
   /// `sourceKind` is `note`; one embedding per version, and only the head
   /// version keeps one (t-107).
   slotValueId        String?                     @unique
+  /// Set when `sourceKind` is `synopsis` or `own_entry` (t-149): a kept entry
+  /// of the journey record the person has not kept from her. Both tables are
+  /// ours, so this one is modelled. Removing the entry, or erasure, takes it.
+  journeyEntryId     String?                     @unique
+  journeyEntry       AppJourneyEntry?            @relation(fields: [journeyEntryId], references: [id], onDelete: Cascade)
   embedding          Unsupported("vector(1536)")
   /// The model that made the vector. A search compares only vectors made by
   /// the model that embedded the query: two models' vectors are not comparable.
@@ -829,6 +838,9 @@ model AppJourneyEntry {
   /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
   orgId String?
   org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  /// Its vector in the memory index, while it is kept and not kept from her (t-149).
+  memoryEmbedding AppMemoryEmbedding?
 
   @@index([userId, occurredAt])
   @@index([orgId])

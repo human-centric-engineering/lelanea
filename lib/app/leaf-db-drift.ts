@@ -288,12 +288,12 @@ export function registerLeafDriftProbes(): void {
   });
   registerAppDriftProbe({
     // A row without its source's id would have no cascade to follow it. Probed
-    // on the note half, which only t-107's widened CHECK has, so the t-129
-    // CHECK it replaced does not pass for it.
+    // on the journey half, which only t-149's widened CHECK has, so neither
+    // CHECK it replaced (t-129's, t-107's) passes for it.
     name: 'app_memory_embedding_source_check (every row names its source)',
     kind: 'CHECK constraint',
     table: 'app_memory_embedding',
-    probe: constraintExists('app_memory_embedding_source_check', '"slotValueId" IS NOT NULL'),
+    probe: constraintExists('app_memory_embedding_source_check', '"journeyEntryId" IS NOT NULL'),
   });
   registerAppDriftProbe({
     // Without it a search still answers, by a sequential scan over every vector.

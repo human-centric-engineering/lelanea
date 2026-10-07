@@ -64,6 +64,11 @@ vi.mock('@/lib/logging', () => ({
  */
 const { getNotes } = vi.hoisted(() => ({ getNotes: vi.fn() }));
 vi.mock('@/lib/app/slots/notes', () => ({ getNotes }));
+const index = vi.hoisted(() => ({
+  forgetJourneyEntry: vi.fn(async () => 0),
+  queueJourneyEntryIndex: vi.fn(),
+}));
+vi.mock('@/lib/app/memory/memory-index', () => index);
 
 vi.mock('@/lib/db/client', () => {
   type Where = Record<string, unknown>;

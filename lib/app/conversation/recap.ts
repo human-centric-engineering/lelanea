@@ -47,6 +47,10 @@
  * turn, so the material travels with the opening itself, as its system
  * message. Read for this person only, and bounded:
  *
+ * - **The account of that session they kept** (f-journey-record t-149), when
+ *   there is one: its line and words quoted, its outcomes listed. Never a
+ *   draft, and never one flagged as written from an exchange they have since
+ *   deleted (`readKeptSynopsisOfSession`). Otherwise:
  * - **Their own words** from the session looked back to, oldest first: the
  *   messages of their turns stamped with it. A deleted exchange's words are
  *   gone from the message table, so they never come back here.
@@ -60,8 +64,9 @@
  * The material is not instructions, and the framing says so. The words are the
  * person's own, in their own conversation, already in the history the model
  * reads; quoting them in a system message is what makes them reachable when
- * the history window has moved past them. This is the deterministic stand-in
- * for the kept synopses f-journey-record will replace it with.
+ * the history window has moved past them. The raw words were f-recap's
+ * deterministic stand-in until the record existed; now they are the fallback
+ * for a session the person kept no account of.
  *
  * ## Nothing understood invisibly
  *
@@ -107,6 +112,7 @@ import {
 } from '@/lib/app/sessions/store';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
 import { getNotes } from '@/lib/app/slots/notes';
+import { readKeptSynopsisOfSession, type KeptSynopsisText } from '@/lib/app/journey-record/record';
 import { fallbackModuleName } from '@/lib/app/modules/definitions';
 
 /**
@@ -426,6 +432,30 @@ async function readJourneySteps(userId: string, prior: PriorSession): Promise<st
 }
 
 /**
+ * The account of last time the person kept, as the material carries it (t-149).
+ *
+ * Its line and its words are quoted, `> ` on every line, because the recap may
+ * quote only those lines and this is what the person kept as true of that
+ * session: they approved it, or rewrote it. Cut to the same budget as their
+ * words. The outcomes follow on lines of their own, unquoted: they name what
+ * came of it, and are not something to read back.
+ */
+function keptAccountSection(kept: KeptSynopsisText): string {
+  const line = unfenced(kept.summary).replace(/\s+/g, ' ').trim();
+  const body = cut(unfenced(kept.body).trim(), MAX_RECAP_WORDS_CHARS);
+  const outcomes = kept.outcomes.map(
+    (outcome) =>
+      `- ${outcome.kind}: ${cut(unfenced(outcome.text).replace(/\s+/g, ' ').trim(), MAX_RECAP_NOTE_CHARS)}`
+  );
+  return [
+    'The account of their last session that they kept, having read it and approved it or rewritten it themselves:',
+    quoted(line),
+    quoted(body),
+    ...(outcomes.length > 0 ? ['What they kept as coming out of it:', ...outcomes] : []),
+  ].join('\n');
+}
+
+/**
  * The recap's material for this person, and what its account will say it drew
  * on. Every read names `userId`; nothing here takes another subject.
  */
@@ -433,16 +463,21 @@ export async function readRecapMaterial(
   userId: string,
   prior: PriorSession
 ): Promise<RecapMaterial> {
-  const [words, notes, steps] = await Promise.all([
-    readWords(userId, prior),
+  const [kept, notes, steps] = await Promise.all([
+    readKeptSynopsisOfSession(userId, prior.id),
     readNotes(userId, prior),
     readJourneySteps(userId, prior),
   ]);
+  // What they kept of last time stands in for their raw words (t-149): the
+  // words are read only when they kept no account of that session.
+  const words = kept ? [] : await readWords(userId, prior);
 
   const sections = [
-    words.length > 0
-      ? `What they said last time, in their own words, oldest first:\n${words.map(quoted).join('\n')}`
-      : 'Nothing they said last time was kept.',
+    kept
+      ? keptAccountSection(kept)
+      : words.length > 0
+        ? `What they said last time, in their own words, oldest first:\n${words.map(quoted).join('\n')}`
+        : 'Nothing they said last time was kept.',
     notes.length > 0
       ? `Notes captured since then (the heading, then the reading as kept):\n${notes
           .map((note) => `- ${note.heading}: ${note.value}`)
@@ -457,6 +492,7 @@ export async function readRecapMaterial(
     text: [MATERIAL_START, ...sections, MATERIAL_END].join('\n\n'),
     account: {
       since: prior.startedAt.toISOString(),
+      source: kept ? 'synopsis' : 'words',
       words: words.length,
       notes: notes.map((note) => note.heading),
       journey: steps.length,
