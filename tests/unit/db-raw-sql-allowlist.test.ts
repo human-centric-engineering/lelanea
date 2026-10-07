@@ -109,11 +109,12 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     calls: 1,
     why: 'read-only anti-join: our app_turn rows whose ai_conversation is gone, which Prisma cannot express without a relation the turn deliberately does not carry; binds the org, returns conversation ids only',
   },
-  // LELAÑEA — the memory index (f-memory t-129, t-107 notes), same ledger row.
+  // LELAÑEA — the memory index (f-memory t-129, t-107 notes; f-journey-record
+  // t-149 journey entries), same ledger row.
   {
     file: 'lib/app/memory/memory-index.ts',
-    calls: 11,
-    why: 'pgvector writes, deletes and cosine search over app_memory_embedding joined to ai_message/ai_conversation (messages) or framework_slot_value (notes), which Prisma cannot express (Unsupported vector column, <=> ordering, DELETE … USING); every table carries org_isolation, the searches, the backfill and the prune bind the org, and every per-person statement binds the person on both the index row and its source',
+    calls: 16,
+    why: 'pgvector writes, deletes and cosine search over app_memory_embedding joined to ai_message/ai_conversation (messages), framework_slot_value (notes) or app_journey_entry (journey entries), which Prisma cannot express (Unsupported vector column, <=> ordering, DELETE … USING); every table carries org_isolation, the searches, the backfill and the prune bind the org, and every per-person statement binds the person on both the index row and its source',
   },
   {
     file: 'lib/db/drift-probes.ts',
