@@ -178,7 +178,11 @@ none of it. Read for this person only, fenced, and bounded (`MAX_RECAP_*`):
 | The journey since             | `node_entered` / `node_completed` in `framework_journey_event` since that session began; "began" / "moved on from" a module, never "completed" (§6.12)                                                                                                         |
 
 A deleted exchange's words are gone from the message table, so they never
-come back here. The material is reference, not instructions, and the ask says
+come back here. **A recap already written goes with them** (t-151): deleting an
+exchange takes every recap that looked back on its session, and removing a kept
+account takes every recap drawn from it, because the recap's reply is a stored
+message the model reads as history and may repeat either
+([`slots.md`](./slots.md), "Deleting an exchange"). The material is reference, not instructions, and the ask says
 so; the fence markers are stripped from anything the person wrote, the kept
 account included.
 

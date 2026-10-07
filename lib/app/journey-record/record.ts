@@ -38,7 +38,7 @@ import { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '@/lib/api/errors';
 import { prisma } from '@/lib/db/client';
-import type { executeTransaction } from '@/lib/db/utils';
+import { executeTransaction } from '@/lib/db/utils';
 import { logger } from '@/lib/logging';
 import { readSessionsById, type Session } from '@/lib/app/sessions/store';
 import {
@@ -56,6 +56,9 @@ import {
   type JourneyRecordQuery,
 } from '@/lib/app/journey-record/query';
 import { getNotes } from '@/lib/app/slots/notes';
+import { forgetCachedContext } from '@/lib/app/slots/wipe';
+import { readRecapsLookingBackOn } from '@/lib/app/conversation/recap-lookback';
+import { applyTurnDeletion, planTurnDeletion } from '@/lib/app/memory/delete-turns';
 import {
   forgetSourceRemovedJourneyEntries,
   queueJourneyEntryIndex,
@@ -585,20 +588,40 @@ export async function editOwnEntry(
  * synopsis, or a draft the person does not want. The row goes, words and all
  * (§12). Removing a synopsis does not redraft it: a session is drafted once,
  * when it closes.
+ *
+ * A kept synopsis takes with it the recaps drawn from it (f-recap t-151): a
+ * recap is a stored assistant message the model reads as history, and one
+ * written from the account may repeat it. They go as exchanges go, in the same
+ * transaction, so a recap still being answered refuses the removal with the
+ * deletion's own 409 (`planTurnDeletion`). A draft is never drawn on.
  */
 export async function removeJourneyEntry(
   userId: string,
   id: string
-): Promise<{ id: string; kind: JourneyEntry['kind'] }> {
+): Promise<{ id: string; kind: JourneyEntry['kind']; recaps: number }> {
   const existing = await prisma.appJourneyEntry.findFirst({
     where: { id, userId },
-    select: { kind: true },
+    select: { kind: true, state: true, sessionId: true },
   });
   if (!existing) throw new NotFoundError('Entry not found');
+  const recaps =
+    existing.kind === 'synopsis' && existing.state === 'kept'
+      ? await readRecapsLookingBackOn(userId, [existing.sessionId], { drewOn: 'synopsis' })
+      : [];
+  const plan = recaps.length > 0 ? await planTurnDeletion(userId, recaps) : null;
+
   // Keyed on the owner again, so the delete can only ever take this person's row.
-  const { count } = await prisma.appJourneyEntry.deleteMany({ where: { id, userId } });
+  const where = { id, userId };
+  const count = plan
+    ? await executeTransaction(async (tx) => {
+        const removed = await tx.appJourneyEntry.deleteMany({ where });
+        if (removed.count > 0) await applyTurnDeletion(tx, plan, new Date());
+        return removed.count;
+      })
+    : (await prisma.appJourneyEntry.deleteMany({ where })).count;
   if (count === 0) throw new NotFoundError('Entry not found');
-  return { id, kind: existing.kind };
+  if (plan) forgetCachedContext(userId);
+  return { id, kind: existing.kind, recaps: recaps.length };
 }
 
 type Tx = Parameters<Parameters<typeof executeTransaction>[0]>[0];

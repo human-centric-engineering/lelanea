@@ -296,11 +296,12 @@ export const leafOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
       'nothing is the right answer.',
   },
   {
-    path: 'lib/app/memory/delete-exchange.ts',
+    path: 'lib/app/memory/delete-turns.ts',
     disposition: 'by-design',
     reason:
-      'deleting an exchange reads the messages of the caller’s OWN turns, and ' +
-      'their own conversation row, to delete them (f-memory t-127). The turns are ' +
+      'deleting the person’s turns (an exchange, f-memory t-127; the recap that ' +
+      'looked back on one, f-recap t-151) reads the messages of their OWN turns, and ' +
+      'their own conversation row, to delete them. The turns are ' +
       'first read by `userId` from the session, every message read and delete ' +
       'carries `conversation: { userId }`, and the conversation read and update ' +
       'carry `userId` — so they can only ever match the member’s own rows, never an ' +

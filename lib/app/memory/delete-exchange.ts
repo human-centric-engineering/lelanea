@@ -49,7 +49,15 @@
  *   2026, at t-147). A kept synopsis is flagged instead, so the person can
  *   change or remove their account themselves
  *   (`settleSynopsesOfDeletedExchanges`, `journey-record/record.ts`).
+ * - **The recaps that looked back on its session** (f-recap t-151; owner
+ *   ruling, 7 Oct 2026). A recap is a stored assistant message the model reads
+ *   as history, and it may repeat what the person said in the session it looked
+ *   back on. Each goes as an exchange does, its reply as its window, in the
+ *   same transaction (`recap-lookback.ts` says which).
  * - **The person's cached context blocks**, as a removal does.
+ *
+ * The mechanism, shared with the other deletions of the person's turns, is
+ * `delete-turns.ts`.
  *
  * ## The stopgap write
  *
@@ -59,17 +67,17 @@
  * ships a per-value removal (daybreak#286).
  *
  * @see lib/app/slots/wipe.ts — the placeholder write
+ * @see lib/app/memory/delete-turns.ts — the mechanism
  * @see .context/app/slots.md — "Deleting an exchange"
  */
 
-import { prisma } from '@/lib/db/client';
 import { executeTransaction } from '@/lib/db/utils';
-import { ConflictError, NotFoundError } from '@/lib/api/errors';
-import { staleClaimMs, turnWindowStart } from '@/lib/app/agent/turn-record';
-import { getAgentDeadlines } from '@/lib/app/agent/settings';
-import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
-import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
+import { NotFoundError } from '@/lib/api/errors';
+import { forgetCachedContext } from '@/lib/app/slots/wipe';
 import { settleSynopsesOfDeletedExchanges } from '@/lib/app/journey-record/record';
+import { readRecapsLookingBackOn } from '@/lib/app/conversation/recap-lookback';
+import { isRecapTurnId } from '@/lib/app/conversation/opening-id';
+import { applyTurnDeletion, planTurnDeletion, readOwnedTurns } from '@/lib/app/memory/delete-turns';
 
 export interface ExchangeDeletion {
   userId: string;
@@ -83,131 +91,8 @@ export interface DeletedExchanges {
   messages: number;
   /** Note versions made placeholders. Logged, never sent: see the route. */
   versions: number;
-}
-
-/**
- * Whether a turn is still being answered, as of now. A claim still `running`
- * past `staleClaimMs()` was abandoned (its process died) and its window will
- * not fill any further; the turn path reclaims it by the same test. Counting it
- * as answering would make that exchange undeletable.
- */
-export async function stillAnswering(): Promise<
-  (turn: { status: string; startedAt: Date }) => boolean
-> {
-  const staleAfterMs = staleClaimMs((await getAgentDeadlines()).turnDeadlineMs);
-  const now = Date.now();
-  return (turn) => turn.status === 'running' && now - turn.startedAt.getTime() <= staleAfterMs;
-}
-
-/** The turns asked about, the person's own, with what locates their messages. */
-type OwnedTurn = Awaited<ReturnType<typeof readOwnedTurns>>[number];
-
-function readOwnedTurns(userId: string, ids: string[]) {
-  return prisma.appTurn.findMany({
-    where: { id: { in: ids }, userId },
-    select: {
-      id: true,
-      userId: true,
-      turnId: true,
-      status: true,
-      startedAt: true,
-      conversationId: true,
-      userMessageId: true,
-      sessionId: true,
-      slotWrites: { select: { slotSlug: true, version: true } },
-    },
-  });
-}
-
-interface WindowMessage {
-  id: string;
-  conversationId: string;
-  createdAt: Date;
-}
-
-/**
- * Every message in one turn's window: from where the turn began up to, and not
- * including, the next message the person sent in that conversation. The latest
- * turn has no next message, so its window is open.
- */
-async function messagesOf(turn: OwnedTurn): Promise<WindowMessage[]> {
-  if (!turn.conversationId) return [];
-  const owned = { conversationId: turn.conversationId, conversation: { userId: turn.userId } };
-  const since = await turnWindowStart(turn);
-  const next = await prisma.aiMessage.findFirst({
-    where: {
-      ...owned,
-      role: 'user',
-      createdAt: { gt: since },
-      ...(turn.userMessageId ? { id: { not: turn.userMessageId } } : {}),
-    },
-    orderBy: { createdAt: 'asc' },
-    select: { createdAt: true },
-  });
-  const rows = await prisma.aiMessage.findMany({
-    where: {
-      ...owned,
-      createdAt: { gte: since, ...(next ? { lt: next.createdAt } : {}) },
-    },
-    select: { id: true, conversationId: true, createdAt: true },
-  });
-  return rows;
-}
-
-/** What to clear on one conversation row, once these of its messages are gone. */
-interface ConversationClearing {
-  conversationId: string;
-  summary: boolean;
-  title: boolean;
-}
-
-/**
- * Whether a conversation's stored summary or title holds words from the
- * messages being deleted. See the header for why each is cleared.
- */
-async function clearingsFor(
-  userId: string,
-  deleted: WindowMessage[]
-): Promise<ConversationClearing[]> {
-  const byConversation = new Map<string, WindowMessage[]>();
-  for (const row of deleted) {
-    byConversation.set(row.conversationId, [
-      ...(byConversation.get(row.conversationId) ?? []),
-      row,
-    ]);
-  }
-  const clearings: ConversationClearing[] = [];
-  for (const [conversationId, rows] of byConversation) {
-    const conversation = await prisma.aiConversation.findFirst({
-      where: { id: conversationId, userId },
-      select: { summary: true, summaryUpToMessageId: true },
-    });
-    if (!conversation) continue;
-    const ids = new Set(rows.map((row) => row.id));
-    const oldestDeleted = Math.min(...rows.map((row) => row.createdAt.getTime()));
-
-    let summary = false;
-    if (conversation.summary !== null || conversation.summaryUpToMessageId !== null) {
-      const pin = conversation.summaryUpToMessageId
-        ? await prisma.aiMessage.findFirst({
-            where: { id: conversation.summaryUpToMessageId, conversationId },
-            select: { id: true, createdAt: true },
-          })
-        : null;
-      // No pin, a pin already gone, the pin itself, or anything at or before it.
-      summary = !pin || ids.has(pin.id) || oldestDeleted <= pin.createdAt.getTime();
-    }
-
-    const first = await prisma.aiMessage.findFirst({
-      where: { conversationId, conversation: { userId } },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
-    const title = first !== null && ids.has(first.id);
-
-    if (summary || title) clearings.push({ conversationId, summary, title });
-  }
-  return clearings;
+  /** Recaps that looked back on the exchanges' sessions, taken with them (t-151). */
+  recaps: number;
 }
 
 /**
@@ -220,10 +105,8 @@ async function clearingsFor(
  *   so the route can't be used to learn that a turn exists. Nothing is deleted
  *   when any id fails: a partial delete of what the person asked for would leave
  *   them thinking it was all gone.
- * - **A turn still being answered** gets a 409. Its window is still filling, so
- *   deleting it now would leave the reply's last passes behind. The refusal
- *   names its remedy (`HB10`): wait, and ask again. A claim left `running` past
- *   `staleClaimMs()` is abandoned, not being answered, and is deleted.
+ * - **A turn still being answered** gets a 409 (`planTurnDeletion`), and so
+ *   does a recap that has to go with them while it is still being answered.
  */
 export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedExchanges> {
   const ids = [...new Set(input.exchangeIds)];
@@ -231,59 +114,39 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
   if (turns.length !== ids.length) {
     throw new NotFoundError('That part of the conversation could not be found.');
   }
-  const answering = await stillAnswering();
-  if (turns.some(answering)) {
-    throw new ConflictError(
-      'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
-      { reason: 'still_answering' }
-    );
-  }
-
-  const deletedMessages = (await Promise.all(turns.map(messagesOf))).flat();
-  const messageIds = deletedMessages.map((row) => row.id);
-  const clearings = await clearingsFor(input.userId, deletedMessages);
-
-  const writes = turns.flatMap((turn) => turn.slotWrites);
-  const coined = await coinedSlugs([...new Set(writes.map((write) => write.slotSlug))]);
+  // The recaps that looked back on these sessions may repeat what was said in
+  // them (t-151). A recap asked for is deleted as asked, and takes no other: a
+  // recap is drawn from the person's words, never from an earlier recap.
+  const asked = new Set(ids);
+  const spoken = turns.filter((turn) => !isRecapTurnId(turn.turnId));
+  const recaps = (
+    await readRecapsLookingBackOn(
+      input.userId,
+      spoken.map((turn) => turn.sessionId)
+    )
+  ).filter((recap) => !asked.has(recap.id));
+  const plan = await planTurnDeletion(input.userId, [...turns, ...recaps]);
 
   const removedAt = new Date();
   const result = await executeTransaction(async (tx) => {
-    const versions = await wipeTurnWrites(tx, {
-      userId: input.userId,
-      writes,
-      coined,
-      removedAt,
-    });
-
-    const messages = messageIds.length
-      ? await tx.aiMessage.deleteMany({
-          where: { id: { in: messageIds }, conversation: { userId: input.userId } },
-        })
-      : { count: 0 };
-    for (const clearing of clearings) {
-      await tx.aiConversation.updateMany({
-        where: { id: clearing.conversationId, userId: input.userId },
-        data: {
-          ...(clearing.summary ? { summary: null, summaryUpToMessageId: null } : {}),
-          ...(clearing.title ? { title: null } : {}),
-        },
-      });
-    }
-    const exchanges = await tx.appTurn.deleteMany({
-      where: { id: { in: ids }, userId: input.userId },
-    });
-    // A memory search elsewhere may hold a copy of these words (t-130).
-    await clearStoredSearchResults(tx, { userId: input.userId });
-    // So may their sessions' synopses (t-147): a draft goes, a kept one is flagged.
+    const applied = await applyTurnDeletion(tx, plan, removedAt);
+    // The exchanges' sessions' synopses (t-147): a draft goes, a kept one is
+    // flagged. Not a recap's own session, even for a recap asked for: a
+    // synopsis is never drafted from a recap (`synopsis/material.ts`).
     await settleSynopsesOfDeletedExchanges(tx, {
       userId: input.userId,
-      sessionIds: turns.map((turn) => turn.sessionId),
+      sessionIds: spoken.map((turn) => turn.sessionId),
       at: removedAt,
     });
-
-    return { exchanges: exchanges.count, messages: messages.count, versions };
+    return applied;
   });
 
   forgetCachedContext(input.userId);
-  return result;
+  return {
+    // Every record deleted was asked for or one of the recaps.
+    exchanges: Math.max(0, result.turns - recaps.length),
+    messages: result.messages,
+    versions: result.versions,
+    recaps: recaps.length,
+  };
 }

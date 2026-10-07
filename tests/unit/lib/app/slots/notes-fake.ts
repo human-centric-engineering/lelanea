@@ -70,6 +70,8 @@ export const world = {
   conversations: [] as ConversationRow[],
   /** `app_journey_entry`: what keeping a synopsis and deleting an exchange touch (t-147). */
   entries: [] as EntryRow[],
+  /** `framework_journey_event` `session.started` rows: what a recap looked back on (t-151). */
+  sessions: [] as { id: string; userId: string; occurredAt: Date }[],
   nextId: 0,
 };
 
@@ -158,6 +160,8 @@ export interface TurnRow {
   userMessageId: string | null;
   /** The session it was taken in (t-147); null for a turn from before sessions. */
   sessionId?: string | null;
+  /** What a recap drew on (t-151): `app_turn.recap`. Unset on every other turn. */
+  recap?: unknown;
 }
 
 export interface ConversationRow {
@@ -385,6 +389,7 @@ export const prismaFake = {
           id?: { in: string[] };
           conversationId?: { in: string[] };
           userId?: string;
+          turnId?: { startsWith?: string };
         };
       }) => {
         const keys = Object.keys(where).sort().join();
@@ -397,24 +402,29 @@ export const prismaFake = {
         const byConversation =
           (keys === 'conversationId' || keys === 'conversationId,userId') &&
           where.conversationId?.in;
-        if (!byId && !byConversation) {
+        // The recaps a deletion looks for (t-151): `{ userId, turnId: { startsWith } }`.
+        const recapPrefix = keys === 'turnId,userId' && where.turnId?.startsWith;
+        if (!byId && !byConversation && !recapPrefix) {
           throw new Error(`the fake does not model ${JSON.stringify(where)}`);
         }
         return world.turns
           .filter((row) =>
-            byId
-              ? where.id!.in.includes(row.id) &&
-                row.userId === where.userId &&
-                (!where.conversationId ||
-                  (row.conversationId !== null &&
-                    where.conversationId.in.includes(row.conversationId)))
-              : row.conversationId !== null &&
-                where.conversationId!.in.includes(row.conversationId) &&
-                (where.userId === undefined || row.userId === where.userId)
+            recapPrefix
+              ? row.userId === where.userId && row.turnId.startsWith(recapPrefix)
+              : byId
+                ? where.id!.in.includes(row.id) &&
+                  row.userId === where.userId &&
+                  (!where.conversationId ||
+                    (row.conversationId !== null &&
+                      where.conversationId.in.includes(row.conversationId)))
+                : row.conversationId !== null &&
+                  where.conversationId!.in.includes(row.conversationId) &&
+                  (where.userId === undefined || row.userId === where.userId)
           )
           .map((row) => ({
             ...row,
             sessionId: row.sessionId ?? null,
+            recap: row.recap ?? null,
             slotWrites: world.ledger
               .filter((write) => write.turnId === row.id)
               .map((write) => ({ slotSlug: write.slotSlug, version: write.version })),
@@ -524,11 +534,16 @@ export const prismaFake = {
     }),
   },
   journeyEvent: {
-    // A synopsis's session window (`readSessionsById`). No sessions are
-    // modelled, so it is always unreadable here: the entry carries `session: null`.
-    findMany: vi.fn(async ({ where }: { where: { userId?: string } }) => {
+    // A synopsis's session window (`readSessionsById`), and when the sessions a
+    // recap looked back on began (t-151): `{ id: { in }, userId }`. Only
+    // `world.sessions` is modelled, and only by id, so with none a synopsis's
+    // session is unreadable here: the entry carries `session: null`.
+    findMany: vi.fn(async ({ where }: { where: { userId?: string; id?: { in: string[] } } }) => {
       if (!where.userId) throw new Error(`the fake does not model ${JSON.stringify(where)}`);
-      return [];
+      if (!where.id?.in) return [];
+      return world.sessions
+        .filter((row) => row.userId === where.userId && where.id!.in.includes(row.id))
+        .map((row) => ({ ...row }));
     }),
   },
   appJourneyEntry: {
@@ -686,6 +701,7 @@ export function resetWorld(): void {
   world.messages = [];
   world.conversations = [];
   world.entries = [];
+  world.sessions = [];
   world.nextId = 0;
   clock = 0;
 }

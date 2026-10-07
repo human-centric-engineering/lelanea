@@ -77,6 +77,8 @@ const { getNotes } = await import('@/lib/app/slots/notes');
 const { appendSlotValue } = await import('@/lib/framework/data-slots');
 const { NotFoundError, ConflictError } = await import('@/lib/api/errors');
 const { REMOVED_SLUG_PREFIX, REMOVED_SOURCE_TYPE } = await import('@/lib/app/slots/removed');
+const { recapTurnId } = await import('@/lib/app/conversation/opening-id');
+const { removeJourneyEntry } = await import('@/lib/app/journey-record/record');
 
 const MINE = 'conv-mine';
 const THEIRS = 'conv-theirs';
@@ -171,7 +173,7 @@ describe('deleting an exchange', () => {
 
     const result = await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
 
-    expect(result).toEqual({ exchanges: 1, messages: 4, versions: 1 });
+    expect(result).toEqual({ exchanges: 1, messages: 4, versions: 1, recaps: 0 });
     // Every role in the window went, the tool's result included.
     expect(world.messages.map((row) => row.id).sort()).toEqual(['m5', 'm6', 't1', 't2']);
     expect(world.turns.map((row) => row.id).sort()).toEqual(['turn-b', 'turn-x']);
@@ -289,7 +291,7 @@ describe('deleting an exchange', () => {
 
     const result = await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
 
-    expect(result).toEqual({ exchanges: 1, messages: 0, versions: 1 });
+    expect(result).toEqual({ exchanges: 1, messages: 0, versions: 1, recaps: 0 });
     expect(rowsOf(ME, 'life_work')[1].sourceType).toBe(REMOVED_SOURCE_TYPE);
   });
 });
@@ -549,5 +551,229 @@ describe('what the conversation row kept of an exchange', () => {
     expect(mine()).toMatchObject({ summary: null, summaryUpToMessageId: null });
     // turn-b's messages are not the first, so the title stays.
     expect(mine().title).toBe('words of m1');
+  });
+});
+
+describe('the recaps that looked back on its session (t-151)', () => {
+  const at = (ms: number) => new Date(ms).toISOString();
+  const ids = <T extends { id: string }>(rows: T[]) => rows.map((row) => row.id).sort();
+
+  function recap(
+    id: string,
+    session: string,
+    since: number | null,
+    overrides: Partial<(typeof world.turns)[number]> & { source?: 'synopsis' | 'words' } = {}
+  ): void {
+    const { source = 'words', ...row } = overrides;
+    world.turns.push({
+      id,
+      userId: ME,
+      turnId: recapTurnId(session),
+      status: 'completed',
+      startedAt: new Date(0),
+      conversationId: MINE,
+      userMessageId: null,
+      sessionId: session,
+      recap: since === null ? null : { since: at(since), source, words: 2, notes: [], journey: 0 },
+      ...row,
+    });
+  }
+
+  /**
+   * Three sessions of mine, and two of theirs begun at the same moments.
+   *
+   * - ses_one (began 1s): turn-a and turn-b, as `twoExchanges` has them.
+   * - ses_two (began 100s): recap-two looking back on ses_one, whose reply r1
+   *   repeats what I said; then turn-c, m7 · m8.
+   * - ses_three (began 200s): recap-three looking back on ses_two, its reply r2.
+   * - theirs: turn-x in their_one, and their recap looking back on it, its reply
+   *   tr1, in their own conversation.
+   */
+  function threeSessions(): void {
+    twoExchanges();
+    world.sessions.push(
+      { id: 'ses_one', userId: ME, occurredAt: new Date(1_000) },
+      { id: 'ses_two', userId: ME, occurredAt: new Date(100_000) },
+      { id: 'ses_three', userId: ME, occurredAt: new Date(200_000) },
+      { id: 'their_one', userId: THEM, occurredAt: new Date(1_000) },
+      { id: 'their_two', userId: THEM, occurredAt: new Date(100_000) }
+    );
+    world.turns.find((row) => row.id === 'turn-a')!.sessionId = 'ses_one';
+    world.turns.find((row) => row.id === 'turn-b')!.sessionId = 'ses_one';
+    world.turns.find((row) => row.id === 'turn-x')!.sessionId = 'their_one';
+    world.messages.push(
+      { ...message('r1', 'assistant', 101_000), content: 'Last time you said "words of m1".' },
+      message('m7', 'user', 110_000),
+      message('m8', 'assistant', 111_000),
+      message('r2', 'assistant', 201_000),
+      { ...message('tr1', 'assistant', 101_000, THEIRS, THEM), content: 'You said "words of t1".' }
+    );
+    recap('recap-two', 'ses_two', 1_000, { startedAt: new Date(100_500) });
+    turn('turn-c', 'm7', { sessionId: 'ses_two', startedAt: new Date(110_000) });
+    recap('recap-three', 'ses_three', 100_000, { startedAt: new Date(200_500) });
+    recap('their-recap', 'their_two', 1_000, {
+      userId: THEM,
+      conversationId: THEIRS,
+      startedAt: new Date(100_500),
+    });
+  }
+
+  it('takes the recap that looked back on the session, and its reply, and no other', async () => {
+    threeSessions();
+    expect(ids(world.turns)).toEqual([
+      'recap-three',
+      'recap-two',
+      'their-recap',
+      'turn-a',
+      'turn-b',
+      'turn-c',
+      'turn-x',
+    ]);
+
+    const result = await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
+
+    expect(result).toMatchObject({ exchanges: 1, recaps: 1 });
+    // The recap that repeated it is gone with its reply.
+    expect(ids(world.turns)).toEqual(['recap-three', 'their-recap', 'turn-b', 'turn-c', 'turn-x']);
+    expect(world.messages.some((row) => row.content.includes('words of m1'))).toBe(false);
+    expect(ids(world.messages)).toEqual(['m5', 'm6', 'm7', 'm8', 'r2', 't1', 't2', 'tr1']);
+    // Theirs looked back on a session begun at the same moment, and stays word for word.
+    expect(world.messages.find((row) => row.id === 'tr1')?.content).toBe('You said "words of t1".');
+  });
+
+  it('takes the recap of a later session when an exchange of that session goes', async () => {
+    threeSessions();
+
+    const result = await deleteExchanges({ userId: ME, exchangeIds: ['turn-c'] });
+
+    expect(result).toMatchObject({ exchanges: 1, recaps: 1 });
+    expect(ids(world.turns)).toEqual(['recap-two', 'their-recap', 'turn-a', 'turn-b', 'turn-x']);
+    expect(world.messages.map((row) => row.id)).toContain('r1');
+    expect(world.messages.map((row) => row.id)).not.toContain('r2');
+  });
+
+  it('takes a recap drawn from the kept account too, which the deletion only flags', async () => {
+    threeSessions();
+    world.turns.find((row) => row.id === 'recap-two')!.recap = {
+      since: at(1_000),
+      source: 'synopsis',
+      words: 0,
+      notes: [],
+      journey: 0,
+    };
+    const kept = synopsisEntry({ sessionId: 'ses_one', state: 'kept', keptAt: new Date(50_000) });
+    world.entries.push(kept);
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
+
+    expect(world.turns.some((row) => row.id === 'recap-two')).toBe(false);
+    expect(world.entries.find((row) => row.id === kept.id)?.sourceRemovedAt).not.toBeNull();
+  });
+
+  it('takes a recap whose account could not be kept if it began after the session, and not before', async () => {
+    threeSessions();
+    world.turns.find((row) => row.id === 'recap-three')!.recap = null;
+    recap('recap-before', 'ses_zero', null, { startedAt: new Date(500) });
+
+    const result = await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
+
+    expect(result.recaps).toBe(2);
+    expect(ids(world.turns)).toEqual(['recap-before', 'their-recap', 'turn-b', 'turn-c', 'turn-x']);
+  });
+
+  it('counts a recap asked for by id as asked, and takes no recap for it', async () => {
+    threeSessions();
+
+    const result = await deleteExchanges({ userId: ME, exchangeIds: ['turn-a', 'recap-two'] });
+
+    expect(result).toMatchObject({ exchanges: 2, recaps: 0 });
+    expect(world.turns.some((row) => row.id === 'recap-two')).toBe(false);
+    // recap-three looked back on ses_two, where only the person's words count.
+    expect(world.turns.some((row) => row.id === 'recap-three')).toBe(true);
+  });
+
+  it('settles no synopsis of the session a recap asked for opened, which no synopsis reads', async () => {
+    threeSessions();
+    const draft = synopsisEntry({ sessionId: 'ses_two' });
+    const kept = synopsisEntry({ sessionId: 'ses_two', state: 'kept', keptAt: new Date(150_000) });
+    world.entries.push(draft, kept);
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['recap-two'] });
+
+    expect(world.turns.some((row) => row.id === 'recap-two')).toBe(false);
+    expect(world.entries.find((row) => row.id === draft.id)).toMatchObject({ state: 'draft' });
+    expect(world.entries.find((row) => row.id === kept.id)?.sourceRemovedAt).toBeNull();
+  });
+
+  it('refuses while a recap that has to go is still being answered, and changes nothing', async () => {
+    threeSessions();
+    const running = world.turns.find((row) => row.id === 'recap-two')!;
+    running.status = 'running';
+    running.startedAt = new Date();
+    const before = ids(world.messages);
+
+    await expect(deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] })).rejects.toBeInstanceOf(
+      ConflictError
+    );
+
+    expect(ids(world.messages)).toEqual(before);
+    expect(world.turns.some((row) => row.id === 'turn-a')).toBe(true);
+  });
+
+  describe('removing the kept account it was drawn from', () => {
+    function drawnFromKept() {
+      threeSessions();
+      world.turns.find((row) => row.id === 'recap-two')!.recap = {
+        since: at(1_000),
+        source: 'synopsis',
+        words: 0,
+        notes: [],
+        journey: 0,
+      };
+      // A second later session that looked back on ses_one through their words.
+      recap('recap-words', 'ses_four', 1_000, { startedAt: new Date(300_500) });
+      world.messages.push(message('r4', 'assistant', 301_000));
+      const kept = synopsisEntry({ sessionId: 'ses_one', state: 'kept', keptAt: new Date(50_000) });
+      const theirs = synopsisEntry({
+        userId: THEM,
+        sessionId: 'their_one',
+        state: 'kept',
+        keptAt: new Date(50_000),
+      });
+      world.entries.push(kept, theirs);
+      world.turns.find((row) => row.id === 'their-recap')!.recap = {
+        since: at(1_000),
+        source: 'synopsis',
+        words: 0,
+        notes: [],
+        journey: 0,
+      };
+      return { kept, theirs };
+    }
+
+    it('takes the recap drawn from it, and leaves one written from their words', async () => {
+      const { kept, theirs } = drawnFromKept();
+
+      const removed = await removeJourneyEntry(ME, kept.id);
+
+      expect(removed).toEqual({ id: kept.id, kind: 'synopsis', recaps: 1 });
+      expect(world.turns.some((row) => row.id === 'recap-two')).toBe(false);
+      expect(world.turns.some((row) => row.id === 'recap-words')).toBe(true);
+      expect(ids(world.messages)).not.toContain('r1');
+      expect(ids(world.messages)).toContain('r4');
+      // Theirs, drawn from their own kept account of a session begun at the same moment.
+      expect(world.turns.some((row) => row.id === 'their-recap')).toBe(true);
+      expect(world.entries.map((row) => row.id)).toEqual([theirs.id]);
+      expect(invalidateContext).toHaveBeenCalled();
+    });
+
+    it('takes no recap for a draft, which no recap reads', async () => {
+      drawnFromKept();
+      const draft = synopsisEntry({ sessionId: 'ses_one' });
+      world.entries.push(draft);
+
+      expect(await removeJourneyEntry(ME, draft.id)).toMatchObject({ recaps: 0 });
+      expect(world.turns.some((row) => row.id === 'recap-two')).toBe(true);
+    });
   });
 });

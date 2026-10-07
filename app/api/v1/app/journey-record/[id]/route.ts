@@ -5,7 +5,9 @@
  *   withheldFromAgent? }`, a change to one of my own entries. A synopsis
  *   answers 409: it is changed by keeping it (t-147), never edited here.
  * - `DELETE /api/v1/app/journey-record/:id`: remove any entry, own or
- *   synopsis, kept or draft, words and all (§12).
+ *   synopsis, kept or draft, words and all (§12). A kept synopsis takes the
+ *   recaps drawn from it (t-151), and answers 409 while one is still being
+ *   answered.
  *
  * Another person's entry id answers 404, the same as one that never existed.
  *
@@ -54,9 +56,10 @@ export const DELETE = withAuth<{ id: string }>(
       userId: session.user.id,
       entryId: id,
       kind: removed.kind,
+      recaps: removed.recaps,
     });
 
-    return successResponse(removed);
+    return successResponse({ id: removed.id, kind: removed.kind });
   },
   { ownership: JOURNEY_RECORD_OWNERSHIP }
 );

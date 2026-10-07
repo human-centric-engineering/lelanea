@@ -1296,7 +1296,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/app/conversation/recap.ts',
         // f-journey-record t-146: the member's own words, sent to the synopsis seat.
         'lib/app/journey-record/synopsis/material.ts',
-        'lib/app/memory/delete-exchange.ts',
+        'lib/app/memory/delete-turns.ts',
         'lib/app/memory/delete-conversation.ts',
         'lib/app/memory/memory-index.ts',
         'lib/app/memory/stored-results.ts',
@@ -1355,7 +1355,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ['lib/app/conversation/opening.ts', 'by-design'],
         ['lib/app/conversation/recap.ts', 'by-design'],
         ['lib/app/journey-record/synopsis/material.ts', 'by-design'],
-        ['lib/app/memory/delete-exchange.ts', 'by-design'],
+        ['lib/app/memory/delete-turns.ts', 'by-design'],
         ['lib/app/memory/delete-conversation.ts', 'by-design'],
         ['lib/app/memory/memory-index.ts', 'by-design'],
         ['lib/app/memory/stored-results.ts', 'by-design'],
