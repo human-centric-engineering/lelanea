@@ -13,7 +13,9 @@
  * This takes, per turn, what deleting its exchange takes (`delete-exchange.ts`)
  * once the messages are already gone: the turn record (its ledger rows cascade)
  * and the note versions it wrote, each made a placeholder, a coined heading
- * moving off once nothing under it is left. The conversation row, its summary
+ * moving off once nothing under it is left. Its session's synopsis is settled
+ * as an exchange deletion settles it (t-147): a draft is removed, a kept one
+ * flagged. The conversation row, its summary
  * and title, and the person's own vectors in the memory index all went with
  * the conversation already, by Sunrise's delete and the FK cascades.
  *
@@ -57,6 +59,7 @@ import { requireOrgId, runAsSystem } from '@/lib/tenancy/context';
 import { stillAnswering } from '@/lib/app/memory/delete-exchange';
 import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
 import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
+import { settleSynopsesOfDeletedExchanges } from '@/lib/app/journey-record/record';
 
 /** What forgetting did. */
 export interface ForgottenConversations {
@@ -141,6 +144,7 @@ export async function forgetDeletedConversations(
       conversationId: true,
       status: true,
       startedAt: true,
+      sessionId: true,
       slotWrites: { select: { slotSlug: true, version: true } },
     },
   });
@@ -178,6 +182,17 @@ export async function forgetDeletedConversations(
         // which resets its conversation (`claimTurn`); deleting its record now
         // would take the ledger row the new attempt writes, and leave that
         // version unwiped and unfindable.
+        // The sessions of the turns this deletes, read under the same
+        // condition: a turn retried into another conversation is left, and so
+        // is its session's synopsis.
+        const going = await tx.appTurn.findMany({
+          where: {
+            id: { in: owned.map((turn) => turn.id) },
+            userId,
+            conversationId: { in: [conversationId ?? ''] },
+          },
+          select: { sessionId: true },
+        });
         const deleted = await tx.appTurn.deleteMany({
           where: {
             id: { in: owned.map((turn) => turn.id) },
@@ -187,6 +202,12 @@ export async function forgetDeletedConversations(
         });
         // A memory search in another conversation may hold a copy of its words (t-130).
         await clearStoredSearchResults(tx, { userId });
+        // So may their sessions' synopses (t-147): a draft goes, a kept one is flagged.
+        await settleSynopsesOfDeletedExchanges(tx, {
+          userId,
+          sessionIds: going.map((turn) => turn.sessionId),
+          at: removedAt,
+        });
         return { turns: deleted.count, versions };
       });
       result.turns += done.turns;

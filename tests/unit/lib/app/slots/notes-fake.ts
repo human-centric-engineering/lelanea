@@ -68,8 +68,85 @@ export const world = {
   messages: [] as MessageRow[],
   /** `ai_conversation`: only what an exchange deletion clears (t-127). */
   conversations: [] as ConversationRow[],
+  /** `app_journey_entry`: what keeping a synopsis and deleting an exchange touch (t-147). */
+  entries: [] as EntryRow[],
   nextId: 0,
 };
+
+export interface EntryRow {
+  id: string;
+  userId: string;
+  kind: 'synopsis' | 'own';
+  state: 'draft' | 'kept';
+  sessionId: string | null;
+  summary: string | null;
+  body: string;
+  outcomes: unknown;
+  modules: string[];
+  notes: unknown;
+  withheldFromAgent: boolean;
+  occurredAt: Date;
+  keptAt: Date | null;
+  regenerations: number;
+  sourceRemovedAt: Date | null;
+  notesPending: 'confirm' | 'reread' | null;
+  workingSince: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  orgId: string | null;
+}
+
+/** The columns a journey entry `where` may name, each by equality or `{ in }` (t-147). */
+const ENTRY_WHERE = new Set([
+  'id',
+  'userId',
+  'kind',
+  'state',
+  'sessionId',
+  'updatedAt',
+  'regenerations',
+  'sourceRemovedAt',
+  'workingSince',
+]);
+
+function entryMatches(row: EntryRow, where: Record<string, unknown>): boolean {
+  return Object.entries(where).every(([key, condition]) => {
+    if (key === 'OR') {
+      return (condition as Record<string, unknown>[]).some((clause) => entryMatches(row, clause));
+    }
+    if (!ENTRY_WHERE.has(key)) throw new Error(`the fake does not model ${key} on an entry`);
+    const actual = (row as unknown as Record<string, unknown>)[key];
+    if (condition instanceof Date) {
+      return actual instanceof Date && actual.getTime() === condition.getTime();
+    }
+    if (condition !== null && typeof condition === 'object') {
+      const operators = condition as Record<string, unknown>;
+      if (Object.keys(operators).join() === 'in') {
+        return (operators.in as unknown[]).includes(actual);
+      }
+      // The lease's "taken longer ago than this" (t-147).
+      if (Object.keys(operators).join() === 'lt' && operators.lt instanceof Date) {
+        return actual instanceof Date && actual.getTime() < operators.lt.getTime();
+      }
+      throw new Error(`the fake does not model ${JSON.stringify(condition)} on ${key}`);
+    }
+    return actual === condition;
+  });
+}
+
+/** The columns keeping, regenerating and settling a deletion write (t-147). */
+const ENTRY_WRITES = new Set([
+  'state',
+  'keptAt',
+  'summary',
+  'body',
+  'outcomes',
+  'notes',
+  'regenerations',
+  'sourceRemovedAt',
+  'notesPending',
+  'workingSince',
+]);
 
 export interface TurnRow {
   id: string;
@@ -79,6 +156,8 @@ export interface TurnRow {
   startedAt: Date;
   conversationId: string | null;
   userMessageId: string | null;
+  /** The session it was taken in (t-147); null for a turn from before sessions. */
+  sessionId?: string | null;
 }
 
 export interface ConversationRow {
@@ -309,7 +388,12 @@ export const prismaFake = {
         };
       }) => {
         const keys = Object.keys(where).sort().join();
-        const byId = keys === 'id,userId' && where.id?.in;
+        // The conversation deletion's "the turns this deletes" (t-147) is the
+        // id read narrowed to a deleted conversation.
+        const byId =
+          (keys === 'id,userId' ||
+            (keys === 'conversationId,id,userId' && where.conversationId?.in)) &&
+          where.id?.in;
         const byConversation =
           (keys === 'conversationId' || keys === 'conversationId,userId') &&
           where.conversationId?.in;
@@ -319,13 +403,18 @@ export const prismaFake = {
         return world.turns
           .filter((row) =>
             byId
-              ? where.id!.in.includes(row.id) && row.userId === where.userId
+              ? where.id!.in.includes(row.id) &&
+                row.userId === where.userId &&
+                (!where.conversationId ||
+                  (row.conversationId !== null &&
+                    where.conversationId.in.includes(row.conversationId)))
               : row.conversationId !== null &&
                 where.conversationId!.in.includes(row.conversationId) &&
                 (where.userId === undefined || row.userId === where.userId)
           )
           .map((row) => ({
             ...row,
+            sessionId: row.sessionId ?? null,
             slotWrites: world.ledger
               .filter((write) => write.turnId === row.id)
               .map((write) => ({ slotSlug: write.slotSlug, version: write.version })),
@@ -434,6 +523,54 @@ export const prismaFake = {
       return { count: gone.length };
     }),
   },
+  journeyEvent: {
+    // A synopsis's session window (`readSessionsById`). No sessions are
+    // modelled, so it is always unreadable here: the entry carries `session: null`.
+    findMany: vi.fn(async ({ where }: { where: { userId?: string } }) => {
+      if (!where.userId) throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+      return [];
+    }),
+  },
+  appJourneyEntry: {
+    findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+      const row = world.entries.find((candidate) => entryMatches(candidate, where));
+      return row ? { ...row } : null;
+    }),
+    // Every conditional write keeping makes (t-147). `regenerations` takes a
+    // number or Prisma's `{ increment | decrement: 1 }`; `updatedAt` moves on,
+    // as `@updatedAt` does, so a later write conditional on it misses.
+    updateMany: vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) => {
+        for (const key of Object.keys(data)) {
+          if (!ENTRY_WRITES.has(key)) throw new Error(`the fake does not model writing ${key}`);
+        }
+        const rows = world.entries.filter((row) => entryMatches(row, where));
+        for (const row of rows) {
+          for (const [key, next] of Object.entries(data)) {
+            if (key === 'regenerations' && typeof next === 'object' && next !== null) {
+              const step = next as { increment?: number; decrement?: number };
+              row.regenerations += (step.increment ?? 0) - (step.decrement ?? 0);
+            } else {
+              (row as unknown as Record<string, unknown>)[key] = next;
+            }
+          }
+          row.updatedAt = new Date(row.updatedAt.getTime() + 1);
+        }
+        return { count: rows.length };
+      }
+    ),
+    deleteMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+      const gone = world.entries.filter((row) => entryMatches(row, where));
+      world.entries = world.entries.filter((row) => !gone.includes(row));
+      return { count: gone.length };
+    }),
+  },
   slotDefinition: {
     findMany: vi.fn(async () => world.projections.map((row) => ({ ...row }))),
     findFirst: vi.fn(async ({ where }: { where: { slug: string } }) => {
@@ -511,6 +648,34 @@ export function value(
   };
 }
 
+/** A session's synopsis, a draft unless said otherwise (t-147). */
+export function synopsisEntry(overrides: Partial<EntryRow> = {}): EntryRow {
+  const at = new Date('2026-10-01T09:00:00.000Z');
+  return {
+    id: `cmentry${String(++world.nextId).padStart(18, '0')}`,
+    userId: ME,
+    kind: 'synopsis',
+    state: 'draft',
+    sessionId: 'ses_one',
+    summary: 'Where the work came from',
+    body: 'You talked about the shop.',
+    outcomes: [],
+    modules: [],
+    notes: [],
+    withheldFromAgent: false,
+    occurredAt: at,
+    keptAt: null,
+    regenerations: 0,
+    sourceRemovedAt: null,
+    notesPending: null,
+    workingSince: null,
+    createdAt: at,
+    updatedAt: at,
+    orgId: 'install',
+    ...overrides,
+  };
+}
+
 /** Empty the world and rewind the clock. */
 export function resetWorld(): void {
   world.values = [];
@@ -520,6 +685,7 @@ export function resetWorld(): void {
   world.turns = [];
   world.messages = [];
   world.conversations = [];
+  world.entries = [];
   world.nextId = 0;
   clock = 0;
 }

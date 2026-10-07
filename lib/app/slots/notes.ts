@@ -399,6 +399,12 @@ export interface NoteCorrection {
   userId: string;
   slotSlug: string;
   value: string;
+  /**
+   * Where the person said it, for a later reader of the row. Defaults to
+   * {@link CORRECTION_NOTE}, the notes panel; keeping a session's account
+   * (t-147) names that instead.
+   */
+  reasoningNote?: string;
 }
 
 /** What a correction produced. The panel re-reads the page rather than patching a row. */
@@ -474,7 +480,7 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
     value: input.value,
     confidence: CORRECTION_CONFIDENCE,
     sourceType: SLOT_SOURCE_TYPE.user_confirmed,
-    reasoningNote: CORRECTION_NOTE,
+    reasoningNote: input.reasoningNote ?? CORRECTION_NOTE,
     // Empty on purpose: provenance answers "which exchange did this come from",
     // and this one came from no exchange. `sourceType` is what says where it did
     // come from, and inventing a field for it would put a key in the column the

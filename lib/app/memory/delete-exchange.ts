@@ -45,6 +45,10 @@
  *   with it. The words of a deleted exchange outrank that. The conversation's
  *   `title` is the first 80 characters of its first message, so it is cleared
  *   when that message goes.
+ * - **Its session's synopsis, if it was only a draft** (owner ruling, 6 Oct
+ *   2026, at t-147). A kept synopsis is flagged instead, so the person can
+ *   change or remove their account themselves
+ *   (`settleSynopsesOfDeletedExchanges`, `journey-record/record.ts`).
  * - **The person's cached context blocks**, as a removal does.
  *
  * ## The stopgap write
@@ -65,6 +69,7 @@ import { staleClaimMs, turnWindowStart } from '@/lib/app/agent/turn-record';
 import { getAgentDeadlines } from '@/lib/app/agent/settings';
 import { coinedSlugs, forgetCachedContext, wipeTurnWrites } from '@/lib/app/slots/wipe';
 import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
+import { settleSynopsesOfDeletedExchanges } from '@/lib/app/journey-record/record';
 
 export interface ExchangeDeletion {
   userId: string;
@@ -108,6 +113,7 @@ function readOwnedTurns(userId: string, ids: string[]) {
       startedAt: true,
       conversationId: true,
       userMessageId: true,
+      sessionId: true,
       slotWrites: { select: { slotSlug: true, version: true } },
     },
   });
@@ -268,6 +274,12 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
     });
     // A memory search elsewhere may hold a copy of these words (t-130).
     await clearStoredSearchResults(tx, { userId: input.userId });
+    // So may their sessions' synopses (t-147): a draft goes, a kept one is flagged.
+    await settleSynopsesOfDeletedExchanges(tx, {
+      userId: input.userId,
+      sessionIds: turns.map((turn) => turn.sessionId),
+      at: removedAt,
+    });
 
     return { exchanges: exchanges.count, messages: messages.count, versions };
   });

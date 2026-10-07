@@ -269,6 +269,8 @@ describe('reserved fork tiers', () => {
       // cascades with its person, and a synopsis with its session).
       'enum AppJourneyEntryKind {',
       'enum AppJourneyEntryState {',
+      // t-147 — what keeping still owes a synopsis's notes.
+      'enum AppJourneyNotesPending {',
       'model AppJourneyEntry {',
       // f-safety t-58 — that the crisis path answered someone, never the words
       // (a SOURCE: it is about the person it happened to).

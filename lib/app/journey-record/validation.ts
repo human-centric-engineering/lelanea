@@ -1,14 +1,22 @@
 /**
- * What a person may send to their journey record (f-journey-record t-145).
+ * What a person may send to their journey record (f-journey-record t-145,
+ * t-147).
  *
- * Only an own entry is written through these. A synopsis is drafted by the
- * synopsis seat (t-146) and changed only by keeping it (t-147).
+ * An own entry is written and edited through the first two. A synopsis is
+ * drafted by the synopsis seat (t-146) and changed only by keeping it, or by
+ * asking for another draft (t-147).
  */
 
 import { z } from 'zod';
 
 import { cuidSchema } from '@/lib/validations/common';
-import { JOURNEY_BODY_MAX, JOURNEY_SUMMARY_MAX } from '@/lib/app/journey-record/entry';
+import {
+  JOURNEY_BODY_MAX,
+  JOURNEY_SUMMARY_MAX,
+  journeyNoteRefSchema,
+  journeyOutcomesSchema,
+  SYNOPSIS_STEER_MAX,
+} from '@/lib/app/journey-record/entry';
 
 /** An optional one-line summary: blank is none. */
 const summarySchema = z
@@ -41,3 +49,36 @@ export const ownEntryEditSchema = z
 export type OwnEntryEdit = z.infer<typeof ownEntryEditSchema>;
 
 export const journeyEntryIdSchema = cuidSchema;
+
+/**
+ * The account as the person keeps it, whole: a synopsis always has its line,
+ * so a changed one does too.
+ */
+const synopsisTextSchema = z.object({
+  summary: z.string().trim().min(1, 'Give it a line').max(JOURNEY_SUMMARY_MAX),
+  body: bodySchema,
+  outcomes: journeyOutcomesSchema,
+});
+
+/**
+ * Keeping a synopsis (t-147): which version of it the person was shown, the
+ * listed notes still ticked, and their changes, if any. `confirm` is required, so an empty list (nothing ticked)
+ * is said rather than assumed.
+ */
+export const synopsisKeepSchema = z.object({
+  /** The entry's `updatedAt` as the person was shown it: keeping is conditional on it. */
+  seen: z.iso.datetime().transform((seen) => new Date(seen)),
+  confirm: z.array(journeyNoteRefSchema).max(200),
+  edit: synopsisTextSchema.optional(),
+});
+export type SynopsisKeepInput = z.infer<typeof synopsisKeepSchema>;
+
+/** Asking for another draft: optionally, what was wrong with this one. Blank is none. */
+export const synopsisRegenerateSchema = z.object({
+  steer: z
+    .string()
+    .trim()
+    .max(SYNOPSIS_STEER_MAX)
+    .transform((steer) => (steer ? steer : null))
+    .optional(),
+});

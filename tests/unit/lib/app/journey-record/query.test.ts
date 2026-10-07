@@ -20,6 +20,8 @@ function entry(overrides: Partial<JourneyEntry> & Pick<JourneyEntry, 'id'>): Jou
     modules: [],
     notes: [],
     withheldFromAgent: false,
+    regenerationsLeft: null,
+    sourceRemoved: false,
     occurredAt: '2026-10-01T09:00:00.000Z',
     keptAt: '2026-10-01T10:00:00.000Z',
     updatedAt: '2026-10-01T10:00:00.000Z',

@@ -737,6 +737,15 @@ enum AppJourneyEntryState {
   @@map("app_journey_entry_state")
 }
 
+/// What keeping still owes a synopsis's notes (t-147): confirming the ticked
+/// ones, or reading the kept text against them first. Null once settled.
+enum AppJourneyNotesPending {
+  confirm
+  reread
+
+  @@map("app_journey_notes_pending")
+}
+
 /// One entry in a person's journey record (f-journey-record t-145; product
 /// description §3.16): a session's synopsis, or something they wrote.
 ///
@@ -764,14 +773,14 @@ enum AppJourneyEntryState {
 /// gives a session one synopsis, whichever state it is in, so a redraft
 /// replaces the draft rather than adding a second.
 model AppJourneyEntry {
-  id                String               @id @default(cuid())
+  id                String                  @id @default(cuid())
   /// Hand-written FK → `user`. See the note above.
   userId            String
   kind              AppJourneyEntryKind
   state             AppJourneyEntryState
   /// Hand-written FK → the session's `session.started` row. Set for a
   /// synopsis, null for an own entry.
-  sessionId         String?              @unique
+  sessionId         String?                 @unique
   /// The one line a stop shows when it is closed. Required of a synopsis; an
   /// own entry may have none.
   summary           String?
@@ -781,26 +790,41 @@ model AppJourneyEntry {
   /// What came of a session: `journeyOutcomesSchema` in
   /// `lib/app/journey-record/entry.ts`, each an action, an insight or a
   /// tension. Empty on an own entry.
-  outcomes          Json                 @default("[]")
+  outcomes          Json                    @default("[]")
   /// The slugs of the modules a session touched. Empty when it touched none,
   /// which in release 1, before modules have interiors, is the usual case.
-  modules           String[]             @default([])
+  modules           String[]                @default([])
   /// The visible notes a session's turns wrote, each `{ slotSlug, version }`
   /// (`journeyNoteRefsSchema` in `lib/app/journey-record/entry.ts`), listed so
   /// keeping the synopsis can confirm them (owner ruling 2). References only,
   /// never a reading: the words stay in the note, where removing it takes them.
   /// Hidden and special-category notes are never listed. Empty on an own entry.
-  notes             Json                 @default("[]")
+  notes             Json                    @default("[]")
   /// "Keep this from her": the person has asked that no agent read this entry
   /// (owner ruling 4, at planning). Drafts are never read whatever this says.
-  withheldFromAgent Boolean              @default(false)
+  withheldFromAgent Boolean                 @default(false)
   /// Where the entry sits in time: a synopsis at its session's start, an own
   /// entry when it was written. The record is ordered on it, newest first.
   occurredAt        DateTime
   /// When the entry was kept. Null while it is a draft.
   keptAt            DateTime?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  /// How many times the person has asked for another draft of this synopsis
+  /// (t-147). Capped (`MAX_SYNOPSIS_REGENERATIONS`), and claimed before the
+  /// model is called, so a double submit drafts once.
+  regenerations     Int                     @default(0)
+  /// Set when an exchange this synopsis was written from has since been
+  /// deleted (owner ruling, 6 Oct 2026, at t-147). Only a kept synopsis is
+  /// flagged: a draft is removed instead. Cleared when the person changes it.
+  sourceRemovedAt   DateTime?
+  /// What keeping still owes its notes (t-147). Set by the write that keeps
+  /// it and cleared once the notes are settled, so a keep that failed half
+  /// way is finished by the next one, never forgotten.
+  notesPending      AppJourneyNotesPending?
+  /// A keep or a redraft is under way (t-147): the lease that makes a second
+  /// submit wait rather than race. Taken over once older than the lease.
+  workingSince      DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
   /// The org this row belongs to (Sunrise §107, t-112); the tenancy client stamps it.
   orgId String?

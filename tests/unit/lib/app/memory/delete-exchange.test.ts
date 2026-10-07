@@ -19,12 +19,13 @@
  * @see lib/app/memory/delete-exchange.ts
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
 
 import {
   definition,
   ME,
   resetWorld,
+  synopsisEntry,
   THEM,
   value,
   world,
@@ -283,6 +284,91 @@ describe('deleting an exchange', () => {
 
     expect(result).toEqual({ exchanges: 1, messages: 0, versions: 1 });
     expect(rowsOf(ME, 'life_work')[1].sourceType).toBe(REMOVED_SOURCE_TYPE);
+  });
+});
+
+describe('the synopsis of the session it was in (t-147)', () => {
+  const DELETED_AT = new Date('2026-10-06T12:00:00.000Z');
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(DELETED_AT);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** turn-a in session one, turn-b in session two, theirs under session one's id too. */
+  function inSessions(): void {
+    twoExchanges();
+    world.turns.find((row) => row.id === 'turn-a')!.sessionId = 'ses_one';
+    world.turns.find((row) => row.id === 'turn-b')!.sessionId = 'ses_two';
+    world.turns.find((row) => row.id === 'turn-x')!.sessionId = 'ses_one';
+  }
+
+  const entry = (id: string) => world.entries.find((row) => row.id === id);
+
+  it('removes the session’s draft, and leaves another session’s and another person’s alone', async () => {
+    inSessions();
+    const draft = synopsisEntry({ sessionId: 'ses_one' });
+    const other = synopsisEntry({ sessionId: 'ses_two' });
+    const theirs = synopsisEntry({ userId: THEM, sessionId: 'ses_one' });
+    world.entries.push(draft, other, theirs);
+    expect(world.entries).toHaveLength(3);
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
+
+    expect(entry(draft.id)).toBeUndefined();
+    expect(entry(other.id)).toMatchObject({ state: 'draft', sourceRemovedAt: null });
+    expect(entry(theirs.id)).toMatchObject({ state: 'draft', sourceRemovedAt: null });
+  });
+
+  it('flags a kept synopsis with when, and never takes it', async () => {
+    inSessions();
+    const kept = synopsisEntry({
+      sessionId: 'ses_one',
+      state: 'kept',
+      keptAt: new Date('2026-10-02T00:00:00.000Z'),
+      body: 'In my own words.',
+    });
+    const theirs = synopsisEntry({
+      userId: THEM,
+      sessionId: 'ses_one',
+      state: 'kept',
+      keptAt: new Date('2026-10-02T00:00:00.000Z'),
+    });
+    world.entries.push(kept, theirs);
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
+
+    expect(entry(kept.id)).toMatchObject({
+      state: 'kept',
+      body: 'In my own words.',
+      sourceRemovedAt: DELETED_AT,
+    });
+    expect(entry(theirs.id)?.sourceRemovedAt).toBeNull();
+  });
+
+  it('settles every session the deleted exchanges were in', async () => {
+    inSessions();
+    const one = synopsisEntry({ sessionId: 'ses_one' });
+    const two = synopsisEntry({ sessionId: 'ses_two', state: 'kept', keptAt: DELETED_AT });
+    world.entries.push(one, two);
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-a', 'turn-b'] });
+
+    expect(entry(one.id)).toBeUndefined();
+    expect(entry(two.id)?.sourceRemovedAt).toEqual(DELETED_AT);
+  });
+
+  it('touches no synopsis for a turn taken before sessions', async () => {
+    twoExchanges();
+    const draft = synopsisEntry({ sessionId: 'ses_one' });
+    world.entries.push(draft);
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['turn-a'] });
+
+    expect(entry(draft.id)).toMatchObject({ state: 'draft', sourceRemovedAt: null });
   });
 });
 

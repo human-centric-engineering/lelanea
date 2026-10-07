@@ -95,6 +95,21 @@ export function readSessionTurns(userId: string, sessionId: string): Promise<Ses
 }
 
 /**
+ * Whether an exchange the draft was written from has been deleted since its
+ * turns were read (t-147). Asked after the draft is stored: a deletion that
+ * settled before then found no draft to remove, and this finds the deletion;
+ * one that settles after it finds the draft.
+ */
+export async function lostExchanges(
+  userId: string,
+  sessionId: string,
+  turns: readonly SessionTurn[]
+): Promise<boolean> {
+  const now = new Set((await readSessionTurns(userId, sessionId)).map((turn) => turn.id));
+  return exchangesOf(turns).some((turn) => !now.has(turn.id));
+}
+
+/**
  * The session's exchanges: completed turns that answered a message of theirs.
  * A retried turn is one row, so each thing they said is counted once.
  */
@@ -206,6 +221,18 @@ async function readNoteRefs(userId: string, turnIds: string[]): Promise<JourneyN
   return [...latest].map(([slotSlug, version]) => ({ slotSlug, version }));
 }
 
+/**
+ * Only the conversation, for another draft of a session already drafted
+ * (t-147): its modules and notes were derived once, and do not change because
+ * the person asked for different words.
+ */
+export function readSessionLines(
+  userId: string,
+  turns: readonly SessionTurn[]
+): Promise<{ readable: number; lines: SessionLine[] }> {
+  return readLines(userId, exchangesOf(turns));
+}
+
 /** Everything a closed session gives its synopsis, from the turns already read. */
 export async function readSynopsisMaterial(
   userId: string,
@@ -213,7 +240,7 @@ export async function readSynopsisMaterial(
   turns: readonly SessionTurn[]
 ): Promise<SynopsisMaterial> {
   const [{ readable, lines }, modules, notes] = await Promise.all([
-    readLines(userId, exchangesOf(turns)),
+    readSessionLines(userId, turns),
     readModules(userId, session),
     // Every turn of the session, not only its exchanges: a note can be written on any.
     readNoteRefs(
