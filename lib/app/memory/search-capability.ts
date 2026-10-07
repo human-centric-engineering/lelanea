@@ -169,18 +169,24 @@ function cutEntry(text: string): string {
 }
 
 function asRemembered(hit: MemoryHit): RememberedItem {
-  if ('occurredAt' in hit) {
-    const when = spokenDate(hit.occurredAt);
-    return hit.sourceKind === 'synopsis'
-      ? { kind: 'kept_account', words: cutEntry(hit.text), when, whose: whoseAccount(when) }
-      : { kind: 'their_entry', words: cutEntry(hit.text), when, whose: whoseEntry(when) };
+  switch (hit.sourceKind) {
+    case 'synopsis': {
+      const when = spokenDate(hit.occurredAt);
+      return { kind: 'kept_account', words: cutEntry(hit.text), when, whose: whoseAccount(when) };
+    }
+    case 'own_entry': {
+      const when = spokenDate(hit.occurredAt);
+      return { kind: 'their_entry', words: cutEntry(hit.text), when, whose: whoseEntry(when) };
+    }
+    case 'note': {
+      const when = spokenDate(hit.notedAt);
+      return { kind: 'note', words: hit.text, when, whose: whoseNote(when) };
+    }
+    case 'message': {
+      const when = spokenDate(hit.saidAt);
+      return { kind: 'their_words', words: hit.text, when, whose: whoseWords(when) };
+    }
   }
-  if (hit.sourceKind === 'note') {
-    const when = spokenDate(hit.notedAt);
-    return { kind: 'note', words: hit.text, when, whose: whoseNote(when) };
-  }
-  const when = spokenDate(hit.saidAt);
-  return { kind: 'their_words', words: hit.text, when, whose: whoseWords(when) };
 }
 
 const turnStampSchema = z.object({ seat: z.string(), turnId: z.string().min(1).optional() });

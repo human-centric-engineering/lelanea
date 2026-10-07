@@ -50,7 +50,6 @@ function journeyHit(overrides: Partial<MemoryHit> = {}): MemoryHit {
   return {
     sourceKind: 'own_entry',
     sourceId: 'entry-1',
-    summary: null,
     text: 'Walked by the lake and thought about my father.',
     occurredAt: new Date('2026-10-01T09:00:00Z'),
     distance: 0.1,

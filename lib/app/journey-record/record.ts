@@ -190,11 +190,12 @@ export async function readKeptSynopsisOfSession(
     },
     select: { id: true, summary: true, body: true, outcomes: true },
   });
-  if (!row?.summary) return null;
+  if (!row) return null;
   const outcomes = journeyOutcomesSchema.safeParse(row.outcomes);
   if (!outcomes.success) logger.error('Journey entry has unreadable outcomes', { entryId: row.id });
   return {
-    summary: row.summary,
+    // A synopsis always has its line (the table's CHECK); `''` only satisfies the type.
+    summary: row.summary ?? '',
     body: row.body,
     outcomes: outcomes.success ? outcomes.data : [],
   };

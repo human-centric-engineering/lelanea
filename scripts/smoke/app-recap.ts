@@ -410,7 +410,9 @@ async function main(): Promise<void> {
       keepSynopsis(user.id, drafted.id, { seen: drafted.updatedAt, confirm: [] })
     );
     check(kept.entry.state === 'kept', 'they keep it, as written');
-    const keptMaterial = await readRecapMaterial(user.id, draftMaterial.ready.prior);
+    const keptMaterial = await runAsOrg(INSTALL_ORG_ID, () =>
+      readRecapMaterial(user.id, draftMaterial.ready.prior)
+    );
     check(
       keptMaterial.text.includes(`Its line: ${KEPT_LINE}`) &&
         keptMaterial.account.source === 'synopsis',
@@ -429,7 +431,9 @@ async function main(): Promise<void> {
       indexed === 'indexed' || indexed === 'already_indexed',
       `the kept account is in the memory index (${indexed})`
     );
-    const entries = await listMemoryEntriesForSubject({ userId: user.id });
+    const entries = await runAsOrg(INSTALL_ORG_ID, () =>
+      listMemoryEntriesForSubject({ userId: user.id })
+    );
     check(
       entries.some((row) => row.journeyEntryId === drafted.id && row.sourceKind === 'synopsis'),
       'as a synopsis source'

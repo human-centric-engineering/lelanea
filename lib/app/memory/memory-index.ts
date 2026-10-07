@@ -159,8 +159,6 @@ export interface JourneyEntryHit {
   sourceKind: 'synopsis' | 'own_entry';
   /** The `app_journey_entry` id. */
   sourceId: string;
-  /** Its line, an own entry's only if the person gave one. */
-  summary: string | null;
   /** What was embedded: the line, the words and the outcomes, read from the entry itself. */
   text: string;
   /** When it sits in time: a synopsis at its session's start, an own entry when written. */
@@ -1079,7 +1077,6 @@ export async function searchMemory(
     ...entries.map((row): JourneyEntryHit => ({
       sourceKind: row.kind === 'synopsis' ? 'synopsis' : 'own_entry',
       sourceId: row.journeyEntryId,
-      summary: row.summary,
       text: journeyEntryText(row),
       occurredAt: row.occurredAt,
       distance: Number(row.distance),

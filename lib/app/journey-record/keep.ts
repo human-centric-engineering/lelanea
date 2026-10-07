@@ -374,6 +374,9 @@ export async function keepSynopsis(
     // The text is kept and what its notes are owed is recorded; giving the
     // lease back lets the next keep finish them at once.
     await releaseSynopsisLease(userId, id, now).catch(() => undefined);
+    // The words are kept whatever happened to the notes: what she reads of
+    // them is brought up to date now, not at the next backfill (round 2).
+    queueJourneyEntryIndex({ userId }, id);
     throw err;
   }
   let finished: boolean;
@@ -386,6 +389,7 @@ export async function keepSynopsis(
     });
   } catch (err) {
     await releaseSynopsisLease(userId, id, now).catch(() => undefined);
+    queueJourneyEntryIndex({ userId }, id);
     throw err;
   }
   if (!finished) {

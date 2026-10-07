@@ -656,6 +656,8 @@ describe('a note written to while keeping', () => {
       notesPending: 'confirm',
       workingSince: null,
     });
+    // The words were kept, so what she reads of them is queued anyway (t-149, round 2).
+    expect(index.queueJourneyEntryIndex).toHaveBeenCalledWith({ userId: ME }, draft.id);
 
     const retried = await keepSynopsis(ME, draft.id, { confirm: [LISTED[0]] }, NOW);
     expect(retried.notes[0]).toEqual({ slotSlug: 'life_work', outcome: 'confirmed' });

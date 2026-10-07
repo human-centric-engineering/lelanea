@@ -315,7 +315,14 @@ export async function recapDue(user: GateSubject, session: Session): Promise<str
 
 /** Anything the person wrote, with the fence markers taken out so it cannot close the fence. */
 function unfenced(text: string): string {
-  return text.replaceAll(MATERIAL_START, '').replaceAll(MATERIAL_END, '');
+  // Until nothing changes: taking one marker out of `[Material [Material ends]ends]`
+  // joins another (review round 2, t-149).
+  let current = text;
+  for (;;) {
+    const next = current.replaceAll(MATERIAL_START, '').replaceAll(MATERIAL_END, '');
+    if (next === current) return current;
+    current = next;
+  }
 }
 
 /** At most `max` characters, said to be cut where it was. */
@@ -445,8 +452,10 @@ async function readJourneySteps(userId: string, prior: PriorSession): Promise<st
  * forge a `> ` line, and cut to the words' budget.
  */
 function keptAccountSection(kept: KeptSynopsisText): string {
+  // Collapsed first, then unfenced: a marker split across a line break or a
+  // tab would otherwise slip past and be joined by the collapse (round 2).
   const oneLine = (text: string, max: number) =>
-    cut(unfenced(text).replace(/\s+/g, ' ').trim(), max);
+    cut(unfenced(text.replace(/\s+/g, ' ')).replace(/\s+/g, ' ').trim(), max);
   const outcomes = kept.outcomes.map(
     (outcome) => `- ${outcome.kind}: ${oneLine(outcome.text, MAX_RECAP_NOTE_CHARS)}`
   );
