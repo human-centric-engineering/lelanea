@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SynopsisEditor, type SynopsisText } from '@/components/app/journey/synopsis-editor';
+import { JOURNEY_OUTCOMES_MAX } from '@/lib/app/journey-record/entry';
 
 const INITIAL: SynopsisText = {
   summary: 'Saying no at work',
@@ -95,6 +96,18 @@ describe('SynopsisEditor', () => {
     const sent = onSubmit.mock.calls[0][0] as SynopsisText;
     expect(sent.outcomes).toHaveLength(2);
     expect(sent.outcomes.every((o) => o.text.length > 0)).toBe(true);
+  });
+
+  it('offers no more outcomes once the record’s limit is reached', () => {
+    setup({
+      ...INITIAL,
+      outcomes: Array.from({ length: JOURNEY_OUTCOMES_MAX }, (_, i) => ({
+        kind: 'insight' as const,
+        text: `Outcome ${i}`,
+      })),
+    });
+    expect(screen.getAllByLabelText('Outcome')).toHaveLength(JOURNEY_OUTCOMES_MAX);
+    expect(screen.queryByRole('button', { name: 'Add an outcome' })).toBeNull();
   });
 
   it('will not submit without a line or an account', async () => {
