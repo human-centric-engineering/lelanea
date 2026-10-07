@@ -46,14 +46,16 @@ import {
   journeyNoteRefsSchema,
   journeyOutcomesSchema,
   type JourneyEntry,
+  type JourneyListedNote,
   type JourneyNoteRef,
   type JourneyOutcome,
 } from '@/lib/app/journey-record/entry';
 import {
   queryJourneyRecord,
+  type JourneyRecordPage,
   type JourneyRecordQuery,
-  type JourneyRecordView,
 } from '@/lib/app/journey-record/query';
+import { getNotes } from '@/lib/app/slots/notes';
 import type { OwnEntryCreate, OwnEntryEdit } from '@/lib/app/journey-record/validation';
 
 /**
@@ -117,12 +119,38 @@ async function readEntries(userId: string): Promise<JourneyEntry[]> {
   return rows.map((row) => toEntry(row, row.sessionId ? sessions.get(row.sessionId) : undefined));
 }
 
+/**
+ * The notes the page's entries list, as the notes panel holds them now
+ * (t-148). Read through `getNotes`, so a note hidden since it was listed is
+ * left out by the same rule that keeps it off the panel, and one withheld at
+ * capture carries no reading. One read for the page, and none when nothing on
+ * it lists a note.
+ */
+async function readListedNotes(
+  userId: string,
+  entries: readonly JourneyEntry[]
+): Promise<JourneyListedNote[]> {
+  const listed = new Set(entries.flatMap((entry) => entry.notes.map((note) => note.slotSlug)));
+  if (listed.size === 0) return [];
+  const { notes } = await getNotes(userId);
+  return notes
+    .filter((note) => listed.has(note.slotSlug) && !note.removed)
+    .map((note) => ({
+      slotSlug: note.slotSlug,
+      label: note.slotSlug.replace(/_/g, ' '),
+      reading: note.withheld ? null : note.value,
+      version: note.version,
+      confirmable: note.correctable,
+    }));
+}
+
 /** The person's record, searched and filtered as they asked, with totals over all of it. */
 export async function getJourneyRecord(
   userId: string,
   query: JourneyRecordQuery = {}
-): Promise<JourneyRecordView> {
-  return queryJourneyRecord(await readEntries(userId), query);
+): Promise<JourneyRecordPage> {
+  const view = queryJourneyRecord(await readEntries(userId), query);
+  return { ...view, notes: await readListedNotes(userId, view.entries) };
 }
 
 async function readOwnEntry(userId: string, id: string): Promise<JourneyEntry> {

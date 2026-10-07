@@ -60,6 +60,27 @@ export type JourneyNoteRef = z.infer<typeof journeyNoteRefSchema>;
 /** What `app_journey_entry.notes` holds. */
 export const journeyNoteRefsSchema = z.array(journeyNoteRefSchema);
 
+/**
+ * A note some entry on the page lists, as the notes panel holds it now (t-148).
+ * What the timeline's ticks are drawn from, so a draft shows each note's
+ * heading and reading without a fetch of its own.
+ *
+ * Only a note the notes panel shows is here: one hidden since it was listed is
+ * absent, and the page leaves its tick out. The `version` is the note's current
+ * one, so a note that moved on since the session wrote it is told apart from
+ * one still at the version listed.
+ */
+export interface JourneyListedNote {
+  slotSlug: string;
+  /** The slug in words, as the notes panel titles a card. */
+  label: string;
+  /** The current reading; null when it was withheld at capture. */
+  reading: string | null;
+  version: number;
+  /** Whether keeping may still write to it: the notes panel would let the person correct it. */
+  confirmable: boolean;
+}
+
 /** The session a synopsis is about, with its window. */
 export interface JourneyEntrySession {
   id: string;

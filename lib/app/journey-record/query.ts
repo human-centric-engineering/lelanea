@@ -29,6 +29,7 @@ import {
   countOutcomes,
   type JourneyEntry,
   type JourneyEntryKind,
+  type JourneyListedNote,
   type JourneyOutcomeCounts,
   type JourneyOutcomeKind,
 } from '@/lib/app/journey-record/entry';
@@ -89,6 +90,15 @@ export interface JourneyRecordView {
   totals: JourneyRecordTotals;
   /** Every module the kept record touches, alphabetically: the module filter's options. */
   modules: string[];
+}
+
+/**
+ * What the route and the page are given: the view, plus the notes its entries
+ * list as the notes panel holds them now (t-148), so a stop draws its ticks
+ * from this one read.
+ */
+export interface JourneyRecordPage extends JourneyRecordView {
+  notes: JourneyListedNote[];
 }
 
 /** Case and accents folded, so "lelanea" finds "Lelañea" and "CAFE" finds "café". */
