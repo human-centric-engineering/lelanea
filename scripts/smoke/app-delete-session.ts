@@ -4,8 +4,7 @@
  *
  * The unit tests run the deletion against a Prisma fake. What the fake cannot
  * prove is the wiring underneath it: that the session's turns are found by
- * their real `sessionId` stamp, that the person's memory vectors go by the
- * real FK cascade with their messages, that the recap which looked back on the
+ * their real `sessionId` stamp, that the recap which looked back on the
  * session is found by its account on a real `app_turn` row, that the kept
  * account goes with its row, and that what the next recap would be given holds
  * nothing of the deleted session while the kept one is all still there.
@@ -14,14 +13,18 @@
  *   1. A throwaway person with three sessions in one conversation. The first is
  *      kept: one exchange. The second is deleted: opened by a recap of the
  *      first, then an exchange that writes a note, with a kept account quoting
- *      it. The third is opened by a recap drawn from that account. A memory
- *      vector on each of the person's messages.
+ *      it. The third is opened by a recap drawn from that account.
  *   2. Delete the second session, taking its account. Assert its messages,
- *      turns, note version, account and vector are gone, the third session's
- *      recap with them, and the session rows all stay.
- *   3. Assert what the AI reads next: no message, vector, note or recap
- *      material holds the deleted session's words, and the kept session's are
- *      all still there.
+ *      turns, note version and account are gone, the third session's recap
+ *      with them, and the session rows all stay.
+ *   3. Assert what the AI reads next: no message, note or recap material
+ *      holds the deleted session's words, and the kept session's are all
+ *      still there.
+ *
+ * The person's memory vectors are not written here: only `memory-index.ts`
+ * touches that table (`index-boundary.test.ts`). They go with their messages
+ * by the `messageId` FK cascade, which `smoke:app-memory-index` proves for a
+ * deleted exchange; this proves the messages go.
  *
  * No server and no model: everything runs in this process. Skips (exit 0, says
  * so) with no database or no agent to hang a conversation on.
@@ -190,26 +193,6 @@ async function main(): Promise<void> {
         keptAt: at(150),
       },
     });
-    // A raw insert is not stamped with the org as the client's writes are, so
-    // it takes the conversation's.
-    const { orgId } = await prisma.aiConversation.findUniqueOrThrow({
-      where: { id: conversation.id },
-      select: { orgId: true },
-    });
-    const vector = (messageId: string) =>
-      prisma.$executeRawUnsafe(
-        `INSERT INTO app_memory_embedding
-           (id, "userId", "sourceKind", "messageId", embedding,
-            "embeddingModel", "embeddingProvider", "embeddingDimension", "orgId")
-         VALUES ($1, $2, 'message', $3, $4::vector, 'smoke', 'smoke', 1536, $5)`,
-        `${PREFIX}-${stamp}-${messageId}`,
-        user.id,
-        messageId,
-        `[${Array.from({ length: 1536 }, () => '0.001').join(',')}]`,
-        orgId
-      );
-    await vector(m1.id);
-    await vector(m3.id);
     const before = await readRecapMaterial(user.id, { id: two.id, startedAt: two.occurredAt });
     check(
       before.text.includes(SAID_GONE),
@@ -243,14 +226,6 @@ async function main(): Promise<void> {
     check(
       (await prisma.appJourneyEntry.count({ where: { id: account.id } })) === 0,
       'its kept account is gone'
-    );
-    const vectors = await prisma.$queryRawUnsafe<{ messageId: string }[]>(
-      `SELECT "messageId" FROM app_memory_embedding WHERE "userId" = $1`,
-      user.id
-    );
-    check(
-      vectors.map((row) => row.messageId).join() === m1.id,
-      'its message’s memory vector went by the FK cascade, and the kept one’s stayed'
     );
     check(
       (await prisma.journeyEvent.count({

@@ -178,11 +178,14 @@ none of it. Read for this person only, fenced, and bounded (`MAX_RECAP_*`):
 | The journey since             | `node_entered` / `node_completed` in `framework_journey_event` since that session began; "began" / "moved on from" a module, never "completed" (§6.12)                                                                                                         |
 
 A deleted exchange's words are gone from the message table, so they never
-come back here. **A recap already written goes with them** (t-151): deleting an
-exchange takes every recap that looked back on its session, and removing a kept
-account takes every recap drawn from it, because the recap's reply is a stored
-message the model reads as history and may repeat either
-([`slots.md`](./slots.md), "Deleting an exchange"). The material is reference, not instructions, and the ask says
+come back here. **A recap already written goes with them**, because the
+recap's reply is a stored message the model reads as history and may repeat
+what it was given: deleting an exchange or a whole session takes every recap
+that looked back on its session (t-151, t-153); removing a kept account, or
+changing its words, takes every recap drawn from it (t-151, t-157); and
+removing a note takes every recap whose account lists its heading (t-156)
+([`slots.md`](./slots.md), "Deleting an exchange", "Deleting a session",
+"Removing a note"). The material is reference, not instructions, and the ask says
 so; the fence markers are stripped from anything the person wrote, the kept
 account included.
 
@@ -243,9 +246,6 @@ whole, provided the pane still holds what it held when it asked.
 
 - A tab left open across the gap is not recapped: the recap is decided on the
   pane's read, and the person's next turn then speaks first.
-- Deleting the last exchange of a session (t-127) deletes the recap after it
-  too: an exchange's window runs to the person's next message, and the recap
-  sits inside it.
 - A failed recap attempt's fragment, re-run, joins the reply above it when that
   reply has no linked final row (`reply_not_linked`). Bounding it needs the
   message clock compared with the settle clock, which `turn-record.ts` warns

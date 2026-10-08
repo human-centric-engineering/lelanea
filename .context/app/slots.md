@@ -1170,7 +1170,11 @@ turns shares (`delete-turns.ts`).
 tool is stored as several assistant passes and tool results, and a `fill_slot`
 result can echo the person's words. So it is every message in the turn's
 conversation from the person's message up to their next one, every role
-included. The latest turn's window runs to the end of the conversation.
+included. A turn the agent opened (a recap, the welcome) has no message of the
+person's, so the next one also ends the window before it: two recaps with
+nothing said between them would otherwise share one, and deleting the first
+took the second's reply. The latest turn's window runs to the end of the
+conversation.
 
 **What goes with it:**
 
