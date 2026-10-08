@@ -696,6 +696,21 @@ describe('deleting a session (t-154)', () => {
     ]);
   });
 
+  it('does not show an earlier refusal of another control as the delete’s', async () => {
+    world.nextResponse = refusal(409, 'CONFLICT', 'Conflict.', { reason: 'changed_meanwhile' });
+    renderStop({ state: 'draft', keptAt: null, regenerationsLeft: 3 });
+
+    // A keep is refused first, and says so under the stop.
+    await userEvent.click(screen.getByRole('button', { name: 'Keep this' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/latest version/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+
+    expect(screen.getByRole('group', { name: 'Delete this session?' })).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(world.calls.map((call) => call.method)).toEqual(['POST']);
+  });
+
   it('says to wait for the reply on a 409, deletes nothing more, and keeps the choice open', async () => {
     world.nextResponse = refusal(
       409,

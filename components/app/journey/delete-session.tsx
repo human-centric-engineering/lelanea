@@ -52,6 +52,12 @@ export function DeleteSessionConfirm({
 }) {
   const tickId = useId();
   const [removeAccount, setRemoveAccount] = useState(true);
+  /*
+   * The stop's action is shared by every control on it, so its error may be a
+   * refused keep or redraft from before this opened. Only a refusal of the
+   * delete itself is said here, as "Not deleted.".
+   */
+  const [tried, setTried] = useState(false);
   const kept = entry.state === 'kept';
   const session = entry.session;
   if (!session) return null;
@@ -84,7 +90,7 @@ export function DeleteSessionConfirm({
           </FieldHelp>
         </div>
       ) : null}
-      {action.error ? (
+      {tried && action.error ? (
         <Banner tone="error" className="mt-2.5" lead="Not deleted.">
           {action.error}
         </Banner>
@@ -94,11 +100,12 @@ export function DeleteSessionConfirm({
           size="sm"
           variant="destructive"
           disabled={action.busy}
-          onClick={() =>
+          onClick={() => {
+            setTried(true);
             void action
               .run(() => deleteSession(session.id, kept ? removeAccount : true))
-              .then((went) => went && onDeleted())
-          }
+              .then((went) => went && onDeleted());
+          }}
         >
           {action.busy ? 'Deleting…' : 'Delete this session'}
         </Button>
