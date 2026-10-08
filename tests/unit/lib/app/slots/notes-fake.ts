@@ -161,6 +161,8 @@ export interface TurnRow {
   userMessageId: string | null;
   /** The session it was taken in (t-147); null for a turn from before sessions. */
   sessionId?: string | null;
+  /** The module it was taken in (t-152); null with none current, or from before the stamp. */
+  moduleSlug?: string | null;
   /** What a recap drew on (t-151): `app_turn.recap`. Unset on every other turn. */
   recap?: unknown;
 }
@@ -435,13 +437,21 @@ export const prismaFake = {
           userId?: string;
           turnId?: { startsWith?: string };
           sessionId?: string;
+          moduleSlug?: string;
         };
       }) => {
         const keys = Object.keys(where).sort().join();
-        // A session deletion's turns (t-153): `{ userId, sessionId }`.
-        if (keys === 'sessionId,userId') {
+        // A session deletion's turns (t-153): `{ userId, sessionId }`; a
+        // module's worth's (t-155): `{ userId, moduleSlug }`.
+        if (keys === 'sessionId,userId' || keys === 'moduleSlug,userId') {
           return world.turns
-            .filter((row) => row.userId === where.userId && row.sessionId === where.sessionId)
+            .filter(
+              (row) =>
+                row.userId === where.userId &&
+                (keys === 'moduleSlug,userId'
+                  ? row.moduleSlug === where.moduleSlug
+                  : row.sessionId === where.sessionId)
+            )
             .map((row) => ({
               ...row,
               sessionId: row.sessionId ?? null,
@@ -489,6 +499,16 @@ export const prismaFake = {
           }));
       }
     ),
+    // Whether a module has anything of the person's to offer (t-155):
+    // `{ userId, moduleSlug }`.
+    count: vi.fn(async ({ where }: { where: { userId: string; moduleSlug: string } }) => {
+      if (Object.keys(where).sort().join() !== 'moduleSlug,userId') {
+        throw new Error(`the fake does not model ${JSON.stringify(where)}`);
+      }
+      return world.turns.filter(
+        (row) => row.userId === where.userId && row.moduleSlug === where.moduleSlug
+      ).length;
+    }),
     // And its delete, which cascades to the ledger as the FK does. The
     // conversation deletion (t-128) also narrows to turns still pointing at a
     // deleted conversation.

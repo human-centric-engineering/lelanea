@@ -1,6 +1,6 @@
 /**
- * Smoke: deleting a whole session, on the real development database
- * (f-forget-session t-153).
+ * Smoke: deleting a whole session, and a module's worth, on the real
+ * development database (f-forget-session t-153, t-155).
  *
  * The unit tests run the deletion against a Prisma fake. What the fake cannot
  * prove is the wiring underneath it: that the session's turns are found by
@@ -20,6 +20,11 @@
  *   3. Assert what the AI reads next: no message, note or recap material
  *      holds the deleted session's words, and the kept session's are all
  *      still there.
+ *   4. A fourth session, kept, with one exchange stamped with one module and
+ *      one with another. Delete the first module's worth. Assert its exchange,
+ *      messages and note version are gone by their real `moduleSlug` stamp,
+ *      the other module's exchange and the unstamped first session stay, and
+ *      the kept account is flagged rather than removed.
  *
  * The person's memory vectors are not written here: only `memory-index.ts`
  * touches that table (`index-boundary.test.ts`). They go with their messages
@@ -39,6 +44,7 @@
 import { prisma } from '@/lib/db/client';
 import { appendSlotValue, getSlotHeads } from '@/lib/framework/data-slots';
 import { deleteSession } from '@/lib/app/memory/delete-session';
+import { deleteModuleExchanges } from '@/lib/app/memory/delete-module';
 import { isRemoved } from '@/lib/app/slots/removed';
 import { recapTurnId } from '@/lib/app/conversation/opening-id';
 import { readRecapMaterial } from '@/lib/app/conversation/recap';
@@ -50,6 +56,10 @@ const stamp = Date.now();
 const SLUG = 'current_circumstances';
 const SAID_KEPT = 'I walk the dog by the river every morning';
 const SAID_GONE = 'I am thinking of leaving my job at the bank';
+const SAID_IN_MODULE = 'What I value most is being trusted by my sister';
+const SAID_ELSEWHERE = 'I trust my own judgement more than I used to';
+/** A taxonomy heading of its own, so the module's version is not a later reading of `SLUG`. */
+const MODULE_SLOT = 'values_named';
 
 async function dbReachable(): Promise<boolean> {
   try {
@@ -128,7 +138,8 @@ async function main(): Promise<void> {
       assistantMessageId: string,
       sessionId: string,
       seconds: number,
-      recap?: { since: Date; source: 'words' | 'synopsis' }
+      recap?: { since: Date; source: 'words' | 'synopsis' },
+      moduleSlug: string | null = null
     ) =>
       prisma.appTurn.create({
         data: {
@@ -144,6 +155,7 @@ async function main(): Promise<void> {
           userMessageId,
           assistantMessageId,
           sessionId,
+          moduleSlug,
           ...(recap
             ? {
                 recap: {
@@ -254,6 +266,98 @@ async function main(): Promise<void> {
       keptMaterial.text.includes(SAID_KEPT) && left.some((row) => row.content === SAID_KEPT),
       'the kept session’s words are still in the conversation and a recap’s material'
     );
+
+    console.log("\n4. Delete a module's worth from a fourth, kept session");
+    const four = await session(4, 300);
+    const v1 = await say('user', SAID_IN_MODULE, 310);
+    const v2 = await say('assistant', 'Being trusted matters to you.', 311);
+    const o1 = await say('user', SAID_ELSEWHERE, 320);
+    const o2 = await say('assistant', 'That is a real change.', 321);
+    const inModule = await turn(
+      `${PREFIX}-${stamp}-v`,
+      v1.id,
+      v2.id,
+      four.id,
+      310,
+      undefined,
+      'values'
+    );
+    const elsewhere = await turn(
+      `${PREFIX}-${stamp}-o`,
+      o1.id,
+      o2.id,
+      four.id,
+      320,
+      undefined,
+      'inner-authority'
+    );
+    const valued = await appendSlotValue({
+      userId: user.id,
+      slotSlug: MODULE_SLOT,
+      value: SAID_IN_MODULE,
+      valueJson: SAID_IN_MODULE,
+      confidence: 8,
+      sourceType: 'direct',
+      reasoningNote: `They said it plainly: ${SAID_IN_MODULE}`,
+      provenance: { conversationId: conversation.id },
+    });
+    await prisma.appTurnSlotWrite.create({
+      data: { turnId: inModule.id, slotSlug: MODULE_SLOT, version: valued.version, minted: false },
+    });
+    const fourAccount = await prisma.appJourneyEntry.create({
+      data: {
+        userId: user.id,
+        kind: 'synopsis',
+        state: 'kept',
+        sessionId: four.id,
+        summary: 'Trust',
+        body: `You said ${SAID_IN_MODULE}.`,
+        occurredAt: at(300),
+        keptAt: at(350),
+      },
+    });
+
+    const worth = await deleteModuleExchanges({ userId: user.id, moduleSlug: 'values' });
+    check(
+      worth.exchanges === 1 && worth.messages === 2 && worth.versions === 1,
+      "the module's one exchange, its two messages and its one version"
+    );
+    check(
+      (await prisma.appTurn.count({ where: { id: inModule.id } })) === 0 &&
+        (await prisma.appTurn.count({ where: { id: elsewhere.id } })) === 1 &&
+        (await prisma.appTurn.count({ where: { id: kept.id } })) === 1,
+      'its turn is gone; the other module’s and the unstamped turn stay'
+    );
+    const afterModule = await prisma.aiMessage.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    check(
+      afterModule.map((row) => row.id).join() === [m1.id, m2.id, o1.id, o2.id].join(),
+      'only the unstamped session’s and the other module’s messages are left'
+    );
+    const [moduleVersion] = await prisma.slotValue.findMany({
+      where: { userId: user.id, slotSlug: MODULE_SLOT },
+    });
+    check(isRemoved(moduleVersion), 'the note it wrote is a placeholder');
+    const flagged = await prisma.appJourneyEntry.findUnique({ where: { id: fourAccount.id } });
+    check(
+      flagged?.state === 'kept' && flagged.sourceRemovedAt !== null,
+      'the session’s kept account stays, flagged as written from something since deleted'
+    );
+    check(
+      !JSON.stringify(afterModule).includes(SAID_IN_MODULE) &&
+        afterModule.some((row) => row.content === SAID_ELSEWHERE),
+      'nothing said in the module is left, and what was said elsewhere is'
+    );
+    const nothingLeft = await deleteModuleExchanges({
+      userId: user.id,
+      moduleSlug: 'values',
+    }).then(
+      () => 'deleted',
+      (error: unknown) => (error instanceof Error ? error.name : 'other')
+    );
+    check(nothingLeft === 'NotFoundError', 'a second ask finds nothing, and says so');
 
     console.log('\n✓ smoke:app-delete-session passed');
   } finally {

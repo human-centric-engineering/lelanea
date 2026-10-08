@@ -9,6 +9,8 @@ import { getJourneyMap } from '@/lib/app/journey/map';
 import type { JourneyStructure } from '@/lib/app/content';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { DiscoveryView } from '@/components/app/onboarding/discovery-view';
+import { DeleteModuleExchanges } from '@/components/app/modules/delete-module-exchanges';
+import { countModuleExchanges } from '@/lib/app/memory/delete-module';
 import { getDiscoveryState } from '@/lib/app/onboarding/discovery-store';
 import { asksIn } from '@/lib/app/onboarding/discovery';
 import { getDiscoveryModuleSlug } from '@/lib/app/onboarding/discovery-slots';
@@ -80,6 +82,7 @@ export default async function ModulePage({ params }: Params) {
         tierLabel={tier.label}
         tierIntent={tier.intent}
         parts={partsFor(await loadStructure(), place.slug)}
+        forgetting={await forgettingFor(place.slug)}
       >
         {await discoveryFor(place.slug)}
       </ModuleView>
@@ -112,6 +115,25 @@ async function discoveryFor(slug: string): Promise<React.ReactNode> {
   const state = await getDiscoveryState(session.user.id);
   if (!state || !asksIn(state.set, slug)) return undefined;
   return <DiscoveryView userId={session.user.id} state={state} where="module" />;
+}
+
+/**
+ * The offer to delete what the person said in this module (t-155), when they
+ * said anything in it since turns were stamped with their module. With nothing
+ * stamped there is nothing to offer, and when the count cannot be read the page
+ * still renders without it: the offer is a way out, not the module.
+ */
+async function forgettingFor(slug: string): Promise<React.ReactNode> {
+  const session = await getServerSession();
+  if (!session) return undefined;
+  let exchanges: number;
+  try {
+    exchanges = await countModuleExchanges(session.user.id, slug);
+  } catch (error) {
+    logger.error('Module exchanges could not be counted', error, { slug });
+    return undefined;
+  }
+  return <DeleteModuleExchanges slug={slug} exchanges={exchanges} />;
 }
 
 /**

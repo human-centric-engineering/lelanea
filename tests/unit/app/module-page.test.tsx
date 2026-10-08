@@ -27,21 +27,32 @@ import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { moduleSlugFromId } from '@/lib/app/modules/definitions';
 import { fakeJourneyStore } from '@/tests/helpers/app/content-stores';
 
-const { getJourneyMap, notFound, getServerSession, getDiscoveryState, getDiscoveryModuleSlug } =
-  vi.hoisted(() => ({
-    getJourneyMap: vi.fn(),
-    getServerSession: vi.fn(),
-    getDiscoveryState: vi.fn(),
-    getDiscoveryModuleSlug: vi.fn(),
-    notFound: vi.fn(() => {
-      throw new Error('NEXT_NOT_FOUND');
-    }),
-  }));
+const {
+  getJourneyMap,
+  notFound,
+  getServerSession,
+  getDiscoveryState,
+  getDiscoveryModuleSlug,
+  countModuleExchanges,
+} = vi.hoisted(() => ({
+  getJourneyMap: vi.fn(),
+  countModuleExchanges: vi.fn(),
+  getServerSession: vi.fn(),
+  getDiscoveryState: vi.fn(),
+  getDiscoveryModuleSlug: vi.fn(),
+  notFound: vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND');
+  }),
+}));
 vi.mock('@/lib/app/journey/map', () => ({ getJourneyMap }));
 vi.mock('@/lib/app/content/journey-store', async () =>
   (await import('@/tests/helpers/app/content-stores')).fakeJourneyStore()
 );
-vi.mock('next/navigation', () => ({ notFound, usePathname: () => '/app/modules/values' }));
+vi.mock('next/navigation', async () => {
+  const router = (await import('@/tests/types/mocks')).createMockRouter();
+  return { notFound, usePathname: () => '/app/modules/values', useRouter: () => router };
+});
+vi.mock('@/lib/app/memory/delete-module', () => ({ countModuleExchanges }));
 vi.mock('@/lib/auth/utils', () => ({ getServerSession }));
 vi.mock('@/lib/app/onboarding/discovery-store', () => ({ getDiscoveryState }));
 vi.mock('@/lib/app/onboarding/discovery-slots', () => ({ getDiscoveryModuleSlug }));
@@ -64,6 +75,8 @@ beforeEach(() => {
   getServerSession.mockResolvedValue({ user: { id: 'user_1', name: 'Maya Reyes' } });
   getDiscoveryModuleSlug.mockResolvedValue('onboarding');
   getDiscoveryState.mockResolvedValue({ set: { moduleSlug: 'onboarding', questions: [{}] } });
+  countModuleExchanges.mockReset();
+  countModuleExchanges.mockResolvedValue(0);
 });
 
 async function realMap() {
@@ -133,10 +146,53 @@ describe('/app/modules/[slug]', () => {
 
     expect(screen.queryByTestId('discovery-view')).toBeNull();
     expect(screen.getByText('module placeholder')).toBeInTheDocument();
-    // Only the narrow read: no session, and none of the person's answers.
+    // Only the narrow read: none of the person's answers. (The session is read
+    // for the offer to delete what they said here, t-155.)
     expect(getDiscoveryModuleSlug).toHaveBeenCalled();
-    expect(getServerSession).not.toHaveBeenCalled();
     expect(getDiscoveryState).not.toHaveBeenCalled();
+  });
+
+  it('offers to delete what the person said in the module when they said something there (t-155)', async () => {
+    getJourneyMap.mockResolvedValue(await realMap());
+    countModuleExchanges.mockResolvedValue(3);
+    const ui = await ModulePage(params('values'));
+    render(<ShellLayoutProvider>{ui}</ShellLayoutProvider>);
+
+    expect(countModuleExchanges).toHaveBeenCalledWith('user_1', 'values');
+    expect(
+      screen.getByRole('button', { name: 'Delete what I said in this module' })
+    ).toBeInTheDocument();
+  });
+
+  it('offers nothing with nothing stamped, signed out, or when the count cannot be read', async () => {
+    getJourneyMap.mockResolvedValue(await realMap());
+    const offer = () => screen.queryByRole('button', { name: 'Delete what I said in this module' });
+
+    const none = render(
+      <ShellLayoutProvider>{await ModulePage(params('values'))}</ShellLayoutProvider>
+    );
+    expect(offer()).toBeNull();
+    none.unmount();
+
+    getServerSession.mockResolvedValue(null);
+    countModuleExchanges.mockResolvedValue(3);
+    const out = render(
+      <ShellLayoutProvider>{await ModulePage(params('values'))}</ShellLayoutProvider>
+    );
+    expect(offer()).toBeNull();
+    expect(screen.getByText('module placeholder')).toBeInTheDocument();
+    out.unmount();
+
+    getServerSession.mockResolvedValue({ user: { id: 'user_1', name: 'Maya Reyes' } });
+    countModuleExchanges.mockRejectedValue(new Error('db down'));
+    render(<ShellLayoutProvider>{await ModulePage(params('values'))}</ShellLayoutProvider>);
+    expect(offer()).toBeNull();
+    expect(screen.getByText('module placeholder')).toBeInTheDocument();
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      'Module exchanges could not be counted',
+      expect.any(Error),
+      { slug: 'values' }
+    );
   });
 
   it('keeps the placeholder, logged, when it cannot tell which module asks them', async () => {
