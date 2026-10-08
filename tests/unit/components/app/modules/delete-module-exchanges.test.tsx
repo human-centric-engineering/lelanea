@@ -174,6 +174,23 @@ describe('the confirmation', () => {
     expect(router.refresh).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps saying why once the re-read finds nothing left in the module', async () => {
+    world.nextResponse = refusal(
+      404,
+      'NOT_FOUND',
+      'There is nothing you said in this module to delete.'
+    );
+    const { rerender } = render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);
+    await userEvent.click(offer()!);
+    await userEvent.click(confirm());
+
+    rerender(<DeleteModuleExchanges moduleSlug="values" exchanges={0} />);
+
+    expect(screen.getByText('There is nothing you said in this module to delete.')).toBeTruthy();
+    expect(screen.queryByText(MODULE_DELETE_DONE)).toBeNull();
+    expect(offer()).toBeNull();
+  });
+
   it('says a failed connection plainly', async () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);

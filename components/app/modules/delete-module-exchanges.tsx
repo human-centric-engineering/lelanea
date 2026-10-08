@@ -64,7 +64,15 @@ export function DeleteModuleExchanges({
       </Banner>
     );
   }
-  if (exchanges === 0) return null;
+  if (exchanges === 0) {
+    // A refusal that found nothing left (deleted in another tab) stays said
+    // once the re-read empties the module: it carries why, and where to go.
+    return error ? (
+      <Banner tone="info" className="max-w-[52rem]">
+        {error}
+      </Banner>
+    ) : null;
+  }
 
   async function remove() {
     setCalling(true);
