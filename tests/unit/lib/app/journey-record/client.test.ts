@@ -16,6 +16,7 @@ import {
   JOURNEY_RECORD_EXPORT,
   JourneyRefused,
   changeOwnEntry,
+  fetchCurrentSession,
   keepSynopsis,
   regenerateSynopsis,
   removeEntry,
@@ -200,6 +201,55 @@ describe('a refusal', () => {
     await expect(removeEntry('cmentry1', { fetchImpl })).rejects.toMatchObject({
       code: 'FORBIDDEN',
       message: 'Not allowed.',
+    });
+  });
+});
+
+describe('fetchCurrentSession', () => {
+  const SESSION = `ses_${'a'.repeat(32)}`;
+
+  function json(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  it('reads the current session with credentials and answers it', async () => {
+    const fetchImpl = fetchSpy(() =>
+      json({ success: true, data: { session: { id: SESSION, hasTurns: true } } })
+    );
+
+    await expect(fetchCurrentSession({ fetchImpl })).resolves.toEqual({
+      id: SESSION,
+      hasTurns: true,
+    });
+    const [path, init] = fetchImpl.mock.calls[0];
+    expect(path).toBe('/api/v1/app/sessions/current');
+    expect(init?.credentials).toBe('include');
+    expect(init?.method).toBeUndefined();
+  });
+
+  it('answers null when the route has no session to offer', async () => {
+    const fetchImpl = fetchSpy(() => json({ success: true, data: { session: null } }));
+
+    await expect(fetchCurrentSession({ fetchImpl })).resolves.toBeNull();
+  });
+
+  it('throws on an answer it cannot read, rather than offering on a guess', async () => {
+    const fetchImpl = fetchSpy(() =>
+      json({ success: true, data: { session: { id: SESSION, hasTurns: 'yes' } } })
+    );
+
+    await expect(fetchCurrentSession({ fetchImpl })).rejects.toMatchObject({ code: 'malformed' });
+  });
+
+  it('throws the route’s refusal', async () => {
+    const fetchImpl = fetchSpy(() => errorEnvelope(401, 'UNAUTHORIZED', 'Sign in first.'));
+
+    await expect(fetchCurrentSession({ fetchImpl })).rejects.toMatchObject({
+      status: 401,
+      message: 'Sign in first.',
     });
   });
 });
