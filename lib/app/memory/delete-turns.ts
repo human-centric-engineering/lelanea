@@ -29,7 +29,8 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import type { executeTransaction } from '@/lib/db/utils';
 import { ConflictError } from '@/lib/api/errors';
-import { staleClaimMs, turnWindowStart } from '@/lib/app/agent/turn-record';
+import { openingWindowStart, staleClaimMs, turnWindowStart } from '@/lib/app/agent/turn-record';
+import { OPENING_TURN_ID_PREFIX, RECAP_TURN_ID_PREFIX } from '@/lib/app/conversation/opening-id';
 import { getAgentDeadlines } from '@/lib/app/agent/settings';
 import { coinedSlugs, wipeTurnWrites, type TurnWrite } from '@/lib/app/slots/wipe';
 import { clearStoredSearchResults } from '@/lib/app/memory/stored-results';
@@ -82,10 +83,16 @@ interface WindowMessage {
 
 /**
  * Every message in one turn's window: from where the turn began up to, and not
- * including, the next message the person sent in that conversation. The latest
- * turn has no next message, so its window is open. A turn the agent opened (a
+ * including, whichever comes first of the next message the person sent in that
+ * conversation and the window of the next turn the agent opened there. The
+ * latest turn has neither, so its window is open. A turn the agent opened (a
  * recap) has no message of the person's, so its window begins at its claim and
  * holds its reply (`turnWindowStart`).
+ *
+ * The next opened turn ends it because nothing of the person's comes between
+ * two recaps when they arrive and say nothing: bounded by their next message
+ * alone, deleting the first recap took the second's reply and left its turn
+ * behind, replying with nothing (found building t-156).
  */
 async function messagesOf(turn: OwnedTurn): Promise<WindowMessage[]> {
   if (!turn.conversationId) return [];
@@ -101,10 +108,36 @@ async function messagesOf(turn: OwnedTurn): Promise<WindowMessage[]> {
     orderBy: { createdAt: 'asc' },
     select: { createdAt: true },
   });
+  const opened = await prisma.appTurn.findFirst({
+    where: {
+      userId: turn.userId,
+      conversationId: turn.conversationId,
+      startedAt: { gt: turn.startedAt },
+      OR: [
+        { turnId: { startsWith: OPENING_TURN_ID_PREFIX } },
+        { turnId: { startsWith: RECAP_TURN_ID_PREFIX } },
+      ],
+    },
+    orderBy: { startedAt: 'asc' },
+    select: { startedAt: true },
+  });
+  const ends = [
+    ...(next ? [next.createdAt] : []),
+    // Its window reaches back a grace before its claim. Never so far that this
+    // window would close before it opens: then the claim itself bounds it.
+    ...(opened
+      ? [
+          openingWindowStart(opened.startedAt).getTime() > since.getTime()
+            ? openingWindowStart(opened.startedAt)
+            : opened.startedAt,
+        ]
+      : []),
+  ];
+  const end = ends.length > 0 ? new Date(Math.min(...ends.map((at) => at.getTime()))) : null;
   return prisma.aiMessage.findMany({
     where: {
       ...owned,
-      createdAt: { gte: since, ...(next ? { lt: next.createdAt } : {}) },
+      createdAt: { gte: since, ...(end ? { lt: end } : {}) },
     },
     select: { id: true, conversationId: true, createdAt: true },
   });

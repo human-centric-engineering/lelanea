@@ -1,5 +1,6 @@
 /**
- * What a request to delete exchanges may carry (f-memory t-127).
+ * What a request to delete exchanges (f-memory t-127) or a session
+ * (f-forget-session t-153) may carry.
  *
  * The ids are `app_turn` record ids, which the notes read hands out per note.
  * Bounded so one request can't ask the transaction to walk an unbounded list:
@@ -21,3 +22,17 @@ export const exchangeDeletionSchema = z.strictObject({
 });
 
 export type ExchangeDeletionRequest = z.infer<typeof exchangeDeletionSchema>;
+
+/**
+ * A session's id, as `sessionEventId` (`sessions/store.ts`) derives it: `ses_`
+ * and 32 hex digits (f-forget-session t-153).
+ */
+export const sessionIdSchema = z.string().regex(/^ses_[0-9a-f]{32}$/, 'That is not a session id.');
+
+/** What a request to delete a session carries. */
+export const sessionDeletionSchema = z.strictObject({
+  /** Remove the session's kept account too. Ticked by default where it is offered (owner ruling 1). */
+  removeAccount: z.boolean(),
+});
+
+export type SessionDeletionRequest = z.infer<typeof sessionDeletionSchema>;

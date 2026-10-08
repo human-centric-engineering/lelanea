@@ -45,6 +45,14 @@
  * the same way. After keeping, a synopsis lists only the notes it confirmed, at
  * the versions it left them, so a later change re-reads exactly those.
  *
+ * **A change to its words takes the recaps drawn from it** (f-recap t-157), as
+ * removing it does (`removeJourneyEntry`): a recap written from the old words
+ * is a stored message the model reads, and may say back what the person has
+ * just taken out. Any change to the text, a typo included, since nothing here
+ * can tell which words a recap used; the cost is the AI's opening words. A
+ * keep that changes no text (an untick, finishing what an earlier keep owes)
+ * takes none.
+ *
  * ## Once
  *
  * The keep is one conditional write (`claimSynopsisKeep`), made before any
@@ -65,18 +73,23 @@
  * @see .context/app/journey-record.md — "Keeping a synopsis"
  */
 
+import { executeTransaction } from '@/lib/db/utils';
 import { APIError, ConflictError } from '@/lib/api/errors';
 import { logger } from '@/lib/logging';
 import { getSlotHeads, SLOT_SOURCE_TYPE } from '@/lib/framework/data-slots';
 import type { Note } from '@/lib/app/slots/notes-view';
 import { CORRECTION_CONFIDENCE, correctNote, getNotes } from '@/lib/app/slots/notes';
 import { queueJourneyEntryIndex } from '@/lib/app/memory/memory-index';
+import { applyTurnDeletion, planTurnDeletion } from '@/lib/app/memory/delete-turns';
+import { readRecapsLookingBackOn } from '@/lib/app/conversation/recap-lookback';
+import { forgetCachedContext } from '@/lib/app/slots/wipe';
 import type { JourneyEntry, JourneyNoteRef } from '@/lib/app/journey-record/entry';
 import {
   claimSynopsisKeep,
   finishSynopsisKeep,
   readOwnSynopsis,
   releaseSynopsisLease,
+  type NotesPending,
   type SynopsisText,
 } from '@/lib/app/journey-record/record';
 import { openSeat, type SeatRefusal } from '@/lib/app/journey-record/synopsis/seat';
@@ -329,14 +342,23 @@ export async function keepSynopsis(
 
   const ticked = listed.filter((ref) => input.confirm.some((other) => sameRef(other, ref)));
   // Owed a re-read when the text changed, now or in a keep that never read it.
-  const pending = edit || stored.notesPending === 'reread' ? 'reread' : 'confirm';
+  const pending: NotesPending = edit || stored.notesPending === 'reread' ? 'reread' : 'confirm';
 
   // Finishing what an earlier keep owes changes no text, so it needs no
   // proof of what the page showed: that keep's own writes moved the row on
   // since. Anything else is conditional on what the person was shown, so a
   // page that is out of date matches nothing.
   const finishing = entry.state === 'kept' && !edit && stored.notesPending !== null;
-  const claimed = await claimSynopsisKeep(userId, id, {
+  // Changing the words of a kept account takes the recaps written from the old
+  // ones (t-157): they may say back what the person has just taken out. Read and
+  // refused (409, still being answered) before anything is written, and taken
+  // in the claim's own transaction, so a keep that loses its race takes none.
+  const recaps =
+    edit && entry.state === 'kept'
+      ? await readRecapsLookingBackOn(userId, [stored.sessionId], { drewOn: 'synopsis' })
+      : [];
+  const plan = recaps.length > 0 ? await planTurnDeletion(userId, recaps) : null;
+  const claim = {
     from: entry.state,
     updatedAt: finishing ? stored.updatedAt : input.seen,
     now,
@@ -344,7 +366,15 @@ export async function keepSynopsis(
     // What it lists until its notes are settled: what was ticked, as listed.
     notes: ticked,
     pending,
-  });
+  };
+  const claimed = plan
+    ? await executeTransaction(async (tx) => {
+        const won = await claimSynopsisKeep(userId, id, claim, tx);
+        if (won) await applyTurnDeletion(tx, plan, now);
+        return won;
+      })
+    : await claimSynopsisKeep(userId, id, claim);
+  if (claimed && plan) forgetCachedContext(userId);
   if (!claimed) {
     // Someone else's submit got there first. If it kept what this one asks
     // for, this is a double submit, and its answer is the kept synopsis.

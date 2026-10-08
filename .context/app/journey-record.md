@@ -325,11 +325,25 @@ synopsis (`workingSince`, five minutes) and records what its notes are owed
 - **Regenerating takes the same lease**, so a second redraft, at once or while
   the first is being written, calls nothing and gets 409 `regenerating`.
 
+### Changing a kept account takes the recaps written from it
+
+A recap drawn from a kept account (`recap.source: 'synopsis'`) is a stored
+message the model reads, and may say back what the person has just taken out.
+So a keep that changes a kept account's words deletes those recaps in the
+claim's own transaction (f-recap t-157), as removing the account does
+(`removeJourneyEntry`). A keep that loses its race takes none, and a recap
+still being answered refuses the keep with the deletion's 409. Any change to
+the text counts, a typo included, since nothing can tell which words a recap
+used; the cost is the AI's opening words. A keep that changes no text (an
+untick, finishing what an earlier keep owes) takes none.
+
 ### When the person deletes what a synopsis was written from
 
-Deleting an exchange, or a conversation, settles its session's synopsis in the
-same transaction (owner ruling, 6 Oct 2026, at t-147;
-`settleSynopsesOfDeletedExchanges`):
+Deleting an exchange, a conversation or a whole session settles its session's
+synopsis in the same transaction (owner ruling, 6 Oct 2026, at t-147;
+`settleSynopsesOfDeletedExchanges`). Deleting a whole session can take a kept
+account outright instead, when the person leaves that ticked (f-forget-session
+t-153; [`slots.md`](./slots.md), "Deleting a session"):
 
 - **A draft is removed.** Nobody has kept it, it may quote what was deleted,
   and redrafting it would charge the person for their own deletion.

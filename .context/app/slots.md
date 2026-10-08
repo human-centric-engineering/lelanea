@@ -1118,6 +1118,17 @@ update, so no foreign key cascade would take them, and a search must never find
 a removed note by meaning. Deleting an exchange does the same for the versions
 it wipes. See [`memory.md`](./memory.md).
 
+**The recaps given it go too** (f-recap t-156; owner ruling, 7 Oct 2026). A
+session recap is given the notes captured since the session it looks back on,
+may say them back, and lists their headings in the account under it
+(`app_turn.recap.notes`). So every recap whose account lists the note's heading
+is deleted as an exchange is, in the removal's transaction, and one still being
+answered refuses the removal with the deletion's 409. The heading is read
+before a coined one moves, so the recaps that named it are still found. A recap
+with no readable account is taken if it was claimed after the note was first
+captured. Scrubbing only the heading from the account was rejected: the recap is
+the AI restating the note, not the person's own words.
+
 **Who may remove what.** The same refusal as the correction: a hidden slug and
 a slug with nothing left to remove get the same 404, so the route can't be
 used to learn that a hidden slot is filled. Retired and Art. 9 notes are
@@ -1159,7 +1170,11 @@ turns shares (`delete-turns.ts`).
 tool is stored as several assistant passes and tool results, and a `fill_slot`
 result can echo the person's words. So it is every message in the turn's
 conversation from the person's message up to their next one, every role
-included. The latest turn's window runs to the end of the conversation.
+included. A turn the agent opened (a recap, the welcome) has no message of the
+person's, so the next one also ends the window before it: two recaps with
+nothing said between them would otherwise share one, and deleting the first
+took the second's reply. The latest turn's window runs to the end of the
+conversation.
 
 **What goes with it:**
 
@@ -1201,8 +1216,9 @@ included. The latest turn's window runs to the end of the conversation.
   back on. A recap still being answered refuses the deletion with the same 409.
   Deleting a recap itself takes no other recap: they are drawn from the
   person's words, never from each other. Removing a kept account from the
-  journey record takes the recaps drawn from it too (`removeJourneyEntry`).
-  The lookup is `lib/app/conversation/recap-lookback.ts`.
+  journey record, or changing its words, takes the recaps drawn from it too
+  (`removeJourneyEntry`; `keep.ts`, t-157). The lookup is
+  `lib/app/conversation/recap-lookback.ts`.
 - the person's cached context blocks.
 
 **The response counts exchanges and messages, never note versions.** A turn
@@ -1213,6 +1229,44 @@ exists and was filled (§12). The route logs it for the operator.
 embedding cascade, the ledger cascade, the summary and title, the recap found
 by its account and taken while another session's stays, and that what the AI
 reads next holds nothing of the deleted exchange and all of the kept one.
+
+## Deleting a session (f-forget-session t-153)
+
+Deleting one exchange at a time is the wrong unit for someone who regrets a
+whole sitting. `DELETE /api/v1/app/sessions/:id` with `{ removeAccount }`
+deletes one of the caller's sessions (`lib/app/memory/delete-session.ts`). The
+id is the session's `session.started` row id (`ses_` and 32 hex digits). One
+that isn't the caller's gets the same 404 as one that doesn't exist, and a turn
+still being answered gets the exchange route's 409.
+
+**It takes every turn stamped with the session**, on both seats, through the
+same core as an exchange (`delete-turns.ts`), so everything listed under
+"Deleting an exchange" goes with them. The session's own recap, which looked
+back on the one before, is one of its turns. Every later recap that looked back
+on it goes too.
+
+**Its account** (owner ruling 1, 7 Oct 2026, journal on `f-forget-session`): a
+draft always goes. A kept account goes when `removeAccount` is true, and stays
+flagged as written from something since deleted when it is false, as for one
+exchange. The response says which (`account`: `removed`, `flagged` or `none`),
+with the exchange and message counts, never note versions.
+
+**What stays:** the session's rows in `framework_journey_event` (an ordinal and
+a link, no words; a sitting that happened still happened), the person's own
+entries, and notes with no turn behind them.
+
+**The current session can be deleted.** Its next turn is stamped with it as
+before. With nothing said in it, the recap is owed again, so the next load
+offers a fresh one. With no turns left, its last activity is its own start, so
+the arrival twelve hours after it began closes it, and an emptied session
+drafts no account.
+
+**One transaction, not batches.** A batch failing half way would leave a
+session half deleted and the person told it was gone. A sitting's rows are
+hundreds, not hundreds of thousands, so the transaction only gets a longer
+timeout (`SESSION_DELETION_TIMEOUT_MS`).
+
+`npm run smoke:app-delete-session` proves it on the dev database.
 
 ## Deleting a conversation (f-memory t-128)
 

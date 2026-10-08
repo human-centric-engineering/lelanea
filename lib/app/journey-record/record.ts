@@ -411,6 +411,9 @@ export interface SynopsisText {
  *
  * Changing the text clears the "written from something since deleted" flag:
  * the person has read it and said what it should say.
+ *
+ * Inside a transaction when the change takes the recaps drawn from the old
+ * text with it (t-157, `keep.ts`).
  */
 export async function claimSynopsisKeep(
   userId: string,
@@ -422,9 +425,10 @@ export async function claimSynopsisKeep(
     text: SynopsisText | null;
     notes: JourneyNoteRef[];
     pending: NotesPending;
-  }
+  },
+  db: Tx = prisma
 ): Promise<boolean> {
-  const { count } = await prisma.appJourneyEntry.updateMany({
+  const { count } = await db.appJourneyEntry.updateMany({
     where: {
       id,
       userId,

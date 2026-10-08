@@ -19,16 +19,24 @@
  *   5. Remove a note under a heading the AI made up. Assert its versions moved
  *      to an opaque `removed_*` slug, and a later reading under the old heading
  *      starts its own chain at 1 against the real index.
+ *   6. Two recaps in a row with nothing said between them, the first given a
+ *      note under another made-up heading (f-recap t-156). Remove it. Assert
+ *      the first recap and its reply went, the second and its reply stayed,
+ *      and no recap account the person has left lists the heading.
  *
  * No server and no model: everything runs in this process. Skips (exit 0, says
- * so) with no database.
+ * so) with no database; skips step 6 alone with no agent to hang a
+ * conversation on.
  *
- * Self-cleaning: one `smoke-app-delete-note-*` user, and every slot value keyed
- * on it, removed on every path. Never unscoped deletes.
+ * Self-cleaning: one `smoke-app-delete-note-*` user, and every slot value,
+ * turn and conversation keyed on it, removed on every path. Never unscoped
+ * deletes.
  *
  * Usage: `npm run smoke:app-delete-note` (reads `.env.local`). Exit 0 on every
  * assertion passing, 1 otherwise.
  */
+
+import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/db/client';
 import { appendSlotValue, getSlotHeads } from '@/lib/framework/data-slots';
@@ -36,6 +44,8 @@ import { evaluateCondition } from '@/lib/framework/facilitation/engine/condition
 import { deleteNote } from '@/lib/app/slots/delete-note';
 import { getNotes } from '@/lib/app/slots/notes';
 import { isRemoved, REMOVED_SLUG_PREFIX, REMOVED_VALUE } from '@/lib/app/slots/removed';
+import { recapTurnId } from '@/lib/app/conversation/opening-id';
+import { parseRecapAccount, recapNoteHeading } from '@/lib/app/conversation/recap-account';
 
 const PREFIX = 'smoke-app-delete-note';
 const stamp = Date.now();
@@ -47,6 +57,8 @@ const SLUG = 'current_circumstances';
 /** Not in the taxonomy: a sibling nothing touches, and the made-up heading of step 5. */
 const SIBLING = 'smoke_delete_note_sibling';
 const MINTED = 'smoke_delete_note_minted_heading';
+/** The made-up heading a recap is given in step 6. */
+const RECAPPED = 'smoke_delete_note_recapped_heading';
 
 async function dbReachable(): Promise<boolean> {
   try {
@@ -165,9 +177,95 @@ async function main(): Promise<void> {
     const fresh = await capture(user.id, MINTED, 'a new reading under the old heading');
     check(fresh.version === 1, 'a later reading under the old heading starts at 1, no collision');
 
+    console.log('\n6. The recaps given a note go with it (t-156)');
+    const agent = await prisma.aiAgent.findFirst({ select: { id: true, slug: true } });
+    if (!agent) {
+      console.log('  skipped — no agent in this database to hang a conversation on.');
+    } else {
+      await capture(user.id, RECAPPED, 'my sister moved abroad');
+      const conversation = await prisma.aiConversation.create({
+        data: { userId: user.id, agentId: agent.id },
+      });
+      const later = (seconds: number) => new Date(Date.now() + seconds * 1000);
+      const recap = async (session: string, notes: string[], content: string, seconds: number) => {
+        const reply = await prisma.aiMessage.create({
+          data: {
+            conversationId: conversation.id,
+            role: 'assistant',
+            content,
+            createdAt: later(seconds + 0.5),
+          },
+        });
+        return prisma.appTurn.create({
+          data: {
+            userId: user.id,
+            turnId: recapTurnId(`${PREFIX}-${stamp}-${session}`),
+            clientSupplied: false,
+            requestHash: `${PREFIX}-hash-${session}`,
+            seat: 'facilitator',
+            agentSlug: agent.slug,
+            status: 'completed',
+            startedAt: later(seconds),
+            conversationId: conversation.id,
+            userMessageId: null,
+            assistantMessageId: reply.id,
+            recap: {
+              since: later(-100).toISOString(),
+              source: 'words',
+              words: 0,
+              notes,
+              journey: 0,
+            },
+          },
+        });
+      };
+      // Nothing said between them: the first recap's window must end at the second.
+      const given = await recap(
+        'one',
+        [recapNoteHeading(RECAPPED), recapNoteHeading(SIBLING)],
+        'You mentioned your sister moved abroad.',
+        1
+      );
+      const other = await recap(
+        'two',
+        [recapNoteHeading(SIBLING)],
+        'You are still an early riser.',
+        10
+      );
+      const removedWithRecap = await deleteNote({ userId: user.id, slotSlug: RECAPPED });
+      check(removedWithRecap.recaps === 1, 'the removal took one recap');
+      const replies = await prisma.aiMessage.findMany({
+        where: { conversationId: conversation.id },
+        select: { content: true },
+      });
+      check(
+        (await prisma.appTurn.count({ where: { id: given.id } })) === 0 &&
+          !replies.some((row) => row.content.includes('sister')),
+        'the recap given the note went, with its reply'
+      );
+      check(
+        (await prisma.appTurn.count({ where: { id: other.id } })) === 1 &&
+          replies.map((row) => row.content).join() === 'You are still an early riser.',
+        'the next recap, with nothing said between them, kept its reply'
+      );
+      const accounts = await prisma.appTurn.findMany({
+        where: { userId: user.id, recap: { not: Prisma.DbNull } },
+        select: { recap: true },
+      });
+      check(
+        accounts.length === 1 &&
+          accounts.every(
+            (row) => !parseRecapAccount(row.recap)?.notes.includes(recapNoteHeading(RECAPPED))
+          ),
+        'no recap account left lists the removed note’s heading'
+      );
+    }
+
     console.log('\n✓ smoke:app-delete-note passed');
   } finally {
     if (userId) {
+      await prisma.appTurn.deleteMany({ where: { userId } }).catch(() => undefined);
+      await prisma.aiConversation.deleteMany({ where: { userId } }).catch(() => undefined);
       await prisma.slotValue.deleteMany({ where: { userId } }).catch(() => undefined);
       await prisma.user.deleteMany({ where: { id: userId } }).catch(() => undefined);
     }

@@ -692,6 +692,21 @@ describe('the recaps that looked back on its session (t-151)', () => {
     expect(world.turns.some((row) => row.id === 'recap-three')).toBe(true);
   });
 
+  it('ends a recap’s window at the next recap when nothing was said between them', async () => {
+    threeSessions();
+    // ses_two's turn-c never happened: the person arrived, read recap-two, and left.
+    world.turns = world.turns.filter((row) => row.id !== 'turn-c');
+    world.messages = world.messages.filter((row) => !['m7', 'm8'].includes(row.id));
+    expect(ids(world.messages)).toContain('r2');
+
+    await deleteExchanges({ userId: ME, exchangeIds: ['recap-two'] });
+
+    // recap-three's reply is its own, and stays with its turn.
+    expect(ids(world.messages)).not.toContain('r1');
+    expect(ids(world.messages)).toContain('r2');
+    expect(world.turns.some((row) => row.id === 'recap-three')).toBe(true);
+  });
+
   it('settles no synopsis of the session a recap asked for opened, which no synopsis reads', async () => {
     threeSessions();
     const draft = synopsisEntry({ sessionId: 'ses_two' });

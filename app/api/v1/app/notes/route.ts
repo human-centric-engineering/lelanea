@@ -130,7 +130,8 @@ export const DELETE = withAuth(async (request: NextRequest, session) => {
   log.info('Note removed by the person it is about', {
     userId: session.user.id,
     versions: removed.versions,
+    recaps: removed.recaps,
   });
 
-  return successResponse(removed);
+  return successResponse({ versions: removed.versions });
 }, OWNERSHIP);
