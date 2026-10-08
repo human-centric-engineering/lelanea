@@ -46,6 +46,8 @@ interface EventRow {
 const db = vi.hoisted(() => ({
   entries: [] as EntryRow[],
   events: [] as EventRow[],
+  /** `app_turn`, as far as a session's turns go: whose, and which session stamped. */
+  turns: [] as { userId: string; sessionId: string | null }[],
   /** User id → `User.timezone`. */
   zones: new Map<string, string | null>(),
   seq: 0,
@@ -137,6 +139,16 @@ vi.mock('@/lib/db/client', () => {
           return { count: before - db.entries.length };
         }),
       },
+      appTurn: {
+        // `distinct: ['sessionId']` is honoured: one row per session.
+        findMany: vi.fn(async ({ where }: { where: Where }) => [
+          ...new Map(
+            db.turns
+              .filter((row) => matches(row, where))
+              .map((row) => [row.sessionId, { sessionId: row.sessionId }])
+          ).values(),
+        ]),
+      },
       user: {
         findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
           db.zones.has(where.id) ? { timezone: db.zones.get(where.id) ?? null } : null
@@ -220,6 +232,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.entries = [];
   db.events = [];
+  db.turns = [];
   db.zones.clear();
   db.seq = 0;
 });
@@ -262,8 +275,47 @@ describe('getJourneyRecord', () => {
       ordinal: 3,
       startedAt: started.toISOString(),
       closedAt: closed.toISOString(),
+      hasTurns: false,
     });
     expect(entry.outcomes).toEqual([{ kind: 'action', text: 'Say no on Thursday' }]);
+  });
+
+  it('says which sessions still have turns, from the caller’s own turns only (t-154)', async () => {
+    const talked = await session(ME, 1, new Date('2026-10-01T09:00:00Z'));
+    const emptied = await session(ME, 2, new Date('2026-10-03T09:00:00Z'));
+    db.entries.push(
+      row({
+        id: 'cmsyn000000000000000000001',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: talked,
+        summary: 'Talked',
+        occurredAt: new Date('2026-10-01T09:00:00Z'),
+      }),
+      row({
+        id: 'cmsyn000000000000000000002',
+        userId: ME,
+        kind: 'synopsis',
+        sessionId: emptied,
+        summary: 'Emptied',
+        occurredAt: new Date('2026-10-03T09:00:00Z'),
+      })
+    );
+    // Two of mine in the first session; none in the second, but a turn of
+    // someone else's names it, which must not count.
+    db.turns.push(
+      { userId: ME, sessionId: talked },
+      { userId: ME, sessionId: talked },
+      { userId: THEM, sessionId: emptied },
+      { userId: ME, sessionId: null }
+    );
+
+    const entries = (await getJourneyRecord(ME)).entries;
+
+    expect(entries.map((e) => [e.summary, e.session?.hasTurns])).toEqual([
+      ['Emptied', false],
+      ['Talked', true],
+    ]);
   });
 
   it('never resolves a session that is not the caller’s', async () => {

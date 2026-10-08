@@ -25,6 +25,11 @@ vi.mock('next/navigation', () => ({
   useRouter: () => router,
 }));
 
+import {
+  SESSION_DELETE_ACCOUNT,
+  SESSION_DELETE_CONFIRM,
+  SESSION_DELETE_DRAFT,
+} from '@/components/app/journey/delete-session';
 import { JourneyStop, NextStop, stopLine } from '@/components/app/journey/journey-stop';
 import type { JourneyEntry, JourneyListedNote } from '@/lib/app/journey-record/entry';
 import type { JourneySignpost } from '@/lib/app/journey/next';
@@ -571,6 +576,147 @@ describe('a kept own entry', () => {
       { method: 'DELETE', path: `/api/v1/app/journey-record/${e.id}`, body: undefined },
     ]);
     expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('deleting a session (t-154)', () => {
+  const SESSION_ID = `ses_${'a'.repeat(32)}`;
+  const withTurns = {
+    id: SESSION_ID,
+    ordinal: 3,
+    startedAt: '2026-10-01T09:00:00.000Z',
+    closedAt: '2026-10-01T21:00:00.000Z',
+    hasTurns: true,
+  };
+
+  function renderStop(overrides: Partial<JourneyEntry>) {
+    return render(
+      <JourneyStop
+        entry={entry({ session: withTurns, ...overrides })}
+        notes={[]}
+        moduleLabels={{}}
+        thread="none"
+        open
+        onToggle={vi.fn()}
+      />
+    );
+  }
+
+  const offer = () => screen.queryByRole('button', { name: 'Delete this session' });
+
+  it('is offered on a kept synopsis and on a draft whose session still has turns', () => {
+    const kept = renderStop({});
+    expect(offer()).toBeTruthy();
+    kept.unmount();
+
+    renderStop({ state: 'draft', keptAt: null, regenerationsLeft: 3 });
+    expect(offer()).toBeTruthy();
+  });
+
+  it('is not offered on a session with no turns left, one with no session, or an own entry', () => {
+    const empty = renderStop({ session: { ...withTurns, hasTurns: false } });
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+    expect(offer()).toBeNull();
+    empty.unmount();
+
+    const unread = renderStop({ session: null });
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+    expect(offer()).toBeNull();
+    unread.unmount();
+
+    renderStop({ kind: 'own', summary: null, body: 'My own words.' });
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy();
+    expect(offer()).toBeNull();
+  });
+
+  it('asks first, says what goes, and Cancel backs out without a call', async () => {
+    renderStop({});
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+    const group = screen.getByRole('group', { name: 'Delete this session?' });
+    expect(group.textContent).toContain(SESSION_DELETE_CONFIRM);
+    expect(world.calls).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('group', { name: 'Delete this session?' })).toBeNull();
+    expect(world.calls).toHaveLength(0);
+  });
+
+  it('ticks the kept account by default, and sends removeAccount true', async () => {
+    renderStop({});
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+    const tick = screen.getByRole('checkbox', { name: SESSION_DELETE_ACCOUNT });
+    expect((tick as HTMLInputElement).checked).toBe(true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+
+    expect(world.calls).toEqual([
+      {
+        path: `/api/v1/app/sessions/${SESSION_ID}`,
+        method: 'DELETE',
+        body: { removeAccount: true },
+      },
+    ]);
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends removeAccount false when the person unticks it', async () => {
+    renderStop({});
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: SESSION_DELETE_ACCOUNT }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+
+    expect(world.calls).toEqual([
+      {
+        path: `/api/v1/app/sessions/${SESSION_ID}`,
+        method: 'DELETE',
+        body: { removeAccount: false },
+      },
+    ]);
+  });
+
+  it('shows no tick on a draft, says the draft goes, and sends removeAccount true', async () => {
+    renderStop({ state: 'draft', keptAt: null, regenerationsLeft: 3 });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+    expect(screen.queryByRole('checkbox', { name: SESSION_DELETE_ACCOUNT })).toBeNull();
+    expect(screen.getByRole('group', { name: 'Delete this session?' }).textContent).toContain(
+      SESSION_DELETE_DRAFT
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+    expect(world.calls).toEqual([
+      {
+        path: `/api/v1/app/sessions/${SESSION_ID}`,
+        method: 'DELETE',
+        body: { removeAccount: true },
+      },
+    ]);
+  });
+
+  it('says to wait for the reply on a 409, deletes nothing more, and keeps the choice open', async () => {
+    world.nextResponse = refusal(
+      409,
+      'CONFLICT',
+      'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
+      { reason: 'still_answering' }
+    );
+    renderStop({});
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
+
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].textContent).toBe(
+      'Not deleted. Lelañea is still answering in this session. Try again once the reply has finished.'
+    );
+    expect(world.calls).toHaveLength(1);
+    expect(router.refresh).not.toHaveBeenCalled();
+    // Still asking, so trying again is one click.
+    expect(screen.getByRole('group', { name: 'Delete this session?' })).toBeTruthy();
   });
 });
 

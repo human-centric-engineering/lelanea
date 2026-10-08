@@ -408,6 +408,19 @@ prototype's `renderJourney`.
   stop says the notes are not yet confirmed on every read, not only straight
   after the keep, and offers "Try the notes again": a keep that changes
   nothing, which finishes what is owed.
+- **A synopsis stop can delete its whole session** (f-forget-session t-154)
+  while the session still has turns (`session.hasTurns`, read once for the
+  page). The confirmation is asked in place, like every destructive step
+  here, and says what goes in words, with no counts. A kept account carries
+  "Also delete the account you kept", ticked by default (owner ruling 1); a
+  draft always goes, so it has no tick. Unticked, the stop stays after the
+  re-read, flagged as written from a conversation since deleted. A turn still
+  being answered refuses with "try again once the reply has finished", inside
+  the confirmation, so trying again is one click.
+  **Only synopsis stops offer it** (owner ruling, 8 Oct 2026): the current
+  session, a sitting never drafted, and one whose synopsis was discarded or
+  removed have no stop here, and are deleted one exchange at a time from the
+  notes page until t-158 offers them somewhere.
 - **Unsent work survives closing a stop.** A stop's body stays mounted while
   it is closed, so unticked notes and a half-written change are still there
   when it is opened again.
