@@ -89,6 +89,12 @@ export interface JourneyEntrySession {
   startedAt: string;
   /** Null while it is the current session. */
   closedAt: string | null;
+  /**
+   * Whether any turn is still stamped with it, so deleting the session would
+   * take something (f-forget-session t-154). False for a session from before
+   * turns were stamped (t-141), and for one already deleted.
+   */
+  hasTurns: boolean;
 }
 
 export interface JourneyEntry {

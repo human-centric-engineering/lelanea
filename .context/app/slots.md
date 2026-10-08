@@ -1268,6 +1268,10 @@ timeout (`SESSION_DELETION_TIMEOUT_MS`).
 
 `npm run smoke:app-delete-session` proves it on the dev database.
 
+**Where it is offered:** on a synopsis stop in the journey view (t-154;
+[`journey-record.md`](./journey-record.md), "The view"). A session with no
+synopsis has no stop there yet (t-158).
+
 ## Deleting a conversation (f-memory t-128)
 
 Sunrise deletes whole conversations on four paths: the person's own

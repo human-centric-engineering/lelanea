@@ -50,6 +50,8 @@ const REASON_WORDS: Readonly<Record<string, string>> = {
   changed_meanwhile:
     'This changed since the page loaded, perhaps in another tab. The page now shows the latest version.',
   busy: 'This is still being saved. Try again in a moment.',
+  still_answering:
+    'Lelañea is still answering in this session. Try again once the reply has finished.',
   regenerating: 'Another draft is already being written. Try again in a moment.',
   no_more_drafts: 'There are no more drafts to ask for. Change this one yourself instead.',
   paused: 'Lelañea is paused just now, so no new draft can be written.',
@@ -150,4 +152,26 @@ export async function regenerateSynopsis(
   options: Options = {}
 ): Promise<void> {
   await send(`${entryPath(id)}/regenerate`, 'POST', { steer }, options);
+}
+
+/** `DELETE /api/v1/app/sessions/:id` (f-forget-session t-153). */
+export const SESSIONS_ENDPOINT = '/api/v1/app/sessions';
+
+/**
+ * Delete a whole session: what was said in it, Lelañea's replies, the notes it
+ * wrote, the recaps of it, and its draft (t-154). `removeAccount` takes a kept
+ * account with it; without it, the kept account stays and is marked as written
+ * from a conversation since deleted.
+ */
+export async function deleteSession(
+  sessionId: string,
+  removeAccount: boolean,
+  options: Options = {}
+): Promise<void> {
+  await send(
+    `${SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}`,
+    'DELETE',
+    { removeAccount },
+    options
+  );
 }

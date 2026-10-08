@@ -85,7 +85,28 @@ function readNoteRefs(row: AppJourneyEntry): JourneyNoteRef[] {
   return [];
 }
 
-function toEntry(row: AppJourneyEntry, session: Session | undefined): JourneyEntry {
+/**
+ * Which of these sessions still have a turn stamped with them: the ones
+ * deleting would take something from (t-154). One read for any number.
+ */
+async function readSessionsWithTurns(
+  userId: string,
+  sessionIds: readonly string[]
+): Promise<ReadonlySet<string>> {
+  if (sessionIds.length === 0) return new Set();
+  const turns = await prisma.appTurn.findMany({
+    where: { userId, sessionId: { in: [...sessionIds] } },
+    select: { sessionId: true },
+    distinct: ['sessionId'],
+  });
+  return new Set(turns.flatMap((turn) => (turn.sessionId ? [turn.sessionId] : [])));
+}
+
+function toEntry(
+  row: AppJourneyEntry,
+  session: Session | undefined,
+  withTurns: ReadonlySet<string> = new Set()
+): JourneyEntry {
   return {
     id: row.id,
     kind: row.kind,
@@ -111,6 +132,7 @@ function toEntry(row: AppJourneyEntry, session: Session | undefined): JourneyEnt
           ordinal: session.ordinal,
           startedAt: session.startedAt.toISOString(),
           closedAt: session.closedAt?.toISOString() ?? null,
+          hasTurns: withTurns.has(session.id),
         }
       : null,
   };
@@ -123,8 +145,13 @@ async function readEntries(userId: string): Promise<JourneyEntry[]> {
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
   });
   const sessionIds = rows.flatMap((row) => (row.sessionId ? [row.sessionId] : []));
-  const sessions = await readSessionsById(userId, sessionIds);
-  return rows.map((row) => toEntry(row, row.sessionId ? sessions.get(row.sessionId) : undefined));
+  const [sessions, withTurns] = await Promise.all([
+    readSessionsById(userId, sessionIds),
+    readSessionsWithTurns(userId, sessionIds),
+  ]);
+  return rows.map((row) =>
+    toEntry(row, row.sessionId ? sessions.get(row.sessionId) : undefined, withTurns)
+  );
 }
 
 /**
@@ -370,9 +397,12 @@ export async function readOwnSynopsis(
       reason: 'not_a_synopsis',
     });
   }
-  const sessions = await readSessionsById(userId, [row.sessionId]);
+  const [sessions, withTurns] = await Promise.all([
+    readSessionsById(userId, [row.sessionId]),
+    readSessionsWithTurns(userId, [row.sessionId]),
+  ]);
   return {
-    entry: toEntry(row, sessions.get(row.sessionId)),
+    entry: toEntry(row, sessions.get(row.sessionId), withTurns),
     sessionId: row.sessionId,
     updatedAt: row.updatedAt,
     regenerations: row.regenerations,

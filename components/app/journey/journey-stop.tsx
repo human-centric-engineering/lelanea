@@ -11,6 +11,7 @@ import {
   tickedRefs,
   type ListedNote,
 } from '@/components/app/journey/journey-notes';
+import { DeleteSessionConfirm, canDeleteSession } from '@/components/app/journey/delete-session';
 import { FIELD, LABEL } from '@/components/app/journey/fields';
 import { OwnEntryForm } from '@/components/app/journey/own-entry-form';
 import {
@@ -311,7 +312,7 @@ function ConfirmRemove({
 
 /* ---------------------------------------------------------- a synopsis */
 
-type SynopsisMode = 'reading' | 'editing' | 'steering' | 'removing';
+type SynopsisMode = 'reading' | 'editing' | 'steering' | 'removing' | 'deleting';
 
 function SteerForm({
   left,
@@ -416,6 +417,7 @@ function SynopsisBody({
       })
     );
   const draft = entry.state === 'draft';
+  const deleting = mode === 'deleting' && canDeleteSession(entry);
   const toggle = (slotSlug: string) =>
     setUnticked((all) => {
       const next = new Set(all);
@@ -510,6 +512,13 @@ function SynopsisBody({
           onCancel={() => setMode('reading')}
           onConfirm={() => void action.run(() => removeEntry(entry.id))}
         />
+      ) : deleting ? (
+        <DeleteSessionConfirm
+          entry={entry}
+          action={action}
+          onCancel={() => setMode('reading')}
+          onDeleted={() => setMode('reading')}
+        />
       ) : (
         <div className="mt-4 flex flex-wrap gap-2">
           {draft ? (
@@ -543,9 +552,20 @@ function SynopsisBody({
           >
             {draft ? 'Discard' : 'Remove'}
           </Button>
+          {canDeleteSession(entry) ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={action.busy}
+              onClick={() => setMode('deleting')}
+            >
+              Delete this session
+            </Button>
+          ) : null}
         </div>
       )}
-      <Refusal action={action} />
+      {/* The session's confirmation says its own refusal, beside the choice it refused. */}
+      {deleting ? null : <Refusal action={action} />}
     </>
   );
 }
