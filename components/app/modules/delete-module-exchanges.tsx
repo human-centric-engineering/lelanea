@@ -42,10 +42,10 @@ export const MODULE_DELETE_DONE = 'Deleted. What you said in this module is gone
  * what stays is the line saying it went.
  */
 export function DeleteModuleExchanges({
-  moduleSlug,
+  slug,
   exchanges,
 }: {
-  moduleSlug: string;
+  slug: string;
   /** How many of the person's turns are stamped with this module. */
   exchanges: number;
 }) {
@@ -78,7 +78,7 @@ export function DeleteModuleExchanges({
     setCalling(true);
     setError(null);
     try {
-      await deleteModuleExchanges(moduleSlug);
+      await deleteModuleExchanges(slug);
       setDone(true);
       startRefresh(() => router.refresh());
     } catch (caught: unknown) {

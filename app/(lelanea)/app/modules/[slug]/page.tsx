@@ -133,7 +133,7 @@ async function forgettingFor(slug: string): Promise<React.ReactNode> {
     logger.error('Module exchanges could not be counted', error, { slug });
     return undefined;
   }
-  return <DeleteModuleExchanges moduleSlug={slug} exchanges={exchanges} />;
+  return <DeleteModuleExchanges slug={slug} exchanges={exchanges} />;
 }
 
 /**

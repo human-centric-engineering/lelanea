@@ -81,14 +81,14 @@ afterEach(() => {
 
 describe('the offer', () => {
   it('is made when the person said something in the module, and says what it is', () => {
-    render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);
+    render(<DeleteModuleExchanges slug="values" exchanges={2} />);
 
     expect(offer()).toBeTruthy();
     expect(screen.getByText(MODULE_DELETE_OFFER)).toBeTruthy();
   });
 
   it('is not made when nothing of theirs is stamped with the module', () => {
-    const { container } = render(<DeleteModuleExchanges moduleSlug="values" exchanges={0} />);
+    const { container } = render(<DeleteModuleExchanges slug="values" exchanges={0} />);
 
     expect(offer()).toBeNull();
     expect(container.textContent).toBe('');
@@ -97,7 +97,7 @@ describe('the offer', () => {
 
 describe('the confirmation', () => {
   it('asks first, says what goes, what it covers and what stays, and Cancel backs out without a call', async () => {
-    render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);
+    render(<DeleteModuleExchanges slug="values" exchanges={2} />);
 
     await userEvent.click(offer()!);
     const asked = group()!;
@@ -116,7 +116,7 @@ describe('the confirmation', () => {
   });
 
   it('sends one DELETE for the module, with no body, then re-reads the page and says it went', async () => {
-    render(<DeleteModuleExchanges moduleSlug="inner-authority" exchanges={2} />);
+    render(<DeleteModuleExchanges slug="inner-authority" exchanges={2} />);
 
     await userEvent.click(offer()!);
     await userEvent.click(confirm());
@@ -129,11 +129,11 @@ describe('the confirmation', () => {
   });
 
   it('keeps saying it went once the page re-reads with nothing left', async () => {
-    const { rerender } = render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);
+    const { rerender } = render(<DeleteModuleExchanges slug="values" exchanges={2} />);
     await userEvent.click(offer()!);
     await userEvent.click(confirm());
 
-    rerender(<DeleteModuleExchanges moduleSlug="values" exchanges={0} />);
+    rerender(<DeleteModuleExchanges slug="values" exchanges={0} />);
 
     expect(screen.getByText(MODULE_DELETE_DONE)).toBeTruthy();
     expect(offer()).toBeNull();
@@ -146,7 +146,7 @@ describe('the confirmation', () => {
       'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
       { reason: 'still_answering' }
     );
-    render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);
+    render(<DeleteModuleExchanges slug="values" exchanges={2} />);
 
     await userEvent.click(offer()!);
     await userEvent.click(confirm());
@@ -164,7 +164,7 @@ describe('the confirmation', () => {
       'NOT_FOUND',
       'There is nothing you said in this module to delete.'
     );
-    render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);
+    render(<DeleteModuleExchanges slug="values" exchanges={2} />);
 
     await userEvent.click(offer()!);
     await userEvent.click(confirm());
@@ -180,11 +180,11 @@ describe('the confirmation', () => {
       'NOT_FOUND',
       'There is nothing you said in this module to delete.'
     );
-    const { rerender } = render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);
+    const { rerender } = render(<DeleteModuleExchanges slug="values" exchanges={2} />);
     await userEvent.click(offer()!);
     await userEvent.click(confirm());
 
-    rerender(<DeleteModuleExchanges moduleSlug="values" exchanges={0} />);
+    rerender(<DeleteModuleExchanges slug="values" exchanges={0} />);
 
     expect(screen.getByText('There is nothing you said in this module to delete.')).toBeTruthy();
     expect(screen.queryByText(MODULE_DELETE_DONE)).toBeNull();
@@ -193,7 +193,7 @@ describe('the confirmation', () => {
 
   it('says a failed connection plainly', async () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    render(<DeleteModuleExchanges moduleSlug="values" exchanges={2} />);
+    render(<DeleteModuleExchanges slug="values" exchanges={2} />);
 
     await userEvent.click(offer()!);
     await userEvent.click(confirm());
