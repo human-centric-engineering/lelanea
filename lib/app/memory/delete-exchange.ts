@@ -77,7 +77,12 @@ import { forgetCachedContext } from '@/lib/app/slots/wipe';
 import { settleSynopsesOfDeletedExchanges } from '@/lib/app/journey-record/record';
 import { readRecapsLookingBackOn } from '@/lib/app/conversation/recap-lookback';
 import { isRecapTurnId } from '@/lib/app/conversation/opening-id';
-import { applyTurnDeletion, planTurnDeletion, readOwnedTurns } from '@/lib/app/memory/delete-turns';
+import {
+  applyTurnDeletion,
+  planTurnDeletion,
+  readOwnedTurns,
+  type OwnedTurn,
+} from '@/lib/app/memory/delete-turns';
 
 export interface ExchangeDeletion {
   userId: string;
@@ -114,18 +119,36 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
   if (turns.length !== ids.length) {
     throw new NotFoundError('That part of the conversation could not be found.');
   }
+  return deleteOwnedExchanges(input.userId, turns);
+}
+
+/**
+ * Delete these turns, already read as the person's own, as exchanges: with the
+ * recaps that looked back on their sessions and their sessions' synopses
+ * settled, in one transaction. What {@link deleteExchanges} runs once it has
+ * checked the ids, and what a caller resolving its own turns server-side runs
+ * directly (a module's worth, `delete-module.ts`, t-155).
+ *
+ * Refuses with a 409 when a turn, or a recap that has to go with them, is
+ * still being answered (`planTurnDeletion`).
+ */
+export async function deleteOwnedExchanges(
+  userId: string,
+  turns: readonly OwnedTurn[],
+  options: { timeout?: number } = {}
+): Promise<DeletedExchanges> {
   // The recaps that looked back on these sessions may repeat what was said in
   // them (t-151). A recap asked for is deleted as asked, and takes no other: a
   // recap is drawn from the person's words, never from an earlier recap.
-  const asked = new Set(ids);
+  const asked = new Set(turns.map((turn) => turn.id));
   const spoken = turns.filter((turn) => !isRecapTurnId(turn.turnId));
   const recaps = (
     await readRecapsLookingBackOn(
-      input.userId,
+      userId,
       spoken.map((turn) => turn.sessionId)
     )
   ).filter((recap) => !asked.has(recap.id));
-  const plan = await planTurnDeletion(input.userId, [...turns, ...recaps]);
+  const plan = await planTurnDeletion(userId, [...turns, ...recaps]);
 
   const removedAt = new Date();
   const result = await executeTransaction(async (tx) => {
@@ -134,14 +157,14 @@ export async function deleteExchanges(input: ExchangeDeletion): Promise<DeletedE
     // flagged. Not a recap's own session, even for a recap asked for: a
     // synopsis is never drafted from a recap (`synopsis/material.ts`).
     await settleSynopsesOfDeletedExchanges(tx, {
-      userId: input.userId,
+      userId,
       sessionIds: spoken.map((turn) => turn.sessionId),
       at: removedAt,
     });
     return applied;
-  });
+  }, options);
 
-  forgetCachedContext(input.userId);
+  forgetCachedContext(userId);
   return {
     // Every record deleted was asked for or one of the recaps.
     exchanges: Math.max(0, result.turns - recaps.length),

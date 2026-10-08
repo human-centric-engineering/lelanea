@@ -27,6 +27,11 @@ export interface ModuleViewProps {
    * has any yet: its discovery questions (t-104).
    */
   children?: React.ReactNode;
+  /**
+   * The offer to delete what the person said in this module, under its
+   * actions (t-155). Absent when there is nothing of theirs to delete.
+   */
+  forgetting?: React.ReactNode;
 }
 
 /**
@@ -75,6 +80,7 @@ export function ModuleView({
   tierIntent,
   parts,
   children,
+  forgetting,
 }: ModuleViewProps) {
   return (
     <View eyebrow={`${tierLabel.toLowerCase()} · module ${displayNumber}`} title={title}>
@@ -138,6 +144,8 @@ export function ModuleView({
       </Card>
 
       <ModuleActions />
+
+      {forgetting}
     </View>
   );
 }

@@ -1272,6 +1272,50 @@ timeout (`SESSION_DELETION_TIMEOUT_MS`).
 [`journey-record.md`](./journey-record.md), "The view"). A session with no
 synopsis has no stop there yet (t-158).
 
+## Deleting a module's worth (f-forget-session t-155)
+
+Someone working through a module may want everything they said in it gone.
+`DELETE /api/v1/app/modules/:slug/exchanges`, with no body, deletes every turn
+of the caller's stamped with that module (`app_turn.moduleSlug`, t-152;
+`lib/app/memory/delete-module.ts`). Owner ruling 2 (7 Oct 2026) defines a
+module's worth as those turns.
+
+**Each turn goes as one exchange does** (`deleteOwnedExchanges` in
+`delete-exchange.ts`), so everything listed under "Deleting an exchange" goes
+with it. The sessions it touches settle the same way too: a draft account
+goes, a kept account is flagged, and the recaps that looked back on them go.
+**There is no account tick**, unlike a session. A module's worth is part of
+several sessions, so no account is wholly its own. The response carries the
+exchange and message counts, never note versions.
+
+**What stays:**
+
+- turns from before the stamp. Nothing recorded a turn's module before t-152,
+  so they can be deleted by session or one exchange at a time, but not by
+  module;
+- turns in other modules, and turns stamped with none;
+- the module's node state and the person's progress in it, which hold no words;
+- session rows.
+
+**Nothing stamped is a 404 that says so.** That covers an unknown slug, a
+module the person said nothing in, and one where everything predates the stamp.
+It is never a success that deleted nothing (`B31`). A turn still being answered
+gets the exchange route's 409.
+
+**One transaction**, as for a session and for the same reason, with the same
+longer timeout. A module's worth can span several sittings, so it can be larger
+than one session. If it starts reaching the timeout on real data, revisit the
+journal entry "A session is deleted in one transaction, not in batches".
+
+**Where it is offered:** at the foot of the module's page
+(`app/(lelanea)/app/modules/[slug]/page.tsx`,
+`components/app/modules/delete-module-exchanges.tsx`), only when the person has
+a turn stamped with it. The confirmation says plainly that it covers only
+conversations since Lelañea began noting which module they were in.
+
+`npm run smoke:app-delete-session` proves it on the dev database, after the
+session case.
+
 ## Deleting a conversation (f-memory t-128)
 
 Sunrise deletes whole conversations on four paths: the person's own

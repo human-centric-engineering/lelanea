@@ -234,3 +234,32 @@ export async function deleteExchanges(
   }
   return parsed.data.data;
 }
+
+/** Deleting what the person said in one module (t-155): `DELETE` with no body. */
+export function moduleExchangesEndpoint(moduleSlug: string): string {
+  return `/api/v1/app/modules/${encodeURIComponent(moduleSlug)}/exchanges`;
+}
+
+/**
+ * Delete everything the person said in one module since turns were stamped
+ * with theirs, and everything it left behind (t-155). Throws
+ * {@link NotesRefused} with a message meant to be printed when the route says
+ * no: nothing to delete, or a reply still being written.
+ */
+export async function deleteModuleExchanges(
+  moduleSlug: string,
+  options: Options = {}
+): Promise<{ exchanges: number; messages: number }> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(moduleExchangesEndpoint(moduleSlug), {
+    method: 'DELETE',
+    credentials: 'include',
+    signal: options.signal,
+  });
+  if (!response.ok) throw await refusalOf(response);
+  const parsed = deletedExchangesEnvelopeSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new NotesRefused(response.status, 'malformed', 'The deletion could not be confirmed.');
+  }
+  return parsed.data.data;
+}
