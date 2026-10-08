@@ -7,6 +7,11 @@ import * as React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { Composer } from '@/components/app/conversation/composer';
+import {
+  CurrentSessionConfirm,
+  CurrentSessionMenu,
+  useCurrentSessionOffer,
+} from '@/components/app/conversation/delete-current-session';
 import { Transcript } from '@/components/app/conversation/transcript';
 import { StatusLine } from '@/components/app/conversation/turns';
 import { useConversation } from '@/components/app/conversation/use-conversation';
@@ -99,6 +104,7 @@ export function ConversationPane() {
     modulePlace,
     noteSlotsWritten,
     noteTurnSettled,
+    turnsSettled,
     conversationSeat,
     journeyMoved,
     ask,
@@ -120,6 +126,23 @@ export function ConversationPane() {
     // Beginning the journey moves it, and is what makes the AI's opening owed
     // (t-122): the hook asks again whether to open.
     checkOpening: journeyMoved,
+  });
+  /*
+   * "Delete this session", for the sitting the person is in (f-forget-session
+   * t-158), on either seat: a sitting is the person's, not the seat's. What it
+   * deleted leaves the transcript, the notes panel and any page showing the
+   * journey behind, so all three read again.
+   */
+  const { reload } = conversation;
+  const onSessionDeleted = useCallback(() => {
+    reload();
+    noteSlotsWritten();
+  }, [reload, noteSlotsWritten]);
+  const sessionOffer = useCurrentSessionOffer({
+    turnsSettled,
+    turnRunning: conversation.phase !== 'idle',
+    personSpoke: conversation.live !== null && conversation.live.userText !== '',
+    onDeleted: onSessionDeleted,
   });
   const carousel = width === 'small' && wsOpen;
   const stripRef = useRef<HTMLButtonElement>(null);
@@ -310,7 +333,9 @@ export function ConversationPane() {
         ) : (
           <Eyebrow className="min-w-0 truncate">the conversation</Eyebrow>
         )}
+        <CurrentSessionMenu offer={sessionOffer} />
       </div>
+      <CurrentSessionConfirm offer={sessionOffer} />
 
       {/*
         The transcript (`.chat-log`): a SCROLL CONTAINER with the composer
