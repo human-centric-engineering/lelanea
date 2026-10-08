@@ -103,7 +103,11 @@ export function DeleteSessionConfirm({
           onClick={() => {
             setTried(true);
             void action
-              .run(() => deleteSession(session.id, kept ? removeAccount : true))
+              // A draft goes whatever this says (the server drops drafts
+              // unasked), so a draft sends false: if it was kept in another
+              // tab since this loaded, the account the person never saw a
+              // tick for is flagged, not removed.
+              .run(() => deleteSession(session.id, kept && removeAccount))
               .then((went) => went && onDeleted());
           }}
         >

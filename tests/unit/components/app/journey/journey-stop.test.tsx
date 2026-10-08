@@ -677,7 +677,7 @@ describe('deleting a session (t-154)', () => {
     ]);
   });
 
-  it('shows no tick on a draft, says the draft goes, and sends removeAccount true', async () => {
+  it('shows no tick on a draft, says the draft goes, and sends removeAccount false', async () => {
     renderStop({ state: 'draft', keptAt: null, regenerationsLeft: 3 });
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete this session' }));
@@ -691,7 +691,7 @@ describe('deleting a session (t-154)', () => {
       {
         path: `/api/v1/app/sessions/${SESSION_ID}`,
         method: 'DELETE',
-        body: { removeAccount: true },
+        body: { removeAccount: false },
       },
     ]);
   });
