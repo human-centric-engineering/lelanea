@@ -78,6 +78,10 @@ const seat = {
   transcript: [] as unknown[],
   generation: 'available',
   voiceInput: 'off',
+  /** What the current-session read answers (t-158); null offers nothing. */
+  session: null as { id: string; hasTurns: boolean } | null,
+  /** Holds the session delete open until the test lets it go. */
+  deleteGate: null as Promise<void> | null,
 };
 
 beforeEach(() => {
@@ -89,6 +93,8 @@ beforeEach(() => {
   seat.transcript = [];
   seat.generation = 'available';
   seat.voiceInput = 'off';
+  seat.session = null;
+  seat.deleteGate = null;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -102,6 +108,19 @@ beforeEach(() => {
       if (url.startsWith('/api/v1/app/agent/transcribe')) {
         return new Response(
           JSON.stringify({ success: true, data: { voiceInput: seat.voiceInput } }),
+          { status: 200 }
+        );
+      }
+      if (url === '/api/v1/app/sessions/current') {
+        return new Response(JSON.stringify({ success: true, data: { session: seat.session } }), {
+          status: 200,
+        });
+      }
+      if (url.startsWith('/api/v1/app/sessions/') && init?.method === 'DELETE') {
+        if (seat.deleteGate) await seat.deleteGate;
+        if (seat.session) seat.session = { ...seat.session, hasTurns: false };
+        return new Response(
+          JSON.stringify({ success: true, data: { exchanges: 1, messages: 2, account: 'none' } }),
           { status: 200 }
         );
       }
@@ -1273,5 +1292,54 @@ describe('a resource offered with a reply', () => {
     await renderWithProbe();
     expect(screen.queryByRole('list', { name: 'Offered with this reply' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Pointed you to/ })).toBeNull();
+  });
+});
+
+describe('deleting the current session (t-158)', () => {
+  const said = (id: string, text: string) => ({
+    kind: 'reply',
+    id,
+    text,
+    at: '2026-10-08T10:00:00.000Z',
+    turnId: `t-${id}`,
+    citations: [],
+    capabilities: [],
+    turn: null,
+  });
+
+  const transcriptReads = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url]) => typeof url === 'string' && url.startsWith('/api/v1/app/conversation')
+      ).length;
+
+  it('holds the composer while the delete is out, then reads the transcript again', async () => {
+    const user = userEvent.setup();
+    seat.session = { id: `ses_${'a'.repeat(32)}`, hasTurns: true };
+    seat.transcript = [said('a1', 'About the harbour.')];
+    let release!: () => void;
+    seat.deleteGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    await renderLoaded();
+    expect(screen.getByText('About the harbour.')).toBeTruthy();
+
+    await user.click(await screen.findByRole('button', { name: 'Conversation options' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete this session' }));
+    await user.click(screen.getByRole('button', { name: 'Delete this session' }));
+
+    // Out, and not answered: nothing can be sent into the session being deleted.
+    await user.type(box(), 'one more thing');
+    expect(screen.getByRole('button', { name: CONVERSATION_COPY.sendBusy })).toBeDisabled();
+    const readsBefore = transcriptReads();
+
+    seat.transcript = [];
+    release();
+
+    await waitFor(() => expect(screen.queryByText('About the harbour.')).toBeNull());
+    expect(transcriptReads()).toBe(readsBefore + 1);
+    expect(seat.turns).toHaveLength(0);
+    expect(screen.getByRole('button', { name: CONVERSATION_COPY.send })).toBeTruthy();
   });
 });

@@ -286,6 +286,46 @@ describe('the confirmation', () => {
   });
 });
 
+describe('what review round 1 found', () => {
+  it('closes a confirm the person walked away from, rather than bringing it back after the turn', async () => {
+    const ui = userEvent.setup();
+    const { rerender } = render(<Harness />);
+    await openConfirm(ui);
+
+    // They sent a turn instead of confirming.
+    rerender(<Harness turnRunning />);
+    expect(group()).toBeNull();
+    rerender(<Harness turnsSettled={1} />);
+
+    await waitFor(() => expect(world.calls.filter((c) => c.method === 'GET')).toHaveLength(2));
+    expect(trigger()).toBeTruthy();
+    expect(group()).toBeNull();
+  });
+
+  it('keeps the newest read when an older one lands after it', async () => {
+    let releaseFirst!: () => void;
+    const firstHeld = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    fetchMock.mockImplementationOnce(async (path: string) => {
+      world.calls.push({ path, method: 'GET', body: undefined });
+      await firstHeld;
+      return json({ success: true, data: { session: { id: SESSION, hasTurns: false } } });
+    });
+    const { rerender } = render(<Harness turnsSettled={0} />);
+
+    // The first word lands, and its read answers first.
+    rerender(<Harness turnsSettled={1} />);
+    await waitFor(() => expect(trigger()).toBeTruthy());
+
+    releaseFirst();
+    await act(async () => {
+      await firstHeld;
+    });
+    expect(trigger()).toBeTruthy();
+  });
+});
+
 describe('the line saying it went', () => {
   it('stays through the recap that follows, and goes when the person speaks', async () => {
     const ui = userEvent.setup();

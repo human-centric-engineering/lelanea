@@ -358,7 +358,9 @@ export function ConversationPane() {
         value={conversation.draft}
         onChange={conversation.setDraft}
         onSend={() => conversation.send()}
-        busy={conversation.phase !== 'idle'}
+        // Nor while the session is being deleted: a turn sent then would be
+        // left out of the delete, and the re-read after it skipped (t-158).
+        busy={conversation.phase !== 'idle' || sessionOffer.busy}
         voiceInput={conversation.voiceInput}
         insert={ask}
         onInserted={takeAsk}

@@ -94,16 +94,22 @@ export function useCurrentSessionOffer({
     };
   }, []);
 
+  // Reads can overlap (on mount, after each turn, after a delete), and a slow
+  // early one must not land over a later one: only the newest read's answer
+  // is kept.
+  const latestRead = useRef(0);
   const read = useCallback(async () => {
+    const seq = ++latestRead.current;
+    const stillLatest = () => mounted.current && seq === latestRead.current;
     try {
       const current = await fetchCurrentSession({ fetchImpl });
-      if (mounted.current) setSession(current);
+      if (stillLatest()) setSession(current);
     } catch (caught: unknown) {
       // No offer is the honest answer to a read that failed.
       logger.warn('Current session could not be read', {
         error: caught instanceof Error ? caught.message : String(caught),
       });
-      if (mounted.current) setSession(null);
+      if (stillLatest()) setSession(null);
     }
   }, [fetchImpl]);
 
@@ -149,9 +155,14 @@ export function useCurrentSessionOffer({
   }, [session, busy, fetchImpl, onDeleted, router, read]);
 
   const offered = session?.hasTurns === true && !turnRunning;
+  // A confirm left open while a turn began, or after the offer went, closes,
+  // with whatever it said: it is never shown again unasked.
+  if (confirming && !offered && !busy) {
+    setConfirming(false);
+    setError(null);
+  }
   return {
     offered,
-    // A confirm left open while a turn began, or after the offer went, closes.
     confirming: confirming && (offered || busy),
     busy,
     error,
