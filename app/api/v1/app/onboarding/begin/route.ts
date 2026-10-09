@@ -25,7 +25,8 @@
  */
 
 import type { NextRequest } from 'next/server';
-import { withAuth, type AuthSession } from '@/lib/auth/guards';
+import { type AuthSession } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { isApiKeySession } from '@/lib/auth/api-keys';
 import { successResponse } from '@/lib/api/responses';
 import { ConflictError, ForbiddenError, ValidationError, handleAPIError } from '@/lib/api/errors';
@@ -33,7 +34,7 @@ import { getRouteLogger } from '@/lib/api/context';
 import { VALUES_NODE_KEY } from '@/lib/app/journey/map-definition';
 import { beginJourney } from '@/lib/app/onboarding/hand-off';
 
-export const POST = withAuth(
+export const POST = withGatedAuth(
   async (request: NextRequest, session: AuthSession) => {
     const log = await getRouteLogger(request);
     const userId = session.user.id;

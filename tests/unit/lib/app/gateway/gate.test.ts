@@ -12,16 +12,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const { env, getGateStatus } = vi.hoisted(() => ({
+const { env, getGateStatus, findUser } = vi.hoisted(() => ({
   env: { REQUIRE_EMAIL_VERIFICATION: undefined as boolean | undefined, NODE_ENV: 'test' },
   getGateStatus: vi.fn(),
+  findUser: vi.fn(),
 }));
 vi.mock('@/lib/env', () => ({ env }));
 vi.mock('@/lib/app/gateway/acknowledgements', () => ({ getGateStatus }));
+vi.mock('@/lib/db/client', () => ({ prisma: { user: { findUnique: findUser } } }));
 
 import {
   BEGIN_ROUTE,
   gateRedirectFor,
+  gateRedirectForUserId,
   hasPassedGate,
   isEmailVerificationRequired,
   VERIFY_EMAIL_ROUTE,
@@ -117,5 +120,33 @@ describe('hasPassedGate (t-124)', () => {
 
   it('is true for a verified, fully acknowledged person', async () => {
     await expect(hasPassedGate(VERIFIED)).resolves.toBe(true);
+  });
+});
+
+describe('gateRedirectForUserId (t-159)', () => {
+  it('asks the same question of the stored user — the turn hook holds only an id', async () => {
+    env.REQUIRE_EMAIL_VERIFICATION = true;
+    findUser.mockResolvedValue(UNVERIFIED);
+
+    await expect(gateRedirectForUserId('user-1')).resolves.toBe(
+      `${VERIFY_EMAIL_ROUTE}?email=ada%40example.com`
+    );
+    expect(findUser).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      select: { id: true, email: true, emailVerified: true },
+    });
+  });
+
+  it('sends to /app/begin while any kind is outstanding, and lets a passed person through', async () => {
+    findUser.mockResolvedValue(VERIFIED);
+    getGateStatus.mockResolvedValueOnce({ complete: false, kinds: [], outstanding: ['terms'] });
+    await expect(gateRedirectForUserId('user-1')).resolves.toBe(BEGIN_ROUTE);
+    await expect(gateRedirectForUserId('user-1')).resolves.toBeNull();
+  });
+
+  it('does not let through an id that no longer resolves to anyone', async () => {
+    findUser.mockResolvedValue(null);
+    await expect(gateRedirectForUserId('gone')).resolves.toBe(BEGIN_ROUTE);
+    expect(getGateStatus).not.toHaveBeenCalled();
   });
 });

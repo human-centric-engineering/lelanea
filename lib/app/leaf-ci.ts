@@ -220,6 +220,15 @@ export const leafAlwaysRunTests: AppAlwaysRunTest[] = [
       'One reader is what keeps the index swappable for daybreak#287, and what ' +
       'keeps every read of it per person.',
   },
+  {
+    path: 'tests/unit/app/api/v1/app/gate-coverage.test.ts',
+    reason:
+      'reads every `route.ts` under `app/api/v1/app/` off disk and fails on ' +
+      'any exported method that is neither wrapped in `withGatedAuth` nor ' +
+      'listed as exempt with a reason (t-159). The change it exists to catch ' +
+      'is a NEW route that forgot the gate, and that route imports nothing ' +
+      'this test imports — so the branch that adds it would never select it.',
+  },
 ];
 
 /**

@@ -25,12 +25,12 @@
  * route must not say.
  */
 
-import { withAuth } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { successResponse } from '@/lib/api/responses';
 import { getRouteLogger } from '@/lib/api/context';
 import { getGenerationStatus } from '@/lib/app/agent/availability';
 
-export const GET = withAuth(
+export const GET = withGatedAuth(
   async (request) => {
     const log = await getRouteLogger(request);
     const generation = await getGenerationStatus();

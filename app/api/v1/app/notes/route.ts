@@ -42,6 +42,7 @@ import { getRouteLogger } from '@/lib/api/context';
 import { successResponse } from '@/lib/api/responses';
 import { validateQueryParams, validateRequestBody } from '@/lib/api/validation';
 import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { correctNote, getNotes } from '@/lib/app/slots/notes';
 import { deleteNote } from '@/lib/app/slots/delete-note';
 import { notesQuerySchema } from '@/lib/app/slots/notes-query';
@@ -66,7 +67,7 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-export const GET = withAuth(async (request: NextRequest, session) => {
+export const GET = withGatedAuth(async (request: NextRequest, session) => {
   // The route logger carries `url: request.url` — query string and all — on
   // every entry (`getRequestContext`), so without this override each search a
   // person typed would land in the log beside their user id, however careful
@@ -99,7 +100,7 @@ export const GET = withAuth(async (request: NextRequest, session) => {
   return successResponse(view, undefined, { headers: { 'Cache-Control': 'no-store' } });
 }, OWNERSHIP);
 
-export const POST = withAuth(async (request: NextRequest, session) => {
+export const POST = withGatedAuth(async (request: NextRequest, session) => {
   const log = await getRouteLogger(request);
   const body = await validateRequestBody(request, slotCorrectionSchema);
   const corrected = await correctNote({

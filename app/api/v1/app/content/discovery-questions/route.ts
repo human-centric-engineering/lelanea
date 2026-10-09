@@ -21,13 +21,13 @@
  * the documents index route for the two reasons why.
  */
 
-import { withAuth } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { successResponse } from '@/lib/api/responses';
 import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
 import { getDiscoveryQuestions } from '@/lib/app/content/question-store';
 
-export const GET = withAuth(
+export const GET = withGatedAuth(
   async (request) => {
     const log = await getRouteLogger(request);
     const questions = await getDiscoveryQuestions();

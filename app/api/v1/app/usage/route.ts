@@ -15,7 +15,8 @@
  * @see lib/app/agent/metering.ts
  */
 
-import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
+import { type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { successResponse } from '@/lib/api/responses';
 import { getRouteLogger } from '@/lib/api/context';
 import { getMonthToDate } from '@/lib/app/agent/metering';
@@ -34,7 +35,7 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-export const GET = withAuth(async (request, session) => {
+export const GET = withGatedAuth(async (request, session) => {
   const log = await getRouteLogger(request);
   const usage = await getMonthToDate(session.user.id);
 

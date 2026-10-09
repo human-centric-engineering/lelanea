@@ -25,7 +25,9 @@ vi.mock('@/lib/app/onboarding/discovery-store', () => store);
 const slots = vi.hoisted(() => ({ getDiscoverySet: vi.fn() }));
 vi.mock('@/lib/app/onboarding/discovery-slots', () => slots);
 
-const gate = vi.hoisted(() => ({ hasPassedGate: vi.fn() }));
+// The route asks the gate through `withGatedAuth` (t-159), which asks
+// `gateRedirectFor`: `null` is past it, a path is where the layout would send them.
+const gate = vi.hoisted(() => ({ gateRedirectFor: vi.fn() }));
 vi.mock('@/lib/app/gateway/gate', () => gate);
 
 import { GET, POST } from '@/app/api/v1/app/onboarding/discovery/route';
@@ -84,7 +86,7 @@ const WHOLE_SET = { ...SET, pacing: { ...SET.pacing, allowPartialCompletion: fal
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth.api.getSession).mockResolvedValue(createSession());
-  gate.hasPassedGate.mockResolvedValue(true);
+  gate.gateRedirectFor.mockResolvedValue(null);
   slots.getDiscoverySet.mockResolvedValue(SET);
   store.answerDiscoveryQuestion.mockResolvedValue({ outcome: 'written', version: 3 });
   store.skipDiscoveryQuestion.mockResolvedValue('recorded');
@@ -228,10 +230,10 @@ describe('who may call', () => {
     ['a skip', { action: 'skip', questionId: 'q01' }],
     ['a leave', { action: 'leave' }],
   ])('refuses %s from someone not past the gate, writing nothing (t-124)', async (_, body) => {
-    gate.hasPassedGate.mockResolvedValue(false);
+    gate.gateRedirectFor.mockResolvedValue('/app/begin');
     const { status } = await post(body);
     expect(status).toBe(403);
-    expect(gate.hasPassedGate).toHaveBeenCalledWith(
+    expect(gate.gateRedirectFor).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'user_test', email: 'member@example.com', emailVerified: true })
     );
     expect(store.answerDiscoveryQuestion).not.toHaveBeenCalled();
@@ -242,15 +244,16 @@ describe('who may call', () => {
   it('lets someone past the gate write, asking the gate about the caller', async () => {
     const { status } = await post({ action: 'answer', questionId: 'q01', answer: 'x' });
     expect(status).toBe(200);
-    expect(gate.hasPassedGate).toHaveBeenCalledWith(expect.objectContaining({ id: 'user_test' }));
+    expect(gate.gateRedirectFor).toHaveBeenCalledWith(expect.objectContaining({ id: 'user_test' }));
     expect(store.answerDiscoveryQuestion).toHaveBeenCalled();
   });
 
-  it('reads the GET without asking the gate: reading your own answers writes nothing', async () => {
+  it('refuses the GET too, since t-159: every read the shell makes is behind the gate', async () => {
     store.getDiscoveryState.mockResolvedValue({ position: { next: null, finished: true } });
-    gate.hasPassedGate.mockResolvedValue(false);
+    gate.gateRedirectFor.mockResolvedValue('/app/begin');
     const response = await GET(createRequest(undefined, 'GET'));
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(403);
+    expect(store.getDiscoveryState).not.toHaveBeenCalled();
   });
 
   it('refuses a signed-out GET', async () => {

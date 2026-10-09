@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   createEvent: vi.fn(),
   claimTurn: vi.fn(),
   allowance: vi.fn(),
+  gate: vi.fn(),
 }));
 
 vi.mock('@/lib/logging', () => ({
@@ -100,6 +101,8 @@ vi.mock('@/lib/app/voice/register-store', () => ({
 vi.mock('@/lib/app/sessions/store', () => ({
   arriveSessionQuietly: mocks.arriveSessionQuietly,
 }));
+// t-159 — the shell layout's gate, asked first. Its own rule is `gate.test.ts`'s.
+vi.mock('@/lib/app/gateway/gate', () => ({ gateRedirectForUserId: mocks.gate }));
 vi.mock('@/lib/app/agent/turn-record', () => ({
   claimTurn: mocks.claimTurn,
   classifyPricing: vi.fn(async () => 'priced'),
@@ -157,6 +160,7 @@ beforeEach(() => {
   mocks.createEvent.mockResolvedValue({});
   mocks.claimTurn.mockResolvedValue({ kind: 'claimed', turn: TURN_ROW });
   mocks.allowance.mockResolvedValue({ allowed: true });
+  mocks.gate.mockResolvedValue(null);
 });
 
 /** A person who has used their month's budget (f-safety t-59). */
@@ -336,5 +340,57 @@ describe('runRecordedTurn — someone in danger', () => {
     );
     expect(out.map((e) => e.type)).toEqual(['start', 'content', 'done']);
     expect(mocks.createEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('runRecordedTurn — someone not past the gate (t-159)', () => {
+  beforeEach(() => {
+    mocks.gate.mockResolvedValue('/app/begin');
+  });
+
+  it('refuses an ordinary turn before it arrives, claims or calls the model', async () => {
+    const run = vi.fn(() => agentReply());
+
+    const result = await runRecordedTurn(turn('Tell me about the values module.'), run);
+
+    expect(result).toEqual({
+      refused: true,
+      message: expect.any(String),
+      reason: 'GATE_REQUIRED',
+    });
+    expect(mocks.gate).toHaveBeenCalledWith('user-1');
+    expect(run).not.toHaveBeenCalled();
+    expect(mocks.claimTurn).not.toHaveBeenCalled();
+    expect(mocks.arriveSessionQuietly).not.toHaveBeenCalled();
+    expect(mocks.createEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a soft-tier turn too: the resource would be shown with a reply it may not have', async () => {
+    const result = await runRecordedTurn(turn("I can't go on like this"), vi.fn());
+    expect(result).toMatchObject({ refused: true, reason: 'GATE_REQUIRED' });
+  });
+
+  it('still answers a hard-tier message with the resource, and records that it did', async () => {
+    const run = vi.fn(() => agentReply());
+
+    const out = await frames(await runRecordedTurn(turn('I want to kill myself'), run));
+
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ type: 'error', code: 'crisis', resource: { tier: 'hard' } });
+    expect(mocks.createEvent).toHaveBeenCalledWith({
+      data: expect.objectContaining({ actedTier: 'hard' }),
+    });
+    expect(run).not.toHaveBeenCalled();
+    expect(mocks.claimTurn).not.toHaveBeenCalled();
+    expect(mocks.arriveSessionQuietly).not.toHaveBeenCalled();
+  });
+
+  it('lets the same turn through once the gate is passed', async () => {
+    mocks.gate.mockResolvedValue(null);
+    const run = vi.fn(() => agentReply());
+
+    await frames(await runRecordedTurn(turn('Tell me about the values module.'), run));
+
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });

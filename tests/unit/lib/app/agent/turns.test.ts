@@ -199,6 +199,11 @@ const { arriveSessionQuietly } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/app/sessions/store', () => ({ arriveSessionQuietly }));
 
+// t-159 — the turn asks the shell layout's gate first. Everyone here has passed
+// it; the refusal is `tests/unit/lib/app/safety/turn-crisis.test.ts`'s, beside
+// the crisis check it has to leave standing.
+vi.mock('@/lib/app/gateway/gate', () => ({ gateRedirectForUserId: async () => null }));
+
 vi.mock('@/lib/db/client', () => {
   const next = (prefix: string): string => `${prefix}-${++db.seq}`;
   const match = (row: TurnRow, where: Record<string, unknown>): boolean =>

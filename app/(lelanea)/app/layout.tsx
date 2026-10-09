@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { EntryBloom } from '@/components/app/shell/entry-bloom';
+import { GateWatch } from '@/components/app/shell/gate-watch';
 import { Panes } from '@/components/app/shell/panes';
 import { ShellNav } from '@/components/app/shell/shell-nav';
 import { ShellRail } from '@/components/app/shell/shell-rail';
@@ -65,9 +66,10 @@ export const metadata: Metadata = {
  * never a session.
  *
  * A layout is also not re-rendered when the router moves between sibling pages
- * inside it, so this check is a gate on entry rather than on every view. That is
- * fine while the pages under it hold no data — but `t-10` and `t-11` add views
- * that do, and those should guard where they fetch rather than inherit this.
+ * inside it, so this check is a gate on entry rather than on every view. The
+ * views' data is guarded where it is fetched: every app route the shell calls is
+ * `withGatedAuth` and the turn hook asks the same question (t-159), and
+ * `<GateWatch>` takes anyone they refuse back to the gate.
  *
  * ## The gate (§06)
  *
@@ -173,6 +175,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
           </div>
           <ShellRail />
           <EntryBloom />
+          <GateWatch />
         </div>
       </ShellLayoutProvider>
     </MaintenanceWrapperWithAdminNotice>

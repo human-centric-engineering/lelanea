@@ -21,14 +21,14 @@
  * silently dropped. See `lib/app/journey/map.ts`.
  */
 
-import { withAuth } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { successResponse } from '@/lib/api/responses';
 import { NotFoundError } from '@/lib/api/errors';
 import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
 import { getJourneyMap } from '@/lib/app/journey/map';
 
-export const GET = withAuth(
+export const GET = withGatedAuth(
   async (request, session) => {
     const log = await getRouteLogger(request);
     const map = await getJourneyMap(session.user.id);

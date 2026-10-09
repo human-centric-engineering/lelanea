@@ -1364,6 +1364,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/lib/app/modules/client-safe.test.ts',
         'tests/unit/lib/app/org-id-check-roster.test.ts',
         'tests/unit/lib/app/memory/index-boundary.test.ts',
+        // t-159 — every app route is gated or exempt with a reason, a tree scan.
+        'tests/unit/app/api/v1/app/gate-coverage.test.ts',
       ]);
       expect(appOwnerlessSurfaceExceptions.map((entry) => entry.path)).toEqual([
         'lib/framework/facilitation/evaluation/conversation.ts',
@@ -1425,6 +1427,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'tests/unit/lib/app/modules/client-safe.test.ts',
         'tests/unit/lib/app/org-id-check-roster.test.ts',
         'tests/unit/lib/app/memory/index-boundary.test.ts',
+        // t-159 — every app route is gated or exempt with a reason, a tree scan.
+        'tests/unit/app/api/v1/app/gate-coverage.test.ts',
       ]);
       // §08 t-54 — the turn record's two owner-scoped message reads, by design.
       // §08 t-56 — the meter's seat-only conversation join, by design.

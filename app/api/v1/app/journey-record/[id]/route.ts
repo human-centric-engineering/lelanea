@@ -20,11 +20,12 @@ import { getRouteLogger } from '@/lib/api/context';
 import { successResponse } from '@/lib/api/responses';
 import { validatePathParam, validateRequestBody } from '@/lib/api/validation';
 import { withAuth } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { editOwnEntry, removeJourneyEntry } from '@/lib/app/journey-record/record';
 import { JOURNEY_RECORD_OWNERSHIP } from '@/lib/app/journey-record/ownership';
 import { journeyEntryIdSchema, ownEntryEditSchema } from '@/lib/app/journey-record/validation';
 
-export const PATCH = withAuth<{ id: string }>(
+export const PATCH = withGatedAuth<{ id: string }>(
   async (request, session, { params }) => {
     const log = await getRouteLogger(request);
     const { id: raw } = await params;
