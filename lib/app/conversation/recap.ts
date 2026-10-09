@@ -433,8 +433,10 @@ async function readNotes(userId: string, prior: PriorSession): Promise<NoteLine[
     .map((note) => ({
       heading: recapNoteHeading(note.slotSlug),
       // One line, so a reading with line breaks cannot start a `> ` line of
-      // its own: those are the only lines the recap may quote as theirs.
-      value: cut(unfenced(note.value).replace(/\s+/g, ' ').trim(), MAX_RECAP_NOTE_CHARS),
+      // its own: those are the only lines the recap may quote as theirs. And
+      // through `fenceSafeLine`, so the collapse cannot join a marker split
+      // across a line break (t-150).
+      value: cut(fenceSafeLine(note.value), MAX_RECAP_NOTE_CHARS),
     }));
 }
 

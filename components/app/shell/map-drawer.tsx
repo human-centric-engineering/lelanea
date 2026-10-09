@@ -66,10 +66,13 @@ export const TIER_INKS: Readonly<Record<string, string>> = {
 /**
  * What a module's `state` reads as in the row, and the dot that goes with it.
  *
- * The state is the reader's own journey (§15, t-102), and the words and dots
- * are the design's (`.mod.done`, `.mod.now`): `complete ●` in status green,
- * the module they are in with an accent-ink dot, and `not started ○` for
- * everything else. **`open` still reads as "not started", deliberately**:
+ * The state is the reader's own journey (§15, t-102), and the dots are the
+ * design's (`.mod.done`, `.mod.now`): `visited ●` in status green, the module
+ * they are in with an accent-ink dot, and `not started ○` for everything else.
+ * The design's word for the first row says finished, and a module never is: it
+ * is only ever more or less covered, and always open to being returned to
+ * (§6.12, which governs over the prototype's wording; t-143).
+ * **`open` still reads as "not started", deliberately**:
  * `open` means the module can be jumped into, which every module can, so it is
  * a fact about the system rather than about the reader.
  *
@@ -85,7 +88,7 @@ const STATE_ROW: Readonly<
 > = {
   open: { text: 'not started', fill: null },
   current: { text: 'in progress', fill: 'var(--color-accent-ink)' },
-  done: { text: 'complete', fill: 'var(--color-status-green)' },
+  done: { text: 'visited', fill: 'var(--color-status-green)' },
 };
 function stateRow(state: JourneyMapView['modules'][number]['state']): {
   text: string;
@@ -119,7 +122,7 @@ type Load =
  * ## Two kinds of "current"
  *
  * A row's `state` is the reader's journey: the module they are working in,
- * the ones they have completed. Separately, `aria-current="page"` marks the
+ * the ones they have moved on from. Separately, `aria-current="page"` marks the
  * module whose page is open, which is a fact about the route. The two usually
  * coincide and need not: someone in onboarding can open Values to look around.
  *

@@ -680,7 +680,8 @@ is the specific failure D6 names.
   says so under its eyebrow rather than carrying two plausible videos. See
   [`content.md`](./content.md#resources--her-videos-audio-and-articles-and-her-words-on-whatever-is-open).
 - ~~**A module's real state in the map.**~~ Real from §15 t-102: each row
-  reads the reader's own journey — `complete ●`, `in progress ●` for the module
+  reads the reader's own journey — `visited ●` (never "complete": a module is
+  only ever more or less covered, §6.12), `in progress ●` for the module
   they are in, `not started ○` otherwise (`STATE_ROW` in `map-drawer.tsx`). The
   design's `step 5 of 10` waits on something that counts a module's steps.
 - ~~**The budget meter** — omitted from the topbar rather than faked.~~ In the

@@ -484,6 +484,24 @@ describe('readRecapMaterial — what it carries, for this person only', () => {
     expect(material.text.trimEnd().endsWith('[Material ends]')).toBe(true);
   });
 
+  it('closes no fence with a note whose marker is split by a line break or tab, or nested (t-150)', async () => {
+    h.getNotes.mockResolvedValue({
+      notes: [
+        note('split', 'a [Material\nends] b', hour(11)),
+        note('tabbed', 'c [Material\tends] d', hour(11, 1)),
+        note('nested', 'e [Material [Material\nends]ends] f', hour(11, 2)),
+      ],
+    });
+
+    const material = await readRecapMaterial(ME, PRIOR);
+
+    // The notes reached the material, so the count below is not passing on an empty section.
+    expect(material.account.notes).toEqual(['split', 'tabbed', 'nested']);
+    expect(material.text).toContain('- split: a b');
+    expect(material.text.split('[Material ends]')).toHaveLength(2);
+    expect(material.text.trimEnd().endsWith('[Material ends]')).toBe(true);
+  });
+
   it('names only the steps it has words for: entering a module, and moving on from one', async () => {
     h.tables.journeyEvent.push(
       {
