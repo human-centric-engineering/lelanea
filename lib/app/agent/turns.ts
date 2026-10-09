@@ -135,11 +135,17 @@ import type {
   FacilitationTurnRun,
 } from '@/lib/framework/facilitation/agents/turn-hook';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
+import { refuseClientTurnId } from '@/lib/app/agent/turn-intake';
 import { queueMessageIndex } from '@/lib/app/memory/memory-index';
 import { arriveSessionQuietly, type Arrival } from '@/lib/app/sessions/store';
 
 /** Error codes a refused turn carries, for a client to branch on (`turn-codes.ts`, import-light). */
-export { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
+export {
+  TURN_ID_INVALID,
+  TURN_ID_RESERVED,
+  TURN_ID_REUSED,
+  TURN_IN_FLIGHT,
+} from '@/lib/app/agent/turn-codes';
 
 /** The code a replayed turn ends on when its reply no longer exists. */
 export const TURN_REPLY_UNAVAILABLE = 'turn_reply_unavailable';
@@ -485,6 +491,11 @@ async function runGeneratedTurn(
   run: FacilitationTurnRun,
   options: { crisisNow: boolean; arrival: Promise<Arrival | null> }
 ): Promise<ChatStream | FacilitationTurnRefusal> {
+  // An id the ledger must not take is refused before anything reads or claims
+  // it: an AI opening's, sent as a member's turn, or one no link could reach.
+  const unusable = refuseClientTurnId(turn);
+  if (unusable) return unusable;
+
   const turnId = turn.clientTurnId ?? mintTurnId();
   const requestHash = await hashTurnRequest(turn.role, turn.message);
 

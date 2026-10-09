@@ -126,6 +126,7 @@ import {
   type Session,
 } from '@/lib/app/sessions/store';
 import { REPLY_NOT_LINKED } from '@/lib/app/agent/turn-record';
+import { markAgentOpened } from '@/lib/app/agent/turn-intake';
 import { getNotes } from '@/lib/app/slots/notes';
 import { readKeptSynopsisOfSession, type KeptSynopsisText } from '@/lib/app/journey-record/record';
 import { fallbackModuleName } from '@/lib/app/modules/definitions';
@@ -693,7 +694,7 @@ export async function runRecap(ready: RecapReady, request: OpeningRequest): Prom
   }
 
   const events = await runFacilitationTurn(
-    {
+    markAgentOpened({
       userId,
       role: CONVERSATION_SEAT,
       agentId: surface.agentId,
@@ -704,7 +705,7 @@ export async function runRecap(ready: RecapReady, request: OpeningRequest): Prom
       signal: request.signal,
       keepAlive: request.keepAlive,
       headers: request.headers,
-    },
+    }),
     claimed
   );
   return withAccount(events, () => ({ ran, kept }), userId, turnId);

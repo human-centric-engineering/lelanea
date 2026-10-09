@@ -11,6 +11,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { isMarkedAgentOpened } from '@/lib/app/agent/turn-intake';
+
 const h = vi.hoisted(() => ({
   messageFindFirst: vi.fn(),
   turnFindFirst: vi.fn(),
@@ -223,6 +225,8 @@ describe('runOpening', () => {
       }),
       expect.any(Function)
     );
+    // Marked as the AI's, or the hook refuses its reserved id as a member's (t-160).
+    expect(isMarkedAgentOpened(h.runFacilitationTurn.mock.calls[0][0])).toBe(true);
 
     // The run the hook is handed calls the platform with the same words, on
     // the facilitator surface, with whatever the hook adds.

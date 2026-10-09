@@ -94,5 +94,15 @@ export const conversationTurnsQuerySchema = z
   })
   .superRefine(windowIsSane);
 
-/** A turn id as a client sends one — the same bound the turn hook accepts. */
-export const turnIdParamSchema = z.string().trim().min(1).max(128);
+/**
+ * A turn id as a client sends one — the same bound the turn hook accepts
+ * (`lib/app/agent/turn-intake.ts`). Never `.` or `..`: a turn id sits in a URL
+ * path segment here, and the URL standard reads those (escaped or not) as the
+ * current and parent segment, so a link to such a turn could never reach it.
+ */
+export const turnIdParamSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .refine((id) => id !== '.' && id !== '..', { message: 'A turn id cannot be "." or "..".' });

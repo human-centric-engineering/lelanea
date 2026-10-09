@@ -99,5 +99,10 @@ describe('turn ids', () => {
     expect(turnIdParamSchema.safeParse('x'.repeat(128)).success).toBe(true);
     expect(turnIdParamSchema.safeParse('x'.repeat(129)).success).toBe(false);
     expect(turnIdParamSchema.safeParse('  ').success).toBe(false);
+    // A path segment of "." or ".." can never be reached by a link (t-161).
+    expect(turnIdParamSchema.safeParse('.').success).toBe(false);
+    expect(turnIdParamSchema.safeParse('..').success).toBe(false);
+    expect(turnIdParamSchema.safeParse(' .. ').success).toBe(false);
+    expect(turnIdParamSchema.safeParse('...').success).toBe(true);
   });
 });
