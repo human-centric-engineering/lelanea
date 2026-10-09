@@ -243,6 +243,21 @@ describe('the confirmation', () => {
     expect(deletes()).toHaveLength(2);
   });
 
+  it('on a 404 says why and reads again, withdrawing an offer for a session no longer theirs', async () => {
+    world.refuseDelete = refusal(404, 'NOT_FOUND', 'That session could not be found.');
+    const ui = userEvent.setup();
+    render(<Harness />);
+    await openConfirm(ui);
+    world.session = null;
+
+    await ui.click(screen.getByRole('button', { name: 'Delete this session' }));
+
+    await waitFor(() => expect(world.calls.filter((c) => c.method === 'GET')).toHaveLength(2));
+    await waitFor(() => expect(trigger()).toBeNull());
+    expect(group()).toBeNull();
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
   it('says a lost connection without claiming anything went', async () => {
     const ui = userEvent.setup();
     render(<Harness />);
