@@ -35,7 +35,11 @@ import { UsagePanel } from '@/components/app/usage/usage-panel';
 import { CONVERSATION_COPY } from '@/lib/app/conversation/copy';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/app/usage' }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/app/usage',
+  // The pane's session offer refreshes the page after a deletion (t-158).
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => true }));
 vi.mock('@/lib/logging', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
