@@ -28,7 +28,11 @@ const mockPathname = vi.hoisted(() => ({ current: '/app/journey' }));
 // relative-URL fetch settling after the assertions.
 vi.mock('@/components/app/shell/spend-meter', () => ({ SpendMeter: () => null }));
 
-vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname.current,
+  // The pane's session offer refreshes the page after a deletion (t-158).
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => false }));
 vi.mock('@/hooks/use-theme', () => ({ useTheme: () => ({ theme: 'light', setTheme: vi.fn() }) }));
 

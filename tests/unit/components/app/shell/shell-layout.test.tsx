@@ -75,6 +75,8 @@ vi.mock('@/lib/env', () => ({
 }));
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname.current,
+  // The pane's session offer refreshes the page after a deletion (t-158).
+  useRouter: () => ({ refresh: vi.fn() }),
   redirect: vi.fn((to: string) => {
     throw new Error(`redirected:${to}`);
   }),

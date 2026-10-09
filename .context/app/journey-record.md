@@ -419,8 +419,9 @@ prototype's `renderJourney`.
   the confirmation, so trying again is one click.
   **Only synopsis stops offer it** (owner ruling, 8 Oct 2026): the current
   session, a sitting never drafted, and one whose synopsis was discarded or
-  removed have no stop here, and are deleted one exchange at a time from the
-  notes page until t-158 offers them somewhere.
+  removed have no stop here. The current session is offered from the
+  conversation pane instead (t-158; [`slots.md`](./slots.md), "Deleting a
+  session"); the others are deleted one exchange at a time from the notes page.
 - **Unsent work survives closing a stop.** A stop's body stays mounted while
   it is closed, so unticked notes and a half-written change are still there
   when it is opened again.

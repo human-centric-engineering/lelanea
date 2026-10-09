@@ -175,3 +175,32 @@ export async function deleteSession(
     options
   );
 }
+
+const currentSessionEnvelopeSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    session: z.object({ id: z.string(), hasTurns: z.boolean() }).nullable(),
+  }),
+});
+
+/** The sitting the person is in, as the conversation pane's offer needs it (t-158). */
+export type CurrentSession = z.infer<typeof currentSessionEnvelopeSchema>['data']['session'];
+
+/**
+ * The current session's id, and whether the person has said anything in it
+ * (t-158): what the conversation pane reads to offer "Delete this session".
+ * Null when there is none to offer. A refusal or an unreadable answer throws.
+ */
+export async function fetchCurrentSession(options: Options = {}): Promise<CurrentSession> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(`${SESSIONS_ENDPOINT}/current`, {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw await refusalOf(response);
+  const parsed = currentSessionEnvelopeSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new JourneyRefused(response.status, 'malformed', 'The session could not be read.');
+  }
+  return parsed.data.data.session;
+}

@@ -194,6 +194,13 @@ export interface ConversationState {
    * rather than typing it out again (review round 2).
    */
   revealed: (turnId: string) => void;
+  /**
+   * Read the transcript again from the server, as on mount: after something
+   * outside a turn changed it, such as deleting the current session
+   * (f-forget-session t-158). A no-op while a turn is running, since the
+   * server refuses that delete until it lands.
+   */
+  reload: () => void;
 }
 
 interface Options {
@@ -263,6 +270,8 @@ export function useConversation(options: Options = {}): ConversationState {
   const seatScope = useRef(new AbortController());
   // How many times an opening that did not land has read the transcript again.
   const openingRechecks = useRef(0);
+  // Bumped by `reload`, so the transcript read below runs again.
+  const [reads, setReads] = useState(0);
 
   // The in-flight request, so an unmount ends it. The turn itself carries on
   // server-side and is recorded (§08 t-55): closing the tab loses nothing.
@@ -328,6 +337,7 @@ export function useConversation(options: Options = {}): ConversationState {
     fetchTranscript(seat, { signal: controller.signal, fetchImpl })
       .then((transcript) => {
         setEntries(transcript.entries);
+        setUnreadable(false);
         // Only ever raised here: a slower first read must not cancel an
         // opening a newer read already found owed. The seat change clears it.
         if (transcript.opening === true) setOpeningOwed(owedId(transcript));
@@ -343,7 +353,7 @@ export function useConversation(options: Options = {}): ConversationState {
         setPhase('idle');
       });
     return () => controller.abort();
-  }, [seat, fetchImpl]);
+  }, [seat, fetchImpl, reads]);
 
   useEffect(() => {
     mounted.current = true;
@@ -773,6 +783,17 @@ export function useConversation(options: Options = {}): ConversationState {
     return () => controller.abort();
   }, [checkOpening, recheckOpening]);
 
+  const reload = useCallback(() => {
+    if (busy.current) return;
+    // The words a turn ended on belong to a transcript that is about to be
+    // replaced; a retry of them is a new turn now.
+    kept.current = null;
+    setOpeningOwed(null);
+    openingRechecks.current = 0;
+    setPhase('loading');
+    setReads((count) => count + 1);
+  }, []);
+
   const revealed = useCallback((turnId: string) => {
     setEntries((previous) => {
       const index = previous.findIndex(
@@ -787,5 +808,17 @@ export function useConversation(options: Options = {}): ConversationState {
     });
   }, []);
 
-  return { phase, entries, live, draft, setDraft, unreadable, status, voiceInput, send, revealed };
+  return {
+    phase,
+    entries,
+    live,
+    draft,
+    setDraft,
+    unreadable,
+    status,
+    voiceInput,
+    send,
+    revealed,
+    reload,
+  };
 }

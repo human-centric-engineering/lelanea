@@ -1062,3 +1062,57 @@ describe('the AI speaks first, once (t-122)', () => {
     expect(openingRequests).toHaveLength(0);
   });
 });
+
+describe('reading the transcript again (f-forget-session t-158)', () => {
+  const transcriptReads = () =>
+    vi
+      .mocked(fetchImpl)
+      .mock.calls.filter(
+        ([url]) => typeof url === 'string' && url.startsWith('/api/v1/app/conversation?')
+      ).length;
+
+  const reply = (id: string, text: string, turnId: string) => ({
+    kind: 'reply',
+    id,
+    text,
+    at: '2026-10-08T10:00:00.000Z',
+    turnId,
+    citations: [],
+    capabilities: [],
+    turn: null,
+  });
+
+  it('replaces what the pane holds with the server’s transcript, and asks for an owed recap', async () => {
+    transcriptEntries = [
+      reply('a0', 'Earlier, the lighthouse.', 't0'),
+      reply('a1', 'Today, the harbour.', 't1'),
+    ];
+    const { result } = await loaded();
+    expect(result.current.entries).toHaveLength(2);
+
+    // The current session was deleted: only the earlier sitting is left, and
+    // the emptied one is owed a fresh recap.
+    transcriptEntries = [reply('a0', 'Earlier, the lighthouse.', 't0')];
+    openingOwed = true;
+    openingTurnId = 'app_recap_v1_ses_2';
+    act(() => result.current.reload());
+
+    await waitFor(() => expect(openingRequests).toHaveLength(1));
+    expect(transcriptReads()).toBe(2);
+    expect(result.current.entries.map((entry) => ('id' in entry ? entry.id : null))).toEqual([
+      'a0',
+    ]);
+    expect(result.current.live?.turnId).toBe('app_recap_v1_ses_2');
+  });
+
+  it('does nothing while a turn is running', async () => {
+    const { result } = await loaded();
+    act(() => result.current.send('hello'));
+    await waitFor(() => expect(turns).toHaveLength(1));
+
+    act(() => result.current.reload());
+
+    expect(transcriptReads()).toBe(1);
+    expect(result.current.live?.userText).toBe('hello');
+  });
+});

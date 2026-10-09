@@ -24,7 +24,11 @@ import { LAST_MODULE_STORAGE_KEY } from '@/lib/app/journey/paths';
 import { renderInShell } from '@/tests/unit/components/app/shell/render-shell';
 
 const mockPathname = vi.hoisted(() => ({ current: '/app/modules/values' }));
-vi.mock('next/navigation', () => ({ usePathname: () => mockPathname.current }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname.current,
+  // The pane's session offer refreshes the page after a deletion (t-158).
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 vi.mock('@/components/app/ui/use-reduced-motion', () => ({ useReducedMotion: () => false }));
 
 beforeEach(() => {

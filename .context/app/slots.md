@@ -1268,9 +1268,24 @@ timeout (`SESSION_DELETION_TIMEOUT_MS`).
 
 `npm run smoke:app-delete-session` proves it on the dev database.
 
-**Where it is offered:** on a synopsis stop in the journey view (t-154;
-[`journey-record.md`](./journey-record.md), "The view"). A session with no
-synopsis has no stop there yet (t-158).
+**Where it is offered:**
+
+- **On a synopsis stop in the journey view** (t-154;
+  [`journey-record.md`](./journey-record.md), "The view").
+- **For the current session, in the conversation pane** (t-158; owner ruling,
+  8 Oct 2026). The current session has no synopsis until it closes, so it has
+  no stop. The pane reads `GET /api/v1/app/sessions/current`
+  (`lib/app/sessions/current.ts`): the session's id, after arriving as the
+  transcript read does, and `hasTurns`, whether a turn of the person's (not the
+  AI's recap or welcome) is stamped with it. It reads that on mount and after
+  every turn. While `hasTurns` is true and no turn is running, a menu in the
+  pane's head offers "Delete this session", confirmed in place with t-154's
+  copy and refusals. It sends `removeAccount: false`: the current session has
+  no account. Afterwards the transcript, the notes panel and the page read
+  again, and the emptied session's recap runs.
+- **Nowhere for an earlier session with no synopsis** (never drafted, or its
+  draft discarded or kept account removed). Those are deleted one exchange at a
+  time from the notes page.
 
 ## Deleting a module's worth (f-forget-session t-155)
 
