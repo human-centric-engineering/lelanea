@@ -1099,7 +1099,9 @@ describe('reading the transcript again (f-forget-session t-158)', () => {
 
     await waitFor(() => expect(openingRequests).toHaveLength(1));
     expect(transcriptReads()).toBe(2);
-    expect(result.current.entries.map((entry) => entry.id)).toEqual(['a0']);
+    expect(result.current.entries.map((entry) => ('id' in entry ? entry.id : null))).toEqual([
+      'a0',
+    ]);
     expect(result.current.live?.turnId).toBe('app_recap_v1_ses_2');
   });
 
