@@ -118,9 +118,13 @@ export function useCurrentSessionOffer({
     void read();
   }, [turnsSettled, read]);
 
-  // The person speaking retires the line saying the deletion went. Not any
-  // turn: the recap the emptied session is owed runs straight after it.
-  if (done && personSpoke) setDone(false);
+  // The person speaking retires the line saying the deletion went, and a
+  // refusal left standing. Not any turn: the recap the emptied session is
+  // owed runs straight after a deletion.
+  if (personSpoke && (done || error !== null)) {
+    setDone(false);
+    setError(null);
+  }
 
   const confirm = useCallback(() => {
     if (!session || busy) return;
@@ -155,12 +159,11 @@ export function useCurrentSessionOffer({
   }, [session, busy, fetchImpl, onDeleted, router, read]);
 
   const offered = session?.hasTurns === true && !turnRunning;
-  // A confirm left open while a turn began, or after the offer went, closes,
-  // with whatever it said: it is never shown again unasked.
-  if (confirming && !offered && !busy) {
-    setConfirming(false);
-    setError(null);
-  }
+  // A confirm left open while a turn began, or after the offer went, closes:
+  // it is never shown again unasked. A refusal it was showing stays said
+  // (`CurrentSessionConfirm`), since a 404 that withdrew the offer is the
+  // only word the person gets on why nothing was deleted.
+  if (confirming && !offered && !busy) setConfirming(false);
   return {
     offered,
     confirming: confirming && (offered || busy),
@@ -222,7 +225,15 @@ export function CurrentSessionConfirm({ offer }: { offer: CurrentSessionOffer })
       </div>
     );
   }
-  if (!offer.confirming) return null;
+  if (!offer.confirming) {
+    return offer.error ? (
+      <div className="flex-none px-6 pt-2 max-[760px]:px-3.5">
+        <Banner tone="info" lead="Not deleted.">
+          {offer.error}
+        </Banner>
+      </div>
+    ) : null;
+  }
   return (
     <div
       className="flex-none px-6 pt-2 max-[760px]:px-3.5"

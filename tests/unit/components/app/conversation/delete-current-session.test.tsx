@@ -256,6 +256,26 @@ describe('the confirmation', () => {
     await waitFor(() => expect(trigger()).toBeNull());
     expect(group()).toBeNull();
     expect(router.refresh).not.toHaveBeenCalled();
+    // The confirm went with the offer, but why nothing was deleted is still said.
+    expect(screen.getByText('Not deleted.')).toBeTruthy();
+    expect(screen.getByText('That session could not be found.')).toBeTruthy();
+  });
+
+  it('retires a refusal left standing once the person speaks', async () => {
+    world.refuseDelete = refusal(404, 'NOT_FOUND', 'That session could not be found.');
+    const ui = userEvent.setup();
+    const { rerender } = render(<Harness />);
+    await openConfirm(ui);
+    world.session = null;
+    await ui.click(screen.getByRole('button', { name: 'Delete this session' }));
+    await waitFor(() => expect(trigger()).toBeNull());
+    expect(screen.getByText('That session could not be found.')).toBeTruthy();
+
+    act(() => {
+      rerender(<Harness turnRunning personSpoke />);
+    });
+
+    expect(screen.queryByText('That session could not be found.')).toBeNull();
   });
 
   it('says a lost connection without claiming anything went', async () => {
