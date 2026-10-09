@@ -141,12 +141,12 @@ describe('MapDrawerBody — what the map holds', () => {
     expect(values).toHaveTextContent('not started');
     expect(values).toHaveAttribute('href', '/app/modules/values');
     expect(rows().filter((r) => r.getAttribute('aria-current') === 'page')).toHaveLength(0);
-    expect(mapPanel().textContent).not.toMatch(/complete|step \d/i);
+    expect(mapPanel().textContent).not.toMatch(/visited|complete|step \d/i);
     // And every row says it, rather than one row being special by accident.
     for (const row of rows()) expect(row).toHaveTextContent('not started');
   });
 
-  it("shows the reader's own journey: onboarding in progress, then complete (§15 t-102)", async () => {
+  it("shows the reader's own journey: onboarding in progress, then visited (§15 t-102)", async () => {
     const withStates = (states: Record<string, JourneyMapView['modules'][number]['state']>) => {
       const map = realMap();
       return {
@@ -170,12 +170,14 @@ describe('MapDrawerBody — what the map holds', () => {
     expect(onboarding).not.toHaveAttribute('aria-current');
     unmount();
 
-    // Later: onboarding complete, Values in progress.
+    // Later: onboarding visited, Values in progress. Never "complete": a module
+    // is only ever more or less covered (§6.12, t-143).
     get.mockResolvedValue(withStates({ onboarding: 'done', values: 'current' }));
     renderDrawers();
     await openMap();
 
-    expect(rows()[0]).toHaveTextContent('complete');
+    expect(rows()[0]).toHaveTextContent('visited');
+    expect(rows()[0]).not.toHaveTextContent(/complete|finished|done/i);
     expect(rows()[0].querySelector('i')?.getAttribute('style')).toContain('--color-status-green');
     expect(rows()[1]).toHaveTextContent('in progress');
     expect(rows().filter((r) => r.textContent?.includes('not started'))).toHaveLength(15);
@@ -209,7 +211,7 @@ describe('MapDrawerBody — what the map holds', () => {
     await userEvent.click(screen.getByRole('button', { name: /Your map/ }));
     await waitFor(() => expect(rows()[1]).toHaveTextContent('in progress'));
     expect(get).toHaveBeenCalledTimes(2);
-    expect(rows()[0]).toHaveTextContent('complete');
+    expect(rows()[0]).toHaveTextContent('visited');
   });
 
   it('keeps the newer map when the read from before the move answers last (t-106 review)', async () => {
@@ -244,7 +246,7 @@ describe('MapDrawerBody — what the map holds', () => {
     answerOld(withStates({ onboarding: 'current' }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(rows()[0]).toHaveTextContent('complete');
+    expect(rows()[0]).toHaveTextContent('visited');
     expect(rows()[1]).toHaveTextContent('in progress');
   });
 
