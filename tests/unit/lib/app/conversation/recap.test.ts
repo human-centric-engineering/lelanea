@@ -134,6 +134,7 @@ import {
 } from '@/lib/app/conversation/recap';
 import { MAX_OPENING_ATTEMPTS, OPENING_NOT_DUE } from '@/lib/app/conversation/opening';
 import { recapTurnId } from '@/lib/app/conversation/opening-id';
+import { isMarkedAgentOpened } from '@/lib/app/agent/turn-intake';
 import { redactedString } from '@/lib/security/redact';
 import type { ChatEvent } from '@/types/orchestration';
 
@@ -634,6 +635,8 @@ describe('runRecap', () => {
       message: RECAP_MESSAGE,
       clientTurnId: RECAP_ID,
     });
+    // Marked as the AI's, or the hook refuses its reserved id as a member's (t-160).
+    expect(isMarkedAgentOpened(h.runFacilitationTurn.mock.calls[0][0])).toBe(true);
     const request = h.streamChat.mock.calls[0][0];
     expect(request).not.toHaveProperty('message');
     expect(request.openingTurn.content.startsWith(RECAP_MESSAGE)).toBe(true);

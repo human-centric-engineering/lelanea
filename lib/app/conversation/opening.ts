@@ -74,6 +74,7 @@ import { readJourneyNodeStates } from '@/lib/app/onboarding/first-run-store';
 import { handedOffFrom } from '@/lib/app/onboarding/hand-off-state';
 import { hasPassedGate, type GateSubject } from '@/lib/app/gateway/gate';
 import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
+import { markAgentOpened } from '@/lib/app/agent/turn-intake';
 import { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
 
 export { OPENING_TURN_ID } from '@/lib/app/conversation/opening-id';
@@ -241,7 +242,7 @@ export async function runOpening(
 ): Promise<ChatStream> {
   const userId = request.user.id;
   return runFacilitationTurn(
-    {
+    markAgentOpened({
       userId,
       role: CONVERSATION_SEAT,
       agentId: surface.agentId,
@@ -252,7 +253,7 @@ export async function runOpening(
       signal: request.signal,
       keepAlive: request.keepAlive,
       headers: request.headers,
-    },
+    }),
     (extras) =>
       streamChat({
         // The agent opens the turn: no `message`, so no row in the person's name.

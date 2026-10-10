@@ -403,6 +403,8 @@ vi.mock('@/lib/db/client', () => {
 });
 
 import { runRecordedTurn } from '@/lib/app/agent/turns';
+import { markAgentOpened } from '@/lib/app/agent/turn-intake';
+import { OPENING_TURN_ID, recapTurnId } from '@/lib/app/conversation/opening-id';
 import { claimTurn, staleClaimMs } from '@/lib/app/agent/turn-record';
 import { GENERATION_PAUSED_FLAG } from '@/lib/app/agent/availability';
 import { ENDING_MESSAGES } from '@/lib/app/agent/endings';
@@ -771,6 +773,62 @@ describe('a turn id', () => {
       { type: 'error', code: 'unavailable', message: ENDING_MESSAGES.unavailable },
     ]);
     expect(modelCalls).toBe(1);
+  });
+});
+
+describe('an id the ledger must not take (t-160, t-161)', () => {
+  const recapId = recapTurnId('session-1');
+
+  it("refuses a member's turn under a recap's id, so the recap still runs under it", async () => {
+    // The pane is handed this id before the recap runs; a client that posts its
+    // own message under it must not claim the row the recap needs.
+    await expect(
+      runRecordedTurn(turnFor({ clientTurnId: recapId }), fakeRun(turnFor()))
+    ).resolves.toEqual({
+      refused: true,
+      message: expect.any(String),
+      reason: 'TURN_ID_RESERVED',
+    });
+    expect(modelCalls).toBe(0);
+    expect(db.turns).toHaveLength(0);
+
+    const recap = markAgentOpened(turnFor({ clientTurnId: recapId, message: 'recap' }));
+    await take(recap);
+    expect(modelCalls).toBe(1);
+    expect(db.turns.map((t) => [t.turnId, t.status])).toEqual([[recapId, 'completed']]);
+  });
+
+  it("refuses a member's turn under the opening's id, and lets the marked opening run", async () => {
+    await expect(
+      runRecordedTurn(turnFor({ clientTurnId: OPENING_TURN_ID }), fakeRun(turnFor()))
+    ).resolves.toMatchObject({ refused: true, reason: 'TURN_ID_RESERVED' });
+    // Any version of the prefix, not only the current id.
+    await expect(
+      runRecordedTurn(turnFor({ clientTurnId: 'app_opening_v9' }), fakeRun(turnFor()))
+    ).resolves.toMatchObject({ refused: true, reason: 'TURN_ID_RESERVED' });
+    expect(db.turns).toHaveLength(0);
+
+    await take(markAgentOpened(turnFor({ clientTurnId: OPENING_TURN_ID })));
+    expect(db.turns.map((t) => t.turnId)).toEqual([OPENING_TURN_ID]);
+  });
+
+  it('lets an ordinary id that merely contains a reserved word run', async () => {
+    await take(turnFor({ clientTurnId: 'my_app_recap_notes' }));
+    expect(db.turns.map((t) => t.turnId)).toEqual(['my_app_recap_notes']);
+  });
+
+  it.each(['.', '..'])('refuses %j, which no link could reach, before claiming it', async (id) => {
+    await expect(
+      runRecordedTurn(turnFor({ clientTurnId: id }), fakeRun(turnFor()))
+    ).resolves.toMatchObject({ refused: true, reason: 'TURN_ID_INVALID' });
+    expect(modelCalls).toBe(0);
+    expect(db.turns).toHaveLength(0);
+  });
+
+  it('still takes ids that only contain dots', async () => {
+    await take(turnFor({ clientTurnId: '...' }));
+    await take(turnFor({ clientTurnId: 'a.b', message: 'Another.' }));
+    expect(db.turns.map((t) => t.turnId)).toEqual(['...', 'a.b']);
   });
 });
 

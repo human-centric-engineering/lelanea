@@ -391,19 +391,22 @@ describe('useConversation', () => {
       expect(sentIds[2]).toBe(first);
     });
 
-    it('reads TURN_ID_REUSED as unavailable and drops the id', async () => {
-      const { result, first } = await endThenRetry('unavailable');
-      refuse = refusal(409, 'TURN_ID_REUSED');
-      act(() => result.current.send());
-      await waitFor(() => expect(result.current.phase).toBe('idle'));
-      expect(result.current.entries).toEqual([
-        expect.objectContaining({ kind: 'ending', code: 'unavailable' }),
-      ]);
-      refuse = null;
-      act(() => result.current.send());
-      await waitFor(() => expect(sentIds).toHaveLength(3));
-      expect(sentIds[2]).not.toBe(first);
-    });
+    it.each(['TURN_ID_REUSED', 'TURN_ID_RESERVED', 'TURN_ID_INVALID'])(
+      'reads %s as unavailable and drops the id',
+      async (code) => {
+        const { result, first } = await endThenRetry('unavailable');
+        refuse = refusal(409, code);
+        act(() => result.current.send());
+        await waitFor(() => expect(result.current.phase).toBe('idle'));
+        expect(result.current.entries).toEqual([
+          expect.objectContaining({ kind: 'ending', code: 'unavailable' }),
+        ]);
+        refuse = null;
+        act(() => result.current.send());
+        await waitFor(() => expect(sentIds).toHaveLength(3));
+        expect(sentIds[2]).not.toBe(first);
+      }
+    );
 
     it('a network failure before any frame is the unavailable path, id kept', async () => {
       const { result } = await loaded();

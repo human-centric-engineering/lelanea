@@ -372,6 +372,7 @@ dropped.
 | `not_sent`                             | `endings.not_sent` — no retry offered               | dropped                         |
 | `409 TURN_IN_FLIGHT`                   | `stillWorking` — the agent is still on it           | kept, no new one minted         |
 | `409 TURN_ID_REUSED`                   | `endings.unavailable`                               | dropped                         |
+| `409 TURN_ID_RESERVED` / `_INVALID`    | `endings.unavailable`                               | dropped                         |
 | a network failure, or a dropped stream | `endings.unavailable`                               | kept                            |
 | `ceiling_reached`                      | `ceilingEnding(figures)` — spent, limit, reset date | kept — a replay is still served |
 | `crisis` (hard)                        | the resource, laid out                              | kept                            |

@@ -437,6 +437,19 @@ row whose `messageId` is the turn's `assistantMessageId`.
 | failed, or abandoned     | runs again under the same id                                                                                                              |
 | used for different words | `409`, `details.reason: TURN_ID_REUSED`                                                                                                   |
 
+**Two ids are refused before any of that** (`turn-intake.ts`, t-160 / t-161),
+each `409` before anything is claimed:
+
+- **An AI opening's id** (`app_opening_…`, `app_recap_…`) on a member's turn:
+  `details.reason: TURN_ID_RESERVED`. The transcript read hands the pane the
+  recap's id ahead of the recap; a member's turn claiming it first would have
+  the recap refused and the member's turn read as the AI's. The opening and
+  recap still pass through the same hook, so they mark their turn
+  (`markAgentOpened`, a `Symbol.for` key no JSON body can carry).
+- **`.` or `..`**: `details.reason: TURN_ID_INVALID`. A link to such a turn can
+  never reach it — the URL standard reads `%2E` as a dot — so the metering
+  turn routes refuse them too (`turnIdParamSchema`).
+
 - **Scoped to the person.** `@@unique([userId, turnId])` is the claim; the same id
   from someone else is a new turn and says nothing about theirs.
 - **No `turnId` behaves as before**: a minted id is never sent again, so every

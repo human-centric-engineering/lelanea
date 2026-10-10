@@ -28,7 +28,12 @@ import {
   ENDING_UNAVAILABLE,
   STILL_THINKING,
 } from '@/lib/app/agent/endings';
-import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
+import {
+  TURN_ID_INVALID,
+  TURN_ID_RESERVED,
+  TURN_ID_REUSED,
+  TURN_IN_FLIGHT,
+} from '@/lib/app/agent/turn-codes';
 import { capabilityAnswered } from '@/lib/app/agent/capability-answers';
 import { leaningChangeFromResult, type LeaningChange } from '@/lib/app/voice/leaning-change';
 import {
@@ -83,7 +88,8 @@ import type { Citation } from '@/types/orchestration';
  * a turn that completed after the connection dropped, and re-runs one that
  * failed (§08 t-54). Different words are a different turn and mint a new id —
  * which is why `TURN_ID_REUSED` cannot happen from here, and is read as
- * `unavailable` with the id dropped if it ever does. `TURN_IN_FLIGHT` means
+ * `unavailable` with the id dropped if it ever does; so are `TURN_ID_RESERVED`
+ * and `TURN_ID_INVALID`, which a minted id never meets either. `TURN_IN_FLIGHT` means
  * the earlier request is still being answered: the id is kept and no new one
  * is minted. `not_sent` keeps no id — a retry meets the same refusal.
  *
@@ -237,6 +243,16 @@ interface Options {
 function owedId(transcript: { openingTurnId?: string }): string {
   return transcript.openingTurnId ?? OPENING_TURN_ID;
 }
+
+/**
+ * Refusals that say the id itself will never be taken (`turn-codes.ts`): a
+ * retry under it meets the same refusal, so it is dropped.
+ */
+const UNUSABLE_TURN_IDS: ReadonlySet<string> = new Set([
+  TURN_ID_REUSED,
+  TURN_ID_RESERVED,
+  TURN_ID_INVALID,
+]);
 
 /** How many times an opening that did not land reads the transcript again (t-122). */
 export const MAX_OPENING_RECHECKS = 2;
@@ -708,8 +724,10 @@ export function useConversation(options: Options = {}): ConversationState {
           if (controller.signal.aborted) return;
           // A refusal before any frame, or a network failure before one: the
           // same path as `unavailable`, except that `TURN_IN_FLIGHT` keeps its
-          // own words (the earlier request is still being answered) and
-          // `TURN_ID_REUSED` — which this client cannot produce — drops the id.
+          // own words (the earlier request is still being answered) and an id
+          // the hook will never take — reused for other words, reserved for the
+          // AI's own turns, or unlinkable — is dropped. This client mints its
+          // ids, so it produces none of those three.
           const refused = error instanceof TurnRefused ? error.code : null;
           const code = refused === TURN_IN_FLIGHT ? TURN_IN_FLIGHT : ENDING_UNAVAILABLE;
           if (message !== null) {
@@ -718,7 +736,7 @@ export function useConversation(options: Options = {}): ConversationState {
           end(
             { kind: 'ending', turnId, code, message: ENDING_MESSAGES.unavailable },
             {
-              keepId: refused !== TURN_ID_REUSED,
+              keepId: refused === null || !UNUSABLE_TURN_IDS.has(refused),
               // No answer at all: the request may never have arrived.
               recheck: refused === null,
             }
