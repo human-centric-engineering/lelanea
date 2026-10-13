@@ -34,8 +34,10 @@
  * runs the bare model twice — a detached profile, a seed that never ran, an
  * operator who pinned a different model on one of the two agents — and then
  * reports two similar-looking walls of text as evidence that the fingerprint
- * changed nothing. Every one of those states is reachable through the admin UI,
- * and none of them errors.
+ * changed nothing. Some of those states are one admin edit away (a model
+ * pinned on one agent, the profile deleted), the rest one database write away
+ * since Sunrise 0.14.0 locked the others on a system agent — and none of them
+ * errors.
  *
  * So {@link assertArmsComparable} composes **both** system prompts before
  * anything is queued and refuses unless all of the following hold:
@@ -317,8 +319,15 @@ export function assertArmsComparable(arms: readonly ResolvedVoiceArm[]): void {
           `${key}: ${JSON.stringify(fingerprint.binding[key])} vs ${JSON.stringify(bare.binding[key])}`
       )
       .join('; ');
+    const modelRemedy = differing.some((key) => key !== 'temperature')
+      ? ' Match the provider and model in /admin/orchestration/agents — the seed pins both arms to the same pair, and a change to one has to be made to the other.'
+      : '';
+    // Temperature is locked on a system agent in the admin, so its remedy is SQL.
+    const temperatureRemedy = differing.includes('temperature')
+      ? ` Temperature is not editable in the admin on a system agent: UPDATE ai_agent SET temperature = ${fingerprint.binding.temperature} WHERE id = '${bare.agentId}';`
+      : '';
     throw new ValidationError(
-      `The two arms are bound to different models, so the run would compare the models rather than the voice (${detail}). Match the provider and model in /admin/orchestration/agents — the seed pins both arms to the same pair, and a change to one has to be made to the other. Temperature is not editable there on a system agent; match it in the database.`
+      `The two arms are bound to different settings, so the run would compare those rather than the voice (${detail}).${modelRemedy}${temperatureRemedy}`
     );
   }
 }

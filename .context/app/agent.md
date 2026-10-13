@@ -297,7 +297,8 @@ applies, so the tool sees only what t-25's designation rule lets it quote.
   visibility is locked on a system agent (t-170; the runbook's
   [Take the agent off a seat](./incident-runbook.md#take-the-agent-off-a-seat)).
 - **The grant is filled once.** A binding that exists — switched off included —
-  is an operator's and is left alone. Grants are not in the agent snapshot, so
+  is left alone. (Since Sunrise 0.14.0 switching it off is a database edit; the
+  admin locks a system agent's tool switches.) Grants are not in the agent snapshot, so
   restoring an earlier version does not take the tool away.
 
 The members' way in is `POST /api/v1/framework/facilitation/{onboarding|facilitator}/chat/stream`,

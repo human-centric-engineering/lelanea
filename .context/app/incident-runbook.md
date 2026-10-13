@@ -104,22 +104,34 @@ seat is bound again.
   chat serve only a `public` agent, so
   `UPDATE ai_agent SET visibility = 'internal' WHERE slug = 'lelanea-guide';`
   closes them all, and seed `007` widens the agent only once, so a re-seed
-  leaves it closed. Set it back to `public` to restore. It's a database edit
+  leaves it closed. Set it back to `public` to restore. A database edit writes
+  no version row and no audit entry, so **note the time and the statement in
+  the incident log**, for closing and for reopening. It's a database edit
   because the admin can't do it any more: since Daybreak 0.7.0 (Sunrise 0.14.0)
   the guide is a locked system agent in Orchestration → Agents, and its
   visibility, prompt, behaviour, Active switch and which tools it has are
   refused there (owner ruling, t-170). Only operational settings such as the
   model and spend limits stay editable; the agent form lists them.
-- **What the admin can still change on its tools.** A tool's settings stay
-  editable: its rate limit and its `customConfig`, which for `get_state` /
-  `fill_slot` is seed `013`'s slot-read allowlist (which personal data the agent
-  may read). Check those first if its behaviour changed. Its prompt, and which
-  tools it has, can only change through the database or a deploy.
-- **Restoring them.** The seed units put back the instructions
-  (`app-lelanea/003-voice-fingerprint`) and **re-create a missing tool**
-  (`007`, `013`, `014`, `023`–`025`), but an applied unit is skipped, so delete
-  its row first (`DELETE FROM seed_history WHERE name = '<unit>';`), then
-  `npm run db:seed`. They leave an existing tool alone — switched off, edited or
+- **What the admin can still change.** Two things that shape its behaviour stay
+  editable, so check them first if its behaviour changed:
+  - **Its voice profile**, `lelanea-voice-core` in Orchestration → Agent
+    Profiles: persona, brand voice and guardrails. It can be edited or deleted
+    there; deleting it detaches the voice from the guide.
+  - **A tool's settings:** its rate limit and its `customConfig`, which for
+    `get_state` / `fill_slot` is seed `013`'s slot-read allowlist (which
+    personal data the agent may read).
+
+  Its own instructions, and which tools it has, change only through the
+  database or a deploy.
+
+- **Restoring them.** `app-lelanea/003-voice-fingerprint` puts back the
+  instructions and the voice profile (re-attaching it). These **re-create a
+  missing tool**: `app-lelanea/007-agent-reachable`,
+  `app-lelanea/013-agent-slot-tools`, `app-lelanea/014-suggest-resource`,
+  `app-lelanea/023-set-register`, `app-lelanea/024-search-person-memory`,
+  `app-lelanea/025-set-leaning`. An applied unit is skipped, so delete its row
+  first (`DELETE FROM seed_history WHERE name = 'app-lelanea/…';`, the full
+  name), then `npm run db:seed`. They leave an existing tool alone — switched off, edited or
   added — so correct those in `ai_agent_capability` directly.
 - **The agent has no other door.** Sunrise's consumer chat route refuses its slug
   (divergences Row 21). **Never make it a module's primary agent**: Daybreak's
