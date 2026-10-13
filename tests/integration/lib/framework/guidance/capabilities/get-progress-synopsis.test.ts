@@ -24,6 +24,12 @@ describe('execute', () => {
     expect(loadProgressSynopsis).not.toHaveBeenCalled();
   });
 
+  it('refuses an anonymous embed visitor with anonymous_visitor, touching nothing', async () => {
+    const result = await cap.execute(args, ctx('embed_visitor1'));
+    expect(result).toMatchObject({ success: false, error: { code: 'anonymous_visitor' } });
+    expect(loadProgressSynopsis).not.toHaveBeenCalled();
+  });
+
   it('reports journeyStarted:false with a null synopsis when not started', async () => {
     vi.mocked(loadProgressSynopsis).mockResolvedValue(null);
     expect(await cap.execute(args, ctx('user-1'))).toEqual({

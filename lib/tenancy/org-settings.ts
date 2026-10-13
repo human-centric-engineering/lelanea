@@ -1,11 +1,16 @@
 /**
- * `Org.settings` — the platform's own slice of it (§108 t-713).
+ * `Org.settings` — the platform's own slices of it (§108 t-713, §116 t-724,
+ * §120 t-742).
  *
  * The column has existed since §106 and nothing read or wrote it. This module
  * is the whole of what the platform keeps there: a `retention` slice naming
- * the windows an org wants instead of the global ones. Everything else in that
- * JSON belongs to whoever put it there — a fork's own org-level config — and
- * the write path below preserves it rather than replacing the object.
+ * the windows an org wants instead of the global ones, a `platformAgents`
+ * marker recording which platform-agent definitions the org was last
+ * reconciled against (see {@link readPlatformAgentsMarker}), and a `providers`
+ * slice naming the providers a platform admin approved the org for (see
+ * {@link readOrgProviderPolicy}). Everything else in that JSON belongs to
+ * whoever put it there — a fork's own org-level config — and every write path
+ * below preserves it rather than replacing the object.
  *
  * **Validate on read, and degrade to inherit — one key at a time.** The
  * column is admin-written JSON, so a stored value is not trusted on the way
@@ -25,6 +30,11 @@
  * it does not recognise: a key that cannot be read is *absent*, which is
  * already the vocabulary's word for "inherit".
  *
+ * **The provider slice is the exception, and fails closed.** There, the
+ * degraded answer is not a global default but "no provider", because the
+ * blast radius of reading it wrong is an org's data reaching a vendor it was
+ * never approved for. See {@link readOrgProviderPolicy}.
+ *
  * **Tenancy posture:** stateless — nothing here is cached. {@link
  * loadOrgRetention} filters on the org id itself, which is unique across orgs,
  * so it is a row-keyed read in the sense `lib/tenancy/process-state.ts`
@@ -37,11 +47,14 @@
  */
 
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { z } from 'zod';
 import { prisma } from '@/lib/db/client';
 import { logger as defaultLogger, type Logger } from '@/lib/logging';
 import {
   ORG_RETENTION_KEYS,
+  orgProviderPolicySchema,
   orgRetentionSchema,
+  type OrgProviderPolicy,
   type OrgRetentionSlice,
 } from '@/lib/validations/tenancy';
 
@@ -165,6 +178,167 @@ export function applyRetentionPatch(
 
   if (Object.keys(base).length === 0) return Prisma.DbNull;
   return base as Prisma.InputJsonObject;
+}
+
+/** The key the platform-agent reconcile owns inside `Org.settings`. */
+export const ORG_PLATFORM_AGENTS_KEY = 'platformAgents';
+
+const platformAgentsMarkerSchema = z.object({
+  hash: z.string().min(1),
+  slugs: z.array(z.string()),
+});
+
+/**
+ * What the platform-agent reconcile last wrote into an org (§116 t-724).
+ *
+ * `hash` is the registry digest it reconciled against, so the maintenance job
+ * can tell an org that is behind the running code without reading its agents.
+ * `slugs` are the platform agents it materialised there, and they are what
+ * lets a later reconcile deactivate an agent the registry dropped while
+ * leaving every other `isSystem` agent — a fork's own seeded one — alone.
+ */
+export type PlatformAgentsMarker = z.infer<typeof platformAgentsMarkerSchema>;
+
+/**
+ * Read the marker out of an org's `settings`. Anything unreadable is `null`,
+ * which means "never reconciled": the job reconciles the org, and nothing is
+ * deactivated because nothing is known to have been placed.
+ */
+export function readPlatformAgentsMarker(settings: unknown): PlatformAgentsMarker | null {
+  if (!isJsonObject(settings)) return null;
+  const parsed = platformAgentsMarkerSchema.safeParse(settings[ORG_PLATFORM_AGENTS_KEY]);
+  return parsed.success ? parsed.data : null;
+}
+
+/** One org's marker. `Org` is a system model, so no tenant scope is needed. */
+export async function loadPlatformAgentsMarker(
+  orgId: string,
+  db: Pick<PrismaClient, 'org'> = prisma
+): Promise<PlatformAgentsMarker | null> {
+  const org = await db.org.findUnique({ where: { id: orgId }, select: { settings: true } });
+  return org ? readPlatformAgentsMarker(org.settings) : null;
+}
+
+/**
+ * Store the marker, preserving every other key in `settings`.
+ *
+ * Through {@link writeSettingsSlice}, the same serializable read-modify-write
+ * as `updateOrg`'s retention patch. A clash fails the later writer rather than
+ * losing either; the reconcile is re-run by the next maintenance tick.
+ */
+export async function writePlatformAgentsMarker(
+  orgId: string,
+  marker: PlatformAgentsMarker,
+  db: Pick<PrismaClient, '$transaction'> = prisma
+): Promise<void> {
+  await writeSettingsSlice(orgId, ORG_PLATFORM_AGENTS_KEY, marker, db);
+}
+
+/** The key the provider policy owns inside `Org.settings` (§120 t-742). */
+export const ORG_PROVIDERS_KEY = 'providers';
+
+/** What an org that has never been granted anything holds: no provider. */
+const NO_PROVIDERS: OrgProviderPolicy = { approved: [] };
+
+/**
+ * Read an org's provider policy out of its `settings`.
+ *
+ * **Fails closed, unlike retention.** An unreadable retention window degrades
+ * to the global one, because the cost of that failure is pruning. An
+ * unreadable provider policy degrades to *nothing approved*, because the
+ * alternative is sending an org's data to a vendor nobody approved it for. A
+ * slice that is absent is the same answer for a different reason: every org
+ * starts with no provider until a platform admin grants one.
+ *
+ * The whole slice is validated as one value rather than per key: half a
+ * policy — the approved set without its jurisdiction restriction — is wider
+ * than the policy that was written.
+ */
+export function readOrgProviderPolicy(
+  settings: unknown,
+  context: Record<string, unknown> = {},
+  log: Logger = defaultLogger
+): OrgProviderPolicy {
+  if (!isJsonObject(settings)) return NO_PROVIDERS;
+  const slice = settings[ORG_PROVIDERS_KEY];
+  if (slice === undefined || slice === null) return NO_PROVIDERS;
+  const parsed = orgProviderPolicySchema.safeParse(slice);
+  if (parsed.success) return parsed.data;
+  log.warn('Org provider policy is malformed; treating the org as approved for no provider', {
+    ...context,
+    issues: parsed.error.issues.map((issue) => issue.path.join('.') || '(root)'),
+  });
+  return NO_PROVIDERS;
+}
+
+/**
+ * Replace an org's provider policy, preserving every other key in
+ * `settings`, and return what it replaced.
+ *
+ * Through {@link writeSettingsSlice}: a clash with a concurrent settings write
+ * throws `P2034`, which the route answers with a 409.
+ *
+ * **It does not clear the policy cache.** `org-provider-policy.ts` caches each
+ * org's policy for 60 seconds, so a caller in a running process calls
+ * `forgetOrgProviderPolicy(orgId)` after the write, as the grant route does;
+ * otherwise a policy read before the write (creating an org reads it, for the
+ * cleanup agent's pick) answers for up to a minute. It is not done here
+ * because `org-provider-policy.ts` imports this module.
+ *
+ * @returns the previous and the stored policy, or `null` when the org does
+ *   not exist.
+ */
+export async function writeOrgProviderPolicy(
+  orgId: string,
+  policy: OrgProviderPolicy,
+  db: Pick<PrismaClient, '$transaction'> = prisma
+): Promise<{ previous: OrgProviderPolicy; stored: OrgProviderPolicy } | null> {
+  // `null` jurisdictions and an absent key say the same thing; store one.
+  const stored: OrgProviderPolicy = policy.jurisdictions
+    ? { approved: policy.approved, jurisdictions: policy.jurisdictions }
+    : { approved: policy.approved };
+  const replaced = await writeSettingsSlice(orgId, ORG_PROVIDERS_KEY, stored, db);
+  if (replaced === null) return null;
+  return { previous: readOrgProviderPolicy(replaced.settings, { orgId }), stored };
+}
+
+/**
+ * Replace one platform-owned key in an org's `settings`, preserving every
+ * other key — a fork's included.
+ *
+ * A read-modify-write in a SERIALIZABLE transaction: two writers each reading
+ * the object before the other wrote would drop one slice. A clash fails the
+ * later writer with Prisma's `P2034` rather than losing either; a route maps
+ * it to a 409 with {@link isSettingsWriteConflict}.
+ *
+ * @returns the column as it stood before the write, so a caller can say what
+ *   it replaced; `null` when the org does not exist, and nothing was written.
+ */
+async function writeSettingsSlice(
+  orgId: string,
+  key: string,
+  value: unknown,
+  db: Pick<PrismaClient, '$transaction'>
+): Promise<{ settings: unknown } | null> {
+  return db.$transaction(
+    async (tx) => {
+      const row = await tx.org.findUnique({ where: { id: orgId }, select: { settings: true } });
+      if (!row) return null;
+      const base: Record<string, unknown> = isJsonObject(row.settings) ? { ...row.settings } : {};
+      base[key] = value;
+      await tx.org.update({
+        where: { id: orgId },
+        data: { settings: base as Prisma.InputJsonObject },
+      });
+      return { settings: row.settings };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+  );
+}
+
+/** Whether `error` is a SERIALIZABLE clash from {@link writeSettingsSlice}. */
+export function isSettingsWriteConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
 }
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {

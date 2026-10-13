@@ -5,8 +5,8 @@
 > This repository is **Lelañea**, an application built **on** the Daybreak
 > framework (`human-centric-engineering/daybreak`), which is itself built on the
 > Sunrise platform (`human-centric-engineering/sunrise`). Lelañea was cut from
-> Daybreak `daybreak-v0.2.0` and is currently synced to **`daybreak-v0.6.0`**
-> (Sunrise 0.13.0).
+> Daybreak `daybreak-v0.2.0` and is currently synced to **`daybreak-v0.7.0`**
+> (Sunrise 0.14.0).
 >
 > **You are building an app. You are not developing Daybreak, and you are not
 > developing Sunrise.** Everything below this banner is **Sunrise's own platform
@@ -53,30 +53,32 @@
 >
 > **Lelañea-owned (edit these freely):**
 >
-> - The six `lib/app/leaf-*.ts` seams — `leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
->   `leaf-db-drift.ts`, `leaf-data-export.ts`, `leaf-brand.ts`, `leaf-ci.ts`
+> - The seven `lib/app/leaf-*.ts` seams — `leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
+>   `leaf-db-drift.ts`, `leaf-data-export.ts`, `leaf-brand.ts`, `leaf-ci.ts`,
+>   `leaf-platform-agents.ts`
 > - Every other `lib/app/*` file Daybreak keeps empty for us (`capabilities.ts`,
 >   `context-contributors.ts`, `env.ts`, `rate-limit.ts`, `public-nav.ts`,
 >   `protected-nav.ts`, `auth-landing.ts`, `emails.ts`, `csp.ts`, `jobs.ts`,
->   `user-created.ts`, …)
+>   `user-created.ts`, `provider-credentials.ts`, …)
 > - `prisma/schema/app.prisma` (models with `@@map("app_…")`) + `app_…` migrations
 > - **`.context/app/`** — our documentation tree · `components/app/**` — our components
 > - `app/brand-theme.css`, and our identity: `package.json`, `README.md`, `.env*`
 > - New files anywhere: pages in a route group, routes under `app/api/v1/`, `lib/` modules
 >
-> **The six bridges — DO NOT FILL. Fill the `leaf-*` file each delegates to:**
+> **The seven bridges — DO NOT FILL. Fill the `leaf-*` file each delegates to:**
 >
-> | Fill this (ours)              | NOT this (Daybreak's) |
-> | ----------------------------- | --------------------- |
-> | `lib/app/leaf-bootstrap.ts`   | `bootstrap.ts`        |
-> | `lib/app/leaf-admin-nav.ts`   | `admin-nav.ts`        |
-> | `lib/app/leaf-data-export.ts` | `data-export.ts`      |
-> | `lib/app/leaf-brand.ts`       | `brand.ts`            |
-> | `lib/app/leaf-db-drift.ts`    | `db-drift.ts`         |
-> | `lib/app/leaf-ci.ts`          | `ci.ts`               |
+> | Fill this (ours)                  | NOT this (Daybreak's) |
+> | --------------------------------- | --------------------- |
+> | `lib/app/leaf-bootstrap.ts`       | `bootstrap.ts`        |
+> | `lib/app/leaf-admin-nav.ts`       | `admin-nav.ts`        |
+> | `lib/app/leaf-data-export.ts`     | `data-export.ts`      |
+> | `lib/app/leaf-brand.ts`           | `brand.ts`            |
+> | `lib/app/leaf-db-drift.ts`        | `db-drift.ts`         |
+> | `lib/app/leaf-ci.ts`              | `ci.ts`               |
+> | `lib/app/leaf-platform-agents.ts` | `platform-agents.ts`  |
 >
 > **This table is the roster — count bridges here, never from an ordinal in a
-> docblock.** Daybreak fills all six; a file joining the list is a breaking change
+> docblock.** Daybreak fills all seven; a file joining the list is a breaking change
 > and is called out in its changelog.
 >
 > Each bridge runs Daybreak's registration and then calls our hook. Filling a
@@ -90,7 +92,7 @@
 > - **`.context/framework/`** — including its `CHANGELOG.md`, `VERSIONING.md` and
 >   planning board. That board tracks **Daybreak's** work, not ours; ours goes in
 >   `.context/app/`.
-> - `lib/daybreak-version.ts`, and the six `lib/app/*` bridges above
+> - `lib/daybreak-version.ts`, and the seven `lib/app/*` bridges above
 >
 > **Sunrise-owned (do NOT edit; extend through a seam):**
 >
@@ -723,6 +725,7 @@ All commands default to branch diff mode but accept file/folder paths. The test-
 | Cost Estimation          | `.context/orchestration/cost-estimation.md`               | Generic pre-run USD estimate service; empirical/heuristic modes; trigger-UI recipe                                                               |
 | Step Provenance          | `.context/orchestration/provenance.md`                    | `output.sources` contract, engine capture, approval/trace UI pills, opt-in guard rule                                                            |
 | Agent Field Registry     | `.context/orchestration/agent-fields.md`                  | Single source of truth for `AiAgent` config fields; how to add a field, derived vs parity-tested surfaces, fork seam                             |
+| Platform Agents          | `.context/orchestration/platform-agents.md`               | Sunrise's own agents as code definitions, one instance per org; who owns which field; the reconcile, its three callers and its fork seam         |
 | Patterns & Steps         | `.context/orchestration/patterns-and-steps.md`            | The 21 canonical patterns, step→pattern relationships, author guidance                                                                           |
 | Orchestration Engine     | `.context/orchestration/engine.md`                        | Runtime executor, registry, events, strategies                                                                                                   |
 | Tracing (OTEL plug-in)   | `.context/orchestration/tracing.md`                       | Tracer interface, no-op default, OTEL adapter, span tree, attributes                                                                             |

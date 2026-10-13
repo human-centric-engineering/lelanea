@@ -136,6 +136,87 @@ export const orgRetentionSchema = z
 export type OrgRetentionSlice = z.infer<typeof orgRetentionSchema>;
 
 /**
+ * A jurisdiction code: where a provider processes data (`AiProviderConfig
+ * .jurisdiction`), and what an org's provider policy may restrict to (§120
+ * t-742). The operator chooses the vocabulary — `EU`, `US`, `UK`, `EU-DE` —
+ * so this checks a shape, not a list. Stored upper-cased, so `eu` and `EU`
+ * are one code and a match never turns on case.
+ */
+export const jurisdictionSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^[A-Za-z][A-Za-z0-9-]{0,31}$/,
+    'Jurisdiction must be a short code of letters, digits and hyphens, starting with a letter (e.g. EU, US, EU-DE)'
+  )
+  .transform((code) => code.toUpperCase());
+
+/** An org's jurisdiction restriction: `null` means none. */
+const jurisdictionList = z
+  .array(jurisdictionSchema)
+  .min(1, 'Name at least one jurisdiction, or send null for no restriction')
+  .max(50, 'At most 50 jurisdictions')
+  .transform((codes) => [...new Set(codes)])
+  .nullable();
+
+/**
+ * One org's provider policy as STORED in `Org.settings.providers` (§120
+ * t-742): the provider rows a platform admin has approved it for, by id, and
+ * optionally the jurisdictions it is held to.
+ *
+ * Providers are global (design Q3), so `approved` is a permission over the
+ * operator's provider rows — not a list of the org's own providers. `[]`
+ * approves nothing, which is where every org but the install org starts.
+ *
+ * **Row ids, not slugs.** A slug can be renamed, deleted and re-created by a
+ * platform admin, a seed or an import; a grant keyed on it would follow the
+ * slug to whatever row holds it next. An id cannot move, so a renamed row
+ * keeps its grants and a re-created one starts with none.
+ *
+ * `jurisdictions`, when present, restricts the approved set further: a
+ * provider is permitted only if its recorded jurisdiction is one of them, and
+ * a provider with none recorded matches no restriction.
+ *
+ * `.strict()` on read too, deliberately: the read fails closed, and a key it
+ * does not know may be a restriction it would otherwise ignore.
+ */
+export const orgProviderPolicySchema = z
+  .object({
+    approved: z
+      .array(z.string().min(1).max(64))
+      .max(200, 'At most 200 providers')
+      .transform((ids) => [...new Set(ids)]),
+    // Stored without the key when there is no restriction.
+    jurisdictions: jurisdictionList.optional(),
+  })
+  .strict();
+
+export type OrgProviderPolicy = z.infer<typeof orgProviderPolicySchema>;
+
+/**
+ * `PUT /api/v1/admin/orgs/[id]/providers` body: the same policy, naming
+ * providers by SLUG, which is what an operator knows them by. The route
+ * resolves each slug to its row and stores the ids; an unknown slug is a 400.
+ * Duplicates are folded on the way in.
+ *
+ * **`jurisdictions` is required**, as a list or `null`. A PUT replaces the
+ * whole policy, so an optional key would let a caller who meant only to add a
+ * provider silently lift the org's jurisdiction restriction — a write that
+ * widens what an org's data may reach must say so.
+ */
+export const orgProviderPolicyInputSchema = z
+  .object({
+    approved: z
+      .array(slugSchema.max(50, 'Provider slug must be less than 50 characters'))
+      .max(200, 'At most 200 providers')
+      .transform((slugs) => [...new Set(slugs)]),
+    jurisdictions: jurisdictionList,
+  })
+  .strict();
+
+export type OrgProviderPolicyInput = z.infer<typeof orgProviderPolicyInputSchema>;
+
+/**
  * The platform-owned slices of `Org.settings` a PATCH may write.
  *
  * `retention: null` removes the slice, so the org inherits every global

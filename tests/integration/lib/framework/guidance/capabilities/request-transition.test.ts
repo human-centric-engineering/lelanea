@@ -25,6 +25,12 @@ describe('execute', () => {
     expect(applyJourneyTransition).not.toHaveBeenCalled();
   });
 
+  it('refuses an anonymous embed visitor with anonymous_visitor, touching nothing', async () => {
+    const result = await cap.execute(args, ctx('embed_visitor1'));
+    expect(result).toMatchObject({ success: false, error: { code: 'anonymous_visitor' } });
+    expect(applyJourneyTransition).not.toHaveBeenCalled();
+  });
+
   it('reports journeyStarted:false when the journey has not started', async () => {
     vi.mocked(applyJourneyTransition).mockResolvedValue(null);
     expect(await cap.execute(args, ctx('user-1'))).toEqual({

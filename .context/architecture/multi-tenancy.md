@@ -63,6 +63,29 @@ is on:
   have no org); a tick fired from an admin's session sweeps every org, not
   the admin's ([`tenancy/context.md` → Background work](../tenancy/context.md#who-enters-it--the-read-rule),
   [`scheduling.md`](../orchestration/scheduling.md#unified-maintenance-tick-admin-auth-required-preferred)).
+- **Sunrise's own agents and templates in every org** — each org gets its
+  own instance of the platform's tenant-facing agents (`mcp-system`, the
+  evaluation judges, the case generator and the clean-up agent), made when
+  the org is created and kept current by a reconcile on each release, so a
+  new org's MCP calls, evaluations, case generation and clean-up upload work
+  with no manual step. They are defined in code: an org tunes how they run
+  (provider, model, spend, rate limit, retention, and each capability
+  binding's config and rate limit), and the API refuses edits to what the
+  platform owns. `mcp-system`'s tools are the exception: which ones it may
+  use is the org's choice. The workflow builder offers every org the
+  built-in templates, served from code. See
+  [platform agents](../orchestration/platform-agents.md).
+- **Each org reaches only the AI providers it was approved for** (§120
+  t-742). The install org may use every provider; every other org starts with
+  none, and a platform admin grants providers, and optionally holds the org to
+  jurisdictions, on the org's admin page (`/admin/orgs/[id]`) or with
+  `PUT /api/v1/admin/orgs/[id]/providers`. Enforced on
+  every vendor call core makes, whether the provider was auto-picked, named on
+  the agent, a fallback, or an embedding or audio arm, and a fork's own
+  eligibility rule can narrow it but never widen it. **Grant providers to each
+  org you create after flipping the mode**, or its agents, workflows and
+  knowledge base will refuse to call any vendor. See
+  [LLM providers → Per-org approved providers](../orchestration/llm-providers.md#per-org-approved-providers-core-at-multi).
 - **The data subject is per org.** `eraseUser` / `exportUserData` act inside
   the org the request entered: a person with memberships in several orgs is
   erased from, and exported from, the org that asked — the tenant is the
@@ -75,20 +98,20 @@ own it have not shipped (the Multi-tenancy phase on the Hub; the design
 record's [target architecture](./multi-tenancy-design.md#target-architecture)
 says which piece each feature lands):
 
-- **The system agents are the install org's rows.** `cleanup-agent`,
-  `mcp-system`, `quiz-master`, the evaluation judges, the model auditor and
-  the case generator are seeded once, as the install org. Another org finds
-  none of them: the cleanup upload reports the agent unseeded, an unscoped
-  MCP call logs `mcp-system agent not found`, the quiz and judge routes 404.
-  They become platform-owned, tenant-consumed rows in §116 (decided
-  2026-09-21: one copy, usable by every org, editable by none).
+- **The Learn page is the install org's alone, and org admins still see it.** The
+  Pattern Advisor, the Quiz Master and their patterns knowledge help the
+  install's app admins build their app, so they exist only in the install
+  org. Until the console split (§111) hides that page from org admins, it is
+  listed in their console and finds nothing there.
 - **Some process-global state is shared across orgs on purpose.** RLS cannot
   see a Node heap, so every module-level holder in `lib/` is declared in
   [`lib/tenancy/process-state.ts`](../../lib/tenancy/process-state.ts) with
   the posture it carries (§108 t-712). What that leaves shared is the
-  deliberate part: an LLM provider's circuit breaker and in-flight counter
-  are keyed by provider slug, which IS the credential identity until §109
-  makes credentials per org, so a breaker one org opens pauses every org; the
+  deliberate part: an LLM provider's client, circuit breaker and in-flight
+  counter are keyed by (provider slug, credential identity) (§120 t-744), so
+  orgs on the install's shared credential share them — a breaker one of them
+  opens pauses all of them — while a per-org credential from the
+  `lib/app/provider-credentials.ts` seam gets its own; the
   outbound host limiter is per third-party host; the rate-limit counters are
   keyed by the caller. The admin log buffer is the one holder scoped at the
   QUERY rather than partitioned: one process-wide ring, each entry stamped
@@ -101,7 +124,9 @@ says which piece each feature lands):
   platform admin from an org OWNER/ADMIN, but the console is not split; the
   [control-plane map](#the-control-plane-which-admin-surfaces-are-whose)
   below is what §111 splits along.
-- **Storage, provider policy, quotas** — §109 / §110.
+- **Storage and quotas** — §109 / §110. Provider policy is enforced at call
+  time (above); offering only approved providers when an agent is configured
+  is §120 t-743.
 
 ## Enabling it, end to end
 
@@ -178,6 +203,12 @@ MIGRATE_DATABASE_URL=<owner dsn>
 From here every operation on a tenant-owned model runs as
 `$transaction([set_config('app.current_org', <org>, true), op])`, and an
 operation that has no org throws before any SQL.
+
+It also turns on the per-org provider policy: every org except the install
+org may now call only the providers granted to it, and every org starts with
+none. An install that already has customer orgs when it flips must grant each
+one its providers (on `/admin/orgs/[id]`, or `PUT /api/v1/admin/orgs/[id]/providers`), or their calls
+are refused with `provider_not_permitted`. The install org is unaffected.
 
 ### 4. Prove it
 
@@ -369,7 +400,9 @@ has the numbers.
 - **The bypass is total.** `runAsSystem(reason)` sets `app.bypass_rls` and
   sees every org's rows; it is logged at `info` per entry so the audit can
   count them. `runAsCredentialLookup` is the same bypass for one credential
-  read, logged at `debug`. Nothing else should run inside either.
+  read, logged at `debug`, and `runAsCrossOrgCount` the same for a read-only
+  global-config usage count, also at `debug` and confined to one module
+  (§107 t-752). Nothing else should run inside any of them.
 - **Nested creates are stamped; raw inserts are not.** The injection walks
   every write and stamps create-shaped nodes at any depth. A raw `INSERT`
   stamps itself from the parent row (above). An update payload is never
@@ -440,19 +473,19 @@ the rule and the classification win.
 
 ### Platform-ops — the vendor's
 
-| Surface                                                      | Backing models                                                     |
-| ------------------------------------------------------------ | ------------------------------------------------------------------ |
-| `orchestration/providers`, `orchestration/provider-models`   | `AiProviderConfig`, `AiProviderModel`                              |
-| `orchestration/capabilities`                                 | `AiCapability`                                                     |
-| `orchestration/agent-profiles`                               | `AiAgentProfile`                                                   |
-| `features` (feature flags)                                   | `FeatureFlag`                                                      |
-| `orchestration/knowledge/tags`                               | `KnowledgeTag`                                                     |
-| `orchestration/settings`, `orchestration/mcp/settings`       | The two singletons                                                 |
-| `orchestration/mcp/tools`, `mcp/resources`                   | `McpExposedTool`, `McpExposedResource`                             |
-| `users`, `users/[id]`, `users/invite`                        | `User` — tenancy arrives via the `Org` join, not an `orgId` column |
-| `/api/v1/admin/orgs` (API only; no page yet)                 | `Org` — the vendor's acts: create, suspend, export, delete         |
-| `logs`, `orchestration/audit-log`, `orchestration/mcp/audit` | Audit models — the actor is retained deliberately                  |
-| `orchestration/learn`                                        | Static content, no data                                            |
+| Surface                                                      | Backing models                                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `orchestration/providers`, `orchestration/provider-models`   | `AiProviderConfig`, `AiProviderModel`                                                            |
+| `orchestration/capabilities`                                 | `AiCapability`                                                                                   |
+| `orchestration/agent-profiles`                               | `AiAgentProfile`                                                                                 |
+| `features` (feature flags)                                   | `FeatureFlag`                                                                                    |
+| `orchestration/knowledge/tags`                               | `KnowledgeTag`                                                                                   |
+| `orchestration/settings`, `orchestration/mcp/settings`       | The two singletons                                                                               |
+| `orchestration/mcp/tools`, `mcp/resources`                   | `McpExposedTool`, `McpExposedResource`                                                           |
+| `users`, `users/[id]`, `users/invite`                        | `User` — tenancy arrives via the `Org` join, not an `orgId` column                               |
+| `orgs`, `orgs/[id]` (providers only; the rest API-only)      | `Org` — the vendor's acts: create, suspend, export, delete, and which providers each org may use |
+| `logs`, `orchestration/audit-log`, `orchestration/mcp/audit` | Audit models — the actor is retained deliberately                                                |
+| `orchestration/learn`                                        | Static content, no data                                                                          |
 
 Credentials are the hard stop, not a preference: `AiProviderConfig` keys its
 credential off `apiKeyEnvVar` — the _name_ of a process environment variable

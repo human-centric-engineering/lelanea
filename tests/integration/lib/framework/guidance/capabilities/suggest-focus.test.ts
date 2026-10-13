@@ -24,6 +24,12 @@ describe('execute', () => {
     expect(loadFocusSuggestion).not.toHaveBeenCalled();
   });
 
+  it('refuses an anonymous embed visitor with anonymous_visitor, touching nothing', async () => {
+    const result = await cap.execute(args, ctx('embed_visitor1'));
+    expect(result).toMatchObject({ success: false, error: { code: 'anonymous_visitor' } });
+    expect(loadFocusSuggestion).not.toHaveBeenCalled();
+  });
+
   it('lingers (journeyStarted:false) when nothing to guide', async () => {
     vi.mocked(loadFocusSuggestion).mockResolvedValue(null);
     const result = await cap.execute(args, ctx('user-1'));

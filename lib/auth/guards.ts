@@ -26,7 +26,13 @@
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { auth } from '@/lib/auth/config';
-import { UnauthorizedError, ForbiddenError, handleAPIError } from '@/lib/api/errors';
+import {
+  APIError,
+  ErrorCodes,
+  UnauthorizedError,
+  ForbiddenError,
+  handleAPIError,
+} from '@/lib/api/errors';
 import {
   resolveApiKey,
   hasScope,
@@ -34,6 +40,7 @@ import {
   type ApiKeyScope,
 } from '@/lib/auth/api-keys';
 import { logger } from '@/lib/logging';
+import { loggablePath } from '@/lib/logging/redact-path';
 import {
   canAdminister,
   canRead,
@@ -54,6 +61,11 @@ import {
   type OrgRefusal,
 } from '@/lib/tenancy/entry';
 import { TENANT_HEADER_NAME } from '@/lib/tenancy/resolver';
+import {
+  canChangeSharedSettings,
+  SHARED_SETTINGS_REFUSAL,
+  SHARED_SETTINGS_REFUSAL_CODE,
+} from '@/lib/tenancy/shared-settings';
 
 /**
  * Session type from better-auth (matches AuthSession in utils.ts)
@@ -370,6 +382,17 @@ export interface WithAdminAuthOptions<TParams = Record<string, string>> {
    * are the routes that start asking for one.
    */
   ownership?: RouteOwnership;
+  /**
+   * This route creates, changes or deletes a shared setting — a row of one of
+   * the `GLOBAL_CONFIG_MODELS`, which every org reads (§107 t-751). At
+   * `multi`, a session entered into any org but the install org is refused
+   * with a 403 telling the admin to switch to the install org; an unbound
+   * admin API key, which enters no org, is allowed. At `single` it changes
+   * nothing. Set it on the write handlers only: the same admin in a customer
+   * org keeps reading these pages. `tests/unit/scripts/ci/shared-settings-writes.test.ts`
+   * fails naming any route that writes one of those models without it.
+   */
+  writesSharedSettings?: true;
 }
 
 /**
@@ -410,7 +433,7 @@ function refuseOrgEntry(
 ): never {
   logger.warn('tenancy: refused to enter an org for a request', {
     guard,
-    path: request.nextUrl?.pathname,
+    path: loggablePath(request.nextUrl?.pathname),
     userId: principal.userId,
     credential: principal.credential,
     refused: refusal.refused,
@@ -487,7 +510,7 @@ async function resolveResource(
     const resource = await resolver(request, context);
     if (!resource) {
       logger.warn('authorization: a route resource resolver named nothing — denying the request', {
-        path: request.nextUrl?.pathname,
+        path: loggablePath(request.nextUrl?.pathname),
         fix: 'Returning null/undefined from a resource resolver refuses the request; it does not mean "unscoped". A route that acts on no resource should not declare a resolver.',
       });
       return UNRESOLVED;
@@ -495,7 +518,7 @@ async function resolveResource(
     return resource;
   } catch (error) {
     logger.error('authorization: a route resource resolver threw — denying the request', {
-      path: request.nextUrl?.pathname,
+      path: loggablePath(request.nextUrl?.pathname),
       error: error instanceof Error ? error.message : String(error),
       fix: 'The policy cannot be asked about a resource that could not be resolved, and an unresolved scope is not an absent one.',
     });
@@ -931,7 +954,7 @@ export function withAuth(
           // neither the path nor the resource, so a refused cross-user read would
           // be an unattributable 'API Error'. Ids, not contents.
           logger.warn('authorization: canRead refused a request', {
-            path: (request as NextRequest).nextUrl?.pathname,
+            path: loggablePath((request as NextRequest).nextUrl?.pathname),
             resourceKind: resource?.kind,
             resourceId: resource?.id,
             userId: principal.userId,
@@ -1084,7 +1107,7 @@ async function runHandler(args: {
           'authorization: subjectFilter read on a route that did not ask for it',
           undefined,
           {
-            path: args.request.nextUrl?.pathname,
+            path: loggablePath(args.request.nextUrl?.pathname),
             guard: args.guard,
             declared: args.ownership?.decidedBy ?? '(none)',
             fix: "The filter is only computed for a route that declared { decidedBy: 'policy' }. This read got the reader's own id — the narrowest answer — rather than the policy's. Declare 'policy' if the handler needs the real one.",
@@ -1117,7 +1140,7 @@ async function runHandler(args: {
   // a real failure would bury the failure.
   reportOwnershipGap({
     guard: args.guard,
-    path: args.request.nextUrl?.pathname,
+    path: loggablePath(args.request.nextUrl?.pathname),
     ownership: args.ownership,
     declaredResource: args.declaredResource,
     state: args.state,
@@ -1275,13 +1298,29 @@ export function withAdminAuth(
           // Same reason as the `canRead` refusal above: the guard owns the
           // decision, so it owns the record of refusing.
           logger.warn('authorization: canAdminister refused a request', {
-            path: (request as NextRequest).nextUrl?.pathname,
+            path: loggablePath((request as NextRequest).nextUrl?.pathname),
             resourceKind: resource === UNRESOLVED ? '(unresolved)' : resource?.kind,
             resourceId: resource === UNRESOLVED ? undefined : resource?.id,
             userId: principal.userId,
             credential: principal.credential,
           });
           throw new ForbiddenError('Admin access required');
+        }
+
+        // After the policy, so a caller who may not administer at all still
+        // gets the ordinary refusal rather than learning about the install org.
+        // `entry === null` here is the unbound admin API key — the only
+        // credential that enters no org — and it acts as the install org
+        // (owner ruling, 2026-10-02); the rule itself refuses an empty context.
+        if (options?.writesSharedSettings && entry !== null && !canChangeSharedSettings()) {
+          logger.warn('tenancy: refused a shared-settings write outside the install org', {
+            path: loggablePath((request as NextRequest).nextUrl?.pathname),
+            userId: principal.userId,
+            orgId: entry.orgId,
+          });
+          throw new APIError(SHARED_SETTINGS_REFUSAL, ErrorCodes.FORBIDDEN, 403, {
+            reason: SHARED_SETTINGS_REFUSAL_CODE,
+          });
         }
 
         return runHandler({

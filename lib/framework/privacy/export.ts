@@ -36,8 +36,10 @@
  * @see lib/framework/privacy/export-sources.ts · lib/privacy/export-user.ts
  */
 
-import { FRAMEWORK_SUBJECT_DATA_SOURCES } from '@/lib/framework/privacy/export-sources';
-import type { SubjectQuery } from '@/lib/privacy/export-sources';
+import {
+  FRAMEWORK_SUBJECT_DATA_SOURCES,
+  type FrameworkSubjectQuery,
+} from '@/lib/framework/privacy/export-sources';
 
 /**
  * The framework tier's contribution to a subject export: one key per declared
@@ -47,7 +49,7 @@ export type FrameworkSubjectExport = Record<string, unknown[]>;
 
 /** Collect the framework tier's data about one subject. */
 export async function collectFrameworkSubjectData(
-  subject: SubjectQuery
+  subject: FrameworkSubjectQuery
 ): Promise<FrameworkSubjectExport> {
   const results = await Promise.all(
     FRAMEWORK_SUBJECT_DATA_SOURCES.map(async (source) => ({

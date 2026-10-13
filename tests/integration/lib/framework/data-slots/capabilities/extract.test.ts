@@ -37,6 +37,7 @@ beforeEach(() => {
     providerSlug: 'openai',
     model: 'gpt-x',
     fallbacks: [],
+    provenance: { task: 'chat', primary: 'explicit', fallbacks: 'explicit' },
   });
   vi.mocked(getProvider).mockResolvedValue({ chat: vi.fn() } as never);
   vi.mocked(runStructuredCompletion).mockResolvedValue({
@@ -73,6 +74,17 @@ describe('extractTypedValue', () => {
       properties: { value: { type: 'number' } },
       required: ['value'],
       additionalProperties: false,
+    });
+  });
+
+  it("tells the call-time provider gate which arm chose the agent's provider", async () => {
+    // A bare getProvider(slug) is held to BOTH 'primary' and 'explicit' by Sunrise 0.14.0's gate,
+    // so a fork rule barring only one would wrongly refuse the extraction.
+    await extractTypedValue('number', 'about seven', 'agent-1');
+    expect(getProvider).toHaveBeenCalledWith('openai', {
+      task: 'chat',
+      source: 'explicit',
+      primarySlug: null,
     });
   });
 

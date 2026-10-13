@@ -205,6 +205,13 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     why: 'A resolved document-access set per agent cuid, invalidated on grant mutations; the 60-second TTL is the window in which a revoked grant still answers, and it is the same window at single and multi.',
   },
   {
+    file: 'lib/orchestration/llm/org-provider-policy.ts',
+    holders: ['policyCache', 'providerRowCache'],
+    posture: 'row-keyed',
+    keyedBy: 'org id (policies); provider slug (provider rows)',
+    why: "Each org's approved-provider policy, filled by a `findUnique` on the org id, so a system-scoped fill returns the same row an org scope would; and each provider row's id and jurisdiction, global config keyed by a slug unique install-wide (§120 t-742). A write through the org providers API clears that org's entry and a provider-row write clears the row's; the 60-second TTL is the window in which another process may still answer with a revoked grant. Read only at multi.",
+  },
+  {
     file: 'lib/orchestration/llm/budget-mutex.ts',
     holders: ['locks'],
     posture: 'row-keyed',
@@ -222,6 +229,14 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     posture: 'row-keyed',
     keyedBy: 'MCP API key id',
     why: "Key ids are unique across orgs so one map is correct, but filling it is not automatic — the refresh runs under runAsSystem because it inherited the refreshing org before §108 t-712 and silently dropped every other org's override for five minutes.",
+  },
+  {
+    file: 'lib/security/rate-limit-credentials.ts',
+    holders: ['verified', 'inFlight', 'lookupBudget'],
+    posture: 'row-keyed',
+    keyedBy:
+      'a SHA-256 digest of the presented credential, mapping to the stored key or token id (the lookup budget: client IP)',
+    why: "Answers only which credential row a presented value names, for the rate-limit bucket (#701); a value and the row id it maps to are unique across orgs, and scopes and the access decision stay with the route's own resolver. The shared 1000-entry cap is a noisy-neighbour question: an evicted entry costs one more lookup, not a wrong bucket. A revoked key keeps its own bucket until its entry's next re-check (under a minute), or for at most 2x the TTL while the database is failing (the route still refuses the key either way). `inFlight` holds a lookup only until it settles, under the same digest; `lookupBudget` counts cold lookups per client IP, which every org behind that IP shares by decision, like the IP request buckets.",
   },
   {
     file: 'lib/orchestration/mcp/singletons.ts',
@@ -245,15 +260,15 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     file: 'lib/orchestration/llm/circuit-breaker.ts',
     holders: ['breakers'],
     posture: 'shared-by-decision',
-    keyedBy: 'provider slug',
-    why: 'A breaker guards the upstream credential, which is a process environment variable today, so the slug IS the credential identity — the key gains the credential when §109 makes credentials per org, and until then a breaker opened by one org pauses all of them.',
+    keyedBy: 'provider slug and credential identity',
+    why: "A breaker guards the upstream credential, so it is keyed on (slug, credential identity) (§120 t-744): the bare slug for the install's shared credential, which every org using it shares by decision — a breaker that credential trips pauses all of them — and slug + identity for a credential a fork's resolver gives one org, whose failures pause only that org.",
   },
   {
     file: 'lib/orchestration/llm/in-flight-counter.ts',
     holders: ['counts'],
     posture: 'shared-by-decision',
-    keyedBy: 'provider slug',
-    why: 'A saturation gauge for the process against one upstream provider, read by the live-engine dashboard as "this worker\'s load"; the same §109 trigger as the breaker applies.',
+    keyedBy: 'provider slug and credential identity',
+    why: 'A saturation gauge for the process against one upstream credential, read by the live-engine dashboard as "this worker\'s load"; keyed like the breaker (§120 t-744), so a per-org credential is counted on its own.',
   },
   {
     file: 'lib/orchestration/maintenance/idle-gate.ts',
@@ -314,22 +329,22 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
   // ───────────────────────────────────────────────────────────────────────
   {
     file: 'lib/orchestration/llm/model-registry-db-hydrate.ts',
-    holders: ['dbHydratedAt', 'inflight'],
+    holders: ['dbHydratedAt', 'dbFailedAt', 'inflight'],
     posture: 'global-config',
-    why: 'Hydrates the model registry from AiProviderModel, a global-config model, and holds only the freshness stamp and the in-flight promise that de-duplicates concurrent hydrations.',
+    why: 'Hydrates the model registry from AiProviderModel, a global-config model, and holds only the freshness and failure stamps and the in-flight promise that de-duplicates concurrent hydrations.',
   },
   {
     file: 'lib/orchestration/llm/model-registry.ts',
-    holders: ['state', 'inflightRefresh'],
+    holders: ['state', 'dbSourced', 'lastRegistered', 'inflightRefresh'],
     posture: 'global-config',
-    why: 'The AiProviderModel catalogue with its fallback map, refreshed behind one in-flight promise; no row in it belongs to an org.',
+    why: 'The AiProviderModel catalogue with its fallback map, refreshed behind one in-flight promise; no row in it belongs to an org. `dbSourced` records which of its figures a hydrate wrote, so the catalogue and its provenance move together, and `lastRegistered` holds the rows last hydrated so an OpenRouter rebuild re-applies them.',
   },
   {
     file: 'lib/orchestration/llm/provider-manager.ts',
-    holders: ['instanceCache'],
-    posture: 'global-config',
-    keyedBy: 'provider slug or name',
-    why: 'Constructed provider instances from AiProviderConfig, a global-config model whose slugs are unique install-wide, with the API key coming from the environment rather than from a row (§109 changes both halves of that).',
+    holders: ['instanceCache', 'viewKeys'],
+    posture: 'shared-by-decision',
+    keyedBy: 'provider slug (rows), then credential identity (clients)',
+    why: "AiProviderConfig rows, a global-config model whose slugs are unique install-wide, each holding the clients built from it ONE PER CREDENTIAL IDENTITY (§120 t-744): the credential seam may give two orgs different keys for one row, so a client is never shared across identities, and an org only ever reaches the client for the identity the resolver gave it in its own context. Clients on the install's shared credential are shared by every org by decision. `viewKeys` maps each handed-out view to that (slug, identity) key, for the breaker.",
   },
   {
     file: 'lib/orchestration/llm/provider-selector.ts',
@@ -485,6 +500,12 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     why: 'The imported HMAC key for hashing visitor ids, derived once from an install-wide secret.',
   },
   {
+    file: 'lib/orchestration/agents/platform-agents.ts',
+    holders: ['registry', 'appInit', 'cachedHash'],
+    posture: 'no-tenant-data',
+    why: "Platform-agent definitions by slug, core and fork-registered, all from code; every org's instances of them are ordinary tenant rows the reconcile writes inside that org's scope (§116 t-724).",
+  },
+  {
     file: 'lib/orchestration/capabilities/registry.ts',
     holders: [
       'registered',
@@ -576,6 +597,12 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     why: 'Stateless tokeniser strategies, one instance each because constructing them is the only cost.',
   },
   {
+    file: 'lib/orchestration/llm/provider-credentials.ts',
+    holders: ['appResolver', 'registrationFailed', 'appInit'],
+    posture: 'global-config',
+    why: "The fork's one credential resolver and its init gate, registered from code. It holds no credential: a resolver is asked per call, in the caller's org context, and what it returns is cached by the provider manager under the credential's identity (§120 t-744).",
+  },
+  {
     file: 'lib/orchestration/maintenance/app-jobs.ts',
     holders: ['jobs', 'appInit', 'clock'],
     posture: 'no-tenant-data',
@@ -628,6 +655,12 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     holders: ['activeTracer'],
     posture: 'no-tenant-data',
     why: "The installed tracer, the no-op until a fork sets one; a span's attributes come from the call, not from here.",
+  },
+  {
+    file: 'lib/orchestration/workflows/template-catalogue.ts',
+    holders: ['BUILTIN_TEMPLATE_SLUGS'],
+    posture: 'no-tenant-data',
+    why: 'The built-in template slugs, built once at load from the code list: a lookup table, not a cache.',
   },
   {
     file: 'lib/privacy/erasure-hooks.ts',

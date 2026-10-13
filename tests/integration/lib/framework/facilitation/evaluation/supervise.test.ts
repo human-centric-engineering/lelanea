@@ -18,7 +18,12 @@ vi.mock('@/lib/orchestration/supervisor', () => ({ runSupervisorAssessment: vi.f
 vi.mock('@/lib/orchestration/llm/provider-manager', () => ({ getProvider: vi.fn() }));
 vi.mock('@/lib/orchestration/llm/model-registry', () => ({ getModel: vi.fn() }));
 vi.mock('@/lib/orchestration/llm/settings-resolver', () => ({ getDefaultModelForTask: vi.fn() }));
-vi.mock('@/lib/orchestration/evaluations/judge-model', () => ({ JUDGE_MODEL: 'judge-x' }));
+const judgeModel = vi.hoisted((): { value: string | undefined } => ({ value: 'judge-x' }));
+vi.mock('@/lib/orchestration/evaluations/judge-model', () => ({
+  get JUDGE_MODEL() {
+    return judgeModel.value;
+  },
+}));
 vi.mock('@/lib/orchestration/llm/cost-tracker', () => ({
   calculateCost: vi.fn(() => ({ totalCostUsd: 0.03, isLocal: false })),
   logCost: vi.fn(() => Promise.resolve(null)),
@@ -185,6 +190,31 @@ describe('superviseConversation', () => {
       modelOverride: 'model-z',
     });
     expect(getModel).toHaveBeenCalledWith('model-z');
+  });
+
+  it("tells the call-time provider gate an operator's choice is 'explicit'", async () => {
+    await superviseConversation({ conversationId: 'c1', actorUserId: 'a' });
+    expect(getProvider).toHaveBeenCalledWith('openai', {
+      task: 'chat',
+      source: 'explicit',
+      primarySlug: null,
+    });
+  });
+
+  it("tells the call-time provider gate the task default is 'primary'", async () => {
+    judgeModel.value = undefined;
+    vi.mocked(getDefaultModelForTask).mockResolvedValue('default-chat');
+    try {
+      await superviseConversation({ conversationId: 'c1', actorUserId: 'a' });
+    } finally {
+      judgeModel.value = 'judge-x';
+    }
+    expect(getModel).toHaveBeenCalledWith('default-chat');
+    expect(getProvider).toHaveBeenCalledWith('openai', {
+      task: 'chat',
+      source: 'primary',
+      primarySlug: null,
+    });
   });
 
   it('propagates the surface gate (non-framework conversation rejected upstream)', async () => {

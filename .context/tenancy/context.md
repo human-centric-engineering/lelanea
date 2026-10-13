@@ -116,6 +116,15 @@ interface TenantContext {
   sites are enumerable by grep, and what an audit needs is that nothing but
   the lookup — and the credential's last-used touch, which rides with it —
   runs inside one.
+- **`runAsCrossOrgCount(reason, fn)`** (§107 t-752) — the same null-org
+  system scope, for a read-only count of who uses a piece of global config
+  across every org (a provider, model, capability, tag or profile). Logged at
+  `debug` for `runAsCredentialLookup`'s reason: the admin pages ask on every
+  load. It has one caller, `lib/orchestration/admin/global-config-usage.ts`,
+  which names only the caller's own rows and returns another org's as
+  numbers, and `tests/unit/lib/tenancy/cross-org-count-sites.test.ts`
+  (always-run) fails naming any other. Nothing makes the scope itself
+  read-only; that module's queries do, which is why it is confined there.
 - **`runDetached(fn)`** (§108 t-715) — runs `fn` outside every scope, for
   arming something whose lifetime is the **process's** from inside a request.
   Synchronous and unawaited, unlike the runners above: a caller arms a timer
@@ -173,6 +182,22 @@ among the user's **active** orgs, so a member of one suspended and one active
 org starts in the active one; a user whose every org is suspended starts in
 the most recent of them and is refused at entry, which is what suspension
 means.
+
+**A shared-settings write is refused outside the install org** (§107 t-751).
+`withAdminAuth(handler, { writesSharedSettings: true })` enters the session's
+org as usual, then, after the policy has admitted the caller, refuses a write
+at `multi` from any org but the install org, with a 403 that says to switch
+to the install org. An unbound admin API key enters no org, and the guard
+admits it as the install org; `canChangeSharedSettings()` itself refuses an
+empty context, so a capability dispatched with no org entered is refused.
+It is the one guard check that reads which org was entered rather than
+whether the caller may enter it; the rule and what declares it are in
+[isolation.md](./isolation.md#the-policy).
+The admin pages show the same rule as read-only before a write is tried
+(§107 t-753): `getSharedSettingsAccess()` reads the request's org with
+`sessionActingOrgId()` (in `lib/tenancy/entry.ts`), the derivation
+`GET /api/v1/orgs` also uses. That derivation is not an entry, so it does not
+verify the membership.
 
 **Then the guard carries the org two ways:** on the principal (`viewer.orgId`,
 `viewer.orgRole`) for the policy, and as the tenant context that the

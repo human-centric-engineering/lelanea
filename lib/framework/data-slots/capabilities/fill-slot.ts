@@ -3,7 +3,7 @@
  * reading about the user into their data-slots (spec §6.1). A silent tool (D5) the agent
  * calls mid-conversation when it learns something worth remembering.
  *
- * Writes the **caller's own** slots (`context.userId` → `appendSlotValue.userId`), so
+ * Writes the **caller's own** slots (`caller.userId` → `appendSlotValue.userId`), so
  * there is no cross-user write and no `canRead` on this path (that guard is for reads).
  * It fills the two seams the shipped value engine deliberately left open:
  * - **Slug validation / open-mode minting.** `appendSlotValue` does not validate
@@ -24,6 +24,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logging';
 import { BaseCapability } from '@/lib/orchestration/capabilities/base-capability';
+import { checkUserCaller } from '@/lib/framework/shared/caller';
 import type {
   CapabilityContext,
   CapabilityFunctionDefinition,
@@ -152,12 +153,8 @@ export class FillSlotCapability extends BaseCapability<FillSlotArgs, FillSlotDat
     args: FillSlotArgs,
     context: CapabilityContext
   ): Promise<CapabilityResult<FillSlotData>> {
-    if (context.userId === null) {
-      return this.error(
-        'Slot capture is unavailable for system-initiated runs (no user context).',
-        'no_user_context'
-      );
-    }
+    const caller = checkUserCaller(context, 'Slot capture');
+    if (!caller.ok) return this.error(caller.message, caller.code);
 
     // Targeted vs open-mint: a defined-and-active slug appends; a retired one is refused;
     // an undefined slug is a runtime open-mode mint.
@@ -217,7 +214,7 @@ export class FillSlotCapability extends BaseCapability<FillSlotArgs, FillSlotDat
 
     const scope = decodeScope(context.scope);
     const input: AppendSlotValueInput = {
-      userId: context.userId,
+      userId: caller.userId,
       slotSlug: args.slotSlug,
       value: stored.value,
       ...(stored.valueJson !== null ? { valueJson: stored.valueJson } : {}),

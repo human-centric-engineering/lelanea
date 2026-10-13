@@ -94,7 +94,7 @@ describe('exemptions — the tiers that legitimately import the framework', () =
     // #157, rationale 1 — framework/leaf-tier seeds, which run via tsx and never
     // in a build.
     ['a framework boot seed', 'prisma/seeds/_framework/000-framework-boot.ts'],
-    ['a framework seed', 'prisma/seeds/framework/001-framework-rubric-judge.ts'],
+    ['a framework seed', 'prisma/seeds/framework/001-example.ts'],
     ['a leaf seed', 'prisma/seeds/app-reclaim/002-reclaim-surface.ts'],
     // #157, rationale 2 — the reserved leaf surfaces, which DO ship in a build but
     // exist only in a leaf, and a leaf always has a framework tier.
@@ -154,7 +154,7 @@ describe('exempting a path must not cost it the LEAF ban too', () => {
   // framework-tier block's `files`.
   it.each([
     ['the framework itself', 'lib/framework/facilitation/journey/create.ts'],
-    ['a framework seed', 'prisma/seeds/framework/001-framework-rubric-judge.ts'],
+    ['a framework seed', 'prisma/seeds/framework/001-example.ts'],
   ])('keeps the leaf ban on %s (framework tier)', async (_label, filePath) => {
     expect(await bannedGroupsFor(filePath)).toContain(LEAF_BAN);
   });

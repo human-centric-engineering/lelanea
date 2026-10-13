@@ -20,6 +20,7 @@
 
 import { z } from 'zod';
 import { BaseCapability } from '@/lib/orchestration/capabilities/base-capability';
+import { isEmbedUserId } from '@/lib/embed/auth';
 import type { ProvenanceRedaction } from '@/lib/orchestration/capabilities/base-capability';
 import type {
   CapabilityContext,
@@ -122,6 +123,17 @@ export class SubmitProposalCapability extends BaseCapability<
     args: SubmitProposalArgs,
     context: CapabilityContext
   ): Promise<CapabilityResult<SubmitProposalData>> {
+    // An anonymous embed widget visitor (not a `User`, Sunrise #705, t-765) is refused outright.
+    // A signed-in user's proposal is attributed to them (`actorUserId`), and a system run's comes
+    // from an operator's own schedule or workflow; a visitor's would be attributed to no one, so
+    // anyone on the internet could fill the review queue with proposals nobody can trace.
+    if (isEmbedUserId(context.userId)) {
+      return this.error(
+        'Structure proposals are unavailable to anonymous embed widget visitors.',
+        'anonymous_visitor'
+      );
+    }
+
     // Resolve the calling agent's slug for authorship (`agent:<slug>`, F17).
     const agent = await prisma.aiAgent.findUnique({
       where: { id: context.agentId },

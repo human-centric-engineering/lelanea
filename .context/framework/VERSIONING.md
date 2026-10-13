@@ -77,14 +77,18 @@ This is what a version commits to and what the changelog tracks. A leaf may depe
 on:
 
 - **The `lib/app/*` bridges Daybreak fills** — `bootstrap.ts`, `admin-nav.ts`,
-  `data-export.ts`, `brand.ts`, `db-drift.ts` and `ci.ts` — **and the reserved
-  `leaf-*` seams they delegate to** (`leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
-  `leaf-data-export.ts`, `leaf-brand.ts`, `leaf-db-drift.ts`, `leaf-ci.ts`).
+  `data-export.ts`, `brand.ts`, `db-drift.ts`, `ci.ts` and `platform-agents.ts` —
+  **and the reserved `leaf-*` seams they delegate to** (`leaf-bootstrap.ts`,
+  `leaf-admin-nav.ts`, `leaf-data-export.ts`, `leaf-brand.ts`, `leaf-db-drift.ts`,
+  `leaf-ci.ts`, `leaf-platform-agents.ts`).
   Which files are Daybreak's and which are the leaf's **is itself public
   surface**: a file changing hands is a breaking change for any leaf that filled
   it. Every one of these seams **appends** to Daybreak's own entries except
   `leaf-brand.ts`, which **overrides** — brand identity is single-valued, so a
   leaf replaces Daybreak's name rather than composing with it.
+  (`leaf-platform-agents.ts` appends too, but a definition registered under a
+  slug the framework or Sunrise already uses replaces that agent, by core's
+  rule, logged at warn.)
 
   This roster is the count. `CLAUDE.md`'s banner carries the same list for the
   same reason: it has been wrong before, and a docblock's ordinal ("the fourth

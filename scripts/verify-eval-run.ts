@@ -2,9 +2,7 @@
  * End-to-end verification: seed a small dataset + run, drive the worker
  * directly, and report what happened.
  *
- * Usage:  tsx -r dotenv/config scripts/verify-eval-run.ts dotenv_config_path=.env.local
- *
- * Or via the npm helper: npm run verify:eval-run
+ * Usage:  DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config scripts/verify-eval-run.ts
  *
  * Bypasses HTTP/auth (uses Prisma directly to set up state) so we can
  * exercise the worker on the dev DB without juggling cookies. This is a

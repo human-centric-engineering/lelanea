@@ -13,6 +13,9 @@ import {
   createOrgSchema,
   orgIdSchema,
   orgMemberParamsSchema,
+  orgProviderPolicyInputSchema,
+  orgProviderPolicySchema,
+  jurisdictionSchema,
   switchOrgSchema,
   updateOrgMemberSchema,
   updateOrgSchema,
@@ -128,5 +131,66 @@ describe('the member bodies', () => {
     for (const role of ORG_ROLES) expect(updateOrgMemberSchema.parse({ role })).toEqual({ role });
     expect(updateOrgMemberSchema.safeParse({}).success).toBe(false);
     expect(updateOrgMemberSchema.safeParse({ role: 'owner' }).success).toBe(false);
+  });
+});
+
+describe('jurisdictionSchema (§120 t-742)', () => {
+  it('upper-cases a code, so a match never turns on case', () => {
+    expect(jurisdictionSchema.parse(' eu-de ')).toBe('EU-DE');
+  });
+
+  it('refuses something that is not a short code', () => {
+    for (const bad of ['', '1EU', 'E U', 'x'.repeat(33)]) {
+      expect(jurisdictionSchema.safeParse(bad).success).toBe(false);
+    }
+  });
+});
+
+describe('orgProviderPolicySchema — the stored slice (§120 t-742)', () => {
+  it('holds provider row ids, folding duplicates in both lists', () => {
+    expect(
+      orgProviderPolicySchema.parse({
+        approved: ['cmprov1', 'cmprov1', 'cmprov2'],
+        jurisdictions: ['eu', 'EU'],
+      })
+    ).toEqual({ approved: ['cmprov1', 'cmprov2'], jurisdictions: ['EU'] });
+  });
+
+  it('accepts an empty approved set, and no restriction as absent or null', () => {
+    expect(orgProviderPolicySchema.parse({ approved: [] })).toEqual({ approved: [] });
+    expect(orgProviderPolicySchema.parse({ approved: [], jurisdictions: null })).toEqual({
+      approved: [],
+      jurisdictions: null,
+    });
+  });
+
+  it('refuses an empty restriction and an unknown key — the read fails closed on both', () => {
+    expect(orgProviderPolicySchema.safeParse({ approved: [], jurisdictions: [] }).success).toBe(
+      false
+    );
+    expect(orgProviderPolicySchema.safeParse({ approved: [], extra: true }).success).toBe(false);
+  });
+});
+
+describe('orgProviderPolicyInputSchema — the PUT body (§120 t-742)', () => {
+  it('names providers by slug, folding duplicates', () => {
+    expect(
+      orgProviderPolicyInputSchema.parse({ approved: ['a', 'a', 'b'], jurisdictions: null })
+    ).toEqual({ approved: ['a', 'b'], jurisdictions: null });
+  });
+
+  it('requires jurisdictions to be stated, as a list or null', () => {
+    expect(orgProviderPolicyInputSchema.safeParse({ approved: ['a'] }).success).toBe(false);
+  });
+
+  it('refuses a non-slug, an empty restriction and an unknown key', () => {
+    expect(
+      orgProviderPolicyInputSchema.safeParse({ approved: ['Not A Slug'], jurisdictions: null })
+        .success
+    ).toBe(false);
+    expect(
+      orgProviderPolicyInputSchema.safeParse({ approved: [], jurisdictions: [] }).success
+    ).toBe(false);
+    expect(orgProviderPolicyInputSchema.safeParse({ approved: [], extra: 1 }).success).toBe(false);
   });
 });

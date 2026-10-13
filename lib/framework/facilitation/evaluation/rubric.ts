@@ -1,6 +1,6 @@
 /**
- * Framework-rubric scoring (f-governance-plus t-3, spec §5.5 F14) — the per-turn face of the seeded
- * `eval-judge-framework-rubric` judge. f-eval shipped the three named metrics
+ * Framework-rubric scoring (f-governance-plus t-3, spec §5.5 F14) — the per-turn face of the
+ * `eval-judge-framework-rubric` judge (a platform agent: `rubric-judge.ts`). f-eval shipped the three named metrics
  * (faithfulness/groundedness/relevance) + the whole-conversation supervisor; this complements them
  * with a single framework-specific rubric score per turn (did the assistant serve the
  * facilitation/module purpose?), persisted to `FrameworkConversationEval.rubricScore`.
@@ -19,11 +19,12 @@ import { logger } from '@/lib/logging';
 import { driveJudgeAgent } from '@/lib/orchestration/evaluations/judge-driver';
 import { loadFrameworkConversation } from '@/lib/framework/facilitation/evaluation/conversation';
 import { listScorableTurns } from '@/lib/framework/facilitation/evaluation/turns';
+import { FRAMEWORK_RUBRIC_JUDGE_SLUG } from '@/lib/framework/facilitation/evaluation/rubric-judge';
+
+/** Re-exported from its new home (`rubric-judge.ts`, Hub t-142) so a deep import keeps compiling. */
+export { FRAMEWORK_RUBRIC_JUDGE_SLUG };
 
 const ENTITY_TYPE = 'framework_conversation_eval';
-
-/** The seeded framework-rubric judge (see `prisma/seeds/framework/001-framework-rubric-judge.ts`). */
-export const FRAMEWORK_RUBRIC_JUDGE_SLUG = 'eval-judge-framework-rubric';
 
 export interface RubricScoreConversationArgs {
   conversationId: string;

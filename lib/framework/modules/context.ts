@@ -16,6 +16,7 @@
  */
 
 import type { ContextRequest } from '@/lib/orchestration/chat/context-builder';
+import { isEmbedUserId } from '@/lib/embed/auth';
 import { logger } from '@/lib/logging';
 import { getRegisteredModules } from '@/lib/framework/modules/registry';
 import { getSlotHeads } from '@/lib/framework/data-slots/values';
@@ -44,7 +45,10 @@ export async function loadModuleContext(id: string, request?: ContextRequest): P
   // `hidden` slots are system-only, and the strictest `special_category` tier is left to
   // on-demand `get_state` (defense-in-depth, on top of capture's masking-at-rest).
   const userId = request?.userId;
-  if (userId !== undefined && definition.slotDefinitions !== undefined) {
+  // An anonymous embed widget visitor (`embed_<hash>`, Sunrise #705, t-765) holds no slots, so skip
+  // the read rather than query for them as if they were a user who has captured nothing. (The
+  // `get_state` tool refuses a visitor outright; a context contributor has no refusal to return.)
+  if (userId !== undefined && !isEmbedUserId(userId) && definition.slotDefinitions !== undefined) {
     const injectableSlugs = definition.slotDefinitions
       .filter((slot) => slot.visibility !== 'hidden' && slot.sensitivity !== 'special_category')
       .map((slot) => slot.slug);
