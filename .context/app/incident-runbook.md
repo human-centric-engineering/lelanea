@@ -81,32 +81,31 @@ Details: [`agent.md` → The pause switch](./agent.md#the-pause-switch).
 
 ### Take the agent off a seat
 
-**`/admin/orchestration/agents` → the guide agent (`lelanea-guide`) →
-visibility `internal`.** The facilitation surface serves only a `public` agent
-(`resolveFacilitationSurface`), so both of its seats answer **404** — and each
-person's transcript reads back **empty** while it is narrowed. Nothing is
-deleted; the history returns with the agent. A re-seed leaves it narrowed:
-visibility is operator-owned, and seed `007` widens the agent only once
-([`agent.md`](./agent.md#how-the-agent-is-reached)). Set it back to `public` to
-restore it.
+**Pause first** ([above](#pause-every-conversation-with-the-agent)). It stops every reply on both seats
+before any model is called, and tells the person what happened. Take the agent
+off its seats only when it must not be reachable at all.
 
-- **A version restore reopens it.** Visibility is a versioned field, and
-  restoring an earlier version of the agent (the natural way to undo a tampered
-  prompt) writes back the `public` that version held. **Check visibility after
-  every restore** while the agent is meant to be off its seats.
-- **Not the Active switch.** The guide is a system agent: the admin shows its
-  Active switch disabled ("System agents cannot be deactivated"), and the API
-  refuses the change. Visibility is the lever.
-- **Prefer the pause.** A 404 ends a conversation silently. The pause tells the
-  person, in plain words, what happened. Take the agent off a seat only when it
-  must not be reachable at all: the agent compromised, or its prompt or tools
-  changed by someone who shouldn't have.
-- **Unbinding one seat only** is API-only. Read the binding id from
-  `GET /api/v1/admin/framework/facilitation/agents`, then
-  `DELETE /api/v1/admin/framework/facilitation/agents/:bindingId`. **The next
-  re-seed binds the agent again** (seed `006` fills empty seats). To keep it off
-  a seat for good, remove the role from `SEATED_ROLES` (`lib/app/agent/pins.ts`)
-  and deploy.
+**Unbind its seats.** API-only: read the binding ids from
+`GET /api/v1/admin/framework/facilitation/agents`, then
+`DELETE /api/v1/admin/framework/facilitation/agents/:bindingId` for each seat.
+An unbound seat serves no agent, and each person's transcript reads back
+**empty** while it is unbound. Nothing is deleted; the history returns when the
+seat is bound again.
+
+- **The next re-seed binds it again** (seed `006` fills empty seats). To keep it
+  off a seat across deploys, remove the role from `SEATED_ROLES`
+  (`lib/app/agent/pins.ts`) and deploy.
+- **Not visibility, and not the Active switch.** Since Daybreak 0.7.0 (Sunrise
+  0.14.0) the guide is a locked system agent in Orchestration → Agents: its
+  visibility, prompt, behaviour, tools and Active switch are refused there, and
+  only the model, provider, spend limits, rate limit and retention stay editable
+  (owner ruling, t-170). The old lever, visibility → `internal`, no longer works.
+- **Its prompt and tools can't be changed from the admin either.** If they have
+  changed anyway, the change came from the database or a deploy. The seed units
+  restore the instructions (`app-lelanea/003-voice-fingerprint`) and the
+  bindings (`007`, `013`, `014`, `023`–`025`), but an applied unit is skipped:
+  delete its row first (`DELETE FROM seed_history WHERE name = '<unit>';`), then
+  `npm run db:seed`.
 - **The agent has no other door.** Sunrise's consumer chat route refuses its slug
   (divergences Row 21). **Never make it a module's primary agent**: Daybreak's
   module chat route would reach it without the turn hook, so without the crisis

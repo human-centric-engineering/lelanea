@@ -248,7 +248,7 @@ export async function resolveVoiceArms(db: PrismaLike = prisma): Promise<Resolve
     }
     if (!agent.isActive) {
       throw new ValidationError(
-        `The ${VOICE_ARM_LABELS[arm]} arm's agent "${agent.slug}" is inactive, so its half of the comparison would fail every case. Activate it in /admin/orchestration/agents.`
+        `The ${VOICE_ARM_LABELS[arm]} arm's agent "${agent.slug}" is inactive, so its half of the comparison would fail every case. A system agent cannot be switched on from the admin, and the seed only sets it on creation: UPDATE ai_agent SET "isActive" = true WHERE slug = '${agent.slug}';`
       );
     }
     return composeArm(arm, agent);
@@ -288,7 +288,7 @@ export function assertArmsComparable(arms: readonly ResolvedVoiceArm[]): void {
 
   if (bare.fingerprintVersion !== null) {
     throw new ValidationError(
-      `The ${VOICE_ARM_LABELS.bare} arm's system prompt carries fingerprint v${bare.fingerprintVersion}, so the control is carrying the voice profile too and the comparison would be the voice against itself. Detach the profile from "${bare.agentSlug}" in /admin/orchestration/agents.`
+      `The ${VOICE_ARM_LABELS.bare} arm's system prompt carries fingerprint v${bare.fingerprintVersion}, so the control is carrying the voice profile too and the comparison would be the voice against itself. The admin cannot detach it (a system agent's profile is locked since Sunrise 0.14.0); the seed does. ${RESEED_REMEDY}`
     );
   }
 
@@ -300,10 +300,12 @@ export function assertArmsComparable(arms: readonly ResolvedVoiceArm[]): void {
 
   // Not a purity check. Both agents are created unbound and then pinned to the
   // same provider and model by `005-agent-models.ts`, but that pin is
-  // operator-owned and `SYSTEM_AGENT_PROTECTED_FIELDS` does not cover any of
-  // these three — an operator can change the model on one agent through the
-  // admin form, and from then on the comparison measures the models rather than
-  // the fingerprint, with nothing on the screen saying so.
+  // operator-owned: provider and model stay editable on a system agent (Sunrise
+  // 0.14.0 locks the rest), so an operator can change one agent's model through
+  // the admin form, and from then on the comparison measures the models rather
+  // than the fingerprint, with nothing on the screen saying so. Temperature is
+  // locked there now, so a difference in it predates the lock or came from the
+  // database.
   const differing = (['provider', 'model', 'temperature'] as const).filter(
     (key) => fingerprint.binding[key] !== bare.binding[key]
   );
@@ -315,7 +317,7 @@ export function assertArmsComparable(arms: readonly ResolvedVoiceArm[]): void {
       )
       .join('; ');
     throw new ValidationError(
-      `The two arms are bound to different models, so the run would compare the models rather than the voice (${detail}). Match them in /admin/orchestration/agents — the seed pins both arms to the same provider and model, and a change to one has to be made to the other.`
+      `The two arms are bound to different models, so the run would compare the models rather than the voice (${detail}). Match the provider and model in /admin/orchestration/agents — the seed pins both arms to the same pair, and a change to one has to be made to the other. Temperature is not editable there on a system agent; match it in the database.`
     );
   }
 }
@@ -387,7 +389,7 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
     throw new ValidationError(
       `The brand-voice judge "${BRAND_VOICE_JUDGE_SLUG}" is ${
         judge ? 'not an active judge agent' : 'not in this install'
-      }, so the comparison would come back unscored — two walls of text that look exactly like a scored comparison. It is a platform-seeded agent: run \`npm run db:seed\`, or re-activate it in /admin/orchestration/agents.`
+      }, so the comparison would come back unscored — two walls of text that look exactly like a scored comparison. It is a platform agent, and the platform's reconcile creates it and switches it back on: run \`npm run db:seed\`.`
     );
   }
 

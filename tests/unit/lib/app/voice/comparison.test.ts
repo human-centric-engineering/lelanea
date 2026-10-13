@@ -303,6 +303,8 @@ describe('resolveVoiceArms', () => {
   it('refuses an arm whose agent is inactive', async () => {
     agent(VOICE_CONTROL_AGENT_SLUG).isActive = false;
     await expect(resolveVoiceArms()).rejects.toThrow(/inactive/i);
+    // The remedy is one that works: the admin cannot switch on a system agent.
+    await expect(resolveVoiceArms()).rejects.toThrow(/UPDATE ai_agent SET "isActive" = true/);
   });
 });
 
@@ -345,6 +347,9 @@ describe('assertArmsComparable — the four silent misconfigurations', () => {
       // discriminates when the wording is edited.
       /carries fingerprint v/i
     );
+    // Since Sunrise 0.14.0 the admin refuses a system agent's profile, so the
+    // remedy is the seed that detaches it.
+    await expect(arms().then((a) => assertArmsComparable(a))).rejects.toThrow(/db:seed/);
   });
 
   it('refuses when both arms would run the identical prompt', async () => {
