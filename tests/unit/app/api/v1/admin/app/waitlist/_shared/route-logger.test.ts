@@ -45,6 +45,11 @@ vi.mock('@/lib/auth/config', () => ({
   auth: { api: { getSession: () => Promise.resolve(null) } },
 }));
 
+// The logger now delegates to core's `getRouteLogger`, which `tests/setup.ts`
+// mocks for every route test. This one needs the real one: it is the property
+// under test. Unmocked as core's own `context.test.ts` does.
+vi.unmock('@/lib/api/context');
+
 import { getWaitlistRouteLogger } from '@/app/api/v1/admin/app/waitlist/_shared/route-logger';
 
 const SEARCH_URL = 'https://lelanea.com/api/v1/admin/app/waitlist?q=ada%40example.com&page=1';
@@ -57,6 +62,7 @@ describe('getWaitlistRouteLogger', () => {
   it('binds no `url` at all, so the search term cannot ride along', async () => {
     await getWaitlistRouteLogger(new Request(SEARCH_URL));
 
+    expect(withContext).toHaveBeenCalledTimes(1);
     const context = withContext.mock.calls[0]?.[0] ?? {};
     // Absent, not present-and-undefined: `withContext` spreads, and a key set to
     // `undefined` survives into the context object that `pushToLogBuffer` copies.
@@ -68,6 +74,7 @@ describe('getWaitlistRouteLogger', () => {
   it('keeps the query-free endpoint, which is what operations actually needs', async () => {
     await getWaitlistRouteLogger(new Request(SEARCH_URL));
 
+    expect(withContext).toHaveBeenCalledTimes(1);
     const context = withContext.mock.calls[0]?.[0] ?? {};
     expect(context.endpoint).toBe('/api/v1/admin/app/waitlist');
     expect(context.method).toBe('GET');
