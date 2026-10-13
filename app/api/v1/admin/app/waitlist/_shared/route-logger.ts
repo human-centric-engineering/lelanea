@@ -12,33 +12,29 @@
  * and a log is a copy of personal data outside the table the Art. 15 export and
  * the Art. 17 erasure know how to reach.
  *
- * The care was defeated one layer down. `getRouteLogger` binds
- * `getFullContext(request)` to every line the logger emits, and that context
- * carries `url: request.url` — **the complete URL, query string included**
+ * The care was defeated one layer down. `getRouteLogger` bound
+ * `getFullContext(request)` to every line the logger emitted, and that context
+ * carried `url: request.url` — **the complete URL, query string included**
  * (`lib/logging/context.ts`). The sanitiser redacts by KEY name against
  * `PII_FIELDS`, which lists `email` and does not list `url`, so the admin's own
- * `email` context field is replaced with `[PII REDACTED]` in production while
- * the sibling `url: '…/waitlist?q=someone%40example.com'` is written out beside
+ * `email` context field was replaced with `[PII REDACTED]` in production while
+ * the sibling `url: '…/waitlist?q=someone%40example.com'` was written out beside
  * it — to stdout, and into the ring buffer `GET /api/v1/admin/logs` serves and
- * greps. The client table debounces, so one lookup emits the address once.
+ * greps. The client table debounces, so one lookup emitted the address once.
  *
- * Dropping `url` costs nothing operationally: `endpoint` is the same URL with
+ * Dropping `url` cost nothing operationally: `endpoint` is the same URL with
  * the query string stripped (`getEndpointPath`), and `method` is unchanged. What
  * is lost is a duplicate of the path plus the half nothing should keep.
  *
- * ## Why it is fixed here and not in the platform
+ * ## Fixed in the platform since Sunrise 0.14.0
  *
- * `lib/logging/context.ts` and `lib/api/context.ts` are Sunrise-owned and their
- * blobs are identical in all three tiers, so an edit there is a divergence row
- * we would carry and re-resolve on every sync. The gap is already open upstream
- * as [`sunrise#685`](https://github.com/human-centric-engineering/sunrise/issues/685)
- * — filed for a credential in a route PATH; the query-string half is the same
- * mechanism, and this module's case is recorded there.
- *
- * **This is narrow by design.** It fixes the two routes that knowingly take a
- * personal-data search term. Every other route in the app still logs its full
- * URL, which is the platform's behaviour to change, not ours to patch route by
- * route.
+ * [`sunrise#685`](https://github.com/human-centric-engineering/sunrise/issues/685)
+ * shipped with Daybreak 0.7.0: the request context no longer carries `url`, and
+ * `getRouteLogger` binds the query-free `endpoint` only. This wrapper used to
+ * destructure `url` out itself; it now delegates. It stays, rather than eleven
+ * call sites moving to core, because its test pins the privacy property for this
+ * surface — a search term never reaches a log line — against the platform
+ * regressing it.
  *
  * In `_shared/` rather than in `lib/app/`, following
  * `app/api/v1/admin/orchestration/workflows/[id]/_shared/`: it reaches
@@ -47,15 +43,8 @@
  */
 
 import type { Logger } from '@/lib/logging';
-import { logger } from '@/lib/logging';
-import { getEndpointPath, getFullContext } from '@/lib/logging/context';
+import { getRouteLogger } from '@/lib/api/context';
 
 export async function getWaitlistRouteLogger(request: Request): Promise<Logger> {
-  // Destructured out rather than overwritten with `undefined`: `withContext`
-  // spreads, so an explicit `url: undefined` would leave the key in the context
-  // object and rely on `JSON.stringify` dropping it on the way out — true today
-  // for the production formatter and not a property worth depending on.
-  const { url: _url, ...context } = await getFullContext(request);
-
-  return logger.withContext({ ...context, endpoint: getEndpointPath(request) });
+  return getRouteLogger(request);
 }

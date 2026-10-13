@@ -31,6 +31,7 @@ import { logger } from '@/lib/logging';
 import { logCost } from '@/lib/orchestration/llm/cost-tracker';
 import { getProvider } from '@/lib/orchestration/llm/provider-manager';
 import { resolveAgentProviderAndModel } from '@/lib/orchestration/llm/agent-resolver';
+import { primaryCallContext } from '@/lib/orchestration/llm/provider-eligibility';
 import { runStructuredCompletion } from '@/lib/orchestration/llm/structured-completion';
 import { ProviderError } from '@/lib/orchestration/llm/provider';
 import type { LlmMessage } from '@/lib/orchestration/llm/types';
@@ -147,8 +148,10 @@ export interface SeatCall<T> {
  * fails or the reply is refused; the caller decides what that costs them.
  */
 export async function askSeat<T>(userId: string, agent: SeatAgent, call: SeatCall<T>): Promise<T> {
-  const { providerSlug, model } = await resolveAgentProviderAndModel(agent, 'chat');
-  const provider = await getProvider(providerSlug);
+  const { providerSlug, model, provenance } = await resolveAgentProviderAndModel(agent, 'chat');
+  // Tell the call-time provider gate which arm chose the provider; a bare
+  // `getProvider(slug)` is held to both 'primary' and 'explicit' (Sunrise 0.14.0).
+  const provider = await getProvider(providerSlug, primaryCallContext(provenance));
   try {
     const result = await runStructuredCompletion<T>({
       provider,
