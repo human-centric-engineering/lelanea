@@ -49,6 +49,16 @@ describe('execute', () => {
     expect(getSlotHeads).not.toHaveBeenCalled();
   });
 
+  it('refuses an anonymous embed visitor with anonymous_visitor, touching nothing', async () => {
+    const result = await cap.execute({}, ctx('embed_visitor1'));
+    expect(result).toEqual({
+      success: false,
+      error: { code: 'anonymous_visitor', message: expect.any(String) },
+    });
+    expect(canRead).not.toHaveBeenCalled();
+    expect(getSlotHeads).not.toHaveBeenCalled();
+  });
+
   it('reads the caller’s slot heads behind canRead and maps them to views', async () => {
     vi.mocked(getSlotHeads).mockResolvedValue([head()] as never);
 

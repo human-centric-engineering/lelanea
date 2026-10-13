@@ -718,6 +718,8 @@ describe('the two arms of the golden set', () => {
       providerSlug: PINNED_PROVIDER,
       model: PINNED_MODEL,
       fallbacks: [],
+      // Pinned, so the provider gate (Sunrise 0.14.0) sees an operator's choice.
+      provenance: { task: 'chat', primary: 'explicit', fallbacks: 'explicit' },
     });
   });
 });

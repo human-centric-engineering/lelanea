@@ -25,6 +25,7 @@ import { logger } from '@/lib/logging';
 import type { LlmMessage } from '@/lib/orchestration/llm/types';
 import { getProvider } from '@/lib/orchestration/llm/provider-manager';
 import { resolveAgentProviderAndModel } from '@/lib/orchestration/llm/agent-resolver';
+import { primaryCallContext } from '@/lib/orchestration/llm/provider-eligibility';
 import { runStructuredCompletion } from '@/lib/orchestration/llm/structured-completion';
 import { tryParseJson } from '@/lib/orchestration/evaluations/parse-structured';
 import { SLOT_DATA_TYPE } from '@/lib/framework/data-slots/vocabulary';
@@ -68,8 +69,10 @@ export async function extractTypedValue(
     });
     if (agent === null) return null; // orphaned / system run — no provider to resolve
 
-    const { providerSlug, model } = await resolveAgentProviderAndModel(agent, 'chat');
-    const provider = await getProvider(providerSlug);
+    const { providerSlug, model, provenance } = await resolveAgentProviderAndModel(agent, 'chat');
+    // Tell the call-time provider gate (Sunrise 0.14.0, §120) which arm chose the provider; a
+    // bare `getProvider(slug)` is held to both 'primary' and 'explicit' and may be refused.
+    const provider = await getProvider(providerSlug, primaryCallContext(provenance));
 
     // Wrap the per-dataType schema in an object root (`{ value: <schema> }`) — the
     // portable shape `runStructuredCompletion` requires (a bare number/string/boolean

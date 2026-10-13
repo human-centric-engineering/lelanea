@@ -66,7 +66,8 @@ export const VOICE_CONTROL_AGENT_SLUG = 'voice-control-bare';
 /**
  * The judge that scores how close an answer sits to the brand voice.
  *
- * A platform-seeded agent (`prisma/seeds/016-evaluation-judges.ts`), and the one
+ * A platform agent every org gets its own instance of
+ * (`lib/orchestration/agents/platform-agent-definitions/evaluation-judges.ts`), and the one
  * metric a comparison attaches. It is what turns "visibly does not" into a
  * number somebody can look at next month without re-reading ten answers — the
  * difference between a check that gets run and one that does not.

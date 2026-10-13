@@ -146,7 +146,13 @@ async function ask(input: ContextCheckInput, signal: AbortSignal): Promise<Conte
 
   let provider;
   try {
-    provider = await getProvider(providerSlug);
+    // The routing task default is a provider Sunrise chose, not an operator's
+    // pick, so the call-time gate asks the eligibility rule as 'primary'.
+    provider = await getProvider(providerSlug, {
+      task: 'routing',
+      source: 'primary',
+      primarySlug: null,
+    });
   } catch (err) {
     logger.warn('Crisis context check provider is unavailable; the hard tier stands', {
       seat: input.seat,

@@ -71,6 +71,17 @@ describe('loadModuleContext — per-user fresh slots (t-4b)', () => {
     expect(body).not.toContain('system_note');
   });
 
+  it('reads no slots for an anonymous embed widget visitor (they hold none)', async () => {
+    registerModule(
+      definition({
+        slotDefinitions: [{ slug: 'primary_goal', group: 'goals', description: 'the goal' }],
+      })
+    );
+    const body = await loadModuleContext('onboarding', { userId: 'embed_0123456789abcdef' });
+    expect(getSlotHeads).not.toHaveBeenCalled();
+    expect(body).toContain('Module: Onboarding');
+  });
+
   it('omits the slots section when the user has no captured values yet', async () => {
     registerModule(
       definition({ slotDefinitions: [{ slug: 'goal', group: 'g', description: 'd' }] })

@@ -4,13 +4,13 @@
  * (D5) the agent calls mid-conversation to personalise its response.
  *
  * Mirrors `built-in/user-memory.ts`'s `ReadUserMemoryCapability` (a `processesPii`,
- * `context.userId`-scoped read) over the slot engine instead of `AiUserMemory`.
+ * `caller.userId`-scoped read) over the slot engine instead of `AiUserMemory`.
  *
  * **X2 — every slot read routes through `canRead`.** `getSlotHeads` takes a bare
  * `userId` and is deliberately *not* `canRead`-wrapped ([`access.ts`] /
  * [`values.ts`] both document this) — this capability supplies the guard: it builds a
  * `JourneyViewer` from the session user and calls `canRead(viewer, subject, scope)`
- * before reading. Today `subject === context.userId` (own slots) → allow; the seam
+ * before reading. Today `subject === caller.userId` (own slots) → allow; the seam
  * composes with Sunrise #366/#367 for §8 cohort-facilitator reads later. A denied read
  * returns an **empty** result (a capability returns a structured result, never throws
  * across the boundary), so it can never surface another user's heads.
@@ -18,6 +18,7 @@
 
 import { z } from 'zod';
 import { BaseCapability } from '@/lib/orchestration/capabilities/base-capability';
+import { checkUserCaller } from '@/lib/framework/shared/caller';
 import type {
   CapabilityContext,
   CapabilityFunctionDefinition,
@@ -100,14 +101,10 @@ export class GetStateCapability extends BaseCapability<GetStateArgs, GetStateDat
     args: GetStateArgs,
     context: CapabilityContext
   ): Promise<CapabilityResult<GetStateData>> {
-    if (context.userId === null) {
-      return this.error(
-        'Slot state is unavailable for system-initiated runs (no user context).',
-        'no_user_context'
-      );
-    }
-    const subject = context.userId;
-    const viewer: JourneyViewer = { userId: context.userId };
+    const caller = checkUserCaller(context, 'Slot state');
+    if (!caller.ok) return this.error(caller.message, caller.code);
+    const subject = caller.userId;
+    const viewer: JourneyViewer = { userId: caller.userId };
 
     // X2 guard before the (unguarded-by-design) engine read. Denied ⇒ empty, no read.
     if (!(await canRead(viewer, subject))) {

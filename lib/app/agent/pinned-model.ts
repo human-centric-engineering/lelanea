@@ -12,12 +12,12 @@
  *
  * Sunrise's cost tracker prices a turn from an in-memory model registry. Its
  * static map knows the alias `gpt-4o-mini` and not the dated snapshot §8.2 makes
- * us pin, and nothing on the chat path or in the evaluation worker warms the
- * registry from anywhere else — only the admin cost/model pages and the
- * estimators do, and Next can bundle the registry separately per route, so
- * warming one copy does not reliably warm another. Measured on 18 Sept 2026, in a
- * cold process, 3,000 tokens in and 300 out: the alias priced at $0.00063 and
- * the dated id at **$0**, with a warning nobody reads.
+ * us pin. Measured on 18 Sept 2026, in a cold process, 3,000 tokens in and 300
+ * out: the alias priced at $0.00063 and the dated id at **$0**, with a warning
+ * nobody reads. Since Sunrise 0.14.0 every provider call hydrates the registry
+ * from the matrix first (#813's fix), but our matrix row is null-cost on purpose
+ * (one blended rate mis-prices), so a hydrate alone still prices the snapshot
+ * at $0. The rate has to come from here.
  *
  * So the leaf teaches the registry this one model's rate, through the seam that
  * runs where the cost is about to be logged. Owner ruling, 18 Sept 2026, over
@@ -40,7 +40,11 @@
  * @see .context/app/agent.md
  */
 
-import { getModel, registerModels } from '@/lib/orchestration/llm/model-registry';
+import {
+  getModel,
+  isMatrixOwnedFigure,
+  registerModels,
+} from '@/lib/orchestration/llm/model-registry';
 import type { ModelInfo } from '@/lib/orchestration/llm/types';
 
 /** The `AiProviderConfig.slug` the agent's turns go to. Explicit, so it is never re-picked. */
@@ -83,19 +87,27 @@ export const PINNED_MODEL_INFO: ModelInfo = {
  * today — the provider seam (before any model call is costed) and the voice
  * preflight (before the leaf's own estimate).
  *
- * **What can undo it, stated rather than discovered.** `refreshFromOpenRouter()`
- * rebuilds the registry from the static map plus OpenRouter's list, which drops
- * this entry, and the provider seam is wired once per process so it does not put
- * it back. After a SUCCESSFUL refresh that is harmless: OpenRouter lists this
- * snapshot at the same split rate, and delists one only when the provider retires
- * the model — at which point the agent's turns fail for a better reason than
- * their price. A FAILED refresh leaves the registry, and this entry, as they
- * were. Nothing on the chat path or in the evaluation worker calls the refresh at
- * all; it takes an admin page sharing the module instance. §08 t-54 owns the turn
- * path and can call this per turn, which closes even that.
+ * **What it holds against (divergence row 30).** It registers as code, so a
+ * matrix hydrate fills around the rate and never replaces it. A rate a hydrate
+ * put there — an admin's blended cost typed onto our row — is replaced here
+ * rather than left alone, so the exact rate wins whichever ran first. An id
+ * another provider holds is theirs to route and is left alone. A
+ * catalogue refresh (`refreshFromOpenRouter()`) puts the rate back where the new
+ * catalogue has no price for the snapshot; where OpenRouter prices it, its split
+ * rate stands, which is the same rate.
  */
 export function ensurePinnedModelPriced(): void {
   const known = getModel(PINNED_MODEL);
-  if (known && known.inputCostPerMillion > 0 && known.outputCostPerMillion > 0) return;
-  registerModels([PINNED_MODEL_INFO]);
+  const priced = known && known.inputCostPerMillion > 0 && known.outputCostPerMillion > 0;
+  // A positive rate is left alone unless a matrix row put it there: OpenRouter's
+  // figure is as good as ours, a blended row's is not.
+  const fromMatrix =
+    isMatrixOwnedFigure(PINNED_MODEL, 'input') || isMatrixOwnedFigure(PINNED_MODEL, 'output');
+  // Another provider holding the id owns its routing; the registration would
+  // leave it alone, so there is nothing to retry.
+  if ((priced && !fromMatrix) || (known && known.provider !== PINNED_PROVIDER)) return;
+  // As a code registration, so the next matrix hydrate — our row is null-cost
+  // on purpose — fills around this rate rather than zeroing it (Sunrise 0.14.0;
+  // divergence row 30).
+  registerModels([PINNED_MODEL_INFO], { source: 'code' });
 }

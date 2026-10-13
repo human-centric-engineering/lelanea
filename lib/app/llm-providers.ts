@@ -21,7 +21,15 @@
  * a leak on a shared one, because the prompt — or the document, or the voice
  * recording — can reach a provider nobody approved.
  *
- * Example — an org may only use the providers it has approved:
+ * **At `TENANCY_MODE=multi` core already holds each org to its approved
+ * providers** (§120 t-742): the install org may use every provider, and every
+ * other org only those a platform admin granted it through
+ * `PUT /api/v1/admin/orgs/[id]/providers`, within its jurisdictions. That rule
+ * runs first and your rule is handed only what it permitted, so a rule here
+ * can narrow it and never widen it. Register one for a constraint core does
+ * not know about — a billing plan, a contract, a single-tenant install.
+ *
+ * Example — an org may only use the providers its plan includes:
  *
  *   import { registerProviderEligibility } from '@/lib/orchestration/llm/provider-eligibility';
  *   import { approvedProviderSlugs } from '@/lib/app/billing';
@@ -70,14 +78,20 @@
  *    or make this `async` and `await` your loading.
  *  - **Throwing denies, it never permits**, and is logged loudly — a
  *    restriction that cannot be evaluated must not be read as permission.
- *  - **It filters what Sunrise chooses, not what an operator chose.** The
+ *  - **It decides every vendor call core makes through the provider manager,
+ *    operator choices included (§120 t-741).** Where Sunrise CHOOSES — the
  *    auto-picked primary, both fallback lists, the task-default model's
  *    provider on the three paths that resolve one directly, an audio matrix row
- *    reached by order, and every arm of the embedding fallback chain all go
- *    through your rule. An explicit
- *    `agent.provider`, an explicit step or review `modelOverride`, a pinned
- *    audio default and the `EVALUATION_*` env vars do not. Enforce those at
- *    write time — do not offer a provider the org has not approved.
+ *    reached by order, and every arm of the embedding fallback chain — your rule
+ *    filters the candidates, so Sunrise picks a permitted one. Where an
+ *    operator chose — an explicit `agent.provider`, a step or review
+ *    `modelOverride`, a pinned default, the `EVALUATION_*` env vars — nothing
+ *    is rerouted, but the call-time gate asks your rule with
+ *    `source: 'explicit'` and REFUSES the call if you say no. (The pinned audio
+ *    default is also asked when it is chosen, and falls through to the matrix
+ *    when refused.) So a rule that refuses a provider for every source stops
+ *    agents that name it. Still enforce at write time too — do not offer a
+ *    provider the org has not approved — so that refusal is rare.
  *  - **`source: 'primary'` means every path where Sunrise chose**, not only the
  *    agent one: a blank `agent.provider`, a workflow step with no
  *    `modelOverride`, a keyword-enrichment run, an unpinned retroactive review,
@@ -117,15 +131,17 @@ export function registerAppProviderEligibility(): void | Promise<void> {
   //
   // What Lelañea uses this seam for is its TIMING, not its purpose, and that is
   // worth saying out loud. The voice agent is pinned to a dated model id (§8.2)
-  // that Sunrise's static price map does not know, and nothing on the chat path
-  // or in the evaluation worker warms the registry — so in a cold process its
-  // turns were costed at $0. This function is the one leaf hook Sunrise runs
+  // that Sunrise's static price map does not know, and our matrix row is
+  // null-cost on purpose — so without this its turns are costed at $0, even
+  // though every provider call now hydrates the matrix first (Sunrise 0.14.0).
+  // This function is the one leaf hook Sunrise runs
   // lazily, in whichever module graph is about to resolve a provider, before the
   // cost of that call is logged: exactly where the rate has to be known.
   // Registering a model is synchronous, idempotent and restricts nothing.
   //
   // Owner ruling, 18 Sept 2026. The why and the measurements are in
-  // `lib/app/agent/pinned-model.ts`; the platform gap is reported as sunrise#813, and
-  // this goes when Sunrise prices an id outside its static map on those paths.
+  // `lib/app/agent/pinned-model.ts`. sunrise#813 closed with 0.14.0 and did NOT
+  // make this removable: it stays until a model's exact split rate can live
+  // somewhere a hydrate reads (see sunrise#984 and divergence row 30).
   ensurePinnedModelPriced();
 }

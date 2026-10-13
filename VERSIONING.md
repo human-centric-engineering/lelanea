@@ -118,6 +118,8 @@ covered by the version contract.
   - `lib/app/knowledge-access-contributors.ts` → `initAppKnowledgeAccessContributors()` — knowledge document access
   - `lib/app/llm-providers.ts` → `registerAppProviderEligibility()` — provider-eligibility seam (primitive: `registerProviderEligibility()`, resolved through `lib/orchestration/llm/provider-eligibility.ts`)
   - `lib/app/mcp-resources.ts` → `initAppMcpResources()` — MCP resource-type registry
+  - `lib/app/platform-agents.ts` → `initAppPlatformAgents()` — platform agents every org gets an instance of (primitive: `registerPlatformAgent()` in `lib/orchestration/agents/platform-agents.ts`)
+  - `lib/app/provider-credentials.ts` → `initAppProviderCredentials()` — where a provider row's API key comes from, per org (primitive: `registerProviderCredentialResolver()` in `lib/orchestration/llm/provider-credentials.ts`)
   - `lib/app/protected-nav.ts` → `protectedNavItems` — authenticated-area nav
   - `lib/app/protected-routes.ts` → `appProtectedRoutes` — extra route prefixes the proxy protects
   - `lib/app/public-nav.ts` → `publicNavItems` / `footerNavItems` / `footerLegalItems` — public nav and footer
@@ -129,7 +131,7 @@ covered by the version contract.
 
   **Daybreak's reserved leaf seams** — the bridges above that Daybreak fills
   (`bootstrap.ts`, `admin-nav.ts`, `data-export.ts`, `brand.ts`, `db-drift.ts`,
-  `ci.ts`) each delegate to one of these, which Daybreak ships empty for the
+  `ci.ts`, `platform-agents.ts`) each delegate to one of these, which Daybreak ships empty for the
   leaf. Their contract is Daybreak's, documented in
   [`.context/framework/VERSIONING.md`](./.context/framework/VERSIONING.md); they
   are named here because this list is what the coverage guard reads:
@@ -140,6 +142,7 @@ covered by the version contract.
   - `lib/app/leaf-ci.ts` → `leafCoverageExclusions` / `leafAlwaysRunTests` / `leafOwnerlessSurfaceExceptions` — the leaf's CI declarations, via `ci.ts`
   - `lib/app/leaf-data-export.ts` → `initLeafSubjectSources()` / `collectLeafSubjectData()` — the leaf's Art. 15 sources, via `data-export.ts`
   - `lib/app/leaf-db-drift.ts` → `registerLeafDriftProbes()` — the leaf's drift probes, via `db-drift.ts`
+  - `lib/app/leaf-platform-agents.ts` → `initLeafPlatformAgents()` — the leaf's platform agents, via `platform-agents.ts`
 
   **Lelañea's own scaffolds** — LELAÑEA divergence, see
   `.context/app/divergences.md` row 17. These are leaf-owned modules that live
@@ -186,6 +189,7 @@ covered by the version contract.
   - the ESLint app-boundary rule governing `lib/app/**` (root `eslint.config.mjs`)
   - brand mark component (`components/brand/brand-mark.tsx` — fork-owned scaffold; the default returns `BRAND.name` as a bare string, so a fork replaces markup rather than filling a blank)
   - fork theme (`app/brand-theme.css` — per-surface CSS-variable overrides, ships empty, imported by `app/layout.tsx`)
+  - browser-tab icons (`app/favicon.ico`, `app/icon.svg` — fork-replaced assets on the Next file convention, linked by Next with no `layout.tsx` entry)
   - fork schema tier (`prisma/schema/app.prisma` — ships empty; the reserved `/app` and `/framework` tiers generally, see [`CUSTOMIZATION.md`](./CUSTOMIZATION.md#the-appplatform-model))
 
 - **Documented public APIs** —

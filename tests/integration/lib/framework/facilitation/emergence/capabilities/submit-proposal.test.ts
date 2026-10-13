@@ -113,6 +113,13 @@ describe('execute', () => {
     );
   });
 
+  it('refuses an anonymous embed visitor before resolving the agent — no proposal written', async () => {
+    const result = await cap.execute(args, ctx('embed_visitor1'));
+    expect(result).toMatchObject({ success: false, error: { code: 'anonymous_visitor' } });
+    expect(prisma.aiAgent.findUnique).not.toHaveBeenCalled();
+    expect(submitStructureChangeProposal).not.toHaveBeenCalled();
+  });
+
   it('errors (no_agent) when the calling agent cannot be resolved — no proposal written', async () => {
     vi.mocked(prisma.aiAgent.findUnique).mockResolvedValue(null);
     const result = await cap.execute(args, ctx('user-9'));

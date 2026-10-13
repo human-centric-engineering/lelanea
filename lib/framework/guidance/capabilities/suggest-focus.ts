@@ -6,6 +6,7 @@
  */
 
 import { BaseCapability } from '@/lib/orchestration/capabilities/base-capability';
+import { checkUserCaller } from '@/lib/framework/shared/caller';
 import type {
   CapabilityContext,
   CapabilityFunctionDefinition,
@@ -17,8 +18,6 @@ import {
   journeyArgsSchema,
   journeyArgProperties,
   journeyRequest,
-  hasUserContext,
-  NO_USER_CONTEXT_MESSAGE,
   type JourneyArgs,
 } from '@/lib/framework/guidance/capabilities/shared';
 
@@ -50,9 +49,10 @@ export class SuggestFocusCapability extends BaseCapability<JourneyArgs, FocusDat
     args: JourneyArgs,
     context: CapabilityContext
   ): Promise<CapabilityResult<FocusData>> {
-    if (!hasUserContext(context)) return this.error(NO_USER_CONTEXT_MESSAGE, 'no_user_context');
+    const caller = checkUserCaller(context, 'Guidance');
+    if (!caller.ok) return this.error(caller.message, caller.code);
 
-    const { viewer, key } = journeyRequest(args, context.userId);
+    const { viewer, key } = journeyRequest(args, caller.userId);
     const suggestion = await loadFocusSuggestion(viewer, key);
     if (suggestion === null) {
       return this.success({

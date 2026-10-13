@@ -65,6 +65,14 @@ describe('execute', () => {
     expect(appendSlotValue).not.toHaveBeenCalled();
   });
 
+  it('refuses an anonymous embed visitor with anonymous_visitor, touching nothing', async () => {
+    const result = await cap.execute(args(), ctx({ userId: 'embed_visitor1' }));
+    expect(result).toMatchObject({ success: false, error: { code: 'anonymous_visitor' } });
+    expect(appendSlotValue).not.toHaveBeenCalled();
+    expect(getSlotDefinition).not.toHaveBeenCalled();
+    expect(extractTypedValue).not.toHaveBeenCalled();
+  });
+
   it('appends to an active targeted slot and returns the new version, silently', async () => {
     const result = await cap.execute(args(), ctx({ conversationId: 'conv-9' }));
 

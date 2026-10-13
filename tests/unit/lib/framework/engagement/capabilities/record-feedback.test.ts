@@ -56,6 +56,13 @@ describe('RecordFeedbackCapability', () => {
     expect(recordMock).not.toHaveBeenCalled();
   });
 
+  it('refuses an anonymous embed visitor with anonymous_visitor, touching nothing', async () => {
+    const res = await cap.execute({ rating: 5 }, ctx({ userId: 'embed_visitor1' }));
+    expect(res.success).toBe(false);
+    expect(res.error?.code).toBe('anonymous_visitor');
+    expect(recordMock).not.toHaveBeenCalled();
+  });
+
   it('refuses when there is no module scope — attribution is trusted, never an arg', async () => {
     const res = await cap.execute({ rating: 5 }, ctx({ scope: {} }));
     expect(res.success).toBe(false);

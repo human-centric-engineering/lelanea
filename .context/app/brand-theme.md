@@ -346,8 +346,8 @@ lotus tokens are mode-invariant (above).
 
 **Below 48px without water, the mark is the GLYPH**: the bloom caught 850ms into
 its opening. Fully open the flower is ~2.3× wider than tall, so at the 18px
-avatar it would be a sliver. The glyph is also the favicon, the apple icon, and
-`public/favicon.{svg,ico}` (divergence row 13).
+avatar it would be a sliver. The glyph is also the favicon (`app/icon.svg` and
+`app/favicon.ico`, divergence row 13) and the apple icon.
 
 **After changing the model or any `--color-lotus-*` token, run
 `npm run lotus:assets`.** It rewrites `lotus-frames.ts`, the three marks and

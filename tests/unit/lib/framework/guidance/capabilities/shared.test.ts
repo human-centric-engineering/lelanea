@@ -3,11 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  journeyRequest,
-  hasUserContext,
-  journeyArgsSchema,
-} from '@/lib/framework/guidance/capabilities/shared';
+import { journeyRequest, journeyArgsSchema } from '@/lib/framework/guidance/capabilities/shared';
 
 describe('journeyRequest', () => {
   it('builds a viewer + key scoped to the caller as subject', () => {
@@ -23,13 +19,6 @@ describe('journeyRequest', () => {
       contextKey: 'inst-2',
     });
     expect(journeyRequest({ graphSlug: 'g' }, 'u').key).not.toHaveProperty('contextKey');
-  });
-});
-
-describe('hasUserContext', () => {
-  it('narrows on a present userId', () => {
-    expect(hasUserContext({ userId: 'u', agentId: 'a' })).toBe(true);
-    expect(hasUserContext({ userId: null, agentId: 'a' })).toBe(false);
   });
 });
 

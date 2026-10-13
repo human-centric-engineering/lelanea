@@ -67,6 +67,8 @@ export const API = {
     orgById: (id: string): string => `/api/v1/admin/orgs/${id}`,
     /** An org's data export bundle */
     orgExport: (id: string): string => `/api/v1/admin/orgs/${id}/export`,
+    /** An org's approved providers and jurisdictions (§120) */
+    orgProviders: (id: string): string => `/api/v1/admin/orgs/${id}/providers`,
     /** Delete invitation by email */
     invitationByEmail: (email: string): string =>
       `/api/v1/admin/invitations/${encodeURIComponent(email)}`,
@@ -140,6 +142,7 @@ export const API = {
       providerHealth: (id: string): string => `/api/v1/admin/orchestration/providers/${id}/health`,
       MODELS: '/api/v1/admin/orchestration/models',
       WORKFLOWS: '/api/v1/admin/orchestration/workflows',
+      WORKFLOW_TEMPLATES: '/api/v1/admin/orchestration/workflows/templates',
       workflowById: (id: string): string => `/api/v1/admin/orchestration/workflows/${id}`,
       workflowSchedules: (id: string): string =>
         `/api/v1/admin/orchestration/workflows/${id}/schedules`,

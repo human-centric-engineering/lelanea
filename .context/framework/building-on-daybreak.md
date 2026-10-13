@@ -38,20 +38,21 @@ a trap.
 
 ---
 
-## What's yours, and the four files that aren't
+## What's yours, and the files that aren't
 
 Daybreak reserves a leaf surface and keeps it empty for you — the same discipline it
 inherits from Sunrise, applied one level down. **Fill the `leaf-*` files, not the
 bridges they delegate to.**
 
-| Fill this (yours)             | NOT this (Daybreak's) | Registers                                                                                  |
-| ----------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
-| `lib/app/leaf-bootstrap.ts`   | `bootstrap.ts`        | one-time server boot work                                                                  |
-| `lib/app/leaf-admin-nav.ts`   | `admin-nav.ts`        | admin sidebar sections                                                                     |
-| `lib/app/leaf-db-drift.ts`    | `db-drift.ts`         | Prisma-unmodelled DB objects                                                               |
-| `lib/app/leaf-data-export.ts` | `data-export.ts`      | your tables in a subject export, and their Art. 15 declarations                            |
-| `lib/app/leaf-brand.ts`       | `brand.ts`            | product name, legal entity, meta description                                               |
-| `lib/app/leaf-ci.ts`          | `ci.ts`               | your own coverage exclusions, whole-tree always-run tests and ownerless-surface exceptions |
+| Fill this (yours)                 | NOT this (Daybreak's) | Registers                                                                                  |
+| --------------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `lib/app/leaf-bootstrap.ts`       | `bootstrap.ts`        | one-time server boot work                                                                  |
+| `lib/app/leaf-admin-nav.ts`       | `admin-nav.ts`        | admin sidebar sections                                                                     |
+| `lib/app/leaf-db-drift.ts`        | `db-drift.ts`         | Prisma-unmodelled DB objects                                                               |
+| `lib/app/leaf-data-export.ts`     | `data-export.ts`      | your tables in a subject export, and their Art. 15 declarations                            |
+| `lib/app/leaf-brand.ts`           | `brand.ts`            | product name, legal entity, meta description                                               |
+| `lib/app/leaf-ci.ts`              | `ci.ts`               | your own coverage exclusions, whole-tree always-run tests and ownerless-surface exceptions |
+| `lib/app/leaf-platform-agents.ts` | `platform-agents.ts`  | agents every org gets its own instance of (Daybreak 0.7.0+)                                |
 
 Each bridge runs Daybreak's registration and then calls your `leaf-*` hook. Filling a
 bridge directly collides with Daybreak on your next merge — and in the

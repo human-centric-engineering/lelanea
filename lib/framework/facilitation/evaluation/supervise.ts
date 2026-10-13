@@ -124,14 +124,21 @@ export async function superviseConversation(
 
   // Resolve the judge model + provider (same precedence as the retroactive execution-review route):
   // explicit override > EVALUATION_JUDGE_MODEL env > system default chat model.
-  const modelId = modelOverride ?? JUDGE_MODEL ?? (await getDefaultModelForTask('chat'));
+  // Held separately: the call-time provider gate (Sunrise 0.14.0, §120) turns on WHICH arm
+  // answered — an operator's recorded choice is 'explicit', the task default is 'primary'.
+  const operatorChoice = modelOverride ?? JUDGE_MODEL ?? null;
+  const modelId = operatorChoice ?? (await getDefaultModelForTask('chat'));
   const modelInfo = getModel(modelId);
   if (!modelInfo) {
     throw new ValidationError('Unknown model', {
       modelOverride: [`Model "${modelId}" is not in the model registry`],
     });
   }
-  const provider = await getProvider(modelInfo.provider);
+  const provider = await getProvider(modelInfo.provider, {
+    task: 'chat',
+    source: operatorChoice === null ? 'primary' : 'explicit',
+    primarySlug: null,
+  });
 
   // Provider-agnostic LLM shim (copied from the execution-review route). Bills cost per call as a
   // side-effect, attributed to the framework conversation and to the admin (or service account)

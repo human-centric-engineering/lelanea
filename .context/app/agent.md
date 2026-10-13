@@ -197,10 +197,11 @@ answered 404 on both seats. See [How the agent is reached](#how-the-agent-is-rea
 **A dated pin would otherwise cost every one of the agent's turns at $0.** Sunrise's cost
 tracker prices from an in-memory model registry. Its static map holds the alias
 `gpt-4o-mini` and not the dated snapshot; the snapshot reaches the registry only
-from an OpenRouter refresh or a hydrate from the matrix, and **nothing on the
-chat path or in the evaluation worker calls either** — only the admin cost and
-model pages and the estimators do, and Next can bundle the registry separately
-per route, so warming one copy does not reliably warm another.
+from an OpenRouter refresh or a hydrate from the matrix. Until Daybreak 0.7.0
+(Sunrise 0.14.0) **nothing on the chat path or in the evaluation worker called
+either**. Since then every provider call hydrates from the matrix first, which
+is #813's fix, but our row is null-cost (below), so a hydrate alone prices the
+snapshot at $0, flagged unpriced.
 
 Measured on 18 Sept 2026, in a cold process, 3,000 tokens in and 300 out:
 
@@ -219,8 +220,10 @@ accepting $0 until the turn seam lands (which zeroes the golden-set costs on
   $0.60 out, per million. It is part of the pin — change `PINNED_MODEL` and the
   rates change in the same edit; a test holds the three values together.
 - **What registers it** is `ensurePinnedModelPriced()`, in the same file — one map
-  lookup when the rate is already there, one registration when it is not. It has
-  two callers.
+  lookup when the rate is already there, one registration when it is not. It
+  registers as **code** (`{ source: 'code' }`, divergence row 30), so a later
+  hydrate fills around the rate and never replaces it. Without that, Sunrise
+  0.14.0's hydrate reset it to $0 within a minute of boot. It has two callers.
 - **The first caller** is `lib/app/llm-providers.ts`. That seam exists for
   provider-eligibility rules and we register none. It is used for its **timing**:
   it is the one leaf hook Sunrise runs lazily, in whichever module graph is about
@@ -232,10 +235,12 @@ accepting $0 until the turn seam lands (which zeroes the golden-set costs on
   does not run on that path; without the call, the estimate on `/admin/app/voice`
   depended on OpenRouter answering.
 - **The matrix row's cost is null, on purpose.** The column is one number for
-  both directions, and on hydrate a positive value **overrides** a split price
-  already in the registry — the second row of the table. Null falls through to
-  the exact rate. Where no exact rate exists either, the model reads as unpriced,
-  which the voice preflight flags rather than showing as cheap.
+  both directions, so a positive value is a blended rate — the second row of the
+  table. Since row 30 neither order lets it win: a hydrate never overrides the
+  code-registered split rate, and the seam replaces a rate a hydrate put there.
+  Null keeps the row honest about holding no exact rate. Where no exact rate
+  exists either, the model reads as unpriced, which the voice preflight flags
+  rather than showing as cheap.
 
 ### What this does not cover
 
@@ -251,15 +256,17 @@ recorded as free.
 
 **A cost typed onto the matrix row.** The row is seed-managed until an admin — or
 the model auditor's apply step — edits it, and from then on it is theirs. Give it
-a cost and that single number overrides the split rate wherever a hydrate runs;
-`ensurePinnedModelPriced()` leaves any positive rate alone, deliberately, because
-the same rule is what lets OpenRouter's figure stand. Leave that cell empty.
+a cost and the turns still price at the split rate: `ensurePinnedModelPriced()`
+replaces a rate that came from the matrix, and a hydrate never replaces the
+seam's. It leaves a positive rate from anywhere else alone, which is what lets
+OpenRouter's figure stand. The typed number only shows on the matrix pages, so
+leave that cell empty anyway.
 
 **A registry refresh.** `refreshFromOpenRouter()` rebuilds the registry from the
-static map plus OpenRouter's list, which drops our entry, and the seam is wired
-once per process so it does not put it back. After a _successful_ refresh that is
-harmless — OpenRouter lists this snapshot at the same rate, and delists one only
-when the provider retires the model. A _failed_ refresh leaves the registry as it
+static map plus OpenRouter's list. Since row 30 it puts a code registration back
+wherever the new catalogue has no price for the id, and OpenRouter lists this
+snapshot at the same rate anyway, delisting one only when the provider retires
+the model. A _failed_ refresh leaves the registry as it
 was. Nothing on the chat path or in the evaluation worker refreshes at all; it
 takes an admin page sharing the module instance. The turn hook cannot close
 that gap from its side — it is registered from the boot graph, and warming a
@@ -267,10 +274,12 @@ registry there warms the boot graph's copy, not the route's — so it does the
 other half: if a member's turn ever is costed at $0 this way, the turn record
 says `unpriced` rather than free (§08 t-54, below).
 
-The seam fill goes when Sunrise prices an id outside its static map on the chat
-and evaluation-worker paths — reported as
-[`sunrise#813`](https://github.com/human-centric-engineering/sunrise/issues/813),
-which also carries the blended-rate and history-budget overrides described above.
+[`sunrise#813`](https://github.com/human-centric-engineering/sunrise/issues/813)
+reported the gap and closed with 0.14.0's hydrate on every provider call, which
+did not price the snapshot (our row is null) and wiped the code-registered rate.
+The seam fill stays; what goes is our registry edit, when
+[`sunrise#984`](https://github.com/human-centric-engineering/sunrise/issues/984)
+ships a registration a hydrate won't overwrite (divergence row 30).
 
 ## How the agent is reached
 
@@ -974,8 +983,9 @@ exclusion's reason true for an administrator too.
 | `PUT/DELETE /api/v1/admin/app/agent/budgets/:userId` | set / clear one person's limit                     |
 
 All admin-only. The list's `?q=` is usually an email address, so every route on
-this surface logs without the request URL (`app/api/v1/admin/app/agent/_shared/route-logger.ts`, the same
-fix as the waitlist's; the platform gap is `sunrise#685`).
+this surface logs without the request URL. The platform has done so for every
+route since Sunrise 0.14.0 (`sunrise#685`); `app/api/v1/admin/app/agent/_shared/route-logger.ts`
+delegates to it, and its test pins the property for this surface.
 
 ## After a deploy
 

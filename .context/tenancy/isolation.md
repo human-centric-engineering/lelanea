@@ -54,6 +54,110 @@ CREATE POLICY "org_isolation" ON "ai_agent"
 - `NULL` `orgId` rows match no org. `db:tenancy:enable` backfills them to the
   install org before enforcing, so a row born before the chokepoint stamped
   the column, or written under `runAsSystem`, does not vanish.
+- **A unique index still spans every org, but a read doesn't.** Where a
+  column stays unique across the install, `AiWorkflow.slug` (the inbound
+  trigger URL's segment), a plain `findUnique` in one org calls a slug free
+  that another org holds, and the create then fails on the index however
+  often it is retried. Ask availability with
+  `isWorkflowSlugTaken` / `findFreeWorkflowSlug`
+  ([`lib/orchestration/workflows/slug-availability.ts`](../../lib/orchestration/workflows/slug-availability.ts),
+  §107 t-728). Each probe runs under the system scope and returns only a
+  yes/no answer or a free slug, never the other org's row. Save-as-template
+  uses it. The backup importer still reads the slug the plain way, so
+  importing a slug another org holds fails until §109 t-738 moves it onto
+  `isWorkflowSlugTaken`.
+- **Global config is used from every org, so count its users in every org.**
+  A provider, provider model, knowledge tag or agent profile is one row
+  serving every org, but the agents, workflows, grants and cost rows that
+  use it are tenant-owned. A plain count of those in one org misses the
+  rest, so an in-use check written that way lets one org's admin delete
+  what another org depends on. Ask
+  [`lib/orchestration/admin/global-config-usage.ts`](../../lib/orchestration/admin/global-config-usage.ts)
+  (§107 t-731). It counts across orgs, and returns the caller's own rows by
+  name and every other org's as a number. The read pages use it too (§107
+  t-752): the models matrix and a provider's model list (`agents` plus
+  `otherOrgAgentCount` per model), the capabilities list (`_agents` plus
+  `_otherOrgAgentCount`) and a capability's agents
+  (`meta.otherOrgAgentCount`). These list reads take only the caller's rows
+  and count the rest with `groupBy` (at `multi` only); t-731's delete checks
+  still read every org's rows and name only the caller's. With no org
+  entered (an admin API key) nothing is the caller's, so every agent is
+  counted as another org's. Their counts, "in use" filters and
+  delete-disabled states add the two. Because those pages ask on every
+  load, the module counts in `runAsCrossOrgCount`, the same bypass as
+  `runAsSystem` logged at `debug`, and a test confines that scope to this
+  module.
+- **Global config changes only from the install org.** The same one row
+  means a change made from inside a customer's org lands in every org. The
+  rule is `canChangeSharedSettings()`
+  ([`lib/tenancy/shared-settings.ts`](../../lib/tenancy/shared-settings.ts),
+  §107 t-751): at `multi`, only the install org or a system scope may change a
+  `GLOBAL_CONFIG_MODELS` row, and a call stack that entered no org at all is
+  refused. Nothing changes at `single`. Two places enforce it, and both need
+  the code to declare itself:
+  - **Routes.** A handler that creates, changes or deletes one of these rows
+    is `withAdminAuth(handler, { writesSharedSettings: true })`. The guard
+    refuses a session entered into any other org with a 403 whose
+    `details.reason` is `shared_settings_install_org_only` and whose message
+    says to switch to the install org. An unbound admin API key enters no org
+    and the guard admits it, as the install org. The same admin keeps read
+    access from a customer's org: only the write handlers declare it. The
+    backup import declares it too, so at `multi` it runs from the install org
+    only until §109 t-738 splits a backup's shared settings from the
+    importing org's own agents and workflows.
+  - **Capabilities.** A capability class that writes one sets
+    `writesSharedSettings = true` (on `BaseCapability`, beside
+    `processesPii`), and the dispatcher refuses it with
+    `shared_settings_install_org_only` before approval or execution, because
+    any org's workflow reaches a capability through a `tool_call` step.
+    `add_provider_models`, `deactivate_provider_models` and
+    `apply_audit_changes` declare it.
+
+  A whole-tree test
+  ([`shared-settings-writes.test.ts`](../../tests/unit/scripts/ci/shared-settings-writes.test.ts))
+  parses every route, every `lib/` function and every non-route module under
+  `app/`, and fails naming a handler or a capability class that writes one of
+  these models, directly or through a writer, without declaring it. Writes
+  that only create what is missing (the two settings singletons, the default
+  feature flags, the built-in patterns tag) are excepted by path, each with
+  its reason, and only while every write in them still only adds.
+
+  **The admin pages say so first** (§107 t-753). The admin layout asks
+  `getSharedSettingsAccess(session)`
+  ([`lib/tenancy/shared-settings-access.ts`](../../lib/tenancy/shared-settings-access.ts))
+  once per request, with the session it has already read: `readOnly` is
+  `multi` and an org other than the install org, derived from the request the
+  way `GET /api/v1/orgs` derives it (`sessionActingOrgId`: the resolver
+  header, else the session's choice). It provides the answer through
+  [`components/admin/shared-settings-access.tsx`](../../components/admin/shared-settings-access.tsx),
+  and that provider is the only source on a page: no page reads the helper
+  itself, so one page cannot mix two answers.
+  - A component that offers a shared-settings write asks
+    `useSharedSettingsReadOnly()`: it hides its create, delete and toggle
+    actions, disables its save and puts `<SharedSettingsSaveHint />` beside
+    it. The fields stay editable, because a disabled `<fieldset>` would also
+    disable the tabs, the ⓘ help and Cancel. A table drops an action column
+    that would be left empty.
+  - A server page wraps its own create link in `<SharedSettingsEditOnly>`.
+    `useIsInstallOrg()` answers install-org-only actions (the model audit).
+  - A shared-settings page renders `<SharedSettingsReadOnlyNotice />`. It
+    offers a button that switches the session to the install org, but only
+    when that could work (`canSwitch`): when the resolver header chose the
+    org, a switch would not move the request, so it says to use the install
+    org's address; when the user is not a member of the install org (one
+    membership read, only when read-only), it says to ask an install-org
+    admin. A failed read offers the button and leaves the answer to the
+    switch route, so it cannot take the admin tree down.
+
+  The page-side answer is unverified: a page that guessed wrong would only
+  show or hide a button whose request the guard answers either way. It can
+  also be stale: App Router keeps a layout across client navigation, so after
+  a switch made in another tab, this tab's pages keep the old answer until a
+  reload (the notice's own switch reloads the page). The server refuses the write
+  regardless. The knowledge base's document pages are the org's own, so they
+  show no notice and gate only their two shared-settings actions: the
+  patterns seed button, and creating a new tag inline (on upload and in a
+  document's tag picker). Applying an existing tag stays the org's.
 
 The text is defined once, in
 [`lib/tenancy/isolation.ts`](../../lib/tenancy/isolation.ts)

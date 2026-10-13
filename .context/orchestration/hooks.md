@@ -59,6 +59,8 @@ Defined in `HOOK_EVENT_TYPES` in `lib/orchestration/hooks/types.ts`:
 | `capability.refused_not_advertised` | `lib/orchestration/chat/streaming-handler.ts` (#488) and `lib/orchestration/engine/executors/agent-call.ts` (#559) — the model asked for a tool the agent was never offered this turn; payload: `{ agentId, agentSlug, userId, toolName, advertised }` plus `conversationId` (chat) or `executionId` + `stepId` (workflow)                                                                                                                                                                                    |
 | `chat_budget_exceeded_per_turn`     | `lib/orchestration/chat/streaming-handler.ts` (improvement #39 — webhook system only)                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
+**A widget visitor is not a user** (#705, t-765). On `message.created`, `conversation.started` and `capability.refused_not_advertised` from an embed widget turn, `userId` is `null` and the anonymous visitor id arrives as `embedVisitorId`. A subscriber that looks `userId` up as a `User` never gets a visitor id. See [`embed.md`](./embed.md#a-visitor-is-not-a-user).
+
 `capability.refused_not_advertised` fires when the model emits a tool name that
 was not in the set advertised to it for that turn. The caller refuses the call
 — it never reaches the dispatcher — and this event is how a fork notices.
@@ -378,7 +380,11 @@ template that covers any update event:
   half_open→open transition. The dispatch is guarded against
   duplicates while the breaker stays open; receivers don't get a new
   event from a flapping provider until the breaker actually cycles.
-  Payload: `{ providerSlug, failures, threshold, windowMs, cooldownMs, openedAt }`.
+  Payload: `{ providerSlug, perCredential, failures, threshold, windowMs, cooldownMs, openedAt }`.
+  Breakers are per credential (§120 t-744): `perCredential` is `true` when
+  the breaker that opened belongs to one org's credential from a fork's
+  credential resolver rather than the install's shared one. `providerSlug` is
+  always the plain slug, and the credential's identity is not sent.
 
 ## Entity-Scoped Subscriptions
 

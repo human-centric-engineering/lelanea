@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { generateRequestId } from '@/lib/logging/context';
 import { logger } from '@/lib/logging';
+import { collapseDynamicSegments } from '@/lib/logging/redact-path';
 import {
   VISITOR_COOKIE_NAME,
   VISITOR_HEADER_NAME,
@@ -92,6 +93,27 @@ function isAuthenticated(request: NextRequest): boolean {
 }
 
 /**
+ * Routes a partner site calls cross-origin by design, exempt from the Origin
+ * check below (#705, t-765): the embed widget's API (`/api/v1/embed/*`) and its
+ * in-chat approval buttons (`/approvals/:id/approve/embed`, `/reject/embed`).
+ * The widget runs on someone else's domain, so its every POST carries a foreign
+ * Origin, and the check refused them all: a visitor on a partner site could
+ * never send a message.
+ *
+ * The exemption is safe because the check defends against CSRF, which rides on
+ * credentials the browser attaches by itself — cookies. None of these routes
+ * reads a session or cookie: they authenticate with a token the caller must
+ * hold (the `X-Embed-Token` header, or a signed approval token), and each
+ * enforces its own origin allowlist (the embed token's `allowedOrigins`,
+ * `embedAllowedOrigins` for approvals). A route added here must keep both
+ * properties.
+ */
+const CROSS_ORIGIN_TOKEN_ROUTES = [
+  /^\/api\/v1\/embed\//,
+  /^\/api\/v1\/orchestration\/approvals\/[^/]+\/(approve|reject)\/embed$/,
+];
+
+/**
  * Validate origin for state-changing requests (additional CSRF protection)
  *
  * Better-auth provides CSRF protection via tokens, but this adds defense-in-depth
@@ -103,6 +125,10 @@ function isAuthenticated(request: NextRequest): boolean {
 function validateOrigin(request: NextRequest): boolean {
   // Only validate state-changing methods
   if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+    return true;
+  }
+
+  if (CROSS_ORIGIN_TOKEN_ROUTES.some((route) => route.test(request.nextUrl.pathname))) {
     return true;
   }
 
@@ -178,13 +204,15 @@ export async function proxy(request: NextRequest): Promise<NextResponse | Respon
   // Optional per-request access log (default off, behind LOG_HTTP_ACCESS).
   // Makes anonymous navigation visible server-side. The final response
   // status is not available to the proxy for passthrough requests, so the
-  // line carries the request shape + correlation keys only.
+  // line carries the request shape + correlation keys only. The path has its
+  // id- and credential-shaped segments collapsed: a page like `/s/<token>`
+  // would otherwise log a live credential on every visit (#685).
   if (isHttpAccessLogEnabled()) {
     logger.info('http_access', {
       requestId,
       visitorId: visitorId ?? undefined,
       method: request.method,
-      path: pathname,
+      path: collapseDynamicSegments(pathname),
     });
   }
 

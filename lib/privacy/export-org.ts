@@ -23,6 +23,12 @@
  * The org is not a data subject, so no receipt is written and no `reason` is
  * required — the actor is logged, which is what an operator action needs.
  *
+ * **It authorises nothing.** It reads the org it is given, as that org
+ * (`runAsOrg`, t-735), whoever calls it, so the caller decides who may export
+ * which org. Today that is one route, platform admins only. A caller for an
+ * org's own owner (§111) must check the requester administers the org it was
+ * asked for, not just their active one, or this becomes a cross-tenant read.
+ *
  * @see lib/privacy/org-sources.ts — the manifest and its coverage guard
  * @see lib/privacy/erase-org.ts — the deletion this precedes
  * @see lib/privacy/export-user.ts — the per-person shape this mirrors
@@ -31,9 +37,11 @@
 
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { runAsOrg } from '@/lib/tenancy/context';
 import {
   getOrgDataSources,
   getOrgExcludedSources,
+  type OrgDataSource,
   type OrgExcludedSource,
   type OrgQuery,
 } from '@/lib/privacy/org-sources';
@@ -101,9 +109,28 @@ export async function exportOrgData(params: ExportOrgParams): Promise<OrgExport>
 
   // A rejection propagates: an export that quietly lost a section would be
   // indistinguishable, to the reader, from one that had nothing to show.
-  const results = await Promise.all(
-    getOrgDataSources().map(async (source) => ({ source, rows: await source.fetch(query) }))
-  );
+  //
+  // Read as the org being exported, not as whoever is asking (§106 t-735). At
+  // `multi` the admin route runs inside the admin's own active org, and the
+  // `org_isolation` policy would AND every `ownedBy(orgId)` below with that
+  // org, so any other org's export came back with every section empty; an
+  // admin API key enters no org at all, and the reads threw. Entering the
+  // target here, rather than in the route, means any caller gets it — §111's
+  // planned owner self-service export is meant to sit on this same service.
+  //
+  // One source at a time, not all at once. At `multi` the data layer runs
+  // each read as its own transaction (the org setter, then the query), and
+  // each holds a pooled connection for as long as its query runs. Starting
+  // all of them together against a pool of 10 (1 on a serverless deploy) leaves
+  // the rest waiting for a connection, where a large org's reads can time out
+  // and fail the whole export.
+  const results = await runAsOrg(orgId, async () => {
+    const fetched: Array<{ source: OrgDataSource; rows: unknown[] }> = [];
+    for (const source of getOrgDataSources()) {
+      fetched.push({ source, rows: await source.fetch(query) });
+    }
+    return fetched;
+  });
 
   const data: Record<string, unknown[]> = {};
   const attributions: Record<string, unknown[]> = {};

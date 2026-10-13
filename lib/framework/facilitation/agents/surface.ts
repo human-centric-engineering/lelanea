@@ -10,8 +10,8 @@
  * existing surface conversation to resume (if any).
  *
  * Unlike `resolveModuleSurface`, it populates **no** `scope`: the guidance capabilities a
- * facilitation agent is granted are scope-agnostic (`get_journey_state` &c. read `context.userId`
- * + `args.graphSlug`, never `context.scope`), so "surface-scoping" here is purely *which agent
+ * facilitation agent is granted are scope-agnostic (`get_journey_state` &c. read the caller's
+ * user id + `args.graphSlug`, never `context.scope`), so "surface-scoping" here is purely *which agent
  * answers on which surface*, not capability refusal. (Forward caveat: this is safe only while
  * facilitation seats stay bound to scope-agnostic capabilities — a scope-gated capability reads
  * absent scope as allow-on-absent, so binding one to a seat would run it permissively here. Not a

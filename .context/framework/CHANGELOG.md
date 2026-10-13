@@ -25,6 +25,122 @@ process.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-10
+
+> **Seventh tagged Daybreak release: Sunrise 0.14.0.** It carries Sunrise
+> `v0.14.0` (platform agents per org §116, per-org provider policy §120, the
+> install-org rules for shared settings §107, and a security batch) and the
+> framework work it called for, in four PRs:
+> [#296](https://github.com/human-centric-engineering/daybreak/pull/296) (the
+> merge),
+> [#299](https://github.com/human-centric-engineering/daybreak/pull/299)
+> (embed visitors in framework tools),
+> [#300](https://github.com/human-centric-engineering/daybreak/pull/300) (the
+> rubric judge as a platform agent) and
+> [#301](https://github.com/human-centric-engineering/daybreak/pull/301) (its
+> prompt fixed).
+>
+> **One seam changes hands: `lib/app/platform-agents.ts` is Daybreak's.** Leaf
+> platform agents go in the new `lib/app/leaf-platform-agents.ts`. No leaf could
+> have filled the old seam on a Daybreak release, because it first shipped in
+> Sunrise 0.14.0.
+>
+> **At `TENANCY_MODE=single`, the default, little a user sees changes:** the
+> rubric judge's prompt, and an embed widget visitor now gets a clear refusal
+> from a framework tool instead of a failed call. **Still do not switch to `multi`:** the
+> framework's boot syncs (modules, slot definitions) are not yet run per org.
+> That is tracked on the Daybreak Hub and is needed before any Daybreak app
+> enables `multi`.
+
+### Changed
+
+- **Sunrise 0.14.0 merged** (system agents per org §116, per-org provider
+  policy §120, a security batch on logging, exports and outbound messages).
+  Read Sunrise's `[0.14.0]` "What a fork has to do" before deploying: six
+  migrations, two of which lock large tables, and `retire_builtin_template_rows`
+  switches off the twelve seeded `tpl-*` workflows. Run `db:migrate:deploy`, then
+  `db:drift-check`: a vanilla Daybreak now reports 72 probes (Sunrise's new A9,
+  the conversation-owner CHECK). What changes for a leaf:
+  - **Platform agents: register yours in the new reserved
+    `lib/app/leaf-platform-agents.ts`, not in `lib/app/platform-agents.ts`.**
+    Sunrise 0.14.0 ships `lib/app/platform-agents.ts` as a fork seam, and
+    Daybreak fills it as a bridge: it registers the framework's own platform
+    agent (the rubric judge, below), then calls `initLeafPlatformAgents()`. A
+    leaf registering a framework or core slug replaces that agent in every org,
+    logged at warn. Test your init: core rolls the framework's registrations and
+    the leaf's back as one unit if it throws, so a broken leaf init switches the
+    rubric judge off in every org until it is fixed.
+  - **The framework-rubric judge is now a platform agent** (Hub t-142). Every
+    org gets its own `eval-judge-framework-rubric`, from `createOrg`,
+    `db:seed` and the maintenance tick, and the reconcile writes its prompt and
+    settings back on each release. Provider, model and spend stay the org's. The
+    seed `framework/001-framework-rubric-judge` is removed. An existing
+    install's seeded row is adopted in place, with no new row. An admin edit to
+    the judge's prompt is now refused, as for Sunrise's own judges. Clone it to
+    customise it. **Its prompt changed** (Hub t-144): the output schema now asks
+    for one `evaluation_steps` entry per evaluation step (five), where before it
+    asked for four and folded remit and grounding into one; and it now calls the
+    citations input `CITED SOURCES`, the heading the judge driver actually sends
+    (it said `CITATIONS`, so a judge could skip the grounding check). Rubric
+    scores taken before and after the release may differ. Two upgrade checks:
+    - **A judge you switched off comes back on.** `isActive` is the
+      platform's, so the reconcile re-enables it and the API refuses switching
+      it off. To stop rubric scoring, set the eval-sweep step's `rubric: false`.
+    - **At `multi`, an org with its own (non-system) agent under
+      `eval-judge-framework-rubric` keeps it.** The reconcile never takes over
+      an org's own agent, so that org never gets the platform judge. Rename or
+      delete that agent to receive it.
+  - **`lib/app/provider-credentials.ts`** is a new reserved leaf seam. Daybreak
+    keeps it empty: where a provider's API key comes from is the leaf's call.
+  - The two-org smoke (`smoke:tenancy-isolation`) checks core's 12/4 split
+    against core's own definitions, so it passes with fork-registered agents;
+    Daybreak carries that edit until Sunrise
+    [#973](https://github.com/human-centric-engineering/sunrise/issues/973) lands.
+  - **Your own `getProvider(slug)` calls should pass a context.** Without one, a
+    call is permitted only if your eligibility rule permits it as both
+    `'primary'` and `'explicit'`. Daybreak's two calls now pass one.
+  - **A rule in `lib/app/llm-providers.ts` now also decides operator-chosen
+    providers, at call time**, and at `multi` it can only narrow the org's
+    approved set, never widen it. A rule that barred a provider for
+    `'explicit'` now stops agents that name it.
+  - **Your `collectLeafSubjectData()` still receives `{ userId, email }`.** Core
+    added `emailVerified` to its own `SubjectQuery`, not to the leaf's. A leaf
+    table keyed by email that a public form fills should match only a verified
+    address; see Sunrise's `.context/privacy/data-erasure.md`.
+  - **Embed widget chats now start.** A tool of yours that writes the caller id
+    into a `User` foreign key must check `isEmbedUserId` (`lib/embed/auth.ts`)
+    first, and decide what a visitor gets. Daybreak's framework tools now refuse
+    an anonymous visitor with `anonymous_visitor` before touching the database:
+    `fill_slot`, `get_state`, `record_feedback`, the five journey tools and
+    `submit_proposal` (a visitor's proposal could be traced to no one). The
+    module context injected into a visitor's chat skips their (nonexistent)
+    slots. A facilitation escalation records a visitor as `embedVisitorId` in
+    its audit row, with `affectedUserId: null`, and sends no caller id to the
+    escalation webhook. A framework tool of your own
+    can make the same check with `checkUserCaller()`
+    (`lib/framework/shared/caller.ts`).
+  - **`/pre-pr`'s coverage floor is now per file**, as documented (Sunrise
+    t-749). A PR whose changed files only cleared 80% on average now fails, and
+    the failure names the file.
+
+### Security
+
+- **Sunrise 0.14.0's security fixes reach a leaf with this release.** A leaf
+  on Daybreak 0.6.0 or older is exposed to all of them until it takes it. Read
+  Sunrise's `[0.14.0]` Security section; in short:
+  - **Rate-limit bypass.** The `api-key` and `embed-token` rate-limit
+    strategies keyed on the header as presented, so a caller could open a fresh
+    bucket per request (#701). They now key on the verified credential.
+  - **Outbound messages.** `send_message_to_channel` could message any
+    conversation id it was handed. It now sends only within the conversation
+    being handled.
+  - **Logs and exports.** Credentials and emails in request URLs, outbound
+    webhook URLs, and camelCase keys such as `userEmail` were being logged in
+    the clear. A subject export could include another person's contact-form
+    messages.
+  - **Sentry 11** collects request bodies and gen-AI inputs by default. A leaf
+    with Sentry on should set `dataCollection` and add the scrub hooks.
+
 ## [0.6.0] — 2026-09-25
 
 > **Sixth tagged Daybreak release: Sunrise 0.13.0, stage 2 of 2.** It carries

@@ -49,11 +49,26 @@ import { registerAppSubjectSources } from '@/lib/privacy/subject-source-registry
 const byCreatedAt = { createdAt: 'asc' } as const;
 
 /**
+ * What a framework source is handed about the subject: the identity core gives
+ * the `lib/app/data-export.ts` collector (`AppSubjectQuery`), not core's own
+ * `SubjectQuery`. Sunrise 0.14.0 added `emailVerified` to the latter for its
+ * by-address `ContactSubmission` source and deliberately keeps it out of the
+ * fork collector, so a framework source cannot be typed to need it. Every
+ * framework source keys on `userId` anyway.
+ */
+export type FrameworkSubjectQuery = Pick<SubjectQuery, 'userId' | 'email'>;
+
+/** Core's source shape, reading a {@link FrameworkSubjectQuery}. */
+export type FrameworkSubjectDataSource = Omit<SubjectDataSource, 'fetch'> & {
+  fetch: (subject: FrameworkSubjectQuery) => Promise<unknown[]>;
+};
+
+/**
  * Every `framework_*` model carrying a user id, with its disposition. Ordered
  * personal-data first, then attribution — matching how the core manifest
  * presents its own.
  */
-export const FRAMEWORK_SUBJECT_DATA_SOURCES: SubjectDataSource[] = [
+export const FRAMEWORK_SUBJECT_DATA_SOURCES: FrameworkSubjectDataSource[] = [
   // ---------------------------------------------------------------------
   // Personal data — the subject's own records. Every one of these is a
   // `userId` column with a hand-written ON DELETE CASCADE.
@@ -129,7 +144,7 @@ export const FRAMEWORK_SUBJECT_DATA_SOURCES: SubjectDataSource[] = [
     // a person as squarely as it covers the words assessed. `costUsd` is deliberately
     // not selected: what the judge calls cost the operator is the organisation's
     // data, not the subject's, and it says nothing about them.
-    fetch: async ({ userId }: SubjectQuery): Promise<unknown[]> => {
+    fetch: async ({ userId }: FrameworkSubjectQuery): Promise<unknown[]> => {
       // Two steps, not a nested `where`: `conversationId` is a plain string with
       // no `@relation`, so there is no relation filter to traverse. The framework
       // schema keeps FKs to core tables unmodelled on purpose (see the migrations),
@@ -171,7 +186,7 @@ export const FRAMEWORK_SUBJECT_DATA_SOURCES: SubjectDataSource[] = [
     section: 'facilitationMaps',
     disposition: 'attribution',
     description: 'Facilitation maps the subject created.',
-    fetch: async ({ userId }: SubjectQuery): Promise<AttributionRow[]> => {
+    fetch: async ({ userId }: FrameworkSubjectQuery): Promise<AttributionRow[]> => {
       const rows = await prisma.facilitationGraph.findMany({
         where: { createdBy: userId },
         select: { id: true, name: true, createdAt: true },
@@ -187,7 +202,7 @@ export const FRAMEWORK_SUBJECT_DATA_SOURCES: SubjectDataSource[] = [
     description: 'Facilitation map versions the subject published.',
     // `createdBy` also admits `agent:<slug>` for agent-authored versions; a user
     // id never collides with that prefix, so matching on it needs no filter.
-    fetch: async ({ userId }: SubjectQuery): Promise<AttributionRow[]> => {
+    fetch: async ({ userId }: FrameworkSubjectQuery): Promise<AttributionRow[]> => {
       const rows = await prisma.facilitationGraphVersion.findMany({
         where: { createdBy: userId },
         select: { id: true, version: true, createdAt: true, graph: { select: { slug: true } } },
@@ -205,7 +220,7 @@ export const FRAMEWORK_SUBJECT_DATA_SOURCES: SubjectDataSource[] = [
     section: 'facilitationPolicies',
     disposition: 'attribution',
     description: 'Governance policies the subject created.',
-    fetch: async ({ userId }: SubjectQuery): Promise<AttributionRow[]> => {
+    fetch: async ({ userId }: FrameworkSubjectQuery): Promise<AttributionRow[]> => {
       const rows = await prisma.facilitationPolicy.findMany({
         where: { createdBy: userId },
         select: { id: true, kind: true, createdAt: true },
@@ -224,7 +239,7 @@ export const FRAMEWORK_SUBJECT_DATA_SOURCES: SubjectDataSource[] = [
     // already declared via `createdBy`), so a `createdBy`-only query would drop
     // every proposal the subject approved or rejected — authorship the subject
     // is equally entitled to see. `createdBy` also admits `agent:<slug>`.
-    fetch: async ({ userId }: SubjectQuery): Promise<AttributionRow[]> => {
+    fetch: async ({ userId }: FrameworkSubjectQuery): Promise<AttributionRow[]> => {
       const rows = await prisma.structureChangeProposal.findMany({
         where: { OR: [{ createdBy: userId }, { reviewedBy: userId }] },
         select: { id: true, subjectType: true, status: true, createdAt: true },
@@ -242,7 +257,7 @@ export const FRAMEWORK_SUBJECT_DATA_SOURCES: SubjectDataSource[] = [
     section: 'moduleVersions',
     disposition: 'attribution',
     description: 'Module configuration versions the subject published.',
-    fetch: async ({ userId }: SubjectQuery): Promise<AttributionRow[]> => {
+    fetch: async ({ userId }: FrameworkSubjectQuery): Promise<AttributionRow[]> => {
       const rows = await prisma.moduleVersion.findMany({
         where: { createdBy: userId },
         select: { id: true, version: true, createdAt: true, module: { select: { slug: true } } },
@@ -260,7 +275,7 @@ export const FRAMEWORK_SUBJECT_DATA_SOURCES: SubjectDataSource[] = [
     section: 'moduleWorkflowBindings',
     disposition: 'attribution',
     description: 'Module-to-workflow bindings the subject created.',
-    fetch: async ({ userId }: SubjectQuery): Promise<AttributionRow[]> => {
+    fetch: async ({ userId }: FrameworkSubjectQuery): Promise<AttributionRow[]> => {
       const rows = await prisma.moduleWorkflowBinding.findMany({
         where: { createdBy: userId },
         select: { id: true, eventType: true, createdAt: true, module: { select: { slug: true } } },

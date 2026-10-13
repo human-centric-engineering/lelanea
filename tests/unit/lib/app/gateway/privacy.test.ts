@@ -36,6 +36,7 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
       findMany: ReturnType<typeof vi.fn>;
       deleteMany: ReturnType<typeof vi.fn>;
       updateMany: ReturnType<typeof vi.fn>;
+      count: ReturnType<typeof vi.fn>;
     }
 
     const delegates = new Map<string, Delegate>();
@@ -46,6 +47,7 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
           findMany: vi.fn().mockResolvedValue([]),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
           updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          count: vi.fn().mockResolvedValue(0),
         };
         delegates.set(name, delegate);
       }
@@ -56,6 +58,7 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
         delegate.findMany.mockReset().mockResolvedValue([]);
         delegate.deleteMany.mockReset().mockResolvedValue({ count: 0 });
         delegate.updateMany.mockReset().mockResolvedValue({ count: 0 });
+        delegate.count.mockReset().mockResolvedValue(0);
       }
     };
 
@@ -69,7 +72,14 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
     const base = {
       get(_target: object, property: string | symbol): unknown {
         if (typeof property !== 'string') return undefined;
-        if (property === 'user') return { findUnique: userFindUnique, delete: userDelete };
+        if (property === 'user')
+          // `findUniqueOrThrow`: core's erasure reads the address and its
+          // verification to scope the contact-form delete (Sunrise 0.14.0).
+          return {
+            findUnique: userFindUnique,
+            findUniqueOrThrow: userFindUnique,
+            delete: userDelete,
+          };
         if (property === 'dataErasureReceipt')
           return { ...delegateFor(property), create: receiptCreate };
         return delegateFor(property);

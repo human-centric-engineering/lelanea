@@ -79,6 +79,35 @@ describe('handleFacilitationGuardEvent', () => {
     );
   });
 
+  it('audits an embed visitor as embedVisitorId and sends no caller id to the webhook', async () => {
+    vi.mocked(listEnabledFacilitationPolicies).mockResolvedValue([policy(escPayload())] as never);
+    // No `embedVisitorId` on the context: the visitor is detected from the id itself, the same
+    // signal that nulls `userId`, so the two cannot disagree.
+    await handleFacilitationGuardEvent(ctx({ userId: 'embed_visitor1' }), event());
+    const notified = vi.mocked(notifyEscalation).mock.calls[0][0];
+    expect(notified.userId).toBeNull();
+    expect(notified.metadata).not.toHaveProperty('embedVisitorId');
+    expect(logAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: null,
+        metadata: expect.objectContaining({
+          affectedUserId: null,
+          embedVisitorId: 'embed_visitor1',
+        }),
+      })
+    );
+  });
+
+  it('adds no embedVisitorId for a signed-in user', async () => {
+    vi.mocked(listEnabledFacilitationPolicies).mockResolvedValue([policy(escPayload())] as never);
+    await handleFacilitationGuardEvent(ctx(), event());
+    const notified = vi.mocked(notifyEscalation).mock.calls[0][0];
+    expect(notified.metadata).not.toHaveProperty('embedVisitorId');
+    expect(vi.mocked(logAdminAction).mock.calls[0][0].metadata).toMatchObject({
+      affectedUserId: 'u1',
+    });
+  });
+
   it('ignores a policy scoped to a different role', async () => {
     vi.mocked(listEnabledFacilitationPolicies).mockResolvedValue([
       policy(escPayload({ scope: { type: 'facilitation_role', id: 'state' } })),
