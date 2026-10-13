@@ -79,7 +79,13 @@ describe('checkCrisisContext', () => {
   it('asks the routing side model on its own provider, with the message as data', async () => {
     answers('DANGER');
     await checkCrisisContext(INPUT);
-    expect(mocks.getProvider).toHaveBeenCalledWith('openai');
+    // As 'primary': the routing default is Sunrise's choice, and a call with no
+    // context is held to 'primary' and 'explicit' both by the provider gate.
+    expect(mocks.getProvider).toHaveBeenCalledWith('openai', {
+      task: 'routing',
+      source: 'primary',
+      primarySlug: null,
+    });
     const [messages, options] = mocks.chat.mock.calls[0] as [
       Array<{ role: string; content: string }>,
       { model: string; signal: AbortSignal },
