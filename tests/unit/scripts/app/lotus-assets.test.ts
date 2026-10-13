@@ -7,7 +7,7 @@
  *
  * @see scripts/app/lotus-assets.tsx
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -45,8 +45,21 @@ describe('the baked lotus', () => {
     expect(read('components/app/ui/lotus-frames.ts')).toBe(lotusFramesSource());
   });
 
-  it('keeps the Sunrise-owned favicon.svg on the same glyph (divergence row 13)', () => {
-    expect(read('public/favicon.svg')).toBe(assets['app/icon.svg']);
+  it('keeps the Sunrise-owned app/favicon.ico as our 16/32/48 lotus (divergence row 13)', () => {
+    // Upstream's is a different ICO; ours is the three PNG entries the
+    // generator writes. ICONDIR: count at 4, then 16-byte entries from 6.
+    const buf = readFileSync(path.join(root, 'app', 'favicon.ico'));
+    const count = buf.readUInt16LE(4);
+    const sizes = Array.from({ length: count }, (_, i) => buf[6 + i * 16]);
+    expect(sizes).toEqual([16, 32, 48]);
+    expect(buf.subarray(buf.readUInt32LE(6 + 12), buf.readUInt32LE(6 + 12) + 4)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47])
+    );
+  });
+
+  it('leaves no favicon in public/, which would clash with the app/ icons', () => {
+    expect(existsSync(path.join(root, 'public', 'favicon.ico'))).toBe(false);
+    expect(existsSync(path.join(root, 'public', 'favicon.svg'))).toBe(false);
   });
 
   it('bakes literal colours, which a favicon, Satori and email can all read', () => {

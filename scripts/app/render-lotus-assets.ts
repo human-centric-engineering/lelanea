@@ -5,8 +5,9 @@
  *
  * Writes the three still marks `LotusMark` shows (`public/lotus-mark.svg` —
  * also the social card — `lotus-bloom.svg`, `lotus-glyph.svg`), the email
- * header `public/lotus-mark.png`, the favicon `app/icon.svg` (and its copies
- * `public/favicon.{svg,ico}` — divergence row 13) and `app/apple-icon.png`. Run it
+ * header `public/lotus-mark.png`, the favicon `app/icon.svg` and `app/favicon.ico`
+ * (both Sunrise-owned paths since 0.14.0 — divergence row 13) and
+ * `app/apple-icon.png`. Run it
  * after changing the lotus model or any `--color-lotus-*` token; the unit test
  * on `scripts/app/lotus-assets.tsx` fails until the SVGs are regenerated.
  */
@@ -56,8 +57,7 @@ async function main() {
     writeFileSync(path.join(root, file), assets[file]);
   }
   writeFileSync(path.join(root, 'app', 'icon.svg'), assets['app/icon.svg']);
-  // Divergence row 13: the Sunrise-owned favicons carry the same glyph.
-  writeFileSync(path.join(root, 'public', 'favicon.svg'), assets['app/icon.svg']);
+  // Divergence row 13: the Sunrise-owned `app/favicon.ico` carries the same glyph.
   const sizes = [16, 32, 48];
   const pngs = await Promise.all(
     sizes.map((size) =>
@@ -67,7 +67,7 @@ async function main() {
         .toBuffer()
     )
   );
-  writeFileSync(path.join(root, 'public', 'favicon.ico'), ico(sizes, pngs));
+  writeFileSync(path.join(root, 'app', 'favicon.ico'), ico(sizes, pngs));
 
   await sharp(Buffer.from(assets['email-lotus.svg']))
     .png({ compressionLevel: 9 })
@@ -79,7 +79,7 @@ async function main() {
     .toFile(path.join(root, 'app', 'apple-icon.png'));
 
   console.log(
-    'lotus assets written: public/lotus-{mark,bloom,glyph,anim-*}.svg, public/lotus-mark.png, public/favicon.{svg,ico}, app/icon.svg, app/apple-icon.png'
+    'lotus assets written: public/lotus-{mark,bloom,glyph,anim-*}.svg, public/lotus-mark.png, app/{icon.svg,favicon.ico,apple-icon.png}'
   );
 }
 
