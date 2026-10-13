@@ -304,7 +304,9 @@ describe('resolveVoiceArms', () => {
     agent(VOICE_CONTROL_AGENT_SLUG).isActive = false;
     await expect(resolveVoiceArms()).rejects.toThrow(/inactive/i);
     // The remedy is one that works: the admin cannot switch on a system agent.
-    await expect(resolveVoiceArms()).rejects.toThrow(/UPDATE ai_agent SET "isActive" = true/);
+    await expect(resolveVoiceArms()).rejects.toThrow(
+      /UPDATE ai_agent SET "isActive" = true WHERE id = '/
+    );
   });
 });
 
@@ -379,6 +381,10 @@ describe('assertArmsComparable — the four silent misconfigurations', () => {
       Object.assign(agent(VOICE_CONTROL_AGENT_SLUG), patch);
       await expect(arms().then((a) => assertArmsComparable(a))).rejects.toThrow(
         /different models/i
+      );
+      // Provider and model are still editable on a system agent; temperature is not.
+      await expect(arms().then((a) => assertArmsComparable(a))).rejects.toThrow(
+        /Match the provider and model in \/admin\/orchestration\/agents.*Temperature is not editable there/
       );
     }
   );
@@ -462,6 +468,10 @@ describe('queueVoiceComparison', () => {
   it('refuses when the brand-voice judge is inactive, rather than queueing unscored', async () => {
     agent(BRAND_VOICE_JUDGE_SLUG).isActive = false;
     await expect(queueVoiceComparison('admin-1')).rejects.toThrow(/brand-voice judge/i);
+    // `db:seed` alone skips an unchanged unit, so the history row goes first.
+    await expect(queueVoiceComparison('admin-1')).rejects.toThrow(
+      /DELETE FROM seed_history WHERE name = '021-platform-agents'/
+    );
     expect(world.runs).toHaveLength(0);
   });
 });

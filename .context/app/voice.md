@@ -142,8 +142,9 @@ attribute an output to a version of her voice that never reached it.
   after the first create. **Since Daybreak 0.7.0 (Sunrise 0.14.0) the admin
   locks almost everything else on a system agent too** — name, description,
   temperature, visibility, the profile, knowledge access, tools and the Active
-  switch. Only the model, provider, spend limits, rate limit and retention are
-  an operator's (owner ruling, t-170, to keep these agents locked).
+  switch. Only operational settings such as the model and spend limits are an
+  operator's; the agent form lists them (owner ruling, t-170, to keep these
+  agents locked).
 
 **The agent's own persona / brand voice / guardrails columns are left NULL**, so
 the profile is what speaks. Sunrise's per-field resolution defaults to
@@ -1823,8 +1824,8 @@ are the artefact itself, and nobody is meant to hand-edit her voice in the admin
 The agent beside it is **split** — `profileId`, `knowledgeAccessMode` and
 `systemInstructions` are reconciled; its name, description and temperature are
 written once. Since Sunrise 0.14.0 the admin locks those on a system agent too,
-along with `isActive`, so in practice only the model and spend controls belong
-to an operator (t-170).
+along with `isActive`, so in practice only operational settings such as the
+model and spend limits belong to an operator (t-170).
 
 It re-runs when either `seed-data/drafted/lelanea_voice_fingerprint.json` or
 `lib/app/voice/fingerprint.ts` changes (`hashInputs`), so a new line in her

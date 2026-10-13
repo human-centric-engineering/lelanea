@@ -95,17 +95,32 @@ seat is bound again.
 - **The next re-seed binds it again** (seed `006` fills empty seats). To keep it
   off a seat across deploys, remove the role from `SEATED_ROLES`
   (`lib/app/agent/pins.ts`) and deploy.
-- **Not visibility, and not the Active switch.** Since Daybreak 0.7.0 (Sunrise
-  0.14.0) the guide is a locked system agent in Orchestration → Agents: its
-  visibility, prompt, behaviour, tools and Active switch are refused there, and
-  only the model, provider, spend limits, rate limit and retention stay editable
-  (owner ruling, t-170). The old lever, visibility → `internal`, no longer works.
-- **Its prompt and tools can't be changed from the admin either.** If they have
-  changed anyway, the change came from the database or a deploy. The seed units
-  restore the instructions (`app-lelanea/003-voice-fingerprint`) and the
-  bindings (`007`, `013`, `014`, `023`–`025`), but an applied unit is skipped:
-  delete its row first (`DELETE FROM seed_history WHERE name = '<unit>';`), then
-  `npm run db:seed`.
+- **A module door too.** If the guide has been made a module's primary agent
+  (the triage table below), unbinding the seats doesn't close that door. Unbind
+  it from the module: `GET /api/v1/admin/framework/modules/{slug}/agents` for
+  the binding id, then
+  `DELETE /api/v1/admin/framework/modules/{slug}/agents/{bindingId}`.
+- **Every door at once: visibility, in the database.** Both the seats and module
+  chat serve only a `public` agent, so
+  `UPDATE ai_agent SET visibility = 'internal' WHERE slug = 'lelanea-guide';`
+  closes them all, and seed `007` widens the agent only once, so a re-seed
+  leaves it closed. Set it back to `public` to restore. It's a database edit
+  because the admin can't do it any more: since Daybreak 0.7.0 (Sunrise 0.14.0)
+  the guide is a locked system agent in Orchestration → Agents, and its
+  visibility, prompt, behaviour, Active switch and which tools it has are
+  refused there (owner ruling, t-170). Only operational settings such as the
+  model and spend limits stay editable; the agent form lists them.
+- **What the admin can still change on its tools.** A tool's settings stay
+  editable: its rate limit and its `customConfig`, which for `get_state` /
+  `fill_slot` is seed `013`'s slot-read allowlist (which personal data the agent
+  may read). Check those first if its behaviour changed. Its prompt, and which
+  tools it has, can only change through the database or a deploy.
+- **Restoring them.** The seed units put back the instructions
+  (`app-lelanea/003-voice-fingerprint`) and **re-create a missing tool**
+  (`007`, `013`, `014`, `023`–`025`), but an applied unit is skipped, so delete
+  its row first (`DELETE FROM seed_history WHERE name = '<unit>';`), then
+  `npm run db:seed`. They leave an existing tool alone — switched off, edited or
+  added — so correct those in `ai_agent_capability` directly.
 - **The agent has no other door.** Sunrise's consumer chat route refuses its slug
   (divergences Row 21). **Never make it a module's primary agent**: Daybreak's
   module chat route would reach it without the turn hook, so without the crisis

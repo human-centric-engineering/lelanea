@@ -290,10 +290,12 @@ Daybreak's facilitation surface refuses any agent that is not — and grants it
 a confident claim to have looked. The agent's `restricted` knowledge access still
 applies, so the tool sees only what t-25's designation rule lets it quote.
 
-- **Visibility is operator-owned.** The seed widens the agent only while it is still
+- **The seed widens it once.** The seed widens the agent only while it is still
   `internal` and its timeline has no `Made reachable by members (seeded — §08)`
-  entry. Narrow it in the admin and a re-run leaves it; its seats answer 404
-  until it is public again.
+  entry. Narrow it and a re-run leaves it; its seats answer 404 until it is
+  public again. Since Sunrise 0.14.0 that is a database edit, not an admin one:
+  visibility is locked on a system agent (t-170; the runbook's
+  [Take the agent off a seat](./incident-runbook.md#take-the-agent-off-a-seat)).
 - **The grant is filled once.** A binding that exists — switched off included —
   is an operator's and is left alone. Grants are not in the agent snapshot, so
   restoring an earlier version does not take the tool away.

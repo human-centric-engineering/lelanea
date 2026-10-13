@@ -142,14 +142,15 @@ export const AGENT_SELECT = {
 /**
  * The remedy named on every refusal.
  *
- * Both arms' rows come from one seed unit, and the runner skips a unit whose
- * content hash has not changed — so a row that drifted underneath the seed is
+ * The arms' rows come from two seed units — the voice arm from `003` (the
+ * agent and its profile), the control from `004` — and the runner skips a unit
+ * whose content hash has not changed — so a row that drifted underneath the seed is
  * precisely the case where re-running `db:seed` alone does nothing. The history
  * row has to go first. Stated here once, because a guard that says what is wrong
  * without saying what to do is advice rather than a mechanism (`HB10`).
  */
 const RESEED_REMEDY =
-  "Re-apply the seed: DELETE FROM seed_history WHERE name = 'app-lelanea/004-voice-golden-set'; then `npm run db:seed`.";
+  "Re-apply the seeds: DELETE FROM seed_history WHERE name IN ('app-lelanea/003-voice-fingerprint', 'app-lelanea/004-voice-golden-set'); then `npm run db:seed`.";
 
 /**
  * Compose one arm: resolve the agent's effective prompt against its profile, and
@@ -248,7 +249,7 @@ export async function resolveVoiceArms(db: PrismaLike = prisma): Promise<Resolve
     }
     if (!agent.isActive) {
       throw new ValidationError(
-        `The ${VOICE_ARM_LABELS[arm]} arm's agent "${agent.slug}" is inactive, so its half of the comparison would fail every case. A system agent cannot be switched on from the admin, and the seed only sets it on creation: UPDATE ai_agent SET "isActive" = true WHERE slug = '${agent.slug}';`
+        `The ${VOICE_ARM_LABELS[arm]} arm's agent "${agent.slug}" is inactive, so its half of the comparison would fail every case. A system agent cannot be switched on from the admin, and the seed only sets it on creation: UPDATE ai_agent SET "isActive" = true WHERE id = '${agent.id}';`
       );
     }
     return composeArm(arm, agent);
@@ -300,8 +301,8 @@ export function assertArmsComparable(arms: readonly ResolvedVoiceArm[]): void {
 
   // Not a purity check. Both agents are created unbound and then pinned to the
   // same provider and model by `005-agent-models.ts`, but that pin is
-  // operator-owned: provider and model stay editable on a system agent (Sunrise
-  // 0.14.0 locks the rest), so an operator can change one agent's model through
+  // operator-owned: provider and model are among the few fields still editable
+  // on a system agent (Sunrise 0.14.0 locks the rest), so an operator can change one agent's model through
   // the admin form, and from then on the comparison measures the models rather
   // than the fingerprint, with nothing on the screen saying so. Temperature is
   // locked there now, so a difference in it predates the lock or came from the
@@ -389,7 +390,7 @@ export async function queueVoiceComparison(queuedByUserId: string): Promise<Queu
     throw new ValidationError(
       `The brand-voice judge "${BRAND_VOICE_JUDGE_SLUG}" is ${
         judge ? 'not an active judge agent' : 'not in this install'
-      }, so the comparison would come back unscored — two walls of text that look exactly like a scored comparison. It is a platform agent, and the platform's reconcile creates it and switches it back on: run \`npm run db:seed\`.`
+      }, so the comparison would come back unscored — two walls of text that look exactly like a scored comparison. It is a platform agent, and the platform's reconcile creates it and switches it back on — but the runner skips that unit when nothing changed: DELETE FROM seed_history WHERE name = '021-platform-agents'; then \`npm run db:seed\`.`
     );
   }
 
