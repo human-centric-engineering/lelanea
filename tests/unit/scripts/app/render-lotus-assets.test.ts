@@ -8,7 +8,7 @@
  */
 import path from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { writeFileSync, toFile, logged } = vi.hoisted(() => ({
   writeFileSync: vi.fn(),
@@ -32,6 +32,10 @@ vi.mock('sharp', () => {
     toFile,
   };
   return { default: () => chain };
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 async function run(): Promise<string[]> {

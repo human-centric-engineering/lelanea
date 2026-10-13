@@ -90,7 +90,8 @@ export const PINNED_MODEL_INFO: ModelInfo = {
  * **What it holds against (divergence row 30).** It registers as code, so a
  * matrix hydrate fills around the rate and never replaces it. A rate a hydrate
  * put there — an admin's blended cost typed onto our row — is replaced here
- * rather than left alone, so the exact rate wins whichever ran first. A
+ * rather than left alone, so the exact rate wins whichever ran first. An id
+ * another provider holds is theirs to route and is left alone. A
  * catalogue refresh (`refreshFromOpenRouter()`) puts the rate back where the new
  * catalogue has no price for the snapshot; where OpenRouter prices it, its split
  * rate stands, which is the same rate.
@@ -102,7 +103,9 @@ export function ensurePinnedModelPriced(): void {
   // figure is as good as ours, a blended row's is not.
   const fromMatrix =
     isMatrixOwnedFigure(PINNED_MODEL, 'input') || isMatrixOwnedFigure(PINNED_MODEL, 'output');
-  if (priced && !fromMatrix) return;
+  // Another provider holding the id owns its routing; the registration would
+  // leave it alone, so there is nothing to retry.
+  if ((priced && !fromMatrix) || (known && known.provider !== PINNED_PROVIDER)) return;
   // As a code registration, so the next matrix hydrate — our row is null-cost
   // on purpose — fills around this rate rather than zeroing it (Sunrise 0.14.0;
   // divergence row 30).

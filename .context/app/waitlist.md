@@ -346,20 +346,18 @@ either screen. Same argument as `rate-limit.ts` makes for not borrowing
   an application log is a copy of their personal data outside the table the
   Art. 15 export and the Art. 17 erasure know how to reach. The log line carries
   `searched: true` instead.
-- **And the logger drops the request URL, which is what made that true.** Leaving
-  `q` out of the `meta` was not enough: `getRouteLogger` binds
-  `url: request.url` — query string included — to every line it emits, and the
-  sanitiser redacts by KEY name against `PII_FIELDS`, which lists `email` and not
-  `url`. So the admin's own `email` context field was redacted in production
-  while `?q=someone%40example.com` was written out beside it, to stdout and into
-  the ring buffer `GET /api/v1/admin/logs` serves and greps. Both routes take
-  their logger from `app/api/v1/admin/app/waitlist/_shared/route-logger.ts`,
-  which rebuilds the context without `url`; `endpoint` already carries the
-  query-free path, so nothing operational is lost. Found by the security review
-  of t-8, which caught the route docblock claiming the paragraph above while
-  emitting the address. **The fix is narrow on
-  purpose** — every other route in the app still logs its full URL, which is the
-  platform's to change: [`sunrise#685`](https://github.com/human-centric-engineering/sunrise/issues/685).
+- **And the logger carries no request URL, which is what makes that true.**
+  Leaving `q` out of the `meta` was not enough: until Sunrise 0.14.0
+  `getRouteLogger` bound `url: request.url` — query string included — to every
+  line, and the sanitiser redacts by KEY name against `PII_FIELDS`, which lists
+  `email` and not `url`. So `?q=someone%40example.com` was written out to stdout
+  and into the ring buffer `GET /api/v1/admin/logs` serves and greps. Found by the
+  security review of t-8. Our fix was to rebuild the context without `url`;
+  [`sunrise#685`](https://github.com/human-centric-engineering/sunrise/issues/685)
+  then removed `url` from the platform's context, for every route. Both routes
+  still take their logger from
+  `app/api/v1/admin/app/waitlist/_shared/route-logger.ts`, now a delegate to
+  core, so its test keeps pinning that a search term never reaches a log line.
 
 ### The export cap, and the remedy it ships with
 

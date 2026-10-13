@@ -130,9 +130,9 @@ export async function refreshFromOpenRouter(options: { force?: boolean } = {}): 
       // OpenRouter's own figure for the same id stays (divergence row 30).
       for (const info of codeRegistered.values()) {
         const known = merged.get(info.id);
-        if (!known || known.inputCostPerMillion === 0 || known.outputCostPerMillion === 0) {
-          merged.set(info.id, withCodeModel(known, info));
-        }
+        if (known && known.inputCostPerMillion > 0 && known.outputCostPerMillion > 0) continue;
+        const entry = withCodeModel(known, info);
+        if (entry) merged.set(info.id, entry);
       }
       state = { models: merged, fetchedAt: Date.now(), failedAt: 0 };
       // The rebuild dropped the matrix's entries; put them back over the new
@@ -253,37 +253,20 @@ export interface RegisterModelsOptions {
    * the row on every hydrate. `'code'`: exact figures a fork registers from
    * code. The call applies them over what the entry holds; a later hydrate
    * fills around them and never overwrites them; a catalogue refresh puts them
-   * back only where the new catalogue has no price for the id, so OpenRouter's
-   * own figure, when it has one, is the registry's after a refresh. An entry
-   * held under another provider keeps its provider (bare-id routing, as
-   * below), and the registration only fills the figures it lacks.
+   * back only where the rebuilt catalogue (static map plus OpenRouter) has no
+   * positive price for the id, so its own figure, when it has one, is the
+   * registry's after a refresh. An id another provider holds is left alone.
    */
   source?: 'matrix' | 'code';
 }
 
 /**
- * Divergence row 30: `info` applied as a code registration over `existing`.
- * Clears the entry's matrix ownership for whatever it sets.
+ * Divergence row 30: `info` applied as a code registration over `existing`, or
+ * null when another provider holds the id — bare-id routing follows `provider`
+ * (as below), so that entry is left as it is.
  */
-function withCodeModel(existing: ModelInfo | undefined, info: ModelInfo): ModelInfo {
-  if (existing && existing.provider !== info.provider) {
-    const sourced = dbSourced.get(info.id);
-    const fill = (field: DbSourcedField, have: number, offered: number) => {
-      if (have > 0 || offered <= 0) return have;
-      sourced?.delete(field);
-      return offered;
-    };
-    return {
-      ...existing,
-      inputCostPerMillion: fill('input', existing.inputCostPerMillion, info.inputCostPerMillion),
-      outputCostPerMillion: fill(
-        'output',
-        existing.outputCostPerMillion,
-        info.outputCostPerMillion
-      ),
-      maxContext: fill('context', existing.maxContext, info.maxContext),
-    };
-  }
+function withCodeModel(existing: ModelInfo | undefined, info: ModelInfo): ModelInfo | null {
+  if (existing && existing.provider !== info.provider) return null;
   dbSourced.delete(info.id);
   return settlePricingFlag({ ...existing, ...info }, false);
 }
@@ -332,7 +315,8 @@ export function registerModels(infos: ModelInfo[], options: RegisterModelsOption
     const models = new Map(state.models);
     for (const info of infos) {
       codeRegistered.set(info.id, info);
-      models.set(info.id, withCodeModel(models.get(info.id), info));
+      const entry = withCodeModel(models.get(info.id), info);
+      if (entry) models.set(info.id, entry);
     }
     state = { ...state, models };
     return;

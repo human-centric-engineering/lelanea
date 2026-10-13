@@ -983,8 +983,9 @@ exclusion's reason true for an administrator too.
 | `PUT/DELETE /api/v1/admin/app/agent/budgets/:userId` | set / clear one person's limit                     |
 
 All admin-only. The list's `?q=` is usually an email address, so every route on
-this surface logs without the request URL (`app/api/v1/admin/app/agent/_shared/route-logger.ts`, the same
-fix as the waitlist's; the platform gap is `sunrise#685`).
+this surface logs without the request URL. The platform has done so for every
+route since Sunrise 0.14.0 (`sunrise#685`); `app/api/v1/admin/app/agent/_shared/route-logger.ts`
+delegates to it, and its test pins the property for this surface.
 
 ## After a deploy
 

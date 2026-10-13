@@ -40,11 +40,12 @@
  * export and the Art. 17 erasure know how to reach. The same reason the public
  * POST logs `created` but not the address.
  *
- * **Saying that took more than leaving `q` out of the `meta`.** The platform's
- * `getRouteLogger` binds the full request URL — query string and all — to every
- * line, and `url` is not a key the sanitiser redacts. The logger comes from
- * `_shared/route-logger.ts` for that reason; the security review of this task
- * caught the first version claiming this paragraph while emitting the address.
+ * **Saying that took more than leaving `q` out of the `meta`.** Until Sunrise
+ * 0.14.0 the platform's `getRouteLogger` bound the full request URL — query
+ * string and all — to every line, and `url` is not a key the sanitiser redacts;
+ * the security review of this task caught the first version claiming this
+ * paragraph while emitting the address. sunrise#685 fixed that in the platform.
+ * The logger still comes from `_shared/route-logger.ts`, whose test pins it.
  *
  * @see lib/app/waitlist/admin.ts · app/api/v1/admin/app/waitlist/export/route.ts
  */

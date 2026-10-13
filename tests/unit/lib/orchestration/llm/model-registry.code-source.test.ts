@@ -126,24 +126,13 @@ describe("registerModels' code source", () => {
     expect(registry.getModel(ID)?.maxContext).toBe(128_000);
   });
 
-  it('keeps the provider of an id another provider already holds, and only fills its gaps', () => {
-    // Bare-id routing follows `provider`, as for a cross-provider matrix row.
+  it('leaves an id another provider holds alone, so its routing stands', () => {
     registry.registerModels([{ ...UNPRICED_ROW, provider: 'anthropic' }]);
     registry.registerModels([EXACT], { source: 'code' });
 
     const model = registry.getModel(ID);
     expect(model?.provider).toBe('anthropic');
-    expect(model?.name).toBe('Example (matrix row)');
-    expect(model?.inputCostPerMillion).toBe(0.15);
-    expect(model?.maxContext).toBe(128_000);
-  });
-
-  it("does not replace another provider's positive figures", () => {
-    registry.registerModels([{ ...EXACT, provider: 'anthropic', inputCostPerMillion: 3 }]);
-    registry.registerModels([EXACT], { source: 'code' });
-
-    expect(registry.getModel(ID)?.provider).toBe('anthropic');
-    expect(registry.getModel(ID)?.inputCostPerMillion).toBe(3);
+    expect(model?.inputCostPerMillion).toBe(0);
   });
 
   it("gives way to the catalogue's own price on a refresh that does know the id", async () => {
