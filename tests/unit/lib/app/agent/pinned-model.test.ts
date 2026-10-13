@@ -59,6 +59,7 @@ import { dbModelToModelInfo } from '@/lib/orchestration/llm/db-model-adapter';
 import {
   __resetForTests as resetRegistry,
   getModel,
+  refreshFromOpenRouter,
   registerModels,
 } from '@/lib/orchestration/llm/model-registry';
 import {
@@ -157,15 +158,32 @@ describe('ensurePinnedModelPriced, called directly', () => {
     expect(costOfATurn()).toBeCloseTo(TRUE_COST, 10);
   });
 
-  it('leaves a rate that is already there alone', () => {
-    // What a successful OpenRouter refresh leaves behind: the same id, priced by
-    // somebody else. Theirs is the more current number; ours is the fallback.
-    registerModels([{ ...PINNED_MODEL_INFO, name: 'From OpenRouter', inputCostPerMillion: 0.2 }]);
+  it("leaves OpenRouter's rate alone", async () => {
+    // A successful OpenRouter refresh: the same id, priced by somebody else.
+    // Theirs is the more current number; ours is the fallback. (Only a rate a
+    // matrix row put there is replaced — see the blended-row case below.)
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: `openai/${PINNED_MODEL}`,
+              name: 'From OpenRouter',
+              context_length: 128_000,
+              pricing: { prompt: '0.0000002', completion: '0.0000006' },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+    await refreshFromOpenRouter({ force: true });
+    fetchSpy.mockRestore();
 
     ensurePinnedModelPriced();
 
     expect(getModel(PINNED_MODEL)?.name).toBe('From OpenRouter');
-    expect(getModel(PINNED_MODEL)?.inputCostPerMillion).toBe(0.2);
+    expect(getModel(PINNED_MODEL)?.inputCostPerMillion).toBeCloseTo(0.2, 10);
   });
 
   it('replaces an entry that is known but unpriced', () => {
@@ -193,6 +211,16 @@ describe('the matrix row and the exact rate', () => {
     // version of the hazard.
     expect(getModel(PINNED_MODEL)).toBeDefined();
     expect(costOfATurn()).toBe(0);
+
+    await wireTheRealSeam();
+
+    expect(costOfATurn()).toBeCloseTo(TRUE_COST, 10);
+  });
+
+  it('a blended cost hydrating BEFORE the seam is replaced by the exact rate', async () => {
+    // An admin typed a cost onto our row and a hydrate ran first in this graph.
+    registerModels([matrixRowAsModelInfo(0.375)]);
+    expect(costOfATurn()).toBeGreaterThan(TRUE_COST * 1.9);
 
     await wireTheRealSeam();
 

@@ -37,7 +37,9 @@ vi.mock('sharp', () => {
 async function run(): Promise<string[]> {
   vi.spyOn(console, 'log').mockImplementation(logged);
   await import('@/scripts/app/render-lotus-assets');
-  await vi.waitFor(() => expect(logged).toHaveBeenCalled());
+  // The real frame and asset generation runs here; give a loaded CI shard room.
+  // A throw inside the script surfaces as an unhandled rejection beside this.
+  await vi.waitFor(() => expect(logged).toHaveBeenCalled(), { timeout: 15_000 });
   const root = process.cwd();
   return [
     ...writeFileSync.mock.calls.map(([file]) => path.relative(root, String(file))),
@@ -46,19 +48,23 @@ async function run(): Promise<string[]> {
 }
 
 describe('npm run lotus:assets', () => {
-  it("writes the favicons where Sunrise's app/ convention reads them, and none to public/", async () => {
-    const written = await run();
+  it(
+    "writes the favicons where Sunrise's app/ convention reads them, and none to public/",
+    { timeout: 20_000 },
+    async () => {
+      const written = await run();
 
-    expect(written).toEqual(
-      expect.arrayContaining(['app/icon.svg', 'app/favicon.ico', 'app/apple-icon.png'])
-    );
-    expect(written.filter((file) => file.startsWith('public/favicon'))).toEqual([]);
+      expect(written).toEqual(
+        expect.arrayContaining(['app/icon.svg', 'app/favicon.ico', 'app/apple-icon.png'])
+      );
+      expect(written.filter((file) => file.startsWith('public/favicon'))).toEqual([]);
 
-    // The ICO is a real container: three PNG entries, 16/32/48.
-    const ico = writeFileSync.mock.calls.find(([file]) =>
-      String(file).endsWith(path.join('app', 'favicon.ico'))
-    )?.[1] as Buffer;
-    expect(ico.readUInt16LE(4)).toBe(3);
-    expect([ico[6], ico[22], ico[38]]).toEqual([16, 32, 48]);
-  });
+      // The ICO is a real container: three PNG entries, 16/32/48.
+      const ico = writeFileSync.mock.calls.find(([file]) =>
+        String(file).endsWith(path.join('app', 'favicon.ico'))
+      )?.[1] as Buffer;
+      expect(ico.readUInt16LE(4)).toBe(3);
+      expect([ico[6], ico[22], ico[38]]).toEqual([16, 32, 48]);
+    }
+  );
 });

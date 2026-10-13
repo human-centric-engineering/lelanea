@@ -131,7 +131,7 @@ export async function refreshFromOpenRouter(options: { force?: boolean } = {}): 
       for (const info of codeRegistered.values()) {
         const known = merged.get(info.id);
         if (!known || known.inputCostPerMillion === 0 || known.outputCostPerMillion === 0) {
-          merged.set(info.id, settlePricingFlag({ ...known, ...info }, false));
+          merged.set(info.id, withCodeModel(known, info));
         }
       }
       state = { models: merged, fetchedAt: Date.now(), failedAt: 0 };
@@ -251,9 +251,41 @@ export interface RegisterModelsOptions {
   /**
    * `'matrix'` (the default): rows from `AiProviderModel`, whose figures follow
    * the row on every hydrate. `'code'`: exact figures a fork registers from
-   * code, which a later hydrate fills around but never overwrites.
+   * code. The call applies them over what the entry holds; a later hydrate
+   * fills around them and never overwrites them; a catalogue refresh puts them
+   * back only where the new catalogue has no price for the id, so OpenRouter's
+   * own figure, when it has one, is the registry's after a refresh. An entry
+   * held under another provider keeps its provider (bare-id routing, as
+   * below), and the registration only fills the figures it lacks.
    */
   source?: 'matrix' | 'code';
+}
+
+/**
+ * Divergence row 30: `info` applied as a code registration over `existing`.
+ * Clears the entry's matrix ownership for whatever it sets.
+ */
+function withCodeModel(existing: ModelInfo | undefined, info: ModelInfo): ModelInfo {
+  if (existing && existing.provider !== info.provider) {
+    const sourced = dbSourced.get(info.id);
+    const fill = (field: DbSourcedField, have: number, offered: number) => {
+      if (have > 0 || offered <= 0) return have;
+      sourced?.delete(field);
+      return offered;
+    };
+    return {
+      ...existing,
+      inputCostPerMillion: fill('input', existing.inputCostPerMillion, info.inputCostPerMillion),
+      outputCostPerMillion: fill(
+        'output',
+        existing.outputCostPerMillion,
+        info.outputCostPerMillion
+      ),
+      maxContext: fill('context', existing.maxContext, info.maxContext),
+    };
+  }
+  dbSourced.delete(info.id);
+  return settlePricingFlag({ ...existing, ...info }, false);
 }
 
 /**
@@ -300,8 +332,7 @@ export function registerModels(infos: ModelInfo[], options: RegisterModelsOption
     const models = new Map(state.models);
     for (const info of infos) {
       codeRegistered.set(info.id, info);
-      models.set(info.id, settlePricingFlag({ ...models.get(info.id), ...info }, false));
-      dbSourced.delete(info.id);
+      models.set(info.id, withCodeModel(models.get(info.id), info));
     }
     state = { ...state, models };
     return;

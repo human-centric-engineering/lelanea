@@ -236,10 +236,11 @@ accepting $0 until the turn seam lands (which zeroes the golden-set costs on
   depended on OpenRouter answering.
 - **The matrix row's cost is null, on purpose.** The column is one number for
   both directions, so a positive value is a blended rate — the second row of the
-  table. A hydrate no longer overrides the code-registered split rate (row 30),
-  but a row that hydrates **before** the seam first runs puts a positive rate
-  there, and the seam leaves a positive rate alone. Null keeps the exact rate. Where no exact rate exists either, the model reads as unpriced,
-  which the voice preflight flags rather than showing as cheap.
+  table. Since row 30 neither order lets it win: a hydrate never overrides the
+  code-registered split rate, and the seam replaces a rate a hydrate put there.
+  Null keeps the row honest about holding no exact rate. Where no exact rate
+  exists either, the model reads as unpriced, which the voice preflight flags
+  rather than showing as cheap.
 
 ### What this does not cover
 
@@ -255,9 +256,11 @@ recorded as free.
 
 **A cost typed onto the matrix row.** The row is seed-managed until an admin — or
 the model auditor's apply step — edits it, and from then on it is theirs. Give it
-a cost and that single number overrides the split rate wherever a hydrate runs;
-`ensurePinnedModelPriced()` leaves any positive rate alone, deliberately, because
-the same rule is what lets OpenRouter's figure stand. Leave that cell empty.
+a cost and the turns still price at the split rate: `ensurePinnedModelPriced()`
+replaces a rate that came from the matrix, and a hydrate never replaces the
+seam's. It leaves a positive rate from anywhere else alone, which is what lets
+OpenRouter's figure stand. The typed number only shows on the matrix pages, so
+leave that cell empty anyway.
 
 **A registry refresh.** `refreshFromOpenRouter()` rebuilds the registry from the
 static map plus OpenRouter's list. Since row 30 it puts a code registration back
