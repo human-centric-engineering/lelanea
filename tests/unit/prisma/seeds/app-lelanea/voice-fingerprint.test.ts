@@ -350,8 +350,8 @@ describe('a re-run', () => {
   });
 
   it('puts the access mode back when something has flipped it to full', async () => {
-    // `SYSTEM_AGENT_PROTECTED_FIELDS` does not cover `knowledgeAccessMode`, so an
-    // admin PATCH can do exactly this after the seed has run. Re-seeding is the
+    // Since Sunrise 0.14.0 the admin refuses this on a system agent, but a
+    // database write can still do it after the seed has run. Re-seeding is the
     // remedy, which is why the column is reconciled rather than set once.
     await runSeed();
     world.agents[0].knowledgeAccessMode = 'full';
@@ -364,9 +364,8 @@ describe('a re-run', () => {
 
   it('reconciles systemInstructions, which no operator is able to set', async () => {
     // The opposite reason to the other two reconciled columns.
-    // `SYSTEM_AGENT_PROTECTED_FIELDS` covers `systemInstructions`, so the PATCH
-    // route rejects any change on a system agent and the version-restore route
-    // skips it. There is no operator edit to preserve — and a write-once field
+    // `systemInstructions` is locked on a system agent, so the PATCH route
+    // rejects any change and the version-restore route skips it. There is no operator edit to preserve — and a write-once field
     // would be unreachable by ANYONE after the first create, so editing the
     // constant would re-run this unit, find the other columns correct, log
     // "already restricted and linked", and silently keep the old text.

@@ -561,8 +561,10 @@ transcribe with) → the microphone is not offered either; a POST would be
 `prisma/seeds/app-lelanea/012-agent-voice-input.ts` turns `enableVoiceInput`
 on for `lelanea-guide` once, as an entry in its version timeline (the field
 is versioned) with `VOICE_INPUT_CHANGE_SUMMARY`, inside one transaction with
-the update — the reachability seed's shape. Off with that entry behind it is
-an admin who turned it off, and a re-run leaves it alone. A missing agent
+the update — the reachability seed's shape. Off with that entry behind it was
+turned off by someone else, and a re-run leaves it alone. Since Sunrise 0.14.0
+that someone is a database edit: `enableVoiceInput` is locked on a system agent
+in the admin. A missing agent
 throws. **After a deploy: `npm run db:seed` per database.**
 
 **What happens to the audio: nothing.** The clip goes to the provider and

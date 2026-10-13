@@ -303,6 +303,10 @@ describe('resolveVoiceArms', () => {
   it('refuses an arm whose agent is inactive', async () => {
     agent(VOICE_CONTROL_AGENT_SLUG).isActive = false;
     await expect(resolveVoiceArms()).rejects.toThrow(/inactive/i);
+    // The remedy is one that works: the admin cannot switch on a system agent.
+    await expect(resolveVoiceArms()).rejects.toThrow(
+      /UPDATE ai_agent SET "isActive" = true WHERE id = 'agent-control';/
+    );
   });
 });
 
@@ -345,6 +349,11 @@ describe('assertArmsComparable — the four silent misconfigurations', () => {
       // discriminates when the wording is edited.
       /carries fingerprint v/i
     );
+    // Since Sunrise 0.14.0 the admin refuses a system agent's profile, so the
+    // remedy is the seed that detaches it.
+    await expect(arms().then((a) => assertArmsComparable(a))).rejects.toThrow(
+      /'app-lelanea\/004-voice-golden-set'.*db:seed/
+    );
   });
 
   it('refuses when both arms would run the identical prompt', async () => {
@@ -364,17 +373,34 @@ describe('assertArmsComparable — the four silent misconfigurations', () => {
     ).toThrow(/identical system prompt/i);
   });
 
+  // Provider and model are still editable on a system agent, so their remedy is
+  // the admin; temperature is locked there, so its remedy is SQL on the control.
   it.each([
-    ['model', { model: 'claude-opus-5' }],
-    ['provider', { provider: 'openai' }],
-    ['temperature', { temperature: 0.2 }],
-  ])(
-    'refuses when the arms differ on %s — that compares models, not voices',
-    async (_column, patch) => {
+    [
+      'model',
+      { model: 'claude-opus-5' },
+      /Match the provider and model in \/admin\/orchestration\/agents/,
+    ],
+    [
+      'provider',
+      { provider: 'openai' },
+      /Match the provider and model in \/admin\/orchestration\/agents/,
+    ],
+    [
+      'temperature',
+      { temperature: 0.2 },
+      /UPDATE ai_agent SET temperature = .+ WHERE id = 'agent-control';/,
+    ],
+  ] as const)(
+    'refuses when the arms differ on %s — that compares settings, not voices',
+    async (column, patch, remedy) => {
       Object.assign(agent(VOICE_CONTROL_AGENT_SLUG), patch);
-      await expect(arms().then((a) => assertArmsComparable(a))).rejects.toThrow(
-        /different models/i
-      );
+      const refusal = arms().then((a) => assertArmsComparable(a));
+      await expect(refusal).rejects.toThrow(/different settings/i);
+      await expect(refusal).rejects.toThrow(remedy);
+      if (column === 'temperature') {
+        await expect(refusal).rejects.not.toThrow(/Match the provider and model/);
+      }
     }
   );
 });
@@ -457,6 +483,10 @@ describe('queueVoiceComparison', () => {
   it('refuses when the brand-voice judge is inactive, rather than queueing unscored', async () => {
     agent(BRAND_VOICE_JUDGE_SLUG).isActive = false;
     await expect(queueVoiceComparison('admin-1')).rejects.toThrow(/brand-voice judge/i);
+    // `db:seed` alone skips an unchanged unit, so the history row goes first.
+    await expect(queueVoiceComparison('admin-1')).rejects.toThrow(
+      /DELETE FROM seed_history WHERE name = '021-platform-agents'/
+    );
     expect(world.runs).toHaveLength(0);
   });
 });

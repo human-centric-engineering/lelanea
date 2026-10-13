@@ -553,7 +553,9 @@ path, not through `get_state`.
 **The grant is operator-owned and filled once**, like 007's: created with its
 config, and thereafter left alone — switched off, narrowed, widened or cleared.
 So **a taxonomy change does not reach an existing grant**; widening is an admin's
-act. Reconciling it on every seed would revert every narrowing an operator had
+act. (The allowlist is still editable in the admin; since Sunrise 0.14.0
+switching the grant off is not, because a system agent's tool switches are
+locked.) Reconciling it on every seed would revert every narrowing an operator had
 made, which is the worse failure (`fp4`).
 
 ### One turn writes a slot once

@@ -137,13 +137,14 @@ attribute an output to a version of her voice that never reached it.
 - **`AiAgent` `lelanea-guide`** — the first agent that speaks as her. Created
   once, with **three** columns reconciled afterwards, for two different reasons.
   `profileId` and `knowledgeAccessMode` because both are load-bearing invariants
-  rather than preferences; `systemInstructions` because
-  `SYSTEM_AGENT_PROTECTED_FIELDS` covers it — so no operator can set it, and a
-  write-once field would be unreachable by _anyone_ after the first create.
-  Everything else — name, description, temperature — is left to whoever edits
-  it. `isActive` is on that protected list too, so a system agent cannot be
-  deactivated through the admin at all; activation is not among the things an
-  operator owns here.
+  rather than preferences; `systemInstructions` because the admin cannot set it
+  on a system agent, so a write-once field would be unreachable by _anyone_
+  after the first create. **Since Daybreak 0.7.0 (Sunrise 0.14.0) the admin
+  locks almost everything else on a system agent too** — name, description,
+  temperature, visibility, the profile, knowledge access, tools and the Active
+  switch. Only operational settings such as the model and spend limits are an
+  operator's; the agent form lists them (owner ruling, t-170, to keep these
+  agents locked).
 
 **The agent's own persona / brand voice / guardrails columns are left NULL**, so
 the profile is what speaks. Sunrise's per-field resolution defaults to
@@ -1544,12 +1545,11 @@ against a stateful fake world and then asks Sunrise's real
 seed left behind. Reverting the mode fails that file; so does dropping the column
 from the `create`.
 
-**One residual, stated rather than discovered.**
-`SYSTEM_AGENT_PROTECTED_FIELDS` is `['slug', 'systemInstructions', 'isActive']` —
-it does **not** cover `knowledgeAccessMode` — so an admin PATCH can still flip
-the guide agent to `full` after the seed has run, and the failure is as silent
-as it ever was. Widening the platform's protected list is Sunrise's call, not a
-leaf's.
+**A residual that 0.14.0 closed.** The platform's old protected list was
+`['slug', 'systemInstructions', 'isActive']`, so an admin PATCH could flip the
+guide agent to `full` after the seed had run, as silently as ever. Since Sunrise
+0.14.0 `knowledgeAccessMode` is locked on a system agent with the rest, so the
+admin refuses it. A direct database write can still do it.
 
 The seed is the remedy, which is why that column is reconciled on every run
 rather than set once at creation — but **`npm run db:seed` alone will not do
@@ -1823,9 +1823,9 @@ text columns as a **pure code projection** and reconciles them on every run: the
 are the artefact itself, and nobody is meant to hand-edit her voice in the admin.
 The agent beside it is **split** — `profileId`, `knowledgeAccessMode` and
 `systemInstructions` are reconciled; its name, description and temperature are
-written once and then belong to whoever edits them. (`isActive` belongs to
-nobody here: it is protected, so a system agent cannot be deactivated through
-the admin at all.)
+written once. Since Sunrise 0.14.0 the admin locks those on a system agent too,
+along with `isActive`, so in practice only operational settings such as the
+model and spend limits belong to an operator (t-170).
 
 It re-runs when either `seed-data/drafted/lelanea_voice_fingerprint.json` or
 `lib/app/voice/fingerprint.ts` changes (`hashInputs`), so a new line in her
