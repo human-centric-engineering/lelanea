@@ -97,5 +97,8 @@ export const PINNED_MODEL_INFO: ModelInfo = {
 export function ensurePinnedModelPriced(): void {
   const known = getModel(PINNED_MODEL);
   if (known && known.inputCostPerMillion > 0 && known.outputCostPerMillion > 0) return;
-  registerModels([PINNED_MODEL_INFO]);
+  // As a code registration, so the next matrix hydrate — our row is null-cost
+  // on purpose — fills around this rate rather than zeroing it (Sunrise 0.14.0;
+  // divergence row 30).
+  registerModels([PINNED_MODEL_INFO], { source: 'code' });
 }

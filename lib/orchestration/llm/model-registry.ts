@@ -126,6 +126,14 @@ export async function refreshFromOpenRouter(options: { force?: boolean } = {}): 
 
       // Successful refresh — clear the failure timestamp so the next
       // expiry of the success TTL gets a clean retry, not a backoff.
+      // A fork's code registrations fill what the new catalogue does not price;
+      // OpenRouter's own figure for the same id stays (divergence row 30).
+      for (const info of codeRegistered.values()) {
+        const known = merged.get(info.id);
+        if (!known || known.inputCostPerMillion === 0 || known.outputCostPerMillion === 0) {
+          merged.set(info.id, settlePricingFlag({ ...known, ...info }, false));
+        }
+      }
       state = { models: merged, fetchedAt: Date.now(), failedAt: 0 };
       // The rebuild dropped the matrix's entries; put them back over the new
       // catalogue, where OpenRouter's figures are now the registry's.
@@ -231,6 +239,24 @@ function pickNumber(
 let lastRegistered: ModelInfo[] = [];
 
 /**
+ * LELAÑEA DIVERGENCE (ledger row 30; sunrise#ISSUE). Models a fork registered
+ * from code with `{ source: 'code' }`, kept so a catalogue rebuild can put them
+ * back. They stand where the static map and OpenRouter do — a registry figure a
+ * matrix row never replaces — rather than where a hydrate's rows do.
+ */
+const codeRegistered = new Map<string, ModelInfo>();
+
+/** How `registerModels` treats what it is given. */
+export interface RegisterModelsOptions {
+  /**
+   * `'matrix'` (the default): rows from `AiProviderModel`, whose figures follow
+   * the row on every hydrate. `'code'`: exact figures a fork registers from
+   * code, which a later hydrate fills around but never overwrites.
+   */
+  source?: 'matrix' | 'code';
+}
+
+/**
  * Sync merge of externally-sourced models into the registry state.
  *
  * Used by server-only hydration coordinators (see
@@ -266,7 +292,20 @@ let lastRegistered: ModelInfo[] = [];
  *     are properly configured the upstream caller already disambiguates
  *     via an explicit `provider/model` selection rather than bare id.
  */
-export function registerModels(infos: ModelInfo[]): void {
+export function registerModels(infos: ModelInfo[], options: RegisterModelsOptions = {}): void {
+  if (options.source === 'code') {
+    // Divergence row 30: a code registration is a catalogue figure, so it is
+    // neither the matrix's last batch nor matrix-owned.
+    if (infos.length === 0) return;
+    const models = new Map(state.models);
+    for (const info of infos) {
+      codeRegistered.set(info.id, info);
+      models.set(info.id, settlePricingFlag({ ...models.get(info.id), ...info }, false));
+      dbSourced.delete(info.id);
+    }
+    state = { ...state, models };
+    return;
+  }
   lastRegistered = infos;
   if (infos.length === 0) return;
   const merged = new Map(state.models);
@@ -399,6 +438,7 @@ export function __resetForTests(): void {
   state = { models: buildFallbackMap(), fetchedAt: 0, failedAt: 0 };
   dbSourced.clear();
   lastRegistered = [];
+  codeRegistered.clear();
   inflightRefresh = null;
 }
 

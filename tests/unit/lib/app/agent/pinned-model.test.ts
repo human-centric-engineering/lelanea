@@ -199,15 +199,16 @@ describe('the matrix row and the exact rate', () => {
     expect(costOfATurn()).toBeCloseTo(TRUE_COST, 10);
   });
 
-  it('a blended cost on that row WOULD override the exact rate — which is why it is null', async () => {
+  it('a blended cost on that row does NOT override the exact rate, and the row stays null', async () => {
     await wireTheRealSeam();
 
-    // The platform's own figure for the alias's row: ($0.15 + $0.60) / 2.
+    // The platform's own figure for the alias's row: ($0.15 + $0.60) / 2. Before
+    // the seam registered as code it beat the exact rate, pricing an
+    // input-heavy turn at nearly twice what it cost (divergence row 30).
     registerModels([matrixRowAsModelInfo(0.375)]);
 
-    // An input-heavy turn, priced at nearly twice what it cost.
-    expect(costOfATurn()).toBeGreaterThan(TRUE_COST * 1.9);
-    // And so the seeded row must never carry one.
+    expect(costOfATurn()).toBeCloseTo(TRUE_COST, 10);
+    // Still null: the row is not where the rate lives.
     expect(PINNED_MODEL_MATRIX_ROW.costPerMillionTokens).toBeNull();
   });
 });
