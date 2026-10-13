@@ -335,9 +335,10 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
   },
   {
     file: 'lib/orchestration/llm/model-registry.ts',
-    holders: ['state', 'dbSourced', 'lastRegistered', 'inflightRefresh'],
+    // LELAÑEA DIVERGENCE (row 30, sunrise#984): `codeRegistered`.
+    holders: ['state', 'dbSourced', 'lastRegistered', 'codeRegistered', 'inflightRefresh'],
     posture: 'global-config',
-    why: 'The AiProviderModel catalogue with its fallback map, refreshed behind one in-flight promise; no row in it belongs to an org. `dbSourced` records which of its figures a hydrate wrote, so the catalogue and its provenance move together, and `lastRegistered` holds the rows last hydrated so an OpenRouter rebuild re-applies them.',
+    why: 'The AiProviderModel catalogue with its fallback map, refreshed behind one in-flight promise; no row in it belongs to an org. `dbSourced` records which of its figures a hydrate wrote, so the catalogue and its provenance move together, and `lastRegistered` holds the rows last hydrated so an OpenRouter rebuild re-applies them. `codeRegistered` holds the models a fork registered from code, for the same rebuild.',
   },
   {
     file: 'lib/orchestration/llm/provider-manager.ts',
