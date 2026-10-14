@@ -27,6 +27,11 @@ const h = vi.hoisted(() => ({
   consumerCheck: vi.fn(),
   agentCheck: vi.fn(),
   sseResponse: vi.fn(),
+  after: vi.fn(),
+}));
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: h.after,
 }));
 
 vi.mock('@/lib/app/conversation/opening', () => ({
@@ -140,6 +145,18 @@ describe('POST /api/v1/app/conversation/opening', () => {
       ['headers', 'keepAlive', 'requestId', 'signal', 'user', 'visitorId'].sort()
     );
     expect(JSON.stringify(h.runOpening.mock.calls[0])).not.toContain('say this instead');
+  });
+
+  it("keeps work the opening hands it alive past the response, with the host's after()", async () => {
+    await POST(createRequest());
+
+    const { keepAlive } = h.runOpening.mock.calls[0][1] as {
+      keepAlive: (work: Promise<unknown>) => void;
+    };
+    const work = Promise.resolve('drafted');
+    keepAlive(work);
+
+    expect(h.after).toHaveBeenCalledWith(work);
   });
 
   it('answers 409 opening_not_due when neither opening is owed, running nothing', async () => {

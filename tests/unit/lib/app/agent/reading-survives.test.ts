@@ -46,6 +46,11 @@ import { NextRequest } from 'next/server';
 const world = vi.hoisted(() => ({ paused: false }));
 
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
+// The member is past the gate (t-159); what is under test is the routes behind it.
+vi.mock('@/lib/app/gateway/gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/app/gateway/gate')>()),
+  gateRedirectFor: async () => null,
+}));
 const { getPublishedMap } = vi.hoisted(() => ({ getPublishedMap: vi.fn() }));
 vi.mock('@/lib/framework/facilitation/map/version-service', () => ({ getPublishedMap }));
 // The map carries the reader's own journey state since t-102; a reader with no

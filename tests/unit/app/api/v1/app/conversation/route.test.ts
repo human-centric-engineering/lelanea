@@ -24,19 +24,23 @@ import { mockAuthenticatedUser, mockUnauthenticatedUser } from '@/tests/helpers/
 const ME = 'cmjbv4i3x00003wsloputgwul';
 const OTHER = 'cmu7other0000000000000000';
 
-const { store, readTranscript, routeLog, openingDue, recapDue, arriveSessionQuietly } = vi.hoisted(
-  () => ({
+const { store, readTranscript, routeLog, openingDue, recapDue, arriveSessionQuietly, after } =
+  vi.hoisted(() => ({
+    after: vi.fn(),
     openingDue: vi.fn(),
     recapDue: vi.fn(),
     arriveSessionQuietly: vi.fn(),
     store: new Map<string, { seat: string; conversationId: string | null; entries: unknown[] }>(),
     readTranscript: vi.fn(),
     routeLog: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-  })
-);
+  }));
 
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after,
+}));
 vi.mock('@/lib/api/context', () => ({ getRouteLogger: () => Promise.resolve(routeLog) }));
 vi.mock('@/lib/app/conversation/transcript', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/app/conversation/transcript')>();
@@ -265,6 +269,20 @@ describe('arriving (f-recap t-141)', () => {
       expect(arriveSessionQuietly).not.toHaveBeenCalledWith(OTHER);
     }
   );
+
+  it("keeps a synopsis draft the close queues alive past the response, with the host's after()", async () => {
+    await GET(request());
+
+    const [, , { keepAlive }] = arriveSessionQuietly.mock.calls[0] as [
+      string,
+      undefined,
+      { keepAlive: (work: Promise<unknown>) => void },
+    ];
+    const work = Promise.resolve('queued');
+    keepAlive(work);
+
+    expect(after).toHaveBeenCalledWith(work);
+  });
 
   it('has arrived before the opening is decided', async () => {
     const order: string[] = [];
