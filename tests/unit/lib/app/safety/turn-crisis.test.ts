@@ -385,6 +385,32 @@ describe('runRecordedTurn — someone not past the gate (t-159)', () => {
     expect(mocks.arriveSessionQuietly).not.toHaveBeenCalled();
   });
 
+  describe('when the gate cannot be read', () => {
+    beforeEach(() => {
+      mocks.gate.mockRejectedValue(new Error('No published version of the disclaimer'));
+    });
+
+    it('still answers a hard-tier message with the resource', async () => {
+      const run = vi.fn(() => agentReply());
+
+      const out = await frames(await runRecordedTurn(turn('I want to kill myself'), run));
+
+      expect(out).toHaveLength(1);
+      expect(out[0]).toMatchObject({ type: 'error', code: 'crisis', resource: { tier: 'hard' } });
+      expect(run).not.toHaveBeenCalled();
+    });
+
+    it('refuses an ordinary turn as not past the gate, rather than letting it through', async () => {
+      const run = vi.fn(() => agentReply());
+
+      const result = await runRecordedTurn(turn('Tell me about the values module.'), run);
+
+      expect(result).toMatchObject({ refused: true, reason: 'GATE_REQUIRED' });
+      expect(run).not.toHaveBeenCalled();
+      expect(mocks.claimTurn).not.toHaveBeenCalled();
+    });
+  });
+
   it('lets the same turn through once the gate is passed', async () => {
     mocks.gate.mockResolvedValue(null);
     const run = vi.fn(() => agentReply());

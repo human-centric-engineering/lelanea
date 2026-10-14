@@ -91,7 +91,8 @@
  * The one thing it still does is the crisis check: a hard-tier message is
  * answered with the resource whoever sent it, because the gate is about what
  * the app may do for someone, and nothing it may not do stands between a
- * person in danger and help.
+ * person in danger and help. A gate that cannot be read counts as not passed
+ * for the same reason: the turn is refused, but only after the crisis check.
  *
  * @see lib/app/agent/turn-record.ts — the store, and why a claim cannot race
  * @see lib/framework/facilitation/agents/turn-hook.ts — the seam Daybreak's route calls
@@ -459,7 +460,7 @@ export async function runRecordedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
 ): Promise<ChatStream | FacilitationTurnRefusal> {
-  if ((await gateRedirectForUserId(turn.userId)) !== null) return refuseBeforeGate(turn);
+  if (!(await passedGate(turn))) return refuseBeforeGate(turn);
 
   // Taking a turn is arriving (f-recap t-141), whatever then answers it: the
   // resource, a pause, a refusal or the model. Started here and awaited only by
@@ -488,6 +489,24 @@ export async function runRecordedTurn(
   if (crisis.resource === null || isRefusal(result)) return result;
   await recordCrisisShown(crisis, who);
   return precededBy(crisisFrame(crisis.resource), result);
+}
+
+/**
+ * Whether the person taking this turn has passed the gate. A gate that cannot
+ * be read — the foundational documents missing, the database failing — counts
+ * as not passed, so the turn still reaches the crisis check on its way to the
+ * refusal instead of failing before it.
+ */
+async function passedGate(turn: FacilitationTurn): Promise<boolean> {
+  try {
+    return (await gateRedirectForUserId(turn.userId)) === null;
+  } catch (error) {
+    logger.error('Agent turn could not read the gate; treated as not passed', {
+      seat: turn.role,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
 }
 
 /**
