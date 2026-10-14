@@ -24,7 +24,8 @@
  */
 
 import type { NextRequest } from 'next/server';
-import { withAuth, type AuthSession, type WithAuthOptions } from '@/lib/auth/guards';
+import { type AuthSession, type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { isApiKeySession } from '@/lib/auth/api-keys';
 import { successResponse } from '@/lib/api/responses';
 import { ForbiddenError, handleAPIError } from '@/lib/api/errors';
@@ -41,7 +42,7 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-export const GET = withAuth(async (request: NextRequest, session: AuthSession) => {
+export const GET = withGatedAuth(async (request: NextRequest, session: AuthSession) => {
   const log = await getRouteLogger(request);
   try {
     const progress = await getFirstRunProgress(session.user.id);
@@ -57,7 +58,7 @@ export const GET = withAuth(async (request: NextRequest, session: AuthSession) =
   }
 }, OWNERSHIP);
 
-export const POST = withAuth(async (request: NextRequest, session: AuthSession) => {
+export const POST = withGatedAuth(async (request: NextRequest, session: AuthSession) => {
   const log = await getRouteLogger(request);
   try {
     if (isApiKeySession(session)) {

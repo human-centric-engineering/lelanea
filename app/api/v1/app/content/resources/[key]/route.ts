@@ -24,7 +24,8 @@
 
 import { z } from 'zod';
 
-import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
+import { type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { successResponse } from '@/lib/api/responses';
 import { NotFoundError } from '@/lib/api/errors';
 import { computeETag, checkConditional } from '@/lib/api/etag';
@@ -45,7 +46,7 @@ const OWNERSHIP: WithAuthOptions<{ key: string }> = {
   },
 };
 
-export const GET = withAuth<{ key: string }>(async (request, _session, { params }) => {
+export const GET = withGatedAuth<{ key: string }>(async (request, _session, { params }) => {
   const log = await getRouteLogger(request);
   const { key: raw } = await params;
   const key = validatePathParam(raw, slugSchema, { label: 'resource key', field: 'key' });

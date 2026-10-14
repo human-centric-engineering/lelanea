@@ -19,7 +19,8 @@
  * Caching: `no-store` on the read; a switch may flip between two asks.
  */
 
-import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
+import { type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { errorResponse, successResponse } from '@/lib/api/responses';
 import { getRouteLogger } from '@/lib/api/context';
 import { audioLimiter, createRateLimitResponse } from '@/lib/security/rate-limit';
@@ -45,7 +46,7 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-export const GET = withAuth(
+export const GET = withGatedAuth(
   async () => {
     const { state } = await voiceInputAvailability();
     return successResponse({ voiceInput: state }, undefined, {
@@ -64,7 +65,7 @@ export const GET = withAuth(
 
 // Audit invariant: this handler MUST NOT persist audio bytes. The only write
 // on the happy path is `logCost(...)`, and the route's tests assert it.
-export const POST = withAuth(async (request, session) => {
+export const POST = withGatedAuth(async (request, session) => {
   const log = await getRouteLogger(request);
   const userId = session.user.id;
 

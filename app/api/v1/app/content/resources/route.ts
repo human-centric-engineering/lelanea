@@ -27,13 +27,13 @@
  * awaiting her sign-off, and a surface that shows the resource can say so.
  */
 
-import { withAuth } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { successResponse } from '@/lib/api/responses';
 import { computeETag, checkConditional } from '@/lib/api/etag';
 import { getRouteLogger } from '@/lib/api/context';
 import { getResourcesLibrary } from '@/lib/app/content/resource-store';
 
-export const GET = withAuth(
+export const GET = withGatedAuth(
   async (request) => {
     const log = await getRouteLogger(request);
     const library = await getResourcesLibrary();

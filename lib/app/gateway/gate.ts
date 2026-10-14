@@ -36,10 +36,12 @@
  */
 
 import { env } from '@/lib/env';
+import { prisma } from '@/lib/db/client';
 import { getGateStatus } from '@/lib/app/gateway/acknowledgements';
+import { GATE_FALLBACK_LOCATION } from '@/lib/app/gateway/gate-codes';
 
 /** The gate page. */
-export const BEGIN_ROUTE = '/app/begin';
+export const BEGIN_ROUTE = GATE_FALLBACK_LOCATION;
 
 /** Sunrise's verify page. It reads `?email=` to offer a resend. */
 export const VERIFY_EMAIL_ROUTE = '/verify-email';
@@ -91,4 +93,20 @@ export async function gateRedirectFor(user: GateSubject): Promise<string | null>
  */
 export async function hasPassedGate(user: GateSubject): Promise<boolean> {
   return (await gateRedirectFor(user)) === null;
+}
+
+/**
+ * {@link gateRedirectFor}, for a caller that holds only the person's id — the
+ * facilitation turn hook, which is handed a user id and not a session.
+ *
+ * A user the id no longer resolves to is sent to the gate rather than let
+ * through: there is nobody to have passed it.
+ */
+export async function gateRedirectForUserId(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, emailVerified: true },
+  });
+  if (user === null) return BEGIN_ROUTE;
+  return gateRedirectFor(user);
 }

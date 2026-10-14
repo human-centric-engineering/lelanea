@@ -31,7 +31,7 @@
  */
 
 import { after } from 'next/server';
-import { withAuth } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { isApiKeySession } from '@/lib/auth/api-keys';
 import { sseResponse } from '@/lib/api/sse';
 import { ConflictError, ForbiddenError, NotFoundError } from '@/lib/api/errors';
@@ -41,7 +41,7 @@ import { CONVERSATION_SEAT } from '@/lib/app/conversation/seats';
 import { OPENING_NOT_DUE, prepareOpening, runOpening } from '@/lib/app/conversation/opening';
 import { prepareRecap, runRecap } from '@/lib/app/conversation/recap';
 
-export const POST = withAuth(
+export const POST = withGatedAuth(
   async (request, session) => {
     if (isApiKeySession(session)) {
       throw new ForbiddenError('Only a signed-in person can be spoken to.');

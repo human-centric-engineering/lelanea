@@ -21,6 +21,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// t-159: these callers are past the shell layout's gate. The gate itself, and
+// the refusal, are `tests/unit/lib/app/gateway/guard.test.ts`'s.
+vi.mock('@/lib/app/gateway/gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/app/gateway/gate')>()),
+  gateRedirectFor: async () => null,
+}));
+
 vi.mock('@/lib/auth/config', () => ({ auth: { api: { getSession: vi.fn() } } }));
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
 vi.mock('@/lib/app/content/journey-store', async () =>

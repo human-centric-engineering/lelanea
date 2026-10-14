@@ -23,7 +23,8 @@ import type { NextRequest } from 'next/server';
 import { getRouteLogger } from '@/lib/api/context';
 import { successResponse } from '@/lib/api/responses';
 import { validateRequestBody } from '@/lib/api/validation';
-import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
+import { type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { getLeanings, setLeaning } from '@/lib/app/voice/leanings-store';
 import { leaningChangeSchema } from '@/lib/app/voice/leanings';
 
@@ -41,12 +42,12 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-export const GET = withAuth(async (_request: NextRequest, session) => {
+export const GET = withGatedAuth(async (_request: NextRequest, session) => {
   const view = await getLeanings(session.user.id);
   return successResponse(view, undefined, { headers: { 'Cache-Control': 'no-store' } });
 }, OWNERSHIP);
 
-export const PATCH = withAuth(async (request: NextRequest, session) => {
+export const PATCH = withGatedAuth(async (request: NextRequest, session) => {
   const log = await getRouteLogger(request);
   const body = await validateRequestBody(request, leaningChangeSchema);
   const result = await setLeaning({

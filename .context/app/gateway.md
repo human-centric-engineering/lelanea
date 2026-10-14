@@ -25,6 +25,10 @@ front of the shell (t-16), and the two **data rights** on the account view
 | Art. 17 — the cascade, pinned             | `lib/app/leaf-db-drift.ts`                                 |
 | The gate — where a person is sent         | `lib/app/gateway/gate.ts`                                  |
 | The redirect                              | `app/(lelanea)/app/layout.tsx`                             |
+| The gate on the API                       | `lib/app/gateway/guard.ts` — `withGatedAuth`               |
+| The gate on a turn                        | `lib/app/agent/turns.ts` — `runRecordedTurn`               |
+| The code a refusal carries (client-safe)  | `lib/app/gateway/gate-codes.ts`                            |
+| Back to the gate when refused (client)    | `components/app/shell/gate-watch.tsx`                      |
 | The gate page, `/app/begin`               | `app/(gate)/app/begin/page.tsx`                            |
 | The gate's controls (client)              | `components/app/views/begin-view.tsx`                      |
 | The export control (client)               | `components/app/account/export-data-row.tsx`               |
@@ -158,6 +162,42 @@ Static routes beat the shell's `[...slug]` catch-all, so the URL resolves to the
 gate page. The page wraps itself in the maintenance wrapper for the reason the
 shell does, and applies the verification redirect itself, since it is outside
 the layout that would otherwise do it.
+
+### The API asks the same question (t-159)
+
+The layout is a gate on **page entry**. Nothing stopped a signed-in person who
+never agreed to the terms calling the app's data routes directly, so the API
+asks the layout's question too:
+
+- **Every app route the shell calls** is `withGatedAuth` rather than
+  `withAuth`. Someone not past the gate gets `403` with code `GATE_REQUIRED` and
+  `details.location` — where the layout would have sent them — and the handler
+  never runs.
+- **A turn** goes through Daybreak's facilitation route, which we do not edit,
+  so the turn hook (`runRecordedTurn`) asks first. It answers `409` with reason
+  `GATE_REQUIRED`, the only refusal that seam can give. A **hard-tier crisis
+  message is still answered with the resource**: the gate is about what the app
+  may do for someone, and nothing it may not do stands between a person in
+  danger and help.
+- **`<GateWatch>`**, in the shell layout, watches the page's `fetch` and takes
+  anyone refused either way back to the gate with a full navigation, so the
+  layout's check runs again. That is the case a version bump creates: someone
+  already in the shell when the terms change.
+
+**What stays reachable without passing:** the acknowledgement route (it _is_
+the gate), the public content and waitlist routes, the cron route, and **taking
+your data out or deleting it**. Exporting or erasing what the app holds about you
+is never conditional on agreeing to a new version of the terms.
+`tests/unit/app/api/v1/app/gate-coverage.test.ts` (always-run) reads every route
+under `app/api/v1/app/` and fails on a method that is neither gated nor listed as
+exempt with its reason — so a new route that forgets the gate fails the build.
+
+**Outside our routes.** Daybreak's module chat route
+(`/api/v1/framework/modules/{slug}/chat/stream`) and module feedback route are
+not ours and have no seam. The chat route answers 404 while no module has a
+primary agent (`agent.md`, "Where else the agent can be reached"); the feedback
+route records a 1–5 rating on a module and is not gated. Sunrise's consumer chat
+route excludes the agent's slug (`consumer-exclusions.ts`).
 
 ### The page — one thing at a time
 

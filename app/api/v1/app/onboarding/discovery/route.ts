@@ -34,24 +34,24 @@
  * answer that could not be written is an error, because it is the person's
  * words.
  *
- * Authentication: `withAuth`. The POST refuses an API key, as the first run's
- * does: these are a person's own answers, which a key cannot give. It also
- * refuses (`403`, nothing written) anyone not past the gate (`hasPassedGate`,
- * the shell layout's own check): an answer given before accepting the terms it
- * is given under is not one to keep (t-124). The surface never shows the
- * questions before the gate; this closes the API.
+ * Authentication: `withGatedAuth` — `withAuth` plus the shell layout's gate,
+ * so both methods refuse (`403 GATE_REQUIRED`, nothing read or written) anyone
+ * not past it: an answer given before accepting the terms it is given under is
+ * not one to keep (t-124, and every app route since t-159). The POST also
+ * refuses an API key, as the first run's does: these are a person's own
+ * answers, which a key cannot give.
  *
  * Rate limiting: inherited from the `/api/v1/**` section cap.
  */
 
 import type { NextRequest } from 'next/server';
-import { withAuth, type AuthSession, type WithAuthOptions } from '@/lib/auth/guards';
+import { type AuthSession, type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { isApiKeySession } from '@/lib/auth/api-keys';
 import { successResponse } from '@/lib/api/responses';
 import { ForbiddenError, ValidationError, handleAPIError } from '@/lib/api/errors';
 import { validateRequestBody } from '@/lib/api/validation';
 import { getRouteLogger } from '@/lib/api/context';
-import { hasPassedGate } from '@/lib/app/gateway/gate';
 import { discoveryActionSchema } from '@/lib/app/onboarding/discovery';
 import { getDiscoverySet } from '@/lib/app/onboarding/discovery-slots';
 import {
@@ -69,7 +69,7 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-export const GET = withAuth(async (request: NextRequest, session: AuthSession) => {
+export const GET = withGatedAuth(async (request: NextRequest, session: AuthSession) => {
   const log = await getRouteLogger(request);
   try {
     const state = await getDiscoveryState(session.user.id);
@@ -85,15 +85,12 @@ export const GET = withAuth(async (request: NextRequest, session: AuthSession) =
   }
 }, OWNERSHIP);
 
-export const POST = withAuth(async (request: NextRequest, session: AuthSession) => {
+export const POST = withGatedAuth(async (request: NextRequest, session: AuthSession) => {
   const log = await getRouteLogger(request);
   const userId = session.user.id;
   try {
     if (isApiKeySession(session)) {
       throw new ForbiddenError('Only a signed-in person can answer the discovery questions.');
-    }
-    if (!(await hasPassedGate(session.user))) {
-      throw new ForbiddenError('The discovery questions open once you have passed the gate.');
     }
     const body = await validateRequestBody(request, discoveryActionSchema);
     const set = await getDiscoverySet();

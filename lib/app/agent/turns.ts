@@ -82,6 +82,18 @@
  *   request already showed the resource, and a record says what was shown, not
  *   what was decided.
  *
+ * ## Someone not past the gate (t-159)
+ *
+ * The shell layout keeps anyone who has not passed the gate out of the shell,
+ * but the turn route is reachable by anyone signed in. So the hook asks the
+ * layout's question (`gateRedirectForUserId`) first, and refuses — `409`, reason
+ * `GATE_REQUIRED` — before the turn is an arrival, a claim or a model call.
+ * The one thing it still does is the crisis check: a hard-tier message is
+ * answered with the resource whoever sent it, because the gate is about what
+ * the app may do for someone, and nothing it may not do stands between a
+ * person in danger and help. A gate that cannot be read counts as not passed
+ * for the same reason: the turn is refused, but only after the crisis check.
+ *
  * @see lib/app/agent/turn-record.ts — the store, and why a claim cannot race
  * @see lib/framework/facilitation/agents/turn-hook.ts — the seam Daybreak's route calls
  */
@@ -136,6 +148,8 @@ import type {
 } from '@/lib/framework/facilitation/agents/turn-hook';
 import { TURN_ID_REUSED, TURN_IN_FLIGHT } from '@/lib/app/agent/turn-codes';
 import { refuseClientTurnId } from '@/lib/app/agent/turn-intake';
+import { gateRedirectForUserId } from '@/lib/app/gateway/gate';
+import { GATE_REQUIRED } from '@/lib/app/gateway/gate-codes';
 import { queueMessageIndex } from '@/lib/app/memory/memory-index';
 import { arriveSessionQuietly, type Arrival } from '@/lib/app/sessions/store';
 
@@ -434,16 +448,20 @@ function isRefusal(
 }
 
 /**
- * Take one facilitation turn — crisis first, then {@link runGeneratedTurn}.
+ * Take one facilitation turn — the gate, crisis, then {@link runGeneratedTurn}.
  *
  * The crisis check is ahead of the pause, the ceiling, the claim and the model
  * on purpose: none of them may stand between a person in danger and the
- * resource. See "Someone in danger" in the module docblock.
+ * resource. See "Someone in danger" in the module docblock. The gate is asked
+ * first, but refuses only after the crisis check has had its say ("Someone not
+ * past the gate").
  */
 export async function runRecordedTurn(
   turn: FacilitationTurn,
   run: FacilitationTurnRun
 ): Promise<ChatStream | FacilitationTurnRefusal> {
+  if (!(await passedGate(turn))) return refuseBeforeGate(turn);
+
   // Taking a turn is arriving (f-recap t-141), whatever then answers it: the
   // resource, a pause, a refusal or the model. Started here and awaited only by
   // the claim, which stamps it; the host keeps it alive past any response that
@@ -471,6 +489,48 @@ export async function runRecordedTurn(
   if (crisis.resource === null || isRefusal(result)) return result;
   await recordCrisisShown(crisis, who);
   return precededBy(crisisFrame(crisis.resource), result);
+}
+
+/**
+ * Whether the person taking this turn has passed the gate. A gate that cannot
+ * be read — the foundational documents missing, the database failing — counts
+ * as not passed, so the turn still reaches the crisis check on its way to the
+ * refusal instead of failing before it.
+ */
+async function passedGate(turn: FacilitationTurn): Promise<boolean> {
+  try {
+    return (await gateRedirectForUserId(turn.userId)) === null;
+  } catch (error) {
+    logger.error('Agent turn could not read the gate; treated as not passed', {
+      seat: turn.role,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * A turn from someone not past the gate: the crisis resource if the message
+ * calls for one, otherwise a refusal. Nothing else — no arrival, no claim, no
+ * model — so nothing is recorded for a person who has not agreed to the terms
+ * beyond the safety record of what they were shown.
+ */
+async function refuseBeforeGate(
+  turn: FacilitationTurn
+): Promise<ChatStream | FacilitationTurnRefusal> {
+  const locale = preferredLanguageTag(turn.headers?.get('accept-language') ?? null);
+  const who = { userId: turn.userId, seat: turn.role };
+  const crisis = await detectCrisis(turn.message, locale, who);
+  if (crisis.resource?.tier === 'hard') {
+    await recordCrisisShown(crisis, who);
+    return only(crisisFrame(crisis.resource));
+  }
+  logger.info('Agent turn refused: not past the gate', { seat: turn.role });
+  return {
+    refused: true,
+    message: 'Agree to the terms before talking to the AI.',
+    reason: GATE_REQUIRED,
+  };
 }
 
 /**

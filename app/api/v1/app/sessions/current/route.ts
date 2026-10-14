@@ -22,7 +22,8 @@ import { after } from 'next/server';
 
 import { getRouteLogger } from '@/lib/api/context';
 import { successResponse } from '@/lib/api/responses';
-import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
+import { type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { readCurrentSession } from '@/lib/app/sessions/current';
 
 /** Ownership: self — the session is resolved and its turns read under the caller's own id. */
@@ -34,7 +35,7 @@ const OWNERSHIP: WithAuthOptions = {
   },
 };
 
-export const GET = withAuth(async (request, session) => {
+export const GET = withGatedAuth(async (request, session) => {
   const log = await getRouteLogger(request);
   const current = await readCurrentSession(session.user.id, {
     keepAlive: (work) => after(work),

@@ -18,7 +18,8 @@
  * @see lib/app/agent/metering.ts
  */
 
-import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
+import { type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { successResponse } from '@/lib/api/responses';
 import { NotFoundError } from '@/lib/api/errors';
 import { getRouteLogger } from '@/lib/api/context';
@@ -35,7 +36,7 @@ const OWNERSHIP: WithAuthOptions<{ turnId: string }> = {
   },
 };
 
-export const GET = withAuth<{ turnId: string }>(async (request, session, { params }) => {
+export const GET = withGatedAuth<{ turnId: string }>(async (request, session, { params }) => {
   const log = await getRouteLogger(request);
   const { turnId: raw } = await params;
   const turnId = validatePathParam(raw, turnIdParamSchema, { label: 'turn id' });

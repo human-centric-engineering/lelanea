@@ -24,14 +24,14 @@
 import { getRouteLogger } from '@/lib/api/context';
 import { successResponse } from '@/lib/api/responses';
 import { validatePathParam, validateRequestBody } from '@/lib/api/validation';
-import { withAuth } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { createRateLimitResponse } from '@/lib/security/rate-limit';
 import { keepSynopsis } from '@/lib/app/journey-record/keep';
 import { JOURNEY_RECORD_OWNERSHIP } from '@/lib/app/journey-record/ownership';
 import { synopsisCallKey, synopsisCallLimiter } from '@/lib/app/journey-record/rate-limit';
 import { journeyEntryIdSchema, synopsisKeepSchema } from '@/lib/app/journey-record/validation';
 
-export const POST = withAuth<{ id: string }>(
+export const POST = withGatedAuth<{ id: string }>(
   async (request, session, { params }) => {
     const log = await getRouteLogger(request);
     const { id: raw } = await params;

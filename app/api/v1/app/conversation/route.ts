@@ -32,7 +32,8 @@
 import { after } from 'next/server';
 import { z } from 'zod';
 
-import { withAuth, type WithAuthOptions } from '@/lib/auth/guards';
+import { type WithAuthOptions } from '@/lib/auth/guards';
+import { withGatedAuth } from '@/lib/app/gateway/guard';
 import { successResponse } from '@/lib/api/responses';
 import { getRouteLogger } from '@/lib/api/context';
 import { validateQueryParams } from '@/lib/api/validation';
@@ -75,7 +76,7 @@ async function owedOpening(
   return arrival ? recapDue(user, arrival.session) : null;
 }
 
-export const GET = withAuth(async (request, session) => {
+export const GET = withGatedAuth(async (request, session) => {
   const log = await getRouteLogger(request);
   const query = validateQueryParams(request.nextUrl.searchParams, querySchema);
   const seat = query.seat ?? CONVERSATION_SEAT;
