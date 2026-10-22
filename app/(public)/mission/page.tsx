@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
 
-import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
+import { MissionRipple } from '@/components/app/site/mission-ripple';
+import {
+  AuthoredBlocks,
+  CATEGORY_LABEL,
+  applyFirstName,
+} from '@/components/app/content/authored-document';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+import type { FoundationalDocumentDetail } from '@/lib/app/content/document-view';
 import { requireDocument } from '@/lib/app/content/sections';
 import styles from '@/app/(public)/document-page.module.css';
 
@@ -49,26 +55,70 @@ export const dynamic = 'force-dynamic';
  * @see .context/app/content.md — the pipeline, and why nothing here is retyped
  * @see .context/app/planning/design/lelanea.html — `#pg-mission`
  */
+/**
+ * The first sentence of hers that opens with `start`, from any paragraph of the
+ * document — or null if she no longer wrote it, in which case the ripple simply
+ * shows one caption fewer (t-171). Found by its opening words so the sentence
+ * on screen is always the stored one, whole.
+ *
+ * Returned as authored text, emphasis markers and all, for `MissionRipple` to
+ * render through `InlineText` — the same path the paragraph beside it takes, so
+ * the two copies of her sentence cannot disagree. The merge field is closed as
+ * for an anonymous reader, since this is a public page. A sentence whose
+ * emphasis runs across its boundary would split a `**` pair in two, so that one
+ * case falls back to plain words.
+ */
+function sentenceStarting(
+  blocks: FoundationalDocumentDetail['blocks'],
+  start: string
+): string | null {
+  for (const block of blocks) {
+    if (block.type !== 'paragraph') continue;
+    const found = applyFirstName(block.text, null)
+      .split(/(?<=[.!?](?:\*\*)?)\s+/)
+      .find((sentence) => sentence.replaceAll('**', '').startsWith(start));
+    if (found) {
+      const markers = found.split('**').length - 1;
+      return markers % 2 === 0 ? found : found.replaceAll('**', '');
+    }
+  }
+  return null;
+}
+
 export default async function MissionPage() {
   const mission = await requireDocument('the_mission');
 
   return (
-    <div className={styles.page}>
-      <section className={`${styles.opening} ${styles.closing}`}>
-        {/* The category, not the prototype's "the mission" — the document is
-            titled "The Mission", so the prototype's eyebrow would print the
-            same three words directly above it in a smaller face. */}
+    <div className={styles.reading}>
+      {/* Her mission's one movement — a single awakened life widening to
+            families, communities and beyond — drawn on the site's water. On a
+            desktop the water runs from the window's left edge, from the nav to
+            the footer, and dissolves into the text (owner, t-171). */}
+      <MissionRipple
+        className={styles.companion}
+        captions={[
+          sentenceStarting(mission.blocks, 'Purpose begins within'),
+          sentenceStarting(mission.blocks, 'One awakened life'),
+          sentenceStarting(mission.blocks, 'It belongs to humanity'),
+        ].filter((caption): caption is string => caption !== null)}
+      />
+
+      <div className={styles.readingText}>
+        {/* The category, not the prototype's "the mission" — the document
+              is titled "The Mission", so the prototype's eyebrow would print
+              the same three words directly above it in a smaller face. */}
         <Eyebrow as="p">{CATEGORY_LABEL[mission.category]}</Eyebrow>
-        <h1 className="brand-display mt-[18px] mb-8 max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
+        <h1 className="brand-display mt-[18px] mb-9 max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
           {mission.title}
         </h1>
 
         <AuthoredBlocks
           blocks={mission.blocks}
           renderStyle={mission.renderStyle}
-          className={`${styles.measure} ${styles.lede}`}
+          beats
+          className={`${styles.prose} ${styles.lede} ${styles.dropcap}`}
         />
-      </section>
+      </div>
     </div>
   );
 }

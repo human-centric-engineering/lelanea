@@ -137,8 +137,9 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px 22px;
-  margin-top: 24px;
-  padding-top: 18px;
+  /* Clear of the promises' stacked shadows above it. */
+  margin-top: 40px;
+  padding-top: 22px;
   border-top: 1px solid var(--color-divider);
 }
 
@@ -194,71 +195,674 @@
   margin-top: 3px;
 }
 
-/*
- * The portrait and its stand-in share their box on purpose — see
- * `.portraitPending`. Anything that changes the shape belongs here, not in one
- * of them.
+/* ================================================================ creator
+ * `/lelanea`'s biography (t-171). Her portrait, name and links sit in an
+ * aside beside the text on a desktop, held in view while the biography
+ * scrolls; once the page narrows they gather into one row above it. The
+ * portrait was a full-height 4:5 panel before, the largest thing on the page,
+ * and it broke the read in two on an iPad. It is an arch now — the shape of a
+ * petal, or a window — and never wider than it needs to be.
  */
+.creator {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: clamp(36px, 5vw, 80px);
+  align-items: start;
+}
+
+.creatorAside {
+  position: sticky;
+  top: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.creatorMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .portrait,
 .portraitPending {
+  position: relative;
+  width: 100%;
   margin: 0;
   aspect-ratio: 4 / 5;
-  border-radius: 20px;
+  overflow: hidden;
+  /* The arch: a full round across the top, the site's large radius below. */
+  border-radius: 999px 999px var(--radius-lg) var(--radius-lg);
+  box-shadow: var(--shadow-rest);
 }
 
 .portrait {
-  overflow: hidden;
   background: var(--color-accent);
 }
 
 .portrait img {
-  display: block;
-  width: 100%;
-  height: 100%;
   object-fit: cover;
-  /* The prototype's framing: the face sits right of centre and high. */
-  object-position: 58% 26%;
+  /* Her face sits right of centre and high in the frame. */
+  object-position: 62% 28%;
 }
 
-/*
- * The portrait's stand-in until a photograph arrives — the same call
- * `SITE_LINKS` makes for a URL that does not exist yet (D3): render something
- * deliberate, never a broken `<img>`.
- *
- * It went through both wrong shapes before this one, which is worth recording
- * because they are opposite errors.
- *
- * With no aspect ratio it sized to its caption and became a thin dashed strip
- * beside a column of prose — which reads as a broken element, and which would
- * have made the section jump from a 40px strip to a 4:5 panel the day the
- * photograph landed. Taking `.portrait`'s ratio fixed that and produced the
- * other error: a ~675px empty dashed box, correct in structure and worse to
- * look at, sitting on a live page for however many months.
- *
- * So it reserves the full 4:5 — the layout must not move later — and fills it
- * the way a designed placeholder does: the brand's own mark, on the same tinted
- * ground the photograph will sit on, with the caption beneath. No dashed
- * border; a dashed border is the visual language of a missing asset, and this
- * is not missing so much as not yet taken.
- */
+/* With no photograph, the arch holds the site's own water with the lotus mark
+   on it, rather than a grey panel with a sentence in it. */
 .portraitPending {
   display: grid;
   place-items: center;
-  align-content: center;
-  gap: 18px;
-  padding: 32px;
-  text-align: center;
-  color: var(--color-muted-foreground);
-  background: var(--color-accent);
 }
 
-/* Quiet enough to be a ground rather than an illustration competing with her. */
+.portraitPending img {
+  object-fit: cover;
+  object-position: 70% 0%;
+}
+
 .portraitPending svg {
-  opacity: 0.35;
+  position: relative;
+  opacity: 0.85;
+}
+
+/* Held in view only where it fits. With the 104px pin, the arch, her name and
+   the links need about 780px of window, so on a shorter one — a 1366×768
+   laptop, a zoomed page — pinning it would keep the links below the fold for
+   the whole biography. There it scrolls with the text instead. */
+@media (max-height: 820px) {
+  .creatorAside {
+    position: static;
+  }
+}
+
+@media (max-width: 1100px) {
+  .creator {
+    grid-template-columns: 1fr;
+  }
+
+  .creatorAside {
+    position: static;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 28px;
+  }
+
+  .portrait,
+  .portraitPending {
+    flex: none;
+    width: 180px;
+  }
+
+  .creatorMeta {
+    flex: 1;
+  }
+}
+
+@media (max-width: 620px) {
+  .creatorAside {
+    flex-wrap: wrap;
+    gap: 18px 20px;
+  }
+
+  .portrait,
+  .portraitPending {
+    width: 120px;
+  }
+
+  /* On a phone the links take the full width beneath the portrait and name,
+     rather than squeezing beside a 120px arch. */
+  .creatorMeta {
+    display: contents;
+  }
+
+  .creatorMeta > :first-child {
+    flex: 1;
+    align-self: center;
+  }
+
+  .creatorMeta > :last-child {
+    flex-basis: 100%;
+    margin-top: 0;
+  }
+}
+
+/* ================================================================ lineage
+ * The fields she draws on, as tributaries (t-171). A stream winds down the
+ * centre of the section — a teal fill shaped by a wave-shaped mask, so the
+ * colour is a token and only the SHAPE is drawn — and each field sits on
+ * alternate banks, joined to the water by a short line and a ring.
+ *
+ * Fields on opposite banks overlap vertically by a little, so the eye zigzags
+ * down the river rather than reading two half-empty columns. Below the iPad
+ * width the river runs down the left edge and every field sits to its right.
+ */
+.river {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 56px 0 0;
+  padding: 12px 0 24px;
+  list-style: none;
+}
+
+.river::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 26px;
+  translate: -50% 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-secondary-ink) 6%,
+    var(--color-secondary-ink) 94%,
+    transparent
+  );
+  /* The stream's course: a slow S-curve, repeated down the page. */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='160' viewBox='0 0 26 160'%3E%3Cpath d='M13 0 C 24 40, 24 40, 13 80 C 2 120, 2 120, 13 160' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E")
+    repeat-y center top / 26px 160px;
+  opacity: 0.7;
+}
+
+.tributary {
+  position: relative;
+  width: calc(50% - 56px);
+}
+
+.tributary:nth-child(odd) {
+  align-self: flex-start;
+  text-align: right;
+}
+
+.tributary:nth-child(even) {
+  align-self: flex-end;
+}
+
+/* Opposite banks overlap a little, so the read zigzags down the river. */
+.tributary + .tributary {
+  margin-top: -28px;
+}
+
+/* The line from the field to the water, and the ring where they meet. */
+.tributary::before {
+  content: '';
+  position: absolute;
+  top: 17px;
+  width: 40px;
+  height: 1px;
+  background: color-mix(in srgb, var(--color-secondary-ink) 45%, transparent);
+}
+
+.tributary::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 1px solid var(--color-secondary-ink);
+  background: var(--color-background);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-secondary-ink) 9%, transparent);
+}
+
+.tributary:nth-child(odd)::before {
+  right: -48px;
+}
+
+.tributary:nth-child(odd)::after {
+  right: -62px;
+}
+
+.tributary:nth-child(even)::before {
+  left: -48px;
+}
+
+.tributary:nth-child(even)::after {
+  left: -62px;
+}
+
+.tributaryText {
+  padding: 2px 0 34px;
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--color-muted-foreground);
+}
+
+.tributaryText :global(h3) {
+  margin: 0 0 8px;
+  font-size: clamp(21px, 2vw, 25px);
+  line-height: 1.2;
+  text-wrap: balance;
+  color: var(--color-heading);
+}
+
+.tributaryText :global(p) {
+  margin: 0 0 0.7em;
+  line-height: inherit;
+}
+
+.tributaryText :global(p:last-child) {
+  margin-bottom: 0;
+}
+
+/* Each field drifts in from its own bank as it reaches the reader. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .tributary {
+      animation: join linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
+}
+
+@keyframes join {
+  from {
+    opacity: 0;
+    translate: 0 24px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .river::before {
+    left: 13px;
+  }
+
+  .tributary,
+  .tributary:nth-child(odd),
+  .tributary:nth-child(even) {
+    align-self: stretch;
+    width: auto;
+    padding-left: 52px;
+    text-align: left;
+  }
+
+  .tributary + .tributary {
+    margin-top: 0;
+  }
+
+  .tributary:nth-child(odd)::before,
+  .tributary:nth-child(even)::before {
+    left: 20px;
+    right: auto;
+    width: 26px;
+  }
+
+  .tributary:nth-child(odd)::after,
+  .tributary:nth-child(even)::after {
+    left: 7px;
+    right: auto;
+  }
+}
+
+/* The coda: the lineage's closing section, set apart as the page's ending,
+   with the water's rings beneath her last line. */
+.coda {
+  margin: clamp(56px, 7vw, 88px) auto 0;
+  max-width: 64ch;
+}
+
+.codaRipples {
+  max-width: 420px;
+  margin: 8px auto 0;
 }
 
 @media (max-width: 1180px) {
   .split {
     grid-template-columns: 1fr;
   }
+}
+
+/* ================================================================ reading
+ * Long text on the public site (t-171). Most of these pages are her prose and
+ * little else, so the type IS the design: a comfortable size and measure, open
+ * leading, and her own rhythm made visible — the short single-sentence turns
+ * she wrote between long paragraphs (`data-beat`, from `AuthoredBlocks`'
+ * `beats`) are set in her quote face, a step up, with air around them.
+ *
+ * `:global` reaches the elements `AuthoredBlocks` renders, which carry
+ * Tailwind utilities (`mb-4 leading-relaxed`). Those live in a cascade layer
+ * and these rules do not, so these win without `!important`.
+ */
+.prose {
+  max-width: 64ch;
+  font-size: 17.5px;
+  line-height: 1.78;
+  color: var(--color-foreground);
+}
+
+.prose :global(p) {
+  margin: 0 0 1.15em;
+  line-height: inherit;
+}
+
+.prose :global(p[data-beat]) {
+  max-width: 34ch;
+  text-wrap: balance;
+  margin: 1.6em 0;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: 1.3em;
+  line-height: 1.42;
+  color: var(--color-heading);
+}
+
+/* Consecutive turns are one stanza ("May it encourage curiosity. / May it
+   deepen compassion. / …"), so they close up rather than each taking the
+   full air of a single turn. */
+.prose :global(p[data-beat] + p[data-beat]) {
+  margin-top: -1.1em;
+}
+
+/* A turn that opens a document is its standfirst, not a pause. */
+.prose > :global(p[data-beat]:first-child) {
+  margin-top: 0;
+}
+
+.prose :global(h2),
+.prose :global(h3) {
+  margin: 2.4em 0 0.7em;
+  text-wrap: balance;
+  font-size: clamp(23px, 2.3vw, 28px);
+  line-height: 1.2;
+}
+
+/* A short orange hairline above each heading: the ceremonial accent, once per
+   section, marking where a new thought begins. */
+.prose :global(h2)::before,
+.prose :global(h3)::before {
+  content: '';
+  display: block;
+  width: 32px;
+  height: 1px;
+  margin-bottom: 18px;
+  background: var(--color-accent-ink);
+}
+
+.prose :global(ul) {
+  margin: 0 0 1.15em;
+}
+
+/*
+ * A drop cap where a passage opens on a full paragraph of hers: `/mission`,
+ * and on `/lelanea` her biography and the lineage. Not where a passage opens
+ * on one of her short turns, which is already set as its own standfirst, and
+ * not on the legal documents, where an ornament would read as decoration over
+ * a disclosure. The
+ * primary orange rather than the accent ink: the accent measures 2.9:1 on the
+ * oyster, short of the 3:1 large text needs, and the primary clears 4.5.
+ */
+.dropcap > :global(p:first-child)::first-letter {
+  float: left;
+  margin: 0.06em 0.12em 0 0;
+  font-family: var(--font-serif);
+  font-size: 4.2em;
+  line-height: 0.8;
+  color: var(--color-primary);
+}
+
+@media (max-width: 620px) {
+  .prose {
+    font-size: 16.5px;
+    line-height: 1.72;
+  }
+
+  .prose :global(p[data-beat]) {
+    font-size: 1.22em;
+  }
+}
+
+/* =============================================================== companion
+ * `/mission` (t-171): the water as the page's whole left side. It runs from
+ * the window's left edge, from beneath the header to the footer, and its
+ * right edge dissolves into the oyster under the text — no frame, no card.
+ * The drawing on it stays pinned in view (see `mission-ripple.module.css`).
+ *
+ * Below the desktop width it becomes a band above the text, fading out
+ * downward into it.
+ */
+.reading {
+  display: grid;
+  grid-template-columns: minmax(340px, 44vw) minmax(0, 1fr);
+}
+
+.readingText {
+  max-width: 720px;
+  padding: clamp(44px, 6vw, 76px) clamp(20px, 5vw, 72px) clamp(56px, 7vw, 96px) 8px;
+}
+
+.companion {
+  position: relative;
+  align-self: stretch;
+  margin: 0;
+}
+
+/*
+ * The right edge dissolves into the page — drawn as an overlay in the page's
+ * own ground, NOT as a `mask-image`. On a real GPU every animating layer inside
+ * a masked element (the captions, the rings, the foot) was composited as its
+ * own rectangle without the mask's backdrop, and each showed as a dark box
+ * while the page loaded (owner, t-171). An overlay has no such failure.
+ */
+.companion::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(to right, transparent 64%, var(--color-background));
+  pointer-events: none;
+}
+
+.companion img {
+  object-fit: cover;
+  object-position: 60% 20%;
+  animation: drift 48s var(--ease-brand) infinite alternate;
+}
+
+/* The water moves, barely: a slow drift and swell, the length of a breath
+   cycle or six. Off for anyone who has asked for less motion. */
+@keyframes drift {
+  from {
+    transform: scale(1.04) translate(0, 0);
+  }
+
+  to {
+    transform: scale(1.12) translate(-2.5%, 1.5%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .companion img {
+    animation: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .reading {
+    grid-template-columns: 1fr;
+  }
+
+  .companion {
+    aspect-ratio: 16 / 9;
+    max-height: 62vh;
+    width: 100%;
+  }
+
+  .companion::after {
+    background: linear-gradient(to bottom, transparent 66%, var(--color-background));
+  }
+
+  .readingText {
+    max-width: 760px;
+    margin-inline: auto;
+    padding: 8px clamp(20px, 5vw, 72px) clamp(56px, 7vw, 92px);
+  }
+}
+
+@media (max-width: 620px) {
+  .companion {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+/* ================================================================== guide
+ * A page with an "on this page" guide beside its text (t-171): `/lelanea`,
+ * `/disclaimer`, `/terms`. The guide's own styles are `PageGuide`'s.
+ */
+.withGuide {
+  /* Room beneath, so the sticky guide comes to rest above the section's
+     dividing line rather than on it (owner, t-171). */
+  padding-bottom: clamp(56px, 7vw, 92px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: clamp(36px, 5vw, 80px);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .withGuide {
+    grid-template-columns: 1fr;
+  }
+
+  .withGuide > nav {
+    display: none;
+  }
+}
+
+/* ================================================================= crisis
+ * `/data`'s crisis passage (t-171). Every word is the disclaimer's own and
+ * none of it is hidden, faded or moved by scrolling — the one place on the
+ * site where design only serves reading. Structure does the work:
+ *
+ *   - a terracotta rule down the left edge rather than an outline, so it
+ *     reads as weighted, not as an alert;
+ *   - the situations in a quieter inset with small terracotta markers, two
+ *     columns where there is room so the whole list is one glance;
+ *   - the instruction that follows them — "stop using this application
+ *     immediately" — set as the instruction it is;
+ *   - what to do next on a clear card of its own.
+ *
+ * The positional selectors follow the authored order (heading, two lines, the
+ * list, then three paragraphs). If that order changes the passage still reads
+ * correctly; it only loses emphasis, never words.
+ */
+.crisisPanel {
+  position: relative;
+  padding: clamp(24px, 3.4vw, 40px) clamp(22px, 4vw, 48px);
+  padding-left: clamp(30px, 4.6vw, 56px);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-status-red-bg);
+}
+
+.crisisPanel::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--color-status-red);
+}
+
+.crisis {
+  max-width: none;
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.crisis :global(h3) {
+  margin: 0 0 14px;
+  font-size: clamp(26px, 2.8vw, 34px);
+}
+
+.crisis :global(p) {
+  max-width: 62ch;
+  margin: 0 0 10px;
+}
+
+/* The situations, inset. */
+.crisis :global(ul) {
+  margin: 16px 0 22px;
+  padding: 18px 24px;
+  list-style: none;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-background) 72%, transparent);
+}
+
+.crisis :global(li) {
+  position: relative;
+  padding: 5px 0 5px 22px;
+  break-inside: avoid;
+}
+
+.crisis :global(li)::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.95em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-status-red);
+}
+
+/* "stop using this application immediately." — the instruction. */
+.crisis :global(ul + p) {
+  margin: 0 0 18px;
+  font-family: var(--font-serif);
+  font-size: clamp(22px, 2.3vw, 28px);
+  line-height: 1.25;
+  color: var(--color-status-red-ink);
+}
+
+/* What to do next, on a clear card of its own. */
+.crisis :global(ul + p + p) {
+  max-width: none;
+  margin: 0 0 16px;
+  padding: 18px 22px;
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  box-shadow: var(--shadow-rest);
+  font-size: 18px;
+  color: var(--color-heading);
+}
+
+@media (min-width: 900px) {
+  .crisis :global(ul) {
+    columns: 2;
+    column-gap: 48px;
+  }
+}
+
+/* ================================================================== tints
+ * A page in sections gives alternate sections a whisper of colour, edge to
+ * edge (owner, t-171): a breath of the teal, then of the lotus's warmth. The
+ * section's content keeps the page's measure; only the ground runs full
+ * width, by a spread shadow clipped to the section's own height — no wrapper,
+ * so the markup and the outline are unchanged.
+ *
+ * A tinted section needs no dividing rule: the change of ground is the
+ * division.
+ */
+.tintTeal,
+.tintWarm {
+  border-top: 0;
+  clip-path: inset(0 -100vmax);
+}
+
+.tintTeal {
+  background: color-mix(in srgb, var(--color-secondary-ink) 6%, var(--color-background));
+  box-shadow: 0 0 0 100vmax
+    color-mix(in srgb, var(--color-secondary-ink) 6%, var(--color-background));
+}
+
+.tintWarm {
+  background: color-mix(in srgb, var(--color-lotus-core) 6%, var(--color-background));
+  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--color-lotus-core) 6%, var(--color-background));
 }

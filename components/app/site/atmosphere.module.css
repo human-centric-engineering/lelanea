@@ -1,0 +1,331 @@
+/*
+ * The public site's atmosphere (t-171): the ripples, her channels on the home
+ * page and the list on `/lelanea`.
+ *
+ * Colours are tokens from `app/brand-theme.css`, mixed with `color-mix` where a
+ * wash is wanted; there are no literals here. The lotus tokens hold across both
+ * themes, so every wash below is the same bloom on oyster and on charcoal.
+ */
+
+/* ------------------------------------------------------------- ripples */
+
+.ripples {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------ channels */
+
+/*
+ * Four across on a desktop, two on an iPad, one on a phone. On a phone each
+ * card turns sideways — art on the left, name and links on the right — so four
+ * cards are a short scroll rather than four screens of artwork.
+ */
+.channels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.channel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-rest);
+}
+
+.channelArt {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-muted);
+}
+
+/*
+ * Her mark is drawn on white. It sits on the oyster in BOTH themes — the
+ * cinema ink, which does not change with the theme — and multiplies onto it,
+ * so the white ground disappears into the panel instead of showing as a
+ * square. Padded, so the mandala breathes rather than touching the edges.
+ */
+.channelArtMark {
+  background: var(--color-cinema-ink);
+}
+
+.channelArtMark img {
+  padding: 8%;
+  mix-blend-mode: multiply;
+}
+
+.channelBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 18px 22px;
+  text-align: center;
+}
+
+.channelName {
+  margin: 0;
+  line-height: 1.15;
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--color-heading);
+}
+
+.channelLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  /* Centred in the space beneath the title, so a single button sits level
+     with the middle of a three-button stack in the next card. */
+  margin: auto 0;
+  padding: 0;
+  list-style: none;
+}
+
+.channelLinks a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  font-size: 13.5px;
+  color: var(--color-foreground);
+  transition:
+    color 200ms var(--ease-brand),
+    border-color 200ms var(--ease-brand),
+    background-color 200ms var(--ease-brand);
+}
+
+.channelLinks svg {
+  flex: none;
+  color: var(--color-secondary-ink);
+}
+
+.channelLinks a:hover {
+  color: var(--color-secondary-ink);
+  border-color: var(--color-secondary-ink);
+  background: var(--color-secondary-wash);
+  text-decoration: none;
+}
+
+@media (max-width: 1100px) {
+  .channels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .channelArt {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+@media (max-width: 620px) {
+  .channels {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .channel {
+    flex-direction: row;
+  }
+
+  .channelArt {
+    flex: none;
+    width: 112px;
+    min-height: 112px;
+    aspect-ratio: auto;
+  }
+
+  .channelArt {
+    border-bottom: 0;
+    border-right: 1px solid var(--color-divider);
+  }
+
+  .channelBody {
+    align-items: flex-start;
+    padding: 14px 16px;
+    gap: 10px;
+    text-align: left;
+  }
+
+  .channelLinks {
+    justify-content: flex-start;
+  }
+
+  .channelName {
+    font-size: 20px;
+  }
+}
+
+/* ------------------------------------------------------- creator links */
+
+.creatorLinks {
+  margin-top: 36px;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.creatorLinks ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.creatorLinks a {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 1px 14px;
+  min-height: 48px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--color-divider);
+  color: var(--color-foreground);
+  transition: color 200ms var(--ease-brand);
+}
+
+.creatorLinks a:hover {
+  color: var(--color-secondary-ink);
+  text-decoration: none;
+}
+
+.creatorLinks a > svg:first-child {
+  grid-row: 1 / span 2;
+  color: var(--color-secondary-ink);
+}
+
+.creatorLinks a > svg:last-child {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.creatorLinkLabel {
+  font-size: 15.5px;
+}
+
+/* The detail sits beneath the label: the aside is narrow, and a handle or a
+   description beside the name wrapped into a ragged column. */
+.creatorLinkDetail {
+  grid-column: 2;
+  font-size: 13px;
+  color: var(--color-muted-foreground);
+}
+
+/* ------------------------------------------------------------- closing */
+
+/*
+ * The home page's closing band: a pond at dusk in the lotus's own deep teals,
+ * the bloom opening at its centre, rings spreading slowly from beneath it.
+ * Dark in both themes, as the cinema is — on the oyster it is the page's one
+ * deep moment, and on charcoal it still reads as water rather than as more
+ * of the ground.
+ */
+.closing {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  /* Full width, edge to edge, and shorter than a card would be: a band of
+     water closing the page and running into the footer (owner, t-171). */
+  min-height: clamp(300px, 30vw, 380px);
+  overflow: hidden;
+  background:
+    radial-gradient(
+      60% 55% at 50% 40%,
+      color-mix(in srgb, var(--color-lotus-petal-outer-edge) 85%, transparent),
+      transparent 75%
+    ),
+    radial-gradient(40% 30% at 50% 36%, var(--color-lotus-halation), transparent 80%),
+    linear-gradient(to bottom, var(--color-lotus-pad-edge), var(--color-lotus-pad) 70%);
+}
+
+.pondRings {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.pondRings span {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: min(760px, 120%);
+  aspect-ratio: 3.2;
+  translate: -50% -50%;
+  /* 50%, not a pill radius: on a 3.2:1 box that is an ellipse, as a ring on
+     water seen at an angle is. */
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--color-lotus-ripple-far) 55%, transparent);
+  opacity: 0.35;
+  scale: 0.55;
+}
+
+.pondRings span:nth-child(2) {
+  scale: 0.85;
+  opacity: 0.25;
+}
+
+.pondRings span:nth-child(3) {
+  scale: 1.15;
+  opacity: 0.15;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pondRings span {
+    animation: spread 12s var(--ease-brand) infinite;
+  }
+
+  .pondRings span:nth-child(2) {
+    animation-delay: -4s;
+  }
+
+  .pondRings span:nth-child(3) {
+    animation-delay: -8s;
+  }
+}
+
+@keyframes spread {
+  from {
+    opacity: 0.45;
+    scale: 0.35;
+  }
+
+  to {
+    opacity: 0;
+    scale: 1.45;
+  }
+}
+
+.closingInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 24px 36px;
+  text-align: center;
+}
+
+.closingBloom {
+  width: min(280px, 64vw);
+  /* The lotus centre's warm bloom, carried into the water around it. */
+  filter: drop-shadow(0 0 48px color-mix(in srgb, var(--color-lotus-core) 30%, transparent));
+}
+
+.closingEyebrow {
+  margin: 0;
+  color: var(--color-cinema-ink);
+}

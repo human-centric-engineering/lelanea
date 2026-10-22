@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 
+import { ChannelGlyph } from '@/components/app/site/channel-icons';
+import { LinkMark } from '@/components/app/site/service-logos';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { useConsent } from '@/lib/consent';
 import { BRAND } from '@/lib/brand';
@@ -30,19 +32,18 @@ import styles from '@/components/app/site/site.module.css';
  * attribution string. There is no paragraph slot, and the disclaimer is the
  * reason the footer exists at all.
  *
- * ## The copyright holder is the seam's, not the prototype's
+ * ## The line reads "© 2026 Lelañea™ · Built by HCE Studio" (owner, t-171)
  *
- * The prototype prints "© [YEAR] Lelañea Fulton". `lib/app/leaf-brand.ts` sets
- * `leafBrandLegalName` to "All Too Human Ltd" with the reasoning recorded in
- * place: the product is Lelañea, the legal entity behind it is not, and this is
- * a legal-attribution surface. The seam is newer than the prototype and is the
- * one that was decided deliberately, so it wins.
+ * The prototype printed "© [YEAR] Lelañea Fulton"; t-5 replaced the holder with
+ * the legal entity from `leafBrandLegalName`. The owner ruled on 22 October
+ * 2026 that the public footer names the product after the ©, with the trademark
+ * on it, followed by the studio's credit. The legal entity stays in the brand
+ * seam for the surfaces that do carry it, and is no longer printed here.
  *
- * The line carries BOTH names on purpose, which is why this footer is not in
- * `tests/unit/brand-fork-surfaces.test.tsx`'s footer table: that table asserts a
- * copyright line contains the legal entity and NOT the product, and the design
- * puts the trademark on the same line. Its wiring is pinned in
- * `site-footer-brand.test.tsx` instead, with the same hoisted-mock technique.
+ * That is why this footer is not in `tests/unit/brand-fork-surfaces.test.tsx`'s
+ * footer table, which asserts a copyright line names the legal entity and NOT
+ * the product. Its wiring is pinned in `site-footer-brand.test.tsx` instead,
+ * with the same hoisted-mock technique.
  *
  * ## The copyright half goes through `resolveFooterCopyright`, not around it
  *
@@ -54,23 +55,31 @@ import styles from '@/components/app/site/site.module.css';
  * existed to close, and no test would have caught it: the protected footer's
  * suite covers only its own side.
  *
- * The trademark is ours and sits outside the seam, since the seam governs an
- * attribution line rather than a mark. When the seam yields nothing, the whole
- * paragraph goes — a bare `Lelañea™` with no year and no entity is not a line
- * anybody chose.
+ * The seam is handed the trademarked product name as the holder, so its
+ * default is "© 2026 Lelañea™", a fork's string still replaces that half
+ * verbatim, and `false` still removes it. `STUDIO_CREDIT` is then appended to
+ * whatever the seam yields — the owner's ruling covers the credit as well as
+ * the name, so it is ours to print, not the seam's to replace. When the seam yields nothing the whole paragraph
+ * goes, credit included: `false` is the white-label setting, and a bare studio
+ * credit is not a line anybody chose.
  *
  * @see .context/app/planning/design/lelanea.html — `footer.site-foot`
  */
+/** The studio's credit, closing the legal line (owner, t-171). */
+export const STUDIO_CREDIT = 'Built by HCE Studio';
+
 export function SiteFooter() {
   const { openPreferences } = useConsent();
   const year = new Date().getFullYear();
-  const copyright = resolveFooterCopyright(year, BRAND.legalName);
+  const copyright = resolveFooterCopyright(year, `${BRAND.name}™`);
 
   // D3: nothing rather than a dead link. A destination with no URL yet is not
   // rendered at all — not disabled, not `#`.
   const outbound = SITE_LINKS.filter(
-    (link): link is { label: string; href: string } => link.href !== null
+    (link): link is typeof link & { href: string } => link.href !== null
   );
+  const primary = outbound.filter((link) => link.detail !== undefined);
+  const channels = outbound.filter((link) => link.detail === undefined);
 
   return (
     <footer className={styles.foot}>
@@ -101,16 +110,46 @@ export function SiteFooter() {
           <Link href="/disclaimer">Disclosures</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
-          {outbound.map((link) => (
-            <a key={link.label} href={link.href} rel="noopener noreferrer" target="_blank">
-              {link.label}
-            </a>
-          ))}
           <button type="button" onClick={openPreferences}>
             Cookie Preferences
           </button>
         </nav>
       </div>
+
+      {/* Her channels (t-171), on two levels: her own site first, on a line
+          of its own, then everywhere else she publishes as a row of pills.
+          Seven more names in the link row above would have buried the page
+          links among them. A link with a `detail` is the one that leads. */}
+      {outbound.length === 0 ? null : (
+        <nav className={styles.footElsewhere} aria-label="Lelañea elsewhere">
+          <span className="brand-eyebrow">elsewhere</span>
+          {primary.map((link) => (
+            <a
+              key={link.label}
+              className={styles.footHome}
+              href={link.href}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {link.icon ? <ChannelGlyph icon={link.icon} size={18} /> : null}
+              <span className={styles.footHomeName}>{link.label}</span>
+              <span className={styles.footDetail}>{link.detail}</span>
+            </a>
+          ))}
+          {channels.length === 0 ? null : (
+            <ul>
+              {channels.map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} rel="noopener noreferrer" target="_blank">
+                    <LinkMark mark={link.mark} icon={link.icon} size={15} />
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </nav>
+      )}
 
       {/*
         The standing disclaimer, on every public page.
@@ -136,12 +175,11 @@ export function SiteFooter() {
         <Link href={`/data#${CRISIS_ANCHOR}`}>what to do in a crisis</Link>.
       </p>
 
-      {/* Both names come from the brand seam: the trademark is the PRODUCT,
-          the copyright is the LEGAL ENTITY, and they differ here. Hardcoding
-          either would be a second place to change the name from. */}
+      {/* The name comes from the brand seam: hardcoding it would be a second
+          place to change it from. */}
       {copyright && (
         <p className={styles.footLegal}>
-          {BRAND.name}™ · {copyright}
+          {copyright} · {STUDIO_CREDIT}
         </p>
       )}
     </footer>

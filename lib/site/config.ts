@@ -31,13 +31,19 @@
  * copy that a human authored — so a change is a PR either way. A constant is
  * the honest shape.
  *
- * ## The outbound links are `null` on purpose (D3)
+ * ## The outbound links (D3, then t-171)
  *
- * Her YouTube, Spotify and personal site are named in the product description
- * but no URLs exist yet. D3 ruled: render **nothing** rather than a dead link.
- * `SITE_LINKS` therefore holds `null` per destination, and the footer maps only
- * the entries that have a URL. Filling one in is the whole change needed to
- * make it appear — there is no second place to edit.
+ * D3 ruled that a destination with no URL renders **nothing** rather than a
+ * dead link, so `SITE_LINKS` keeps `null` as a legal value and the footer maps
+ * only the entries that have one. Her URLs arrived with t-171 (owner, 22 Oct
+ * 2026) and live once, in {@link CHANNEL_URL}: the footer row, the home page's
+ * channels and `/lelanea`'s list all read from there, so a moved channel is one
+ * edit.
+ *
+ * Everything she publishes outside the app goes out under one name,
+ * Integrating Consciousness: the podcast, the Substack and the Skool community
+ * all carry it, and "Conversations with Aya" is a second show on the same
+ * YouTube channel. {@link SITE_CHANNELS} groups them that way.
  *
  * @see .context/app/planning/lelanea-product-description.md §6.10
  */
@@ -68,17 +74,180 @@ export const SITE_DOMAIN = 'lelanea.com';
  * deliberately NOT stubbed: there is no design for the slot yet, and B31's
  * "deliberate stub" needs something to be a stub of.
  */
-export const CREATOR_PORTRAIT: string | null = null;
+export const CREATOR_PORTRAIT: string | null = '/lelanea/creator.webp';
 
 /**
- * Where the site says she can be found. `null` means "no URL yet" and renders
- * nothing at all — not a disabled link, not a `#`, not an empty `<a>`.
+ * "Light through water" — the site's own picture (t-171), generated from the
+ * lotus tokens by `npm run water:image`. Stands where a photograph would, and
+ * can be replaced by one at the same path.
  */
-export const SITE_LINKS: ReadonlyArray<{ label: string; href: string | null }> = [
-  { label: 'YouTube', href: null },
-  { label: 'Spotify', href: null },
-  { label: 'Her site', href: null },
+export const LIGHT_THROUGH_WATER = '/lelanea/water-light.webp';
+
+/**
+ * Her own images from lelaneafulton.com (t-171), copied here because the CSP
+ * serves images from this origin only. Only HER uploads — her site also shows
+ * Wix stock photography (the pampas grass, the blurred refraction), which Wix
+ * licenses for Wix sites alone, and none of that is reused.
+ *
+ * `REFLECTION` is her double-exposure portrait in a window. `FLOWER_OF_LIFE`
+ * is the sacred-geometry drawing from her site, which credits its artwork to
+ * Nathalie Strassburg.
+ */
+export const REFLECTION = '/lelanea/reflection.webp';
+export const FLOWER_OF_LIFE = '/lelanea/flower-of-life.webp';
+
+/**
+ * Her URLs, once. Everything below reads from here.
+ *
+ * `site` is labelled "Integrating Consciousness" with "Lelañea’s personal
+ * website" beside it wherever it appears — never "Her site" (owner, t-171).
+ */
+export const CHANNEL_URL = {
+  site: 'https://www.lelaneafulton.com/',
+  instagram: 'https://www.instagram.com/lelanea/',
+  youtube: 'https://www.youtube.com/@lelaneafulton',
+  spotify: 'https://open.spotify.com/show/2uzw0r6lQAbFxveAqnyGrQ',
+  applePodcasts: 'https://podcasts.apple.com/us/podcast/integrating-consciousness/id1799753903',
+  podcastOnYouTube: 'https://www.youtube.com/playlist?list=PLCl6VwDKqbGUxHb8F0MT6tTxzk4HFX5ta',
+  ayaOnYouTube: 'https://www.youtube.com/playlist?list=PLCl6VwDKqbGWOASZWVxXG-EXSfexIgfr1',
+  substack: 'https://lelanea.substack.com/',
+  skool: 'https://www.skool.com/integrating-consciousness-2716',
+} as const;
+
+/**
+ * The neutral line icon for a link with no service mark to show —
+ * `components/app/site/channel-icons.tsx` draws them. Only her own site and
+ * Skool need one; every other link carries its service's `mark`.
+ */
+export type ChannelIcon = 'site' | 'gather';
+
+/**
+ * A service's own logo, where it has one we can draw
+ * (`components/app/site/service-logos.tsx`). A link carries a `mark` or an
+ * `icon`, never both: a mark always wins, so an icon beside it would be dead
+ * data. Skool has no mark, so it keeps its glyph.
+ */
+export type ServiceMark = 'spotify' | 'applePodcasts' | 'youtube' | 'substack' | 'instagram';
+
+/**
+ * Where the site says she can be found — the footer's row. `null` means "no
+ * URL yet" and renders nothing at all — not a disabled link, not a `#`, not an
+ * empty `<a>`.
+ */
+export const SITE_LINKS: ReadonlyArray<{
+  label: string;
+  href: string | null;
+  icon?: ChannelIcon;
+  mark?: ServiceMark;
+  /** A quieter second label after the name, where the name alone is ambiguous. */
+  detail?: string;
+}> = [
+  {
+    label: 'Integrating Consciousness',
+    detail: 'Lelañea’s personal website',
+    href: CHANNEL_URL.site,
+    icon: 'site',
+  },
+  { label: 'Instagram', href: CHANNEL_URL.instagram, mark: 'instagram' },
+  { label: 'YouTube', href: CHANNEL_URL.youtube, mark: 'youtube' },
+  { label: 'Spotify', href: CHANNEL_URL.spotify, mark: 'spotify' },
+  {
+    label: 'Apple Podcasts',
+    href: CHANNEL_URL.applePodcasts,
+    mark: 'applePodcasts',
+  },
+  { label: 'Substack', href: CHANNEL_URL.substack, mark: 'substack' },
+  { label: 'Skool', href: CHANNEL_URL.skool, icon: 'gather' },
 ];
+
+/**
+ * Her work outside the app, as the home page shows it: one entry per thing
+ * she makes, each with the places it can be found.
+ *
+ * Three of the four carry the name Integrating Consciousness, so the section
+ * is headed with it and each entry is named for what it is. These are labels,
+ * not prose: nothing here describes or sells the work, which is the owner's
+ * ruling for t-171 — the public site says nothing about her work that she did
+ * not. Her own account of it is on `/lelanea`, in `about_the_creator`.
+ */
+export const SITE_CHANNELS: ReadonlyArray<{
+  name: string;
+  /**
+   * Her own artwork for it, copied from where she publishes it (t-171) and
+   * served from `public/lelanea/channels/` — the CSP allows images from this
+   * origin only. `position` is the crop's focal point; `contain` keeps a
+   * mark whole instead of cropping it.
+   */
+  art: { src: string; position?: string; contain?: boolean };
+  links: ReadonlyArray<{ label: string; href: string; mark?: ServiceMark; icon?: ChannelIcon }>;
+}> = [
+  {
+    name: 'The podcast',
+    art: {
+      src: '/lelanea/channels/integrating-consciousness-podcast.webp',
+      // Her face and the show's name; the tagline strip along the foot is
+      // cropped away by the card's landscape frame.
+      position: '50% 22%',
+    },
+    links: [
+      { label: 'Spotify', href: CHANNEL_URL.spotify, mark: 'spotify' },
+      { label: 'Apple Podcasts', href: CHANNEL_URL.applePodcasts, mark: 'applePodcasts' },
+      { label: 'YouTube', href: CHANNEL_URL.podcastOnYouTube, mark: 'youtube' },
+    ],
+  },
+  {
+    name: 'Conversations with Aya',
+    art: {
+      // The series' first episode, "Introduction, Homage, and Prayer": the
+      // show's own frame, cut at the file to leave the episode's caption out.
+      src: '/lelanea/channels/conversations-with-aya-intro.webp',
+      position: '40% 35%',
+    },
+    links: [{ label: 'YouTube', href: CHANNEL_URL.ayaOnYouTube, mark: 'youtube' }],
+  },
+  {
+    name: 'Writing',
+    art: { src: '/lelanea/channels/lelanea-fulton-mark.webp', contain: true },
+    links: [{ label: 'Substack', href: CHANNEL_URL.substack, mark: 'substack' }],
+  },
+  {
+    name: 'Community',
+    // Her Skool banner, cut at the file to her portrait and her name.
+    art: {
+      src: '/lelanea/channels/integrating-consciousness-community-portrait.webp',
+      position: '50% 40%',
+    },
+    links: [{ label: 'Skool', href: CHANNEL_URL.skool, icon: 'gather' }],
+  },
+];
+
+/**
+ * Where to find her, as `/lelanea` lists it beneath her biography: entries of
+ * `SITE_LINKS`, picked by label, each with the handle that page shows beside
+ * it. Derived rather than restated, so a relabelled link or a changed mark is
+ * still one edit. A link the footer does not carry, or carries with no URL
+ * yet, is left out here too.
+ */
+const CREATOR_HANDLES: ReadonlyArray<{ label: string; handle?: string }> = [
+  // Its `detail` in SITE_LINKS already says what it is.
+  { label: 'Integrating Consciousness' },
+  { label: 'Instagram', handle: '@lelanea' },
+  { label: 'YouTube', handle: '@lelaneafulton' },
+  { label: 'Substack', handle: 'lelanea.substack.com' },
+];
+
+export const CREATOR_LINKS: ReadonlyArray<{
+  label: string;
+  detail: string;
+  href: string;
+  icon?: ChannelIcon;
+  mark?: ServiceMark;
+}> = CREATOR_HANDLES.flatMap(({ label, handle }) => {
+  const link = SITE_LINKS.find((candidate) => candidate.label === label);
+  const detail = handle ?? link?.detail;
+  if (!link?.href || detail === undefined) return [];
+  return [{ label, detail, href: link.href, icon: link.icon, mark: link.mark }];
+});
 
 /** The public pages, in the order the header and footer list them. */
 export const SITE_NAV = [

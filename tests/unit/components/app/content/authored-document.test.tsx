@@ -36,8 +36,11 @@ import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  AuthoredBlocks,
   AuthoredDocument,
+  BEAT_MAX_WORDS,
   applyFirstName,
+  isBeat,
   tokenizeInline,
 } from '@/components/app/content/authored-document';
 import type { FoundationalDocumentDetail } from '@/lib/app/content';
@@ -605,5 +608,41 @@ describe('document chrome', () => {
       <AuthoredDocument document={load('the_mission')} className="max-w-prose" />
     );
     expect(container.querySelector('article')?.className).toContain('max-w-prose');
+  });
+});
+
+describe('beats (t-171)', () => {
+  it('marks her short turns and nothing else, only when asked', () => {
+    const mission = load('the_mission');
+    const { container } = render(<AuthoredBlocks blocks={mission.blocks} beats />);
+
+    const beats = [...container.querySelectorAll('p[data-beat]')].map((p) => p.textContent);
+    // Population first: the mission has exactly one turn, and it is this one.
+    expect(beats).toEqual(['Such an evolution reaches far beyond personal fulfillment.']);
+    // And every other paragraph is left as prose.
+    expect(container.querySelectorAll('p').length).toBeGreaterThan(beats.length + 10);
+  });
+
+  it('marks nothing by default, so the app’s own renderings are untouched', () => {
+    const { container } = render(<AuthoredBlocks blocks={load('the_mission').blocks} />);
+
+    expect(container.querySelectorAll('p').length).toBeGreaterThan(0);
+    expect(container.querySelector('p[data-beat]')).toBeNull();
+  });
+
+  it('draws the line at the shortest real paragraph in the public documents', () => {
+    // The lineage opens with a 16-word paragraph — prose, not a turn — and
+    // "May it encourage curiosity." is a turn. The constant sits between them.
+    const lineage = load('the_lineage_of_lelanea');
+    const opening = lineage.blocks[0];
+    if (opening.type !== 'paragraph') throw new Error('the lineage no longer opens on prose');
+
+    expect(isBeat(opening.text)).toBe(false);
+    expect(isBeat('May it encourage curiosity.')).toBe(true);
+    expect(BEAT_MAX_WORDS).toBeLessThan(opening.text.split(/\s+/).length);
+  });
+
+  it('never marks a cadence block, whose line breaks already carry the rhythm', () => {
+    expect(isBeat('Short.\nAnd short.')).toBe(false);
   });
 });

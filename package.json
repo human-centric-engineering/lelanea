@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "node scripts/dev-server.mjs next-dev",
     "lotus:assets": "tsx scripts/app/render-lotus-assets.ts",
+    "water:image": "tsx scripts/app/render-light-through-water.ts",
     "build": "next build",
     "start": "node scripts/dev-server.mjs next-start",
     "lint": "node scripts/run-capped.mjs eslint . --cache --cache-strategy content",

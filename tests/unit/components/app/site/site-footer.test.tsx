@@ -34,7 +34,7 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 import { CRISIS_ANCHOR } from '@/lib/site/config';
 
@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 /** Re-import the footer with `SITE_LINKS` replaced, since it is read at load. */
-async function renderWithLinks(links: ReadonlyArray<{ label: string; href: string | null }>) {
+async function renderWithLinks(links: (typeof import('@/lib/site/config'))['SITE_LINKS']) {
   const actual = await vi.importActual<typeof import('@/lib/site/config')>('@/lib/site/config');
   vi.doMock('@/lib/site/config', () => ({ ...actual, SITE_LINKS: links }));
   const { SiteFooter } = await import('@/components/app/site/site-footer');
@@ -94,6 +94,37 @@ describe('SiteFooter', () => {
       const link = screen.getByRole('link', { name: 'YouTube' });
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
       expect(link).toHaveAttribute('target', '_blank');
+    });
+
+    it('leads with her own site on a line of its own, and lists the rest beneath (t-171)', async () => {
+      await renderWithLinks([
+        {
+          label: 'Integrating Consciousness',
+          detail: 'Lelañea’s personal website',
+          href: 'https://example.com/',
+        },
+        { label: 'YouTube', href: 'https://youtube.com/@lelanea' },
+      ]);
+
+      const elsewhere = screen.getByRole('navigation', { name: 'Lelañea elsewhere' });
+      const site = within(elsewhere).getByRole('link', { name: /Integrating Consciousness/ });
+      const youtube = within(elsewhere).getByRole('link', { name: 'YouTube' });
+
+      expect(site).toHaveTextContent('Lelañea’s personal website');
+      // Not one of the pills: the pills are list items, the lead link is not.
+      expect(site.closest('li')).toBeNull();
+      expect(youtube.closest('li')).not.toBeNull();
+      // And it comes first.
+      expect(site.compareDocumentPosition(youtube) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('never labels the personal site "Her site" (owner, t-171)', async () => {
+      const { SITE_LINKS } =
+        await vi.importActual<typeof import('@/lib/site/config')>('@/lib/site/config');
+      await renderWithLinks(SITE_LINKS);
+
+      expect(screen.queryByText(/her site/i)).toBeNull();
+      expect(screen.getByRole('link', { name: /Lelañea’s personal website/ })).toBeTruthy();
     });
   });
 
@@ -160,7 +191,7 @@ describe('SiteFooter', () => {
       vi.resetModules();
     });
 
-    it('renders a fork’s own string verbatim, after the trademark', async () => {
+    it('renders a fork’s own string verbatim, before the studio credit', async () => {
       vi.resetModules();
       vi.doMock('@/lib/app/footer', () => ({
         footerCopyright: 'An All Too Human production',
@@ -169,15 +200,14 @@ describe('SiteFooter', () => {
       render(<SiteFooter />);
 
       const legal = screen.getByText(/An All Too Human production/);
-      expect(legal.textContent).toContain('™ · An All Too Human production');
-      expect(legal.textContent).not.toContain('©');
+      expect(legal.textContent).toBe('An All Too Human production · Built by HCE Studio');
 
       vi.doMock('@/lib/app/footer', () => ({ footerCopyright: null }));
       vi.resetModules();
     });
   });
 
-  it('prints the trademark and the copyright year on the legal line', async () => {
+  it('prints the copyright year, the trademark and the studio credit, in that order', async () => {
     await renderWithLinks([]);
 
     // The NAMES on this line come from the brand seam, which tests/setup.ts
@@ -185,6 +215,6 @@ describe('SiteFooter', () => {
     // site-footer-brand.test.tsx, which fills the seam with a hoisted mock.
     // What is checked here is the SHAPE the design specifies.
     const legal = screen.getByText(/©/);
-    expect(legal.textContent).toMatch(/™ · © \d{4} /);
+    expect(legal.textContent).toMatch(/^© \d{4} .+™ · Built by HCE Studio$/);
   });
 });

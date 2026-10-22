@@ -308,14 +308,79 @@ export function InlineText({ text }: { text: string }): React.ReactNode {
  * `whitespace-pre-line` keeps the rest of it if a beat is ever authored with a
  * line break inside one block.
  */
+/**
+ * The longest paragraph, in words, that reads as a BEAT rather than as prose
+ * (t-171).
+ *
+ * Her writing turns on short single-sentence paragraphs set between long ones
+ * — "Lelañea is not a finished system." / "May it encourage curiosity." — and
+ * she wrote them as paragraphs of their own on purpose. With `beats` on, a
+ * page can set those apart typographically, so the rhythm she wrote is the
+ * rhythm a reader sees. Fourteen words takes every turn in the public
+ * documents and no full paragraph: their shortest real paragraph is sixteen.
+ */
+export const BEAT_MAX_WORDS = 14;
+
+/**
+ * The fragment id a heading gets when a page asks for anchors (t-171): its
+ * text, bold markers dropped, lower-cased and hyphenated. A heading with no
+ * letters or digits to slug falls back to `section`, never to an empty id —
+ * `id=""` is invalid, and `href="#"` jumps to the top of the page.
+ *
+ * One heading's slug. A document's ids come from {@link headingAnchors}, which
+ * also keeps two headings with the same text apart.
+ */
+export function headingAnchor(text: string): string {
+  return (
+    text
+      .replaceAll('**', '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'section'
+  );
+}
+
+/**
+ * Every heading's fragment id in a block list, by block index (`undefined` for
+ * a block that is not a heading). A repeated slug takes `-2`, `-3`… in
+ * document order, so two headings with the same text get two ids and the
+ * second guide link lands on the second heading. `AuthoredDocument` and a
+ * page's contents list both read ids from here, so the two cannot disagree.
+ */
+export function headingAnchors(
+  blocks: FoundationalDocumentDetail['blocks']
+): (string | undefined)[] {
+  const seen = new Map<string, number>();
+  return blocks.map((block) => {
+    if (block.type !== 'heading') return undefined;
+    const slug = headingAnchor(block.text);
+    const count = (seen.get(slug) ?? 0) + 1;
+    seen.set(slug, count);
+    return count === 1 ? slug : `${slug}-${count}`;
+  });
+}
+
+/** Whether a paragraph is one of her short turns. See {@link BEAT_MAX_WORDS}. */
+export function isBeat(text: string): boolean {
+  if (text.includes('\n')) return false;
+  return text.trim().split(/\s+/).length <= BEAT_MAX_WORDS;
+}
+
 function AuthoredBlock({
   block,
   cadence,
+  beats,
+  anchorId,
   firstName,
   baseLevel,
 }: {
   block: FoundationalDocumentDetail['blocks'][number];
   cadence: boolean;
+  beats: boolean;
+  /** The heading's fragment id, from `headingAnchors`, when the page asks for them. */
+  anchorId: string | undefined;
   firstName: string | null | undefined;
   baseLevel: HeadingLevel;
 }): React.ReactNode {
@@ -336,7 +401,14 @@ function AuthoredBlock({
         HEADING_TAGS[Math.min(6, Math.max(baseLevel, baseLevel + block.level - 2)) - 2];
 
       return (
-        <Heading className={cn(HEADING_TYPE, 'mt-10 mb-3 text-2xl first:mt-0')}>
+        <Heading
+          id={anchorId}
+          className={cn(
+            HEADING_TYPE,
+            'mt-10 mb-3 text-2xl first:mt-0',
+            anchorId !== undefined && 'scroll-mt-[104px]'
+          )}
+        >
           {block.number === undefined ? null : (
             <span className="text-muted-foreground tabular-nums">{`${block.number}. `}</span>
           )}
@@ -347,7 +419,10 @@ function AuthoredBlock({
 
     case 'paragraph':
       return (
-        <p className={cn('mb-4 leading-relaxed', cadence && 'whitespace-pre-line')}>
+        <p
+          className={cn('mb-4 leading-relaxed', cadence && 'whitespace-pre-line')}
+          data-beat={beats && isBeat(block.text) ? '' : undefined}
+        >
           <InlineText text={applyFirstName(block.text, firstName)} />
         </p>
       );
@@ -377,14 +452,20 @@ function AuthoredBlock({
 function BlockList({
   blocks,
   cadence,
+  beats = false,
+  anchors = false,
   firstName,
   baseLevel,
 }: {
   blocks: FoundationalDocumentDetail['blocks'];
   cadence: boolean;
+  beats?: boolean;
+  anchors?: boolean;
   firstName: string | null | undefined;
   baseLevel: HeadingLevel;
 }): React.ReactNode {
+  const anchorIds = anchors ? headingAnchors(blocks) : [];
+
   return (
     <>
       {blocks.map((block, index) => (
@@ -392,6 +473,8 @@ function BlockList({
           key={index}
           block={block}
           cadence={cadence}
+          beats={beats}
+          anchorId={anchorIds[index]}
           firstName={firstName}
           baseLevel={baseLevel}
         />
@@ -417,6 +500,12 @@ export interface AuthoredBlocksProps {
   /** Where the document's own headings sit in the page outline. Default 2. */
   baseLevel?: HeadingLevel;
   className?: string;
+  /**
+   * Mark her short single-sentence paragraphs with `data-beat`, for a page to
+   * set apart (t-171). Off by default, and it changes nothing until a page
+   * styles the attribute.
+   */
+  beats?: boolean;
 }
 
 /**
@@ -437,12 +526,14 @@ export function AuthoredBlocks({
   firstName = null,
   baseLevel = 2,
   className,
+  beats = false,
 }: AuthoredBlocksProps): React.ReactNode {
   return (
     <div className={className}>
       <BlockList
         blocks={blocks}
         cadence={renderStyle === 'cadence'}
+        beats={beats}
         firstName={firstName}
         baseLevel={baseLevel}
       />
@@ -459,6 +550,11 @@ export interface AuthoredDocumentProps {
    */
   firstName?: string | null;
   className?: string;
+  /**
+   * Give each heading a fragment id from {@link headingAnchor}, for a page that
+   * lists its sections (t-171). Off by default.
+   */
+  anchors?: boolean;
 }
 
 /**
@@ -471,6 +567,7 @@ export function AuthoredDocument({
   document: doc,
   firstName = null,
   className,
+  anchors = false,
 }: AuthoredDocumentProps): React.ReactNode {
   return (
     <article className={cn('text-foreground', className)}>
@@ -485,6 +582,7 @@ export function AuthoredDocument({
       <BlockList
         blocks={doc.blocks}
         cadence={doc.renderStyle === 'cadence'}
+        anchors={anchors}
         firstName={firstName}
         baseLevel={2}
       />

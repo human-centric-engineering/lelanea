@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { AuthoredBlocks, InlineText } from '@/components/app/content/authored-document';
-import { Card } from '@/components/app/ui/card';
+import { DataPromises } from '@/components/app/site/data-promises';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import {
   requireDocument,
@@ -49,18 +49,21 @@ export const dynamic = 'force-dynamic';
 const DATA_RIGHTS = [
   {
     title: 'See what is held',
+    glyph: 'see',
     body:
       'Your chat history, the profile built from it, and which messages each conclusion came ' +
       'from, with the date and a confidence level.',
   },
   {
     title: 'Delete any part of it',
+    glyph: 'delete',
     body:
       "A single message, a session, a module's worth, or your whole account. Deleting a message " +
       'also removes anything derived from it.',
   },
   {
     title: 'Export a full copy',
+    glyph: 'export',
     body:
       'A readable file containing everything held about you, available whether or not you have ' +
       'an active subscription.',
@@ -208,7 +211,7 @@ export default async function DataPage() {
 
   return (
     <div className={styles.page}>
-      <section className={styles.opening}>
+      <section className={`${styles.opening} ${styles.closing}`}>
         <Eyebrow as="p">your data</Eyebrow>
         <h1 className="brand-display mt-[18px] mb-6 max-w-[20ch] text-[clamp(36px,4.2vw,58px)]">
           Your work stays yours.
@@ -218,20 +221,15 @@ export default async function DataPage() {
           of it.
         </p>
 
-        <div className={styles.cards}>
-          {DATA_RIGHTS.map((right) => (
-            <Card key={right.title} title={right.title}>
-              {right.body}
-            </Card>
-          ))}
-        </div>
+        <DataPromises items={DATA_RIGHTS} />
 
-        {/* A `p`, not a heading: the page's next heading is the `h2` on "what
-            it is, what it is not", and a heading here would be an `h3` under
-            an `h1` with no `h2` between them. `Eyebrow` renders identical type
-            either way. */}
+        {/* An `h2`, a peer of the three promises' own `h2`s (t-171). As a
+            `p` it fell under "Export a full copy" in the outline, so a screen
+            reader heard the five rights as part of the third promise. They are
+            the footing under all three, and their own heading says so.
+            `Eyebrow` renders identical type either way. */}
         <div className={styles.rightsStrip}>
-          <Eyebrow as="p">your rights under gdpr</Eyebrow>
+          <Eyebrow as="h2">your rights under gdpr</Eyebrow>
           <ul className={styles.rightsList}>
             {GDPR_RIGHTS.map((right) => (
               <li key={right}>{right}</li>
@@ -241,7 +239,7 @@ export default async function DataPage() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.rule}`}>
+      <section className={`${styles.section} ${styles.tintTeal}`}>
         <Eyebrow as="h2">what it is, what it is not</Eyebrow>
 
         <div className={`${styles.split} mt-8`}>
@@ -323,18 +321,18 @@ export default async function DataPage() {
           // onto a second row and stands 100px or more, so the box's top edge —
           // and on a narrower wrap, the heading itself — landed behind the bar.
           id={CRISIS_ANCHOR}
-          className="mt-10 scroll-mt-[104px] rounded-[18px] border border-[var(--color-status-red)] bg-[var(--color-status-red-bg)] p-6"
+          className={`mt-10 scroll-mt-[104px] ${styles.crisisPanel}`}
         >
           <AuthoredBlocks
             blocks={crisis}
             renderStyle={disclaimer.renderStyle}
             baseLevel={3}
-            className={styles.measure}
+            className={`${styles.measure} ${styles.crisis}`}
           />
         </section>
       </section>
 
-      <section className={`${styles.section} ${styles.rule}`}>
+      <section className={`${styles.section} ${styles.tintWarm}`}>
         <div className={styles.split}>
           <div>
             <Eyebrow as="p">coaching and therapy</Eyebrow>

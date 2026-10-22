@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { PageGuide, guideItems } from '@/components/app/site/page-guide';
 import { AuthoredDocument } from '@/components/app/content/authored-document';
 import { requireDocument } from '@/lib/app/content/sections';
 import styles from '@/app/(public)/document-page.module.css';
@@ -48,8 +49,11 @@ export default async function TermsOfUsePage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.opening}>
-        <AuthoredDocument document={terms} className={`${styles.measure} pb-20`} />
+      <div className={`${styles.opening} ${styles.withGuide}`}>
+        <AuthoredDocument document={terms} anchors className={`${styles.prose} pb-20`} />
+        {/* Its own headings, as a contents list beside it (t-171): a long
+            legal document is read by section, not top to bottom. */}
+        <PageGuide items={guideItems(terms.blocks)} />
       </div>
     </div>
   );
