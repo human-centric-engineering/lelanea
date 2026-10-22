@@ -22,8 +22,8 @@
  *
  * That file holds the platform's brand-bearing surfaces, and its footer table
  * asserts a copyright line contains the legal entity and **not** the product
- * name (#363). Lelañea's line carries both by design —
- * `Lelañea™ · © 2026 All Too Human Ltd` — so adding this footer there would
+ * name (#363). Lelañea's line names the product by the owner's ruling (t-171)
+ * — `© 2026 Lelañea™ · Built by HCE Studio` — so adding this footer there would
  * mean weakening an assertion that is correct for every other fork.
  *
  * ## The fixture is deliberately not our own brand
@@ -56,28 +56,33 @@ import { render, screen } from '@testing-library/react';
 import { SiteFooter } from '@/components/app/site/site-footer';
 
 describe('SiteFooter legal line', () => {
-  it('takes both names from the seam rather than hardcoding either', () => {
+  it('takes the product name from the seam rather than hardcoding it', () => {
     render(<SiteFooter />);
 
     const legal = screen.getByText(/©/);
 
     expect(legal).toHaveTextContent(`${FORK.name}™`);
-    expect(legal).toHaveTextContent(FORK.legalName);
-    // A literal in the component would survive both assertions above only if it
-    // happened to be "Acme". This is what makes them mean something.
+    // A literal in the component would survive the assertion above only if it
+    // happened to be "Acme". This is what makes it mean something.
     expect(legal.textContent).not.toContain('Lelañea');
   });
 
-  it('trademarks the product and reserves the © for the legal entity', () => {
+  it('puts the © before the trademarked name and the studio credit last (t-171)', () => {
     render(<SiteFooter />);
 
     const text = screen.getByText(/©/).textContent ?? '';
 
-    // Order carries the claim. "Acme Holdings Ltd™ · © Acme" would satisfy a
-    // pair of contains-assertions and say the opposite of what is meant.
-    expect(text.indexOf(`${FORK.name}™`)).toBeGreaterThanOrEqual(0);
-    expect(text.indexOf(`${FORK.name}™`)).toBeLessThan(text.indexOf('©'));
-    expect(text.indexOf('©')).toBeLessThan(text.indexOf(FORK.legalName));
+    // Order carries the claim, so it is asserted whole rather than as a set
+    // of contains-checks that a reordered line would also satisfy.
+    expect(text).toMatch(new RegExp(`^© \\d{4} ${FORK.name}™ · Built by HCE Studio$`));
+  });
+
+  it('no longer prints the legal entity on the public footer (owner, t-171)', () => {
+    render(<SiteFooter />);
+
+    // The seam is filled, so the entity is there to leak if the line still
+    // read it.
+    expect(screen.getByText(/©/).textContent).not.toContain(FORK.legalName);
   });
 
   it('does not reinstate the personal name or the placeholder year from the design file', () => {

@@ -234,6 +234,97 @@
 }
 
 /*
+ * Her channels (t-171), on two levels: the eyebrow, her own site on a line of
+ * its own in the display face, then the other channels as a row of pills.
+ * Separated from the page links by the divider, so the outbound links read as
+ * one family instead of trailing off the nav.
+ */
+.footElsewhere {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.footElsewhere > span {
+  color: var(--color-muted-foreground);
+}
+
+.footHome {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  color: var(--color-heading);
+}
+
+.footHome svg {
+  flex: none;
+  align-self: center;
+  color: var(--color-secondary-ink);
+}
+
+.footHomeName {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  line-height: 1.2;
+  border-bottom: 1px solid transparent;
+  transition: border-color 200ms var(--ease-brand);
+}
+
+.footHome:hover {
+  text-decoration: none;
+}
+
+.footHome:hover .footHomeName {
+  border-bottom-color: var(--color-accent-ink);
+}
+
+.footDetail {
+  font-size: 14px;
+  color: var(--color-muted-foreground);
+}
+
+.footElsewhere ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 32px tall: comfortably over WCAG 2.5.8's 24px target on a phone. */
+.footElsewhere li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 4px 13px 4px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 13.5px;
+  color: var(--color-muted-foreground);
+  background: var(--color-pill);
+  transition:
+    color 200ms var(--ease-brand),
+    background-color 200ms var(--ease-brand);
+}
+
+.footElsewhere li a:hover {
+  color: var(--color-foreground);
+  background: var(--color-pill-hover);
+  text-decoration: none;
+}
+
+.footElsewhere li svg {
+  flex: none;
+  color: var(--color-secondary-ink);
+}
+
+/*
  * The disclaimer. It is site-wide rather than per-page on purpose: "not a
  * crisis service" has to be true of every page someone can land on, and a
  * paragraph that lives on the home page only is absent from exactly the pages

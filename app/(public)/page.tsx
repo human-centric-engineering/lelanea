@@ -5,6 +5,9 @@ import { InlineText } from '@/components/app/content/authored-document';
 import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { Lotus } from '@/components/app/ui/lotus';
+import { ChannelsSection } from '@/components/app/site/channels';
+import { ImagePlaceholder } from '@/components/app/site/image-placeholder';
+import { Ripples } from '@/components/app/site/ripples';
 import { WaitlistForm } from '@/components/app/site/waitlist-form';
 import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
@@ -147,6 +150,8 @@ export default async function HomePage() {
       </section>
 
       <section className={styles.band} style={{ marginTop: 'clamp(56px,7vw,88px)' }}>
+        {/* The lotus's water, spreading out beneath her words (t-171). */}
+        <Ripples className={styles.bandRipples} />
         <p className="brand-quote">
           {closingBeats.map((beat, index) => (
             <Fragment key={index}>
@@ -167,20 +172,28 @@ export default async function HomePage() {
             page read h1 → (nothing) → h2, skipping all three cards for anyone
             navigating by heading. The type is identical either way. */}
         <Eyebrow as="h2">what this is</Eyebrow>
-        <div className={styles.cards}>
-          {WHAT_THIS_IS.map((card) => (
-            <Card key={card.title} title={card.title}>
-              {selectSectionText(documents[card.source], card.section).map((beat, index) => (
-                // One `<p>` per beat, which IS the cadence note honoured —
-                // "render each as its own line or beat". `mb-2` on all but
-                // the last keeps them reading as beats of one thought rather
-                // than as separate paragraphs.
-                <p key={index} className="mb-2 last:mb-0">
-                  <InlineText text={beat} />
-                </p>
-              ))}
-            </Card>
-          ))}
+        {/* An image beside the three cards (t-171): tall at desktop width,
+            a wide band above them once the page narrows. */}
+        <div className={styles.whatThisIs}>
+          <ImagePlaceholder
+            title="Pampas grass in soft, late light"
+            className={styles.whatThisIsImage}
+          />
+          <div className={styles.cards}>
+            {WHAT_THIS_IS.map((card) => (
+              <Card key={card.title} title={card.title}>
+                {selectSectionText(documents[card.source], card.section).map((beat, index) => (
+                  // One `<p>` per beat, which IS the cadence note honoured —
+                  // "render each as its own line or beat". `mb-2` on all but
+                  // the last keeps them reading as beats of one thought rather
+                  // than as separate paragraphs.
+                  <p key={index} className="mb-2 last:mb-0">
+                    <InlineText text={beat} />
+                  </p>
+                ))}
+              </Card>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -194,9 +207,16 @@ export default async function HomePage() {
         {/* A description list, not a stack of divs: each row is a term (the
             tier) and its definition (the modules in it), which is what the
             markup should say. */}
-        <dl>
-          {pathTiers.map((tier) => (
+        {/* Drawn as a path (t-171): a thin teal line down the left with a
+            numbered stop at each tier. The numbers are the tiers' position on
+            this page, not their stored order, and are decorative — the
+            description list already conveys the sequence. */}
+        <dl className={styles.path}>
+          {pathTiers.map((tier, index) => (
             <div key={tier.id} className={styles.tierRow}>
+              <span className={styles.tierStop} aria-hidden="true">
+                {String(index + 1).padStart(2, '0')}
+              </span>
               <dt className="brand-eyebrow">{tier.label}</dt>
               <dd>
                 {tier.modules
@@ -207,8 +227,9 @@ export default async function HomePage() {
             </div>
           ))}
         </dl>
-        <div className={styles.rule} />
       </section>
+
+      <ChannelsSection className={`${styles.section} ${styles.rule}`} />
     </div>
   );
 }

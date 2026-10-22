@@ -77,6 +77,8 @@
 }
 
 .band {
+  position: relative;
+  isolation: isolate;
   padding: 44px 0;
   border-top: 1px solid var(--color-divider);
   border-bottom: 1px solid var(--color-divider);
@@ -97,8 +99,41 @@
   font-size: clamp(26px, 3vw, 34px);
 }
 
+/* The ripples sit centred behind the quote, under it in the stacking order,
+   and clipped by nothing: at 800×240 they are a band's height already. */
+.bandRipples {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: -1;
+  width: min(900px, 120%);
+  translate: -50% -50%;
+}
+
 .section {
   padding: clamp(56px, 7vw, 92px) 0;
+}
+
+/*
+ * "What this is": a tall image beside the three cards on a desktop, held in
+ * view while the cards scroll past it; a wide band above them once narrower.
+ */
+.whatThisIs {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: clamp(24px, 3.4vw, 44px);
+  align-items: start;
+  margin-top: 26px;
+}
+
+.whatThisIsImage {
+  position: sticky;
+  top: 110px;
+  aspect-ratio: 4 / 5;
+}
+
+.whatThisIs .cards {
+  grid-template-columns: 1fr;
+  margin-top: 0;
 }
 
 .rule {
@@ -112,13 +147,57 @@
   margin-top: 26px;
 }
 
+/*
+ * The journey as a path: a numbered stop per tier, joined by a thin teal line.
+ * The line is drawn per row, from beneath its own stop to the next stop, so it
+ * begins at the first and ends at the last however tall any row wraps.
+ */
+.path {
+  margin: 0;
+}
+
 .tierRow {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px 24px;
-  padding: 16px 0;
-  border-top: 1px solid var(--color-divider);
+  min-height: 72px;
+  padding: 18px 0 18px 64px;
+}
+
+.tierRow:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 52px;
+  bottom: -14px;
+  width: 1px;
+  background: color-mix(in srgb, var(--color-secondary-ink) 38%, transparent);
+}
+
+.tierStop {
+  position: absolute;
+  left: 0;
+  top: 14px;
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-secondary-ink) 55%, transparent);
+  background: var(--color-background);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--color-secondary-ink);
+}
+
+/* The first stop carries the ceremonial orange: where the path begins. */
+.tierRow:first-child .tierStop {
+  border-color: var(--color-accent-ink);
+  color: var(--color-accent-ink);
+  box-shadow: var(--shadow-bloom);
 }
 
 .tierRow dt {
@@ -156,6 +235,19 @@
     margin-inline: auto;
   }
 
+  .whatThisIs {
+    grid-template-columns: 1fr;
+  }
+
+  .whatThisIsImage {
+    position: static;
+    aspect-ratio: 21 / 9;
+  }
+
+  .whatThisIs .cards {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
   .hero form {
     margin-inline: auto;
     text-align: left;
@@ -179,5 +271,26 @@
 
   .tierRow dt {
     width: auto;
+  }
+
+  .tierRow {
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 52px;
+  }
+
+  .tierStop {
+    width: 31px;
+    height: 31px;
+    font-size: 11px;
+  }
+
+  .tierRow:not(:last-child)::before {
+    left: 15px;
+    top: 48px;
+  }
+
+  .whatThisIsImage {
+    aspect-ratio: 4 / 3;
   }
 }

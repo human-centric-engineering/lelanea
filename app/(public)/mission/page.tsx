@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
+import { ImagePlaceholder } from '@/components/app/site/image-placeholder';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { requireDocument } from '@/lib/app/content/sections';
 import styles from '@/app/(public)/document-page.module.css';
@@ -62,6 +63,14 @@ export default async function MissionPage() {
         <h1 className="brand-display mt-[18px] mb-8 max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
           {mission.title}
         </h1>
+
+        {/* The page's one image (t-171): a wide, quiet band between the title
+            and her text, after the soft refracted photography on her site. */}
+        <ImagePlaceholder
+          title="Light through water, softly out of focus"
+          ratio="21 / 9"
+          className="mb-10"
+        />
 
         <AuthoredBlocks
           blocks={mission.blocks}

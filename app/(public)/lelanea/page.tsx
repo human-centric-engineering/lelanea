@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 
 import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
+import { CreatorLinks } from '@/components/app/site/channels';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { requireDocument } from '@/lib/app/content/sections';
@@ -129,6 +130,8 @@ export default async function LelaneaPage() {
               baseLevel={3}
               className={`${styles.measure} ${styles.lede}`}
             />
+
+            <CreatorLinks />
           </div>
         </div>
       </section>

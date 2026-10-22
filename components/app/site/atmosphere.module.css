@@ -1,0 +1,278 @@
+/*
+ * The public site's atmosphere (t-171): the ripples, the image placeholders,
+ * her channels on the home page and the list on `/lelanea`.
+ *
+ * Colours are tokens from `app/brand-theme.css`, mixed with `color-mix` where a
+ * wash is wanted; there are no literals here. The lotus tokens hold across both
+ * themes, so every wash below is the same bloom on oyster and on charcoal.
+ */
+
+/* ------------------------------------------------------------- ripples */
+
+.ripples {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------- image placeholder */
+
+/*
+ * Out-of-focus light through water: three soft blooms of the lotus colours over
+ * the card ground. Built from radial gradients rather than a filter so it costs
+ * nothing to paint, and the caption above it stays sharp.
+ */
+.placeholder {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(
+      60% 70% at 22% 30%,
+      color-mix(in srgb, var(--color-lotus-petal-inner) 30%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 60% at 78% 68%,
+      color-mix(in srgb, var(--color-lotus-core-light) 26%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      70% 50% at 55% 105%,
+      color-mix(in srgb, var(--color-lotus-ripple-far) 24%, transparent),
+      transparent 70%
+    ),
+    var(--color-card);
+}
+
+/* A hairline inside the edge, so the panel holds its shape on the card-coloured
+   footer and in dark mode, where the blooms are quieter against the ground. */
+.placeholder::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid var(--color-divider);
+  pointer-events: none;
+}
+
+.placeholderCaption {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 14px;
+  padding: 8px 12px;
+  max-width: calc(100% - 28px);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-foreground);
+  background: color-mix(in srgb, var(--color-background) 82%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.placeholderCaption > :first-child {
+  color: var(--color-muted-foreground);
+}
+
+/* ------------------------------------------------------------ channels */
+
+/*
+ * Four across on a desktop, two on an iPad, one on a phone. On a phone each
+ * card turns sideways — art on the left, name and links on the right — so four
+ * cards are a short scroll rather than four screens of placeholder.
+ */
+.channels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.channel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-rest);
+}
+
+.channelArt {
+  aspect-ratio: 4 / 3;
+  border-radius: 0;
+}
+
+.channelArt::after {
+  border-width: 0 0 1px;
+}
+
+.channelBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.channelName {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--color-heading);
+}
+
+.channelName svg {
+  flex: none;
+  color: var(--color-secondary-ink);
+}
+
+.channelLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: auto 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.channelLinks a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  font-size: 13.5px;
+  color: var(--color-foreground);
+  transition:
+    color 200ms var(--ease-brand),
+    border-color 200ms var(--ease-brand),
+    background-color 200ms var(--ease-brand);
+}
+
+.channelLinks a:hover {
+  color: var(--color-secondary-ink);
+  border-color: var(--color-secondary-ink);
+  background: var(--color-secondary-wash);
+  text-decoration: none;
+}
+
+@media (max-width: 1100px) {
+  .channels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .channelArt {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+@media (max-width: 620px) {
+  .channels {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .channel {
+    flex-direction: row;
+  }
+
+  .channelArt {
+    flex: none;
+    width: 112px;
+    aspect-ratio: auto;
+  }
+
+  .channelArt::after {
+    border-width: 0 1px 0 0;
+  }
+
+  /* No room for a caption beside a 112px square; the panel stays as the
+     reserved space and the card's own name says what it is for. */
+  .channelArt figcaption {
+    display: none;
+  }
+
+  .channelBody {
+    padding: 14px 16px;
+    gap: 10px;
+  }
+
+  .channelName {
+    font-size: 20px;
+  }
+}
+
+/* ------------------------------------------------------- creator links */
+
+.creatorLinks {
+  margin-top: 36px;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.creatorLinks ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.creatorLinks a {
+  display: grid;
+  grid-template-columns: 20px minmax(0, auto) minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 4px 14px;
+  min-height: 48px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--color-divider);
+  color: var(--color-foreground);
+  transition: color 200ms var(--ease-brand);
+}
+
+.creatorLinks a:hover {
+  color: var(--color-secondary-ink);
+  text-decoration: none;
+}
+
+.creatorLinks a > svg:first-child {
+  color: var(--color-secondary-ink);
+}
+
+.creatorLinkLabel {
+  font-size: 16px;
+}
+
+.creatorLinkDetail {
+  font-size: 14px;
+  color: var(--color-muted-foreground);
+}
+
+/* On a phone the detail drops beneath the label rather than squeezing it. */
+@media (max-width: 620px) {
+  .creatorLinks a {
+    grid-template-columns: 20px minmax(0, 1fr) 12px;
+  }
+
+  .creatorLinkDetail {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .creatorLinks a > svg:last-child {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}
