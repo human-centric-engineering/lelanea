@@ -654,7 +654,16 @@
   position: absolute;
   inset: 0;
   z-index: 2;
-  background: linear-gradient(to right, transparent 64%, var(--color-background));
+  /* Begins a third of the way across and eases in, so the water thins out
+     gradually rather than stopping short of the text (owner, t-171). */
+  background: linear-gradient(
+    to right,
+    transparent 30%,
+    color-mix(in srgb, var(--color-background) 18%, transparent) 50%,
+    color-mix(in srgb, var(--color-background) 50%, transparent) 70%,
+    color-mix(in srgb, var(--color-background) 85%, transparent) 88%,
+    var(--color-background)
+  );
   pointer-events: none;
 }
 

@@ -47,6 +47,9 @@
 .water {
   object-fit: cover;
   object-position: 60% 20%;
+  /* A touch of the oyster ground through the picture, so the water reads as
+     light as the page it sits on rather than a shade darker (owner, t-171). */
+  opacity: 0.78;
 }
 
 .ripple {
@@ -275,48 +278,45 @@
 }
 
 /* ============================================================ dark mode
- * On a charcoal page the pale water glared, and its fade into the text was a
- * grey wash. In dark mode the water is the same picture at dusk — dimmed and
- * deepened toward the pond's own teals, as on the home page's closing band —
- * and the marks on it turn light: the life a deep-teal disc with a warm rim,
- * the words in the oyster ink. */
+ * On a charcoal page the pale water glared, and a teal dusk stood out as a
+ * coloured panel. In dark mode the water is the same picture laid faintly over
+ * the page's own charcoal, so it blends into the ground the text sits on with
+ * only a hint of the pond's teal (owner, t-171); the marks on it turn light,
+ * and the life is a disc of that same ground, a shade deeper, with a quiet rim. */
 :global(html.dark) .water {
-  opacity: 0.3;
-  filter: saturate(1.2);
+  opacity: 0.14;
 }
 
 :global(html.dark) .stage {
-  /* The dusk is the stage's own ground, with the water laid over it part
-     transparent — no overlay layer, no z-index, nothing for the compositor
-     to separate. */
-  background: linear-gradient(to bottom, var(--color-lotus-pad-edge), var(--color-lotus-pad));
+  /* The stage's own ground, with the water laid over it part transparent — no
+     overlay layer, no z-index, nothing for the compositor to separate. */
+  background: color-mix(in srgb, var(--color-lotus-pad) 14%, var(--color-background));
 }
 
 :global(html.dark) .caption,
 :global(html.dark) .word,
 :global(html.dark) .foot {
   color: var(--color-cinema-ink);
-  text-shadow: 0 0 12px var(--color-lotus-pad);
+  text-shadow: 0 0 12px var(--color-background);
 }
 
 :global(html.dark) .ring {
-  border-color: color-mix(in srgb, var(--color-lotus-vein) 38%, transparent);
+  border-color: color-mix(in srgb, var(--color-lotus-vein) 26%, transparent);
 }
 
 :global(html.dark) .word::after {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-lotus-pad) 80%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-background) 80%, transparent);
 }
 
 :global(html.dark) .centre {
   background: radial-gradient(
     circle at 50% 40%,
-    var(--color-lotus-petal-outer-edge) 50%,
-    var(--color-lotus-pad-edge)
+    color-mix(in srgb, var(--color-lotus-pad) 30%, var(--color-background)) 55%,
+    color-mix(in srgb, var(--color-lotus-pad) 18%, var(--color-background))
   );
   box-shadow:
     var(--shadow-bloom),
-    0 0 0 1px color-mix(in srgb, var(--color-lotus-core) 60%, transparent),
-    0 0 0 7px color-mix(in srgb, var(--color-lotus-petal-outer) 25%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--color-lotus-core) 35%, transparent);
 }
 
 :global(html.dark) .centre span {
