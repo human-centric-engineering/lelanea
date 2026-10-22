@@ -3,7 +3,7 @@
  *
  * Tailwind carries everything that is a single property on a single element;
  * what lands here is the handful of rules that are not expressible that way —
- * the hero's two-column-to-one reflow at the prototype's own 1180px, the bloom's
+ * the hero's single centred column, the bloom's
  * radial glow (a pseudo-element), and the tier row's fixed label column.
  *
  * Colours are tokens from `app/brand-theme.css`; there are no literals here.
@@ -12,27 +12,42 @@
  */
 
 .hero {
+  /* One centred column at every width, the flower above the words (owner,
+     t-171): the two-column desktop hero left a void beside the form. Running
+     text keeps its own left edge so it stays readable, and the form card
+     centres as a block while its contents do not. */
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-columns: 1fr;
   gap: clamp(32px, 5vw, 72px);
   align-items: start;
   padding-top: clamp(44px, 6vw, 76px);
+  text-align: center;
+}
+
+.hero form {
+  margin-inline: auto;
+  text-align: left;
 }
 
 .hero h1 {
   font-size: clamp(40px, 4.6vw, 64px);
-  margin: 16px 0 0;
+  margin: 16px auto 0;
+  /* Balanced lines in the centred column, never one word left on its own. */
+  max-width: 22ch;
+  text-wrap: balance;
 }
 
 .lede {
   font-size: 18px;
   line-height: 1.7;
   margin-top: 22px;
+  margin-inline: auto;
   max-width: 52ch;
 }
 
 .bloom {
   position: relative;
+  order: -1;
   display: flex;
   justify-content: center;
   padding-top: 8px;
@@ -57,8 +72,8 @@
   translate: -50% 0;
   width: 560px;
   height: 560px;
-  /* 100%, not 140%: below 1180px the hero is one column, so this box is the
-     content width. At 140% a 350px container produced a 490px glow centred
+  /* 100%, not 140%: the hero is one column, so this box is the content
+     width. At 140% a 350px container produced a 490px glow centred
      195px from the viewport edge — ~50px past it, and nothing clips it, so
      the page gained a horizontal scrollbar on a phone. */
   max-width: 100%;
@@ -74,7 +89,7 @@
 .bloomArt {
   position: relative;
   z-index: 1;
-  width: min(470px, 100%);
+  width: min(300px, 100%);
 }
 
 /*
@@ -92,11 +107,11 @@
      is measured from the bloom column, which begins at the flower. */
   position: absolute;
   left: 50%;
-  top: calc(8px + min(470px, 100%) * 0.36);
+  top: calc(8px + min(300px, 100%) * 0.36);
   z-index: 0;
   /* Sized in its own right, not only from the flower: on narrower screens
      the flower shrinks, and a pool that shrank with it all but vanished. */
-  width: clamp(620px, 210%, 1040px);
+  width: 620px;
   aspect-ratio: 2;
   translate: -50% -50%;
   border-radius: 50%;
@@ -211,7 +226,9 @@
 
 .creatorCard {
   position: relative;
-  display: flex;
+  /* Not shown while the hero is one centred column (owner, t-171): it would
+     sit between the flower and the heading. */
+  display: none;
   align-items: center;
   gap: 16px;
   padding: 14px 22px 14px 14px;
@@ -399,39 +416,7 @@
   color: var(--color-muted-foreground);
 }
 
-/*
- * Once the hero stacks, a left-aligned column leaves a void beside it. The
- * column centres; running text keeps its own left edge so it stays readable,
- * and the form card centres as a block while its contents do not.
- */
 @media (max-width: 1180px) {
-  .hero {
-    grid-template-columns: 1fr;
-    text-align: center;
-  }
-
-  .bloom {
-    order: -1;
-  }
-
-  .bloomArt {
-    width: 300px;
-  }
-
-  /* The flower is 300px here; the pool keeps to it. */
-  .heroWater {
-    top: calc(8px + 300px * 0.36);
-    width: 620px;
-  }
-
-  .creatorCard {
-    display: none;
-  }
-
-  .lede {
-    margin-inline: auto;
-  }
-
   /* The tier label above its modules on every row, not beside them on the
      rows short enough to fit — a column that switches between the two reads
      as a mistake. */
@@ -446,11 +431,6 @@
 
   .journeyArt {
     display: none;
-  }
-
-  .hero form {
-    margin-inline: auto;
-    text-align: left;
   }
 }
 

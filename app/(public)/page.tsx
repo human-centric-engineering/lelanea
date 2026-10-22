@@ -146,7 +146,7 @@ export default async function HomePage() {
           </div>
 
           <div className={styles.bloom}>
-            {/* Decorative: the page's name is its `h1` a column away, so
+            {/* Decorative: the page's name is its `h1` just below, so
               announcing the flower would only repeat it. It unfolds on every
               load, as the app's entry bloom does (owner, t-132). */}
             <div className={styles.heroWater} aria-hidden="true" />
@@ -169,8 +169,8 @@ export default async function HomePage() {
             {/* Who made this (t-171), in the space beneath the bloom: her face,
               her name and her titles, leading to her page. "Created by", not
               "your guide": the app speaks in her voice, and the page must not
-              suggest she coaches each person herself. Desktop only — below it
-              the hero is one column and this would sit above the heading. */}
+              suggest she coaches each person herself. Hidden while the hero is
+              one centred column, where it would sit above the heading. */}
             {CREATOR_PORTRAIT === null ? null : (
               <Link href="/lelanea" className={styles.creatorCard}>
                 <span className={styles.creatorFace}>
