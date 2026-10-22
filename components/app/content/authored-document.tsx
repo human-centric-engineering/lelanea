@@ -308,14 +308,35 @@ export function InlineText({ text }: { text: string }): React.ReactNode {
  * `whitespace-pre-line` keeps the rest of it if a beat is ever authored with a
  * line break inside one block.
  */
+/**
+ * The longest paragraph, in words, that reads as a BEAT rather than as prose
+ * (t-171).
+ *
+ * Her writing turns on short single-sentence paragraphs set between long ones
+ * — "Lelañea is not a finished system." / "May it encourage curiosity." — and
+ * she wrote them as paragraphs of their own on purpose. With `beats` on, a
+ * page can set those apart typographically, so the rhythm she wrote is the
+ * rhythm a reader sees. Fourteen words takes every turn in the public
+ * documents and no full paragraph: their shortest real paragraph is sixteen.
+ */
+export const BEAT_MAX_WORDS = 14;
+
+/** Whether a paragraph is one of her short turns. See {@link BEAT_MAX_WORDS}. */
+export function isBeat(text: string): boolean {
+  if (text.includes('\n')) return false;
+  return text.trim().split(/\s+/).length <= BEAT_MAX_WORDS;
+}
+
 function AuthoredBlock({
   block,
   cadence,
+  beats,
   firstName,
   baseLevel,
 }: {
   block: FoundationalDocumentDetail['blocks'][number];
   cadence: boolean;
+  beats: boolean;
   firstName: string | null | undefined;
   baseLevel: HeadingLevel;
 }): React.ReactNode {
@@ -347,7 +368,10 @@ function AuthoredBlock({
 
     case 'paragraph':
       return (
-        <p className={cn('mb-4 leading-relaxed', cadence && 'whitespace-pre-line')}>
+        <p
+          className={cn('mb-4 leading-relaxed', cadence && 'whitespace-pre-line')}
+          data-beat={beats && isBeat(block.text) ? '' : undefined}
+        >
           <InlineText text={applyFirstName(block.text, firstName)} />
         </p>
       );
@@ -377,11 +401,13 @@ function AuthoredBlock({
 function BlockList({
   blocks,
   cadence,
+  beats = false,
   firstName,
   baseLevel,
 }: {
   blocks: FoundationalDocumentDetail['blocks'];
   cadence: boolean;
+  beats?: boolean;
   firstName: string | null | undefined;
   baseLevel: HeadingLevel;
 }): React.ReactNode {
@@ -392,6 +418,7 @@ function BlockList({
           key={index}
           block={block}
           cadence={cadence}
+          beats={beats}
           firstName={firstName}
           baseLevel={baseLevel}
         />
@@ -417,6 +444,12 @@ export interface AuthoredBlocksProps {
   /** Where the document's own headings sit in the page outline. Default 2. */
   baseLevel?: HeadingLevel;
   className?: string;
+  /**
+   * Mark her short single-sentence paragraphs with `data-beat`, for a page to
+   * set apart (t-171). Off by default, and it changes nothing until a page
+   * styles the attribute.
+   */
+  beats?: boolean;
 }
 
 /**
@@ -437,12 +470,14 @@ export function AuthoredBlocks({
   firstName = null,
   baseLevel = 2,
   className,
+  beats = false,
 }: AuthoredBlocksProps): React.ReactNode {
   return (
     <div className={className}>
       <BlockList
         blocks={blocks}
         cadence={renderStyle === 'cadence'}
+        beats={beats}
         firstName={firstName}
         baseLevel={baseLevel}
       />

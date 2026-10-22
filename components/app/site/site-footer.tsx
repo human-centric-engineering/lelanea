@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { ChannelGlyph } from '@/components/app/site/channel-icons';
+import { LinkMark } from '@/components/app/site/service-logos';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { useConsent } from '@/lib/consent';
 import { BRAND } from '@/lib/brand';
@@ -135,7 +136,7 @@ export function SiteFooter() {
               {channels.map((link) => (
                 <li key={link.label}>
                   <a href={link.href} rel="noopener noreferrer" target="_blank">
-                    {link.icon ? <ChannelGlyph icon={link.icon} size={16} /> : null}
+                    <LinkMark mark={link.mark} icon={link.icon} size={15} />
                     {link.label}
                   </a>
                 </li>

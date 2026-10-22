@@ -49,7 +49,7 @@ export default async function TermsOfUsePage() {
   return (
     <div className={styles.page}>
       <div className={styles.opening}>
-        <AuthoredDocument document={terms} className={`${styles.measure} pb-20`} />
+        <AuthoredDocument document={terms} className={`${styles.prose} pb-20`} />
       </div>
     </div>
   );

@@ -3,10 +3,12 @@ import Image from 'next/image';
 
 import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
 import { CreatorLinks } from '@/components/app/site/channels';
+import { Ripples } from '@/components/app/site/ripples';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
+import type { FoundationalDocumentDetail } from '@/lib/app/content/document-view';
 import { requireDocument } from '@/lib/app/content/sections';
-import { CREATOR_PORTRAIT } from '@/lib/site/config';
+import { CREATOR_PORTRAIT, LIGHT_THROUGH_WATER } from '@/lib/site/config';
 import styles from '@/app/(public)/document-page.module.css';
 
 export const metadata: Metadata = {
@@ -67,6 +69,25 @@ export const dynamic = 'force-dynamic';
  * @see .context/app/content.md — the pipeline, and why nothing here is retyped
  * @see .context/app/planning/design/lelanea.html — `#pg-lelanea`
  */
+type Blocks = FoundationalDocumentDetail['blocks'];
+type Block = Blocks[number];
+
+/**
+ * A document's blocks, cut at its headings (t-171): whatever precedes the first
+ * heading, then one group per heading with the blocks beneath it. The lineage
+ * is a run of short headed sections — each a field and the people in it — and
+ * reads as a set of tiles, not as one long column.
+ */
+function byHeading(blocks: Blocks): { intro: Block[]; groups: Block[][] } {
+  const intro: Block[] = [];
+  const groups: Block[][] = [];
+  for (const block of blocks) {
+    if (block.type === 'heading') groups.push([block]);
+    else (groups.at(-1) ?? intro).push(block);
+  }
+  return { intro, groups };
+}
+
 export default async function LelaneaPage() {
   const [philosophy, creator, lineage] = await Promise.all([
     requireDocument('the_heart_behind_lelanea'),
@@ -74,77 +95,158 @@ export default async function LelaneaPage() {
     requireDocument('the_lineage_of_lelanea'),
   ]);
 
+  // The lineage's LAST section is its coda — "An Evolving Body of Work", which
+  // closes on her "May it…" blessing — and it is set apart as the page's
+  // ending rather than tiled with the fields she draws on. Taken by position,
+  // not by title, so a retitled coda stays the coda.
+  const { intro: lineageIntro, groups } = byHeading(lineage.blocks);
+  const coda = groups.length > 1 ? groups.at(-1) : undefined;
+  const fields = coda === undefined ? groups : groups.slice(0, -1);
+
   return (
     <div className={styles.page}>
-      <section className={styles.opening}>
-        {/* The category, not the prototype's "the heart behind lelañea": the
+      <section className={`${styles.opening} ${styles.withGuide}`}>
+        <div>
+          {/* The category, not the prototype's "the heart behind lelañea": the
             document is titled "The Heart Behind Lelañea", so the prototype's
             eyebrow would print the page's own `h1` above it in a smaller face.
             The inner sections take no eyebrow at all for the same reason —
             all three documents share this category, so a repeated "about
             lelañea" would label nothing. */}
-        <Eyebrow as="p">{CATEGORY_LABEL[philosophy.category]}</Eyebrow>
-        <h1 className="brand-display mt-[18px] max-w-[20ch] text-[clamp(38px,4.4vw,60px)]">
-          {philosophy.title}
-        </h1>
-        {philosophy.subtitle === null ? null : (
-          <p className="text-muted-foreground mt-4 text-lg">{philosophy.subtitle}</p>
-        )}
+          <Eyebrow as="p">{CATEGORY_LABEL[philosophy.category]}</Eyebrow>
+          <h1
+            id="heart"
+            className="brand-display mt-[18px] max-w-[20ch] scroll-mt-[104px] text-[clamp(38px,4.4vw,60px)]"
+          >
+            {philosophy.title}
+          </h1>
+          {philosophy.subtitle === null ? null : (
+            <p className="text-muted-foreground mt-4 text-lg">{philosophy.subtitle}</p>
+          )}
 
-        <AuthoredBlocks
-          blocks={philosophy.blocks}
-          renderStyle={philosophy.renderStyle}
-          className={`${styles.measure} ${styles.lede} mt-8`}
-        />
+          <AuthoredBlocks
+            blocks={philosophy.blocks}
+            renderStyle={philosophy.renderStyle}
+            beats
+            className={`${styles.prose} mt-10`}
+          />
+        </div>
+
+        {/* A guide to a long page (t-171), in the empty half beside the
+            opening: the three documents by their own titles, held in view on
+            a desktop and absent below it, where the page is one column. */}
+        <nav className={styles.guide} aria-label="On this page">
+          <LotusMark size={44} water={false} />
+          <p className="brand-eyebrow text-muted-foreground">on this page</p>
+          <ol>
+            <li>
+              <a href="#heart">{philosophy.title}</a>
+            </li>
+            <li>
+              <a href="#creator">{creator.title}</a>
+            </li>
+            <li>
+              <a href="#lineage">{lineage.title}</a>
+            </li>
+          </ol>
+        </nav>
       </section>
 
       <section className={`${styles.section} ${styles.rule}`}>
-        <div className={styles.split}>
-          <figure className={CREATOR_PORTRAIT === null ? styles.portraitPending : styles.portrait}>
-            {CREATOR_PORTRAIT === null ? (
-              <>
-                {/* Decorative: the caption below says what this is, and the
-                    mark is the brand's, not a depiction of her. */}
-                <LotusMark size={120} water={false} />
-                <figcaption className="text-sm">
-                  A portrait of Lelañea Fulton will appear here.
-                </figcaption>
-              </>
-            ) : (
-              <Image
-                src={CREATOR_PORTRAIT}
-                alt="Lelañea Fulton"
-                width={720}
-                height={900}
-                sizes="(max-width: 1180px) 100vw, 50vw"
-              />
-            )}
-          </figure>
+        <div className={styles.creator}>
+          {/* Her portrait, her name and where to find her, held beside the
+              biography on a desktop and gathered into one row above it once
+              the page narrows (t-171). An arch rather than a full-height
+              panel: it was the largest thing on the page and broke the read. */}
+          <aside className={styles.creatorAside}>
+            <figure
+              className={CREATOR_PORTRAIT === null ? styles.portraitPending : styles.portrait}
+            >
+              {CREATOR_PORTRAIT === null ? (
+                <>
+                  {/* Decorative: the caption says what this is, and the mark
+                      is the brand's, not a depiction of her. */}
+                  <Image src={LIGHT_THROUGH_WATER} alt="" fill sizes="300px" />
+                  <LotusMark size={72} water={false} />
+                  <figcaption className="sr-only">
+                    A portrait of Lelañea Fulton will appear here.
+                  </figcaption>
+                </>
+              ) : (
+                <Image
+                  src={CREATOR_PORTRAIT}
+                  alt="Lelañea Fulton"
+                  fill
+                  sizes="(max-width: 620px) 120px, (max-width: 1100px) 180px, 300px"
+                />
+              )}
+            </figure>
+            <div className={styles.creatorMeta}>
+              <p className="brand-display text-[26px] text-[var(--color-heading)]">
+                Lelañea Fulton
+              </p>
+              <CreatorLinks />
+            </div>
+          </aside>
 
           <div>
-            <h2 className="brand-display mb-5 text-[clamp(32px,3.6vw,44px)]">{creator.title}</h2>
+            <h2
+              id="creator"
+              className="brand-display mb-7 scroll-mt-[104px] text-[clamp(32px,3.6vw,44px)]"
+            >
+              {creator.title}
+            </h2>
 
             <AuthoredBlocks
               blocks={creator.blocks}
               renderStyle={creator.renderStyle}
               baseLevel={3}
-              className={`${styles.measure} ${styles.lede}`}
+              beats
+              className={`${styles.prose} ${styles.lede}`}
             />
-
-            <CreatorLinks />
           </div>
         </div>
       </section>
 
       <section className={`${styles.section} ${styles.rule}`}>
-        <h2 className="brand-display mb-6 text-[clamp(28px,3vw,36px)]">{lineage.title}</h2>
+        <h2
+          id="lineage"
+          className="brand-display mb-7 scroll-mt-[104px] text-[clamp(32px,3.6vw,44px)]"
+        >
+          {lineage.title}
+        </h2>
 
         <AuthoredBlocks
-          blocks={lineage.blocks}
+          blocks={lineageIntro}
           renderStyle={lineage.renderStyle}
-          baseLevel={3}
-          className={styles.measure}
+          beats
+          className={`${styles.prose} ${styles.lede}`}
         />
+
+        <div className={styles.lineage}>
+          {fields.map((group, index) => (
+            <AuthoredBlocks
+              key={index}
+              blocks={group}
+              renderStyle={lineage.renderStyle}
+              baseLevel={3}
+              className={styles.lineageTile}
+            />
+          ))}
+        </div>
+
+        {coda === undefined ? null : (
+          <div className={styles.coda}>
+            <AuthoredBlocks
+              blocks={coda}
+              renderStyle={lineage.renderStyle}
+              baseLevel={3}
+              beats
+              className={styles.prose}
+            />
+            <Ripples className={styles.codaRipples} rings={4} />
+          </div>
+        )}
       </section>
     </div>
   );

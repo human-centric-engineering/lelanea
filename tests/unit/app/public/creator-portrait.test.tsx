@@ -3,11 +3,9 @@
 /**
  * `/lelanea` when a portrait of Lelañea Fulton exists.
  *
- * `CREATOR_PORTRAIT` is `null` in the tree, so `document-pages.test.tsx` can
- * only ever exercise the stand-in. This file mocks the config to prove the
- * other half — and it is the half that matters, because it is the one nobody
- * will look at again until the day the photograph lands, when a mistake in it
- * ships as a broken image on the page introducing her.
+ * Mocks the config to a fixed path, so this proves the photograph branch
+ * whatever the real `CREATOR_PORTRAIT` holds. The stand-in is pinned by
+ * `creator-portrait-pending.test.tsx`, which mocks it to null.
  *
  * A separate file rather than a case in the other one: the constant is read at
  * render time from a module, so a `vi.mock` at the top of a shared file would

@@ -1,5 +1,6 @@
-import { ChannelGlyph } from '@/components/app/site/channel-icons';
-import { ImagePlaceholder } from '@/components/app/site/image-placeholder';
+import Image from 'next/image';
+
+import { LinkMark } from '@/components/app/site/service-logos';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { CREATOR_LINKS, SITE_CHANNELS } from '@/lib/site/config';
 import styles from '@/components/app/site/atmosphere.module.css';
@@ -29,7 +30,7 @@ function OutArrow() {
  * One card per thing she makes, each with the places to find it. No card
  * describes its subject: the owner's ruling is that the public site says
  * nothing about her work that she did not, and her own account of it is on
- * `/lelanea`. The art panel is a placeholder until the cover art is supplied.
+ * `/lelanea`. The art is hers, from where each thing is published.
  *
  * Each link names its card in its accessible name, because "YouTube" appears
  * on two cards and a list of links read out of context would not tell them
@@ -49,12 +50,24 @@ export function ChannelsSection({ className }: { className?: string }) {
       <ul className={styles.channels}>
         {SITE_CHANNELS.map((channel) => (
           <li key={channel.name} className={styles.channel}>
-            <ImagePlaceholder title={channel.art} className={styles.channelArt} />
+            {/* Decorative: the card's heading names what the art is for, and
+                the text in the artwork repeats the show's own name. */}
+            <div
+              className={`${styles.channelArt} ${channel.art.contain ? styles.channelArtMark : ''}`}
+            >
+              <Image
+                src={channel.art.src}
+                alt=""
+                fill
+                sizes="(max-width: 620px) 112px, (max-width: 1100px) 50vw, 25vw"
+                style={{
+                  objectFit: channel.art.contain ? 'contain' : 'cover',
+                  objectPosition: channel.art.position ?? '50% 50%',
+                }}
+              />
+            </div>
             <div className={styles.channelBody}>
-              <h3 className={styles.channelName}>
-                <ChannelGlyph icon={channel.icon} size={18} />
-                <span className="brand-display">{channel.name}</span>
-              </h3>
+              <h3 className={`brand-display ${styles.channelName}`}>{channel.name}</h3>
               <ul className={styles.channelLinks}>
                 {channel.links.map((link) => (
                   <li key={link.href}>
@@ -64,6 +77,7 @@ export function ChannelsSection({ className }: { className?: string }) {
                       target="_blank"
                       aria-label={`${channel.name} on ${link.label} (opens in a new tab)`}
                     >
+                      <LinkMark mark={link.mark} icon={link.icon} size={15} />
                       {link.label}
                       <OutArrow />
                     </a>
@@ -93,7 +107,7 @@ export function CreatorLinks() {
         {CREATOR_LINKS.map((link) => (
           <li key={link.href}>
             <a href={link.href} rel="noopener noreferrer" target="_blank">
-              <ChannelGlyph icon={link.icon} size={20} />
+              <LinkMark mark={link.mark} icon={link.icon} size={18} />
               <span className={styles.creatorLinkLabel}>{link.label}</span>
               <span className={styles.creatorLinkDetail}>{link.detail}</span>
               <OutArrow />

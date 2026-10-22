@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
+import { MissionRipple } from '@/components/app/site/mission-ripple';
 import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
-import { ImagePlaceholder } from '@/components/app/site/image-placeholder';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { requireDocument } from '@/lib/app/content/sections';
 import styles from '@/app/(public)/document-page.module.css';
@@ -55,28 +55,28 @@ export default async function MissionPage() {
 
   return (
     <div className={styles.page}>
-      <section className={`${styles.opening} ${styles.closing}`}>
-        {/* The category, not the prototype's "the mission" — the document is
-            titled "The Mission", so the prototype's eyebrow would print the
-            same three words directly above it in a smaller face. */}
-        <Eyebrow as="p">{CATEGORY_LABEL[mission.category]}</Eyebrow>
-        <h1 className="brand-display mt-[18px] mb-8 max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
-          {mission.title}
-        </h1>
+      <section className={`${styles.opening} ${styles.closing} ${styles.reading}`}>
+        {/* Her mission's one movement — a single awakened life widening to
+            families, communities and beyond — drawn on the site's water, and
+            held beside the text on a desktop (t-171). */}
+        <MissionRipple className={styles.companion} />
 
-        {/* The page's one image (t-171): a wide, quiet band between the title
-            and her text, after the soft refracted photography on her site. */}
-        <ImagePlaceholder
-          title="Light through water, softly out of focus"
-          ratio="21 / 9"
-          className="mb-10"
-        />
+        <div>
+          {/* The category, not the prototype's "the mission" — the document
+              is titled "The Mission", so the prototype's eyebrow would print
+              the same three words directly above it in a smaller face. */}
+          <Eyebrow as="p">{CATEGORY_LABEL[mission.category]}</Eyebrow>
+          <h1 className="brand-display mt-[18px] mb-9 max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
+            {mission.title}
+          </h1>
 
-        <AuthoredBlocks
-          blocks={mission.blocks}
-          renderStyle={mission.renderStyle}
-          className={`${styles.measure} ${styles.lede}`}
-        />
+          <AuthoredBlocks
+            blocks={mission.blocks}
+            renderStyle={mission.renderStyle}
+            beats
+            className={`${styles.prose} ${styles.lede} ${styles.dropcap}`}
+          />
+        </div>
       </section>
     </div>
   );

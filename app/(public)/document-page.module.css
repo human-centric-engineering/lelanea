@@ -194,71 +194,444 @@
   margin-top: 3px;
 }
 
-/*
- * The portrait and its stand-in share their box on purpose — see
- * `.portraitPending`. Anything that changes the shape belongs here, not in one
- * of them.
+/* ================================================================ creator
+ * `/lelanea`'s biography (t-171). Her portrait, name and links sit in an
+ * aside beside the text on a desktop, held in view while the biography
+ * scrolls; once the page narrows they gather into one row above it. The
+ * portrait was a full-height 4:5 panel before, the largest thing on the page,
+ * and it broke the read in two on an iPad. It is an arch now — the shape of a
+ * petal, or a window — and never wider than it needs to be.
  */
+.creator {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: clamp(36px, 5vw, 80px);
+  align-items: start;
+}
+
+.creatorAside {
+  position: sticky;
+  top: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.creatorMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .portrait,
 .portraitPending {
+  position: relative;
+  width: 100%;
   margin: 0;
   aspect-ratio: 4 / 5;
-  border-radius: 20px;
+  overflow: hidden;
+  /* The arch: a full round across the top, the site's large radius below. */
+  border-radius: 999px 999px var(--radius-lg) var(--radius-lg);
+  box-shadow: var(--shadow-rest);
 }
 
 .portrait {
-  overflow: hidden;
   background: var(--color-accent);
 }
 
 .portrait img {
-  display: block;
-  width: 100%;
-  height: 100%;
   object-fit: cover;
-  /* The prototype's framing: the face sits right of centre and high. */
-  object-position: 58% 26%;
+  /* Her face sits right of centre and high in the frame. */
+  object-position: 62% 28%;
 }
 
-/*
- * The portrait's stand-in until a photograph arrives — the same call
- * `SITE_LINKS` makes for a URL that does not exist yet (D3): render something
- * deliberate, never a broken `<img>`.
- *
- * It went through both wrong shapes before this one, which is worth recording
- * because they are opposite errors.
- *
- * With no aspect ratio it sized to its caption and became a thin dashed strip
- * beside a column of prose — which reads as a broken element, and which would
- * have made the section jump from a 40px strip to a 4:5 panel the day the
- * photograph landed. Taking `.portrait`'s ratio fixed that and produced the
- * other error: a ~675px empty dashed box, correct in structure and worse to
- * look at, sitting on a live page for however many months.
- *
- * So it reserves the full 4:5 — the layout must not move later — and fills it
- * the way a designed placeholder does: the brand's own mark, on the same tinted
- * ground the photograph will sit on, with the caption beneath. No dashed
- * border; a dashed border is the visual language of a missing asset, and this
- * is not missing so much as not yet taken.
- */
+/* With no photograph, the arch holds the site's own water with the lotus mark
+   on it, rather than a grey panel with a sentence in it. */
 .portraitPending {
   display: grid;
   place-items: center;
-  align-content: center;
-  gap: 18px;
-  padding: 32px;
-  text-align: center;
-  color: var(--color-muted-foreground);
-  background: var(--color-accent);
 }
 
-/* Quiet enough to be a ground rather than an illustration competing with her. */
+.portraitPending img {
+  object-fit: cover;
+  object-position: 70% 0%;
+}
+
 .portraitPending svg {
-  opacity: 0.35;
+  position: relative;
+  opacity: 0.85;
+}
+
+@media (max-width: 1100px) {
+  .creator {
+    grid-template-columns: 1fr;
+  }
+
+  .creatorAside {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 28px;
+  }
+
+  .portrait,
+  .portraitPending {
+    flex: none;
+    width: 180px;
+  }
+
+  .creatorMeta {
+    flex: 1;
+  }
+}
+
+@media (max-width: 620px) {
+  .creatorAside {
+    flex-wrap: wrap;
+    gap: 18px 20px;
+  }
+
+  .portrait,
+  .portraitPending {
+    width: 120px;
+  }
+
+  /* On a phone the links take the full width beneath the portrait and name,
+     rather than squeezing beside a 120px arch. */
+  .creatorMeta {
+    display: contents;
+  }
+
+  .creatorMeta > :first-child {
+    flex: 1;
+    align-self: center;
+  }
+
+  .creatorMeta > :last-child {
+    flex-basis: 100%;
+    margin-top: 0;
+  }
+}
+
+/* ================================================================ lineage
+ * The fields she draws on, as tiles: three across on a desktop, two on an
+ * iPad, one on a phone. Each is a heading and a sentence or two of names, so
+ * a tile is the shape the content already has.
+ */
+.lineage {
+  /* Columns rather than a grid: the tiles differ a lot in length, and a grid
+     row is as tall as its longest tile, which left holes under the short
+     ones. Columns pack them, masonry-style. */
+  columns: 3;
+  column-gap: 18px;
+  margin-top: 40px;
+}
+
+.lineageTile {
+  break-inside: avoid;
+  margin-bottom: 18px;
+  padding: 24px 24px 22px;
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-rest);
+  font-size: 15.5px;
+  line-height: 1.65;
+}
+
+.lineageTile :global(h3) {
+  margin: 0 0 10px;
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+/* A short teal hairline above each field: the same mark as the prose headings,
+   in the navigation teal rather than the ceremonial orange, since nine of
+   them sit side by side. */
+.lineageTile :global(h3)::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 1px;
+  margin-bottom: 14px;
+  background: var(--color-secondary-ink);
+}
+
+.lineageTile :global(p) {
+  margin: 0 0 0.8em;
+  line-height: inherit;
+}
+
+.lineageTile :global(p:last-child) {
+  margin-bottom: 0;
+}
+
+/* The coda: the lineage's closing section, set apart as the page's ending,
+   with the water's rings beneath her last line. */
+.coda {
+  margin: clamp(56px, 7vw, 88px) auto 0;
+  max-width: 64ch;
+}
+
+.codaRipples {
+  max-width: 420px;
+  margin: 8px auto 0;
+}
+
+@media (max-width: 1100px) {
+  .lineage {
+    columns: 2;
+  }
+}
+
+@media (max-width: 620px) {
+  .lineage {
+    columns: 1;
+  }
+
+  .lineageTile {
+    margin-bottom: 12px;
+  }
+
+  .lineageTile {
+    padding: 20px;
+  }
 }
 
 @media (max-width: 1180px) {
   .split {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ================================================================ reading
+ * Long text on the public site (t-171). Most of these pages are her prose and
+ * little else, so the type IS the design: a comfortable size and measure, open
+ * leading, and her own rhythm made visible — the short single-sentence turns
+ * she wrote between long paragraphs (`data-beat`, from `AuthoredBlocks`'
+ * `beats`) are set in her quote face, a step up, with air around them.
+ *
+ * `:global` reaches the elements `AuthoredBlocks` renders, which carry
+ * Tailwind utilities (`mb-4 leading-relaxed`). Those live in a cascade layer
+ * and these rules do not, so these win without `!important`.
+ */
+.prose {
+  max-width: 64ch;
+  font-size: 17.5px;
+  line-height: 1.78;
+  color: var(--color-foreground);
+}
+
+.prose :global(p) {
+  margin: 0 0 1.15em;
+  line-height: inherit;
+}
+
+.prose :global(p[data-beat]) {
+  max-width: 34ch;
+  text-wrap: balance;
+  margin: 1.6em 0;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: 1.3em;
+  line-height: 1.42;
+  color: var(--color-heading);
+}
+
+/* Consecutive turns are one stanza ("May it encourage curiosity. / May it
+   deepen compassion. / …"), so they close up rather than each taking the
+   full air of a single turn. */
+.prose :global(p[data-beat] + p[data-beat]) {
+  margin-top: -1.1em;
+}
+
+/* A turn that opens a document is its standfirst, not a pause. */
+.prose > :global(p[data-beat]:first-child) {
+  margin-top: 0;
+}
+
+.prose :global(h2),
+.prose :global(h3) {
+  margin: 2.4em 0 0.7em;
+  text-wrap: balance;
+  font-size: clamp(23px, 2.3vw, 28px);
+  line-height: 1.2;
+}
+
+/* A short orange hairline above each heading: the ceremonial accent, once per
+   section, marking where a new thought begins. */
+.prose :global(h2)::before,
+.prose :global(h3)::before {
+  content: '';
+  display: block;
+  width: 32px;
+  height: 1px;
+  margin-bottom: 18px;
+  background: var(--color-accent-ink);
+}
+
+.prose :global(ul) {
+  margin: 0 0 1.15em;
+}
+
+/*
+ * A drop cap on a page that opens with a long paragraph of hers. The
+ * primary orange rather than the accent ink: the accent measures 2.9:1 on the
+ * oyster, short of the 3:1 large text needs, and the primary clears 4.5.
+ */
+.dropcap > :global(p:first-child)::first-letter {
+  float: left;
+  margin: 0.06em 0.12em 0 0;
+  font-family: var(--font-serif);
+  font-size: 4.2em;
+  line-height: 0.8;
+  color: var(--color-primary);
+}
+
+@media (max-width: 620px) {
+  .prose {
+    font-size: 16.5px;
+    line-height: 1.72;
+  }
+
+  .prose :global(p[data-beat]) {
+    font-size: 1.22em;
+  }
+}
+
+/* =============================================================== companion
+ * `/mission`'s reading companion: "light through water" held beside the text
+ * on a desktop, so a long read always has somewhere for the eye to rest. A
+ * band above the text once the page narrows.
+ */
+.reading {
+  display: grid;
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  gap: clamp(36px, 5vw, 80px);
+  align-items: start;
+}
+
+.companion {
+  position: sticky;
+  top: 104px;
+  height: min(calc(100vh - 140px), 780px);
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-rest);
+}
+
+.companion img {
+  object-fit: cover;
+  object-position: 70% 0%;
+  animation: drift 48s var(--ease-brand) infinite alternate;
+}
+
+/* The water moves, barely: a slow drift and swell, the length of a breath
+   cycle or six. Off for anyone who has asked for less motion. */
+@keyframes drift {
+  from {
+    transform: scale(1.04) translate(0, 0);
+  }
+
+  to {
+    transform: scale(1.12) translate(-2.5%, 1.5%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .companion img {
+    animation: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .reading {
+    grid-template-columns: 1fr;
+  }
+
+  .companion {
+    position: relative;
+    top: auto;
+    height: auto;
+    aspect-ratio: 21 / 9;
+  }
+}
+
+@media (max-width: 620px) {
+  .companion {
+    aspect-ratio: 16 / 10;
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ================================================================== guide
+ * "On this page", beside `/lelanea`'s opening (t-171).
+ */
+.withGuide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: clamp(36px, 5vw, 80px);
+  align-items: start;
+}
+
+.guide {
+  position: sticky;
+  top: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 36px;
+  padding: 26px 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-divider);
+}
+
+.guide ol {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: guide;
+}
+
+.guide li {
+  counter-increment: guide;
+}
+
+.guide a {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  padding: 9px 0;
+  border-top: 1px solid var(--color-divider);
+  font-family: var(--font-serif);
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--color-heading);
+  transition: color 200ms var(--ease-brand);
+}
+
+.guide a::before {
+  content: counter(guide, decimal-leading-zero) / '';
+  padding-top: 3px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary-ink);
+}
+
+.guide a:hover {
+  color: var(--color-secondary-ink);
+  text-decoration: none;
+}
+
+@media (max-width: 1100px) {
+  .withGuide {
+    grid-template-columns: 1fr;
+  }
+
+  .guide {
+    display: none;
   }
 }

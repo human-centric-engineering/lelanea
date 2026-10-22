@@ -1,16 +1,18 @@
 import { Fragment } from 'react';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 
 import { InlineText } from '@/components/app/content/authored-document';
 import { Card } from '@/components/app/ui/card';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { Lotus } from '@/components/app/ui/lotus';
 import { ChannelsSection } from '@/components/app/site/channels';
-import { ImagePlaceholder } from '@/components/app/site/image-placeholder';
+import { ClosingBand } from '@/components/app/site/closing-band';
 import { Ripples } from '@/components/app/site/ripples';
 import { WaitlistForm } from '@/components/app/site/waitlist-form';
 import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
+import { FLOWER_OF_LIFE, REFLECTION } from '@/lib/site/config';
 import styles from '@/app/(public)/home.module.css';
 
 /**
@@ -175,10 +177,11 @@ export default async function HomePage() {
         {/* An image beside the three cards (t-171): tall at desktop width,
             a wide band above them once the page narrows. */}
         <div className={styles.whatThisIs}>
-          <ImagePlaceholder
-            title="Pampas grass in soft, late light"
-            className={styles.whatThisIsImage}
-          />
+          {/* Her double-exposure portrait, from her own site: decorative here,
+              since nothing on the page refers to it. */}
+          <figure className={styles.whatThisIsImage}>
+            <Image src={REFLECTION} alt="" fill sizes="(max-width: 1180px) 100vw, 40vw" />
+          </figure>
           <div className={styles.cards}>
             {WHAT_THIS_IS.map((card) => (
               <Card key={card.title} title={card.title}>
@@ -197,7 +200,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.rule}`}>
+      <section className={`${styles.section} ${styles.rule} ${styles.journey}`}>
         <Eyebrow as="p">the journey</Eyebrow>
         <h2 className="brand-display my-[14px] mb-[26px] max-w-[20ch] text-[clamp(32px,3.4vw,40px)]">
           {/* The journey's own subtitle, read rather than retyped (t-86). */}
@@ -211,6 +214,11 @@ export default async function HomePage() {
             numbered stop at each tier. The numbers are the tiers' position on
             this page, not their stored order, and are decorative — the
             description list already conveys the sequence. */}
+        {/* Her flower-of-life drawing, faint behind the path on a desktop. */}
+        <div className={styles.journeyArt} aria-hidden="true">
+          <Image src={FLOWER_OF_LIFE} alt="" fill sizes="40vw" />
+        </div>
+
         <dl className={styles.path}>
           {pathTiers.map((tier, index) => (
             <div key={tier.id} className={styles.tierRow}>
@@ -230,6 +238,8 @@ export default async function HomePage() {
       </section>
 
       <ChannelsSection className={`${styles.section} ${styles.rule}`} />
+
+      <ClosingBand />
     </div>
   );
 }

@@ -42,7 +42,7 @@ export default async function DisclaimerPage() {
   return (
     <div className={styles.page}>
       <div className={styles.opening}>
-        <AuthoredDocument document={disclaimer} className={`${styles.measure} pb-20`} />
+        <AuthoredDocument document={disclaimer} className={`${styles.prose} pb-20`} />
       </div>
     </div>
   );

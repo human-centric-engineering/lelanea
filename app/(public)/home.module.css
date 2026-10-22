@@ -96,6 +96,8 @@
 .band :global(.brand-quote) {
   max-width: 46ch;
   margin: 0 auto;
+  /* No word left alone on the last line ("been."). */
+  text-wrap: balance;
   font-size: clamp(26px, 3vw, 34px);
 }
 
@@ -128,7 +130,50 @@
 .whatThisIsImage {
   position: sticky;
   top: 110px;
+  margin: 0;
   aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-rest);
+}
+
+.whatThisIsImage img {
+  object-fit: cover;
+  object-position: 50% 30%;
+}
+
+/* The journey carries her flower-of-life drawing, faint, to the right of the
+   path on a desktop. Multiplied, so its white ground vanishes into the oyster;
+   gone in dark mode, where a multiply would paint it black, and gone below
+   the desktop width, where the path needs the whole column. */
+.journey {
+  position: relative;
+}
+
+.journey dl,
+.journey > :not(.journeyArt) {
+  position: relative;
+}
+
+.journeyArt {
+  position: absolute;
+  /* Beside the heading, in the space its short measure leaves — clear of the
+     module names below, which it would otherwise sit under. */
+  top: clamp(40px, 5vw, 70px);
+  right: -1%;
+  width: min(460px, 42%);
+  aspect-ratio: 1983 / 1176;
+  opacity: 0.32;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.journeyArt img {
+  object-fit: contain;
+}
+
+:global(html.dark) .journeyArt {
+  display: none;
 }
 
 .whatThisIs .cards {
@@ -240,8 +285,13 @@
   }
 
   .whatThisIsImage {
-    position: static;
-    aspect-ratio: 21 / 9;
+    position: relative;
+    top: auto;
+    aspect-ratio: 16 / 9;
+  }
+
+  .journeyArt {
+    display: none;
   }
 
   .whatThisIs .cards {

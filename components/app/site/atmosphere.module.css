@@ -1,6 +1,6 @@
 /*
- * The public site's atmosphere (t-171): the ripples, the image placeholders,
- * her channels on the home page and the list on `/lelanea`.
+ * The public site's atmosphere (t-171): the ripples, her channels on the home
+ * page and the list on `/lelanea`.
  *
  * Colours are tokens from `app/brand-theme.css`, mixed with `color-mix` where a
  * wash is wanted; there are no literals here. The lotus tokens hold across both
@@ -16,76 +16,12 @@
   pointer-events: none;
 }
 
-/* ---------------------------------------------------- image placeholder */
-
-/*
- * Out-of-focus light through water: three soft blooms of the lotus colours over
- * the card ground. Built from radial gradients rather than a filter so it costs
- * nothing to paint, and the caption above it stays sharp.
- */
-.placeholder {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  margin: 0;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(
-      60% 70% at 22% 30%,
-      color-mix(in srgb, var(--color-lotus-petal-inner) 30%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      50% 60% at 78% 68%,
-      color-mix(in srgb, var(--color-lotus-core-light) 26%, transparent),
-      transparent 72%
-    ),
-    radial-gradient(
-      70% 50% at 55% 105%,
-      color-mix(in srgb, var(--color-lotus-ripple-far) 24%, transparent),
-      transparent 70%
-    ),
-    var(--color-card);
-}
-
-/* A hairline inside the edge, so the panel holds its shape on the card-coloured
-   footer and in dark mode, where the blooms are quieter against the ground. */
-.placeholder::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: 1px solid var(--color-divider);
-  pointer-events: none;
-}
-
-.placeholderCaption {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 14px;
-  padding: 8px 12px;
-  max-width: calc(100% - 28px);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--color-foreground);
-  background: color-mix(in srgb, var(--color-background) 82%, transparent);
-  backdrop-filter: blur(6px);
-}
-
-.placeholderCaption > :first-child {
-  color: var(--color-muted-foreground);
-}
-
 /* ------------------------------------------------------------ channels */
 
 /*
  * Four across on a desktop, two on an iPad, one on a phone. On a phone each
  * card turns sideways — art on the left, name and links on the right — so four
- * cards are a short scroll rather than four screens of placeholder.
+ * cards are a short scroll rather than four screens of artwork.
  */
 .channels {
   display: grid;
@@ -107,42 +43,54 @@
 }
 
 .channelArt {
+  position: relative;
   aspect-ratio: 4 / 3;
-  border-radius: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-muted);
 }
 
-.channelArt::after {
-  border-width: 0 0 1px;
+/*
+ * Her mark is drawn on white. It sits on the oyster in BOTH themes — the
+ * cinema ink, which does not change with the theme — and multiplies onto it,
+ * so the white ground disappears into the panel instead of showing as a
+ * square. Padded, so the mandala breathes rather than touching the edges.
+ */
+.channelArtMark {
+  background: var(--color-cinema-ink);
+}
+
+.channelArtMark img {
+  padding: 8%;
+  mix-blend-mode: multiply;
 }
 
 .channelBody {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 20px 20px;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 18px 22px;
+  text-align: center;
 }
 
 .channelName {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   margin: 0;
+  line-height: 1.15;
   font-size: 22px;
   font-weight: 400;
   color: var(--color-heading);
 }
 
-.channelName svg {
-  flex: none;
-  color: var(--color-secondary-ink);
-}
-
 .channelLinks {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
-  margin: auto 0 0;
+  /* Centred in the space beneath the title, so a single button sits level
+     with the middle of a three-button stack in the next card. */
+  margin: auto 0;
   padding: 0;
   list-style: none;
 }
@@ -161,6 +109,11 @@
     color 200ms var(--ease-brand),
     border-color 200ms var(--ease-brand),
     background-color 200ms var(--ease-brand);
+}
+
+.channelLinks svg {
+  flex: none;
+  color: var(--color-secondary-ink);
 }
 
 .channelLinks a:hover {
@@ -193,22 +146,24 @@
   .channelArt {
     flex: none;
     width: 112px;
+    min-height: 112px;
     aspect-ratio: auto;
   }
 
-  .channelArt::after {
-    border-width: 0 1px 0 0;
-  }
-
-  /* No room for a caption beside a 112px square; the panel stays as the
-     reserved space and the card's own name says what it is for. */
-  .channelArt figcaption {
-    display: none;
+  .channelArt {
+    border-bottom: 0;
+    border-right: 1px solid var(--color-divider);
   }
 
   .channelBody {
+    align-items: flex-start;
     padding: 14px 16px;
     gap: 10px;
+    text-align: left;
+  }
+
+  .channelLinks {
+    justify-content: flex-start;
   }
 
   .channelName {
@@ -232,9 +187,9 @@
 
 .creatorLinks a {
   display: grid;
-  grid-template-columns: 20px minmax(0, auto) minmax(0, 1fr) 12px;
+  grid-template-columns: 20px minmax(0, 1fr) 12px;
   align-items: center;
-  gap: 4px 14px;
+  gap: 1px 14px;
   min-height: 48px;
   padding: 10px 2px;
   border-bottom: 1px solid var(--color-divider);
@@ -248,31 +203,71 @@
 }
 
 .creatorLinks a > svg:first-child {
+  grid-row: 1 / span 2;
   color: var(--color-secondary-ink);
 }
 
-.creatorLinkLabel {
-  font-size: 16px;
+.creatorLinks a > svg:last-child {
+  grid-column: 3;
+  grid-row: 1 / span 2;
 }
 
+.creatorLinkLabel {
+  font-size: 15.5px;
+}
+
+/* The detail sits beneath the label: the aside is narrow, and a handle or a
+   description beside the name wrapped into a ragged column. */
 .creatorLinkDetail {
-  font-size: 14px;
+  grid-column: 2;
+  font-size: 13px;
   color: var(--color-muted-foreground);
 }
 
-/* On a phone the detail drops beneath the label rather than squeezing it. */
+/* ------------------------------------------------------------- closing */
+
+/*
+ * The home page's closing band: the lotus on the water, and the way in. The
+ * water is the same picture in both themes, so the marks on it use the cinema
+ * tokens, which hold across themes too.
+ */
+.closing {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  min-height: clamp(300px, 34vw, 400px);
+  margin-bottom: clamp(56px, 7vw, 92px);
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-rest);
+}
+
+.closing > img {
+  z-index: -1;
+  object-fit: cover;
+  object-position: 70% 20%;
+}
+
+.closingInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.closingEyebrow {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  color: var(--color-cinema);
+  background: color-mix(in srgb, var(--color-cinema-ink) 80%, transparent);
+}
+
 @media (max-width: 620px) {
-  .creatorLinks a {
-    grid-template-columns: 20px minmax(0, 1fr) 12px;
-  }
-
-  .creatorLinkDetail {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  .creatorLinks a > svg:last-child {
-    grid-column: 3;
-    grid-row: 1 / span 2;
+  .closing {
+    border-radius: var(--radius-lg);
   }
 }

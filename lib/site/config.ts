@@ -74,7 +74,27 @@ export const SITE_DOMAIN = 'lelanea.com';
  * deliberately NOT stubbed: there is no design for the slot yet, and B31's
  * "deliberate stub" needs something to be a stub of.
  */
-export const CREATOR_PORTRAIT: string | null = null;
+export const CREATOR_PORTRAIT: string | null = '/lelanea/creator.webp';
+
+/**
+ * "Light through water" — the site's own picture (t-171), generated from the
+ * lotus tokens by `npm run water:image`. Stands where a photograph would, and
+ * can be replaced by one at the same path.
+ */
+export const LIGHT_THROUGH_WATER = '/lelanea/light-through-water.webp';
+
+/**
+ * Her own images from lelaneafulton.com (t-171), copied here because the CSP
+ * serves images from this origin only. Only HER uploads — her site also shows
+ * Wix stock photography (the pampas grass, the blurred refraction), which Wix
+ * licenses for Wix sites alone, and none of that is reused.
+ *
+ * `REFLECTION` is her double-exposure portrait in a window. `FLOWER_OF_LIFE`
+ * is the sacred-geometry drawing from her site, which credits its artwork to
+ * Nathalie Strassburg.
+ */
+export const REFLECTION = '/lelanea/reflection.webp';
+export const FLOWER_OF_LIFE = '/lelanea/flower-of-life.webp';
 
 /**
  * Her URLs, once. Everything below reads from here.
@@ -98,6 +118,13 @@ export const CHANNEL_URL = {
 export type ChannelIcon = 'site' | 'instagram' | 'video' | 'listen' | 'read' | 'gather';
 
 /**
+ * A service's own logo, where it has one we can draw
+ * (`components/app/site/service-logos.tsx`). A link with a `mark` shows it in
+ * place of its `icon`; Skool has none, so it keeps its glyph.
+ */
+export type ServiceMark = 'spotify' | 'applePodcasts' | 'youtube' | 'substack' | 'instagram';
+
+/**
  * Where the site says she can be found — the footer's row. `null` means "no
  * URL yet" and renders nothing at all — not a disabled link, not a `#`, not an
  * empty `<a>`.
@@ -106,6 +133,7 @@ export const SITE_LINKS: ReadonlyArray<{
   label: string;
   href: string | null;
   icon?: ChannelIcon;
+  mark?: ServiceMark;
   /** A quieter second label after the name, where the name alone is ambiguous. */
   detail?: string;
 }> = [
@@ -115,11 +143,16 @@ export const SITE_LINKS: ReadonlyArray<{
     href: CHANNEL_URL.site,
     icon: 'site',
   },
-  { label: 'Instagram', href: CHANNEL_URL.instagram, icon: 'instagram' },
-  { label: 'YouTube', href: CHANNEL_URL.youtube, icon: 'video' },
-  { label: 'Spotify', href: CHANNEL_URL.spotify, icon: 'listen' },
-  { label: 'Apple Podcasts', href: CHANNEL_URL.applePodcasts, icon: 'listen' },
-  { label: 'Substack', href: CHANNEL_URL.substack, icon: 'read' },
+  { label: 'Instagram', href: CHANNEL_URL.instagram, icon: 'instagram', mark: 'instagram' },
+  { label: 'YouTube', href: CHANNEL_URL.youtube, icon: 'video', mark: 'youtube' },
+  { label: 'Spotify', href: CHANNEL_URL.spotify, icon: 'listen', mark: 'spotify' },
+  {
+    label: 'Apple Podcasts',
+    href: CHANNEL_URL.applePodcasts,
+    icon: 'listen',
+    mark: 'applePodcasts',
+  },
+  { label: 'Substack', href: CHANNEL_URL.substack, icon: 'read', mark: 'substack' },
   { label: 'Skool', href: CHANNEL_URL.skool, icon: 'gather' },
 ];
 
@@ -135,38 +168,52 @@ export const SITE_LINKS: ReadonlyArray<{
  */
 export const SITE_CHANNELS: ReadonlyArray<{
   name: string;
-  icon: ChannelIcon;
-  /** What the cover-art placeholder is waiting for. */
-  art: string;
-  links: ReadonlyArray<{ label: string; href: string }>;
+  /**
+   * Her own artwork for it, copied from where she publishes it (t-171) and
+   * served from `public/lelanea/channels/` — the CSP allows images from this
+   * origin only. `position` is the crop's focal point; `contain` keeps a
+   * mark whole instead of cropping it.
+   */
+  art: { src: string; position?: string; contain?: boolean };
+  links: ReadonlyArray<{ label: string; href: string; mark?: ServiceMark; icon?: ChannelIcon }>;
 }> = [
   {
     name: 'The podcast',
-    icon: 'listen',
-    art: 'Podcast cover art',
+    art: {
+      src: '/lelanea/channels/integrating-consciousness-podcast.webp',
+      // Her face and the show's name; the tagline strip along the foot is
+      // cropped away by the card's landscape frame.
+      position: '50% 22%',
+    },
     links: [
-      { label: 'Spotify', href: CHANNEL_URL.spotify },
-      { label: 'Apple Podcasts', href: CHANNEL_URL.applePodcasts },
-      { label: 'YouTube', href: CHANNEL_URL.podcastOnYouTube },
+      { label: 'Spotify', href: CHANNEL_URL.spotify, mark: 'spotify' },
+      { label: 'Apple Podcasts', href: CHANNEL_URL.applePodcasts, mark: 'applePodcasts' },
+      { label: 'YouTube', href: CHANNEL_URL.podcastOnYouTube, mark: 'youtube' },
     ],
   },
   {
     name: 'Conversations with Aya',
-    icon: 'video',
-    art: 'Conversations with Aya cover art',
-    links: [{ label: 'YouTube', href: CHANNEL_URL.ayaOnYouTube }],
+    art: {
+      // The series' first episode, "Introduction, Homage, and Prayer": the
+      // show's own frame, cut at the file to leave the episode's caption out.
+      src: '/lelanea/channels/conversations-with-aya.webp',
+      position: '40% 35%',
+    },
+    links: [{ label: 'YouTube', href: CHANNEL_URL.ayaOnYouTube, mark: 'youtube' }],
   },
   {
     name: 'Writing',
-    icon: 'read',
-    art: 'Substack header image',
-    links: [{ label: 'Substack', href: CHANNEL_URL.substack }],
+    art: { src: '/lelanea/channels/lelanea-fulton-mark.webp', contain: true },
+    links: [{ label: 'Substack', href: CHANNEL_URL.substack, mark: 'substack' }],
   },
   {
     name: 'Community',
-    icon: 'gather',
-    art: 'Community image',
-    links: [{ label: 'Skool', href: CHANNEL_URL.skool }],
+    // Her Skool banner, cut at the file to her portrait and her name.
+    art: {
+      src: '/lelanea/channels/integrating-consciousness-community.webp',
+      position: '50% 40%',
+    },
+    links: [{ label: 'Skool', href: CHANNEL_URL.skool, icon: 'gather' }],
   },
 ];
 
@@ -176,6 +223,7 @@ export const CREATOR_LINKS: ReadonlyArray<{
   detail: string;
   href: string;
   icon: ChannelIcon;
+  mark?: ServiceMark;
 }> = [
   {
     label: 'Integrating Consciousness',
@@ -183,9 +231,27 @@ export const CREATOR_LINKS: ReadonlyArray<{
     href: CHANNEL_URL.site,
     icon: 'site',
   },
-  { label: 'Instagram', detail: '@lelanea', href: CHANNEL_URL.instagram, icon: 'instagram' },
-  { label: 'YouTube', detail: '@lelaneafulton', href: CHANNEL_URL.youtube, icon: 'video' },
-  { label: 'Substack', detail: 'lelanea.substack.com', href: CHANNEL_URL.substack, icon: 'read' },
+  {
+    label: 'Instagram',
+    detail: '@lelanea',
+    href: CHANNEL_URL.instagram,
+    icon: 'instagram',
+    mark: 'instagram',
+  },
+  {
+    label: 'YouTube',
+    detail: '@lelaneafulton',
+    href: CHANNEL_URL.youtube,
+    icon: 'video',
+    mark: 'youtube',
+  },
+  {
+    label: 'Substack',
+    detail: 'lelanea.substack.com',
+    href: CHANNEL_URL.substack,
+    icon: 'read',
+    mark: 'substack',
+  },
 ];
 
 /** The public pages, in the order the header and footer list them. */

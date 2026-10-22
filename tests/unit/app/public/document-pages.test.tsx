@@ -213,15 +213,9 @@ describe('/lelanea', () => {
     }
   });
 
-  it('shows a deliberate stand-in while there is no portrait', async () => {
-    render(await LelaneaPage());
-
-    // `CREATOR_PORTRAIT` is null (D3's shape). What must not happen is an
-    // `<img>` with an empty or placeholder `src`, which renders as a broken
-    // image on the page introducing her.
-    expect(screen.queryByRole('img')).toBeNull();
-    expect(screen.getByText(/portrait of Lelañea Fulton will appear here/i)).toBeTruthy();
-  });
+  // The stand-in shown while there is no portrait is pinned in
+  // `creator-portrait-pending.test.tsx`, which sets the constant to null
+  // itself: since t-171 the real one carries a photograph.
 });
 
 describe('/data', () => {

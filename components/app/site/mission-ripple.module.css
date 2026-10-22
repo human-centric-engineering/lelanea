@@ -1,0 +1,162 @@
+/*
+ * The mission's ripple (t-171): a life at the centre of the water and the
+ * circles it widens into. The water image is the same in both themes, as a
+ * photograph would be, so the marks on it use the cinema tokens, which do not
+ * change with the theme either.
+ *
+ * The rings live in a square sized to the panel's SHORTER side — a container
+ * query unit, so it fits the tall panel on a desktop and the wide band on an
+ * iPad or phone alike.
+ */
+
+.panel {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  container-type: size;
+}
+
+.water {
+  object-fit: cover;
+  object-position: 70% 0%;
+}
+
+.ripple {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: min(88cqw, 88cqh);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+}
+
+/*
+ * Five rings, from just outside the centre to the square's edge, evenly
+ * spaced. Written out per ring rather than computed from a custom property:
+ * the stylesheet guard holds every `var()` in `components/app` to a token
+ * declared in `app/brand-theme.css`, and a ring index is not a token.
+ */
+.ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-cinema-ink) 62%, transparent);
+}
+
+/*
+ * Each ring's word sits on its edge, alternating top and bottom so that on a
+ * short band the labels of neighbouring rings are twice as far apart.
+ */
+.word {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  translate: -50% -50%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 11.5px;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  color: var(--color-cinema);
+  background: color-mix(in srgb, var(--color-cinema-ink) 84%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.ring:nth-child(1) {
+  width: 40.8%;
+}
+
+.ring:nth-child(2) {
+  width: 55.6%;
+}
+
+.ring:nth-child(3) {
+  width: 70.4%;
+}
+
+.ring:nth-child(4) {
+  width: 85.2%;
+}
+
+.ring:nth-child(5) {
+  width: 100%;
+}
+
+.ring:nth-child(even) .word {
+  top: 100%;
+}
+
+.centre {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 24%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  padding: 6px;
+  border-radius: 999px;
+  text-align: center;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: clamp(12px, 4.2cqmin, 17px);
+  line-height: 1.15;
+  color: var(--color-cinema);
+  background: color-mix(in srgb, var(--color-cinema-ink) 88%, transparent);
+  /* The lotus centre's warm bloom: where it begins. */
+  box-shadow: var(--shadow-bloom);
+}
+
+/*
+ * The rings arrive as the reader moves down the page, one per stretch of the
+ * text, so the picture widens as the argument does. Only where scroll-driven
+ * animation exists and motion is welcome; everywhere else they are all
+ * present from the start, which is the same picture.
+ */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .ring {
+      animation: widen linear both;
+      animation-timeline: scroll(root block);
+    }
+
+    /* The first ring is there on arrival — a life already moving the water —
+       and the rest follow as the text does. */
+    .ring:nth-child(1) {
+      animation: none;
+    }
+
+    .ring:nth-child(2) {
+      animation-range: 6% 16%;
+    }
+
+    .ring:nth-child(3) {
+      animation-range: 14% 24%;
+    }
+
+    .ring:nth-child(4) {
+      animation-range: 22% 32%;
+    }
+
+    .ring:nth-child(5) {
+      animation-range: 30% 40%;
+    }
+  }
+}
+
+@keyframes widen {
+  from {
+    opacity: 0;
+    scale: 0.82;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
