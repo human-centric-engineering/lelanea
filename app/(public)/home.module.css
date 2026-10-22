@@ -96,12 +96,18 @@
   border-radius: 50%;
   /* The closing pond's own deep teals, blended: darkest beneath the flower,
      dissolving into the oyster well before the edge (owner, t-171). */
+  /* Many stops, easing out like a soft light falls off, so the pool has no
+     visible band anywhere between its deep centre and the page. */
   background: radial-gradient(
     closest-side,
-    color-mix(in srgb, var(--color-lotus-pad-edge) 80%, transparent),
-    color-mix(in srgb, var(--color-lotus-petal-outer-edge) 58%, transparent) 42%,
-    color-mix(in srgb, var(--color-lotus-petal-mid) 26%, transparent) 70%,
-    transparent
+    color-mix(in srgb, var(--color-lotus-pad-edge) 62%, transparent) 0%,
+    color-mix(in srgb, var(--color-lotus-pad-edge) 52%, transparent) 18%,
+    color-mix(in srgb, var(--color-lotus-petal-outer-edge) 40%, transparent) 34%,
+    color-mix(in srgb, var(--color-lotus-petal-outer) 27%, transparent) 50%,
+    color-mix(in srgb, var(--color-lotus-petal-mid) 16%, transparent) 64%,
+    color-mix(in srgb, var(--color-lotus-petal-inner) 8%, transparent) 78%,
+    color-mix(in srgb, var(--color-lotus-petal-inner) 3%, transparent) 90%,
+    transparent 100%
   );
   /* No `filter: blur` here, though it would soften the edge further: the
      lotus's opening plays on a GPU-composited canvas above this pool, and a
@@ -117,19 +123,25 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--color-lotus-vein) 70%, transparent);
-  opacity: 0.5;
-  scale: 0.4;
+  /* The lotus's own teal on the oyster, so the rings read as they spread;
+     the pale vein on charcoal, below. */
+  border: 1px solid color-mix(in srgb, var(--color-lotus-petal-outer) 75%, transparent);
+  opacity: 0.4;
+  scale: 0.32;
+}
+
+:global(html.dark) .heroWater span {
+  border-color: color-mix(in srgb, var(--color-lotus-vein) 70%, transparent);
 }
 
 .heroWater span:nth-child(2) {
-  opacity: 0.35;
-  scale: 0.62;
+  opacity: 0.28;
+  scale: 0.47;
 }
 
 .heroWater span:nth-child(3) {
-  opacity: 0.2;
-  scale: 0.84;
+  opacity: 0.14;
+  scale: 0.6;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -148,13 +160,19 @@
 
 @keyframes heroSpread {
   from {
-    opacity: 0.7;
-    scale: 0.25;
+    opacity: 0;
+    scale: 0.22;
   }
 
+  15% {
+    opacity: 0.75;
+  }
+
+  /* Gone by two-thirds of the pool's width, well inside its fade, so a ring
+     never draws a hard ellipse against the bare page. */
   to {
     opacity: 0;
-    scale: 1;
+    scale: 0.68;
   }
 }
 
