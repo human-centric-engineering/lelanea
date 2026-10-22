@@ -608,30 +608,35 @@
 }
 
 /* =============================================================== companion
- * `/mission`'s reading companion: "light through water" held beside the text
- * on a desktop, so a long read always has somewhere for the eye to rest. A
- * band above the text once the page narrows.
+ * `/mission` (t-171): the water as the page's whole left side. It runs from
+ * the window's left edge, from beneath the header to the footer, and its
+ * right edge dissolves into the oyster under the text — no frame, no card.
+ * The drawing on it stays pinned in view (see `mission-ripple.module.css`).
+ *
+ * Below the desktop width it becomes a band above the text, fading out
+ * downward into it.
  */
 .reading {
   display: grid;
-  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
-  gap: clamp(36px, 5vw, 80px);
-  align-items: start;
+  grid-template-columns: minmax(340px, 44vw) minmax(0, 1fr);
+}
+
+.readingText {
+  max-width: 720px;
+  padding: clamp(44px, 6vw, 76px) clamp(20px, 5vw, 72px) clamp(56px, 7vw, 96px) 8px;
 }
 
 .companion {
-  position: sticky;
-  top: 104px;
-  height: min(calc(100vh - 140px), 780px);
+  position: relative;
+  align-self: stretch;
   margin: 0;
-  overflow: hidden;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-rest);
+  /* The right edge dissolves into the page: water to the oyster. */
+  mask-image: linear-gradient(to right, black 68%, transparent);
 }
 
 .companion img {
   object-fit: cover;
-  object-position: 70% 0%;
+  object-position: 60% 20%;
   animation: drift 48s var(--ease-brand) infinite alternate;
 }
 
@@ -659,17 +664,22 @@
   }
 
   .companion {
-    position: relative;
-    top: auto;
-    height: auto;
-    aspect-ratio: 21 / 9;
+    aspect-ratio: 16 / 9;
+    max-height: 62vh;
+    width: 100%;
+    mask-image: linear-gradient(to bottom, black 70%, transparent);
+  }
+
+  .readingText {
+    max-width: 760px;
+    margin-inline: auto;
+    padding: 8px clamp(20px, 5vw, 72px) clamp(56px, 7vw, 92px);
   }
 }
 
 @media (max-width: 620px) {
   .companion {
-    aspect-ratio: 16 / 10;
-    border-radius: var(--radius-lg);
+    aspect-ratio: 4 / 3;
   }
 }
 

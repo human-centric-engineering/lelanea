@@ -45,39 +45,45 @@ export function MissionRipple({
       role="img"
       aria-label={`${RIPPLE_CENTRE}, widening to ${RIPPLE_RINGS.join(', ')}`}
     >
-      <Image
-        src={LIGHT_THROUGH_WATER}
-        alt=""
-        fill
-        priority
-        sizes="(max-width: 1100px) 100vw, 40vw"
-        className={styles.water}
-      />
-
-      {captions.length === 0 ? null : (
-        <div className={styles.captions} aria-hidden="true">
-          {captions.slice(0, 3).map((caption) => (
-            <p key={caption} className={styles.caption}>
-              {caption}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {/* The bloom the rings come from, resting at the foot of the panel. */}
-      <div className={styles.foot} aria-hidden="true">
-        <LotusMark size={58} water={false} />
-        <span className="brand-eyebrow">the mission</span>
-      </div>
-
-      <div className={styles.ripple} aria-hidden="true">
-        {RIPPLE_RINGS.map((word) => (
-          <div key={word} className={styles.ring}>
-            <span className={styles.word}>{word}</span>
+      {/* The stage holds the drawing in view: on a desktop the water runs
+          the full height of the page beside the text, and the rings stay with
+          the reader as they scroll. */}
+      <div className={styles.stage}>
+        {/* The water is drawn at the stage's size — a screen high — rather
+            than stretched down the whole page, where it would turn blocky. */}
+        <Image
+          src={LIGHT_THROUGH_WATER}
+          alt=""
+          fill
+          priority
+          sizes="(max-width: 1100px) 100vw, 45vw"
+          className={styles.water}
+        />
+        {captions.length === 0 ? null : (
+          <div className={styles.captions} aria-hidden="true">
+            {captions.slice(0, 3).map((caption) => (
+              <p key={caption} className={styles.caption}>
+                {caption}
+              </p>
+            ))}
           </div>
-        ))}
-        <div className={styles.centre}>
-          <span>{RIPPLE_CENTRE}</span>
+        )}
+
+        {/* The bloom the rings come from, resting at the foot of the panel. */}
+        <div className={styles.foot} aria-hidden="true">
+          <LotusMark size={58} water={false} />
+          <span className="brand-eyebrow">the mission</span>
+        </div>
+
+        <div className={styles.ripple} aria-hidden="true">
+          {RIPPLE_RINGS.map((word) => (
+            <div key={word} className={styles.ring}>
+              <span className={styles.word}>{word}</span>
+            </div>
+          ))}
+          <div className={styles.centre}>
+            <span>{RIPPLE_CENTRE}</span>
+          </div>
         </div>
       </div>
     </figure>

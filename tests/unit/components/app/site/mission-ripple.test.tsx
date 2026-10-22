@@ -51,7 +51,10 @@ describe('MissionRipple', () => {
     // description is not read a second time word by word.
     const hidden = [...figure.querySelectorAll('[aria-hidden="true"]')].map((el) => el.textContent);
     expect(hidden.some((text) => text?.includes('communities'))).toBe(true);
-    // Nothing visible inside the figure is outside a hidden layer.
-    expect(figure.querySelectorAll(':scope > :not([aria-hidden="true"]):not(img)')).toHaveLength(0);
+    // Nothing visible inside the figure's stage is outside a hidden layer, so
+    // the only thing announced is the figure's own label.
+    const stage = figure.firstElementChild!;
+    expect(stage.children.length).toBeGreaterThan(2);
+    expect(stage.querySelectorAll(':scope > :not([aria-hidden="true"]):not(img)')).toHaveLength(0);
   });
 });

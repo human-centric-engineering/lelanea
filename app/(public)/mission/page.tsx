@@ -76,37 +76,36 @@ export default async function MissionPage() {
   const mission = await requireDocument('the_mission');
 
   return (
-    <div className={styles.page}>
-      <section className={`${styles.opening} ${styles.closing} ${styles.reading}`}>
-        {/* Her mission's one movement — a single awakened life widening to
-            families, communities and beyond — drawn on the site's water, and
-            held beside the text on a desktop (t-171). */}
-        <MissionRipple
-          className={styles.companion}
-          captions={[
-            sentenceStarting(mission.blocks, 'Purpose begins within'),
-            sentenceStarting(mission.blocks, 'One awakened life'),
-            sentenceStarting(mission.blocks, 'It belongs to humanity'),
-          ].filter((caption): caption is string => caption !== null)}
-        />
+    <div className={styles.reading}>
+      {/* Her mission's one movement — a single awakened life widening to
+            families, communities and beyond — drawn on the site's water. On a
+            desktop the water runs from the window's left edge, from the nav to
+            the footer, and dissolves into the text (owner, t-171). */}
+      <MissionRipple
+        className={styles.companion}
+        captions={[
+          sentenceStarting(mission.blocks, 'Purpose begins within'),
+          sentenceStarting(mission.blocks, 'One awakened life'),
+          sentenceStarting(mission.blocks, 'It belongs to humanity'),
+        ].filter((caption): caption is string => caption !== null)}
+      />
 
-        <div>
-          {/* The category, not the prototype's "the mission" — the document
+      <div className={styles.readingText}>
+        {/* The category, not the prototype's "the mission" — the document
               is titled "The Mission", so the prototype's eyebrow would print
               the same three words directly above it in a smaller face. */}
-          <Eyebrow as="p">{CATEGORY_LABEL[mission.category]}</Eyebrow>
-          <h1 className="brand-display mt-[18px] mb-9 max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
-            {mission.title}
-          </h1>
+        <Eyebrow as="p">{CATEGORY_LABEL[mission.category]}</Eyebrow>
+        <h1 className="brand-display mt-[18px] mb-9 max-w-[20ch] text-[clamp(34px,3.9vw,48px)]">
+          {mission.title}
+        </h1>
 
-          <AuthoredBlocks
-            blocks={mission.blocks}
-            renderStyle={mission.renderStyle}
-            beats
-            className={`${styles.prose} ${styles.lede} ${styles.dropcap}`}
-          />
-        </div>
-      </section>
+        <AuthoredBlocks
+          blocks={mission.blocks}
+          renderStyle={mission.renderStyle}
+          beats
+          className={`${styles.prose} ${styles.lede} ${styles.dropcap}`}
+        />
+      </div>
     </div>
   );
 }

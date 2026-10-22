@@ -703,8 +703,3 @@
   background: color-mix(in srgb, var(--color-lotus-core) 6%, var(--color-background));
   box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--color-lotus-core) 6%, var(--color-background));
 }
-
-/* The closing pond sits clear of the warm section above it, on the oyster. */
-.tintWarm + section {
-  margin-top: clamp(56px, 7vw, 92px);
-}
