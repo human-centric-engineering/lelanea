@@ -86,58 +86,64 @@
 .heroWater {
   position: absolute;
   left: 50%;
-  top: 62%;
+  top: 58%;
   z-index: -1;
-  width: 124%;
-  aspect-ratio: 2.6;
+  width: 150%;
+  aspect-ratio: 1.9;
   translate: -50% -50%;
   border-radius: 50%;
+  /* The closing pond's own deep teals, blended: darkest beneath the flower,
+     dissolving into the oyster well before the edge (owner, t-171). */
   background: radial-gradient(
     closest-side,
-    color-mix(in srgb, var(--color-lotus-petal-mid) 22%, transparent),
-    color-mix(in srgb, var(--color-lotus-petal-inner) 10%, transparent) 55%,
+    color-mix(in srgb, var(--color-lotus-pad-edge) 72%, transparent),
+    color-mix(in srgb, var(--color-lotus-petal-outer-edge) 52%, transparent) 50%,
+    color-mix(in srgb, var(--color-lotus-petal-mid) 16%, transparent) 78%,
     transparent
   );
+  filter: blur(10px);
   pointer-events: none;
 }
 
+/* The rings, as on the pond: spreading slowly outward from under the bloom
+   and fading as they go. */
 .heroWater span {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--color-lotus-petal-outer) 40%, transparent);
-  opacity: 0.4;
-  scale: 0.45;
+  border: 1px solid color-mix(in srgb, var(--color-lotus-vein) 70%, transparent);
+  opacity: 0.5;
+  scale: 0.4;
 }
 
 .heroWater span:nth-child(2) {
-  opacity: 0.28;
-  scale: 0.68;
+  opacity: 0.35;
+  scale: 0.62;
 }
 
 .heroWater span:nth-child(3) {
-  opacity: 0.16;
-  scale: 0.9;
+  opacity: 0.2;
+  scale: 0.84;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .heroWater span {
-    animation: heroSpread 12s var(--ease-brand) infinite;
+    animation: heroSpread 10s var(--ease-brand) infinite;
   }
 
   .heroWater span:nth-child(2) {
-    animation-delay: -4s;
+    animation-delay: -3.33s;
   }
 
   .heroWater span:nth-child(3) {
-    animation-delay: -8s;
+    animation-delay: -6.66s;
   }
 }
 
 @keyframes heroSpread {
   from {
-    opacity: 0.5;
-    scale: 0.3;
+    opacity: 0.7;
+    scale: 0.25;
   }
 
   to {
