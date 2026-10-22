@@ -56,13 +56,18 @@ import styles from '@/components/app/site/site.module.css';
  * suite covers only its own side.
  *
  * The seam is handed the trademarked product name as the holder, so its
- * default is "© 2026 Lelañea™", a fork's string still replaces it verbatim, and
- * `false` still removes it. When the seam yields nothing the whole paragraph
+ * default is "© 2026 Lelañea™", a fork's string still replaces that half
+ * verbatim, and `false` still removes it. `STUDIO_CREDIT` is then appended to
+ * whatever the seam yields — the owner's ruling covers the credit as well as
+ * the name, so it is ours to print, not the seam's to replace. When the seam yields nothing the whole paragraph
  * goes, credit included: `false` is the white-label setting, and a bare studio
  * credit is not a line anybody chose.
  *
  * @see .context/app/planning/design/lelanea.html — `footer.site-foot`
  */
+/** The studio's credit, closing the legal line (owner, t-171). */
+export const STUDIO_CREDIT = 'Built by HCE Studio';
+
 export function SiteFooter() {
   const { openPreferences } = useConsent();
   const year = new Date().getFullYear();
@@ -172,7 +177,11 @@ export function SiteFooter() {
 
       {/* The name comes from the brand seam: hardcoding it would be a second
           place to change it from. */}
-      {copyright && <p className={styles.footLegal}>{copyright} · Built by HCE Studio</p>}
+      {copyright && (
+        <p className={styles.footLegal}>
+          {copyright} · {STUDIO_CREDIT}
+        </p>
+      )}
     </footer>
   );
 }

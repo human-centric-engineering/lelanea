@@ -1,5 +1,6 @@
 import Image from 'next/image';
 
+import { InlineText } from '@/components/app/content/authored-document';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { LIGHT_THROUGH_WATER } from '@/lib/site/config';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,8 @@ export function MissionRipple({
    * Up to three of her sentences, shown one after another above the rings as
    * they grow — the page picks them out of the mission, so they are hers and
    * never retyped here. Hidden where the panel is a wide band, with no room.
+   * Authored text, so it renders through `InlineText` like every other
+   * authored string: her emphasis kept, a placeholder marked.
    */
   captions?: ReadonlyArray<string>;
 }) {
@@ -63,7 +66,7 @@ export function MissionRipple({
           <div className={styles.captions} aria-hidden="true">
             {captions.slice(0, 3).map((caption) => (
               <p key={caption} className={styles.caption}>
-                {caption}
+                <InlineText text={caption} />
               </p>
             ))}
           </div>

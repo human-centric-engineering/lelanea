@@ -114,3 +114,18 @@
     font-size: 16.5px;
   }
 }
+
+/* Only stack where a whole panel fits beneath its pin. On a short window —
+   a landscape phone, a laptop at 200% zoom (WCAG reflow) — a panel can be
+   taller than the space below its `top`, and the next one would slide over
+   text that could never be scrolled into view. These are the page's most
+   important claims, so there they simply scroll, one after another. After
+   the narrow-screen rules on purpose: their `top`s would otherwise offset a
+   panel that is no longer pinned. `relative` rather than `static`, because
+   the narrow layout positions the glyph against the panel. */
+@media (max-height: 720px) {
+  .promise:nth-child(n) {
+    position: relative;
+    top: auto;
+  }
+}

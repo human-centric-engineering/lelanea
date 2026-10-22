@@ -57,4 +57,12 @@ describe('MissionRipple', () => {
     expect(stage.children.length).toBeGreaterThan(2);
     expect(stage.querySelectorAll(':scope > :not([aria-hidden="true"]):not(img)')).toHaveLength(0);
   });
+
+  it('renders a caption as authored text, through InlineText', () => {
+    const { container } = render(<MissionRipple captions={['It is **hers**, whole.']} />);
+
+    const caption = container.querySelector('p');
+    expect(caption?.textContent).toBe('It is hers, whole.');
+    expect(caption?.querySelector('strong')?.textContent).toBe('hers');
+  });
 });

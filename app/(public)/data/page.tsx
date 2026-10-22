@@ -223,12 +223,13 @@ export default async function DataPage() {
 
         <DataPromises items={DATA_RIGHTS} />
 
-        {/* A `p`, not a heading: the page's next heading is the `h2` on "what
-            it is, what it is not", and a heading here would be an `h3` under
-            an `h1` with no `h2` between them. `Eyebrow` renders identical type
-            either way. */}
+        {/* An `h2`, a peer of the three promises' own `h2`s (t-171). As a
+            `p` it fell under "Export a full copy" in the outline, so a screen
+            reader heard the five rights as part of the third promise. They are
+            the footing under all three, and their own heading says so.
+            `Eyebrow` renders identical type either way. */}
         <div className={styles.rightsStrip}>
-          <Eyebrow as="p">your rights under gdpr</Eyebrow>
+          <Eyebrow as="h2">your rights under gdpr</Eyebrow>
           <ul className={styles.rightsList}>
             {GDPR_RIGHTS.map((right) => (
               <li key={right}>{right}</li>

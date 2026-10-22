@@ -525,7 +525,10 @@
 .windowFrame {
   position: relative;
   width: 100%;
-  height: min(68vh, 620px);
+  /* Never taller than the window leaves room for beneath the 112px pin, with
+     the caption under it: on a short screen the frame gives way, so "created
+     by" stays in view while the chapters pass. */
+  height: min(68vh, 620px, calc(100vh - 220px));
   overflow: hidden;
   /* An arch: a full round across the top, the large radius below. */
   border-radius: 999px 999px var(--radius-xl) var(--radius-xl);

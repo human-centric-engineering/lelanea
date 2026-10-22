@@ -1,4 +1,8 @@
-import { headingAnchor } from '@/components/app/content/authored-document';
+import {
+  InlineText,
+  applyFirstName,
+  headingAnchors,
+} from '@/components/app/content/authored-document';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
 import type { FoundationalDocumentDetail } from '@/lib/app/content/document-view';
 import { cn } from '@/lib/utils';
@@ -6,6 +10,7 @@ import styles from '@/components/app/site/page-guide.module.css';
 
 export interface PageGuideItem {
   href: string;
+  /** Authored text — rendered through `InlineText`, never stripped by hand. */
   label: string;
   /** The document's own section number, where it numbers them. */
   number?: number;
@@ -13,15 +18,19 @@ export interface PageGuideItem {
 
 /**
  * A document's top-level headings as guide items, linking to the ids
- * `AuthoredDocument` gives them with `anchors` — both from `headingAnchor`.
+ * `AuthoredDocument` gives them with `anchors` — both from `headingAnchors`,
+ * so a repeated heading's link lands on the right one. The label is the
+ * heading's authored text, merge field closed as for an anonymous reader, and
+ * `PageGuide` renders it through `InlineText` as the heading itself is.
  */
 export function guideItems(blocks: FoundationalDocumentDetail['blocks']): PageGuideItem[] {
-  return blocks.flatMap((block) =>
+  const anchors = headingAnchors(blocks);
+  return blocks.flatMap((block, index) =>
     block.type === 'heading' && block.level === 2
       ? [
           {
-            href: `#${headingAnchor(block.text)}`,
-            label: block.text.replaceAll('**', ''),
+            href: `#${anchors[index]}`,
+            label: applyFirstName(block.text, null),
             number: block.number,
           },
         ]
@@ -51,7 +60,9 @@ export function PageGuide({ items, className }: { items: PageGuideItem[]; classN
               <span className={styles.number} aria-hidden="true">
                 {String(item.number ?? index + 1).padStart(2, '0')}
               </span>
-              <span>{item.label}</span>
+              <span>
+                <InlineText text={item.label} />
+              </span>
             </a>
           </li>
         ))}

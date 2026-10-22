@@ -263,6 +263,16 @@
   opacity: 0.85;
 }
 
+/* Held in view only where it fits. With the 104px pin, the arch, her name and
+   the links need about 780px of window, so on a shorter one — a 1366×768
+   laptop, a zoomed page — pinning it would keep the links below the fold for
+   the whole biography. There it scrolls with the text instead. */
+@media (max-height: 820px) {
+  .creatorAside {
+    position: static;
+  }
+}
+
 @media (max-width: 1100px) {
   .creator {
     grid-template-columns: 1fr;

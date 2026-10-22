@@ -1,7 +1,11 @@
 import type { Metadata } from 'next';
 
 import { MissionRipple } from '@/components/app/site/mission-ripple';
-import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
+import {
+  AuthoredBlocks,
+  CATEGORY_LABEL,
+  applyFirstName,
+} from '@/components/app/content/authored-document';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import type { FoundationalDocumentDetail } from '@/lib/app/content/document-view';
 import { requireDocument } from '@/lib/app/content/sections';
@@ -53,9 +57,16 @@ export const dynamic = 'force-dynamic';
  */
 /**
  * The first sentence of hers that opens with `start`, from any paragraph of the
- * document, with her bold markers removed — or null if she no longer wrote it,
- * in which case the ripple simply shows one caption fewer (t-171). Found by its
- * opening words so the sentence on screen is always the stored one, whole.
+ * document — or null if she no longer wrote it, in which case the ripple simply
+ * shows one caption fewer (t-171). Found by its opening words so the sentence
+ * on screen is always the stored one, whole.
+ *
+ * Returned as authored text, emphasis markers and all, for `MissionRipple` to
+ * render through `InlineText` — the same path the paragraph beside it takes, so
+ * the two copies of her sentence cannot disagree. The merge field is closed as
+ * for an anonymous reader, since this is a public page. A sentence whose
+ * emphasis runs across its boundary would split a `**` pair in two, so that one
+ * case falls back to plain words.
  */
 function sentenceStarting(
   blocks: FoundationalDocumentDetail['blocks'],
@@ -63,11 +74,13 @@ function sentenceStarting(
 ): string | null {
   for (const block of blocks) {
     if (block.type !== 'paragraph') continue;
-    const found = block.text
-      .replaceAll('**', '')
-      .split(/(?<=[.!?])\s+/)
-      .find((sentence) => sentence.startsWith(start));
-    if (found) return found;
+    const found = applyFirstName(block.text, null)
+      .split(/(?<=[.!?](?:\*\*)?)\s+/)
+      .find((sentence) => sentence.replaceAll('**', '').startsWith(start));
+    if (found) {
+      const markers = found.split('**').length - 1;
+      return markers % 2 === 0 ? found : found.replaceAll('**', '');
+    }
   }
   return null;
 }

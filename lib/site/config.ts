@@ -114,13 +114,18 @@ export const CHANNEL_URL = {
   skool: 'https://www.skool.com/integrating-consciousness-2716',
 } as const;
 
-/** Which line icon a link carries. `components/app/site/channel-icons.tsx` draws them. */
-export type ChannelIcon = 'site' | 'instagram' | 'video' | 'listen' | 'read' | 'gather';
+/**
+ * The neutral line icon for a link with no service mark to show —
+ * `components/app/site/channel-icons.tsx` draws them. Only her own site and
+ * Skool need one; every other link carries its service's `mark`.
+ */
+export type ChannelIcon = 'site' | 'gather';
 
 /**
  * A service's own logo, where it has one we can draw
- * (`components/app/site/service-logos.tsx`). A link with a `mark` shows it in
- * place of its `icon`; Skool has none, so it keeps its glyph.
+ * (`components/app/site/service-logos.tsx`). A link carries a `mark` or an
+ * `icon`, never both: a mark always wins, so an icon beside it would be dead
+ * data. Skool has no mark, so it keeps its glyph.
  */
 export type ServiceMark = 'spotify' | 'applePodcasts' | 'youtube' | 'substack' | 'instagram';
 
@@ -143,16 +148,15 @@ export const SITE_LINKS: ReadonlyArray<{
     href: CHANNEL_URL.site,
     icon: 'site',
   },
-  { label: 'Instagram', href: CHANNEL_URL.instagram, icon: 'instagram', mark: 'instagram' },
-  { label: 'YouTube', href: CHANNEL_URL.youtube, icon: 'video', mark: 'youtube' },
-  { label: 'Spotify', href: CHANNEL_URL.spotify, icon: 'listen', mark: 'spotify' },
+  { label: 'Instagram', href: CHANNEL_URL.instagram, mark: 'instagram' },
+  { label: 'YouTube', href: CHANNEL_URL.youtube, mark: 'youtube' },
+  { label: 'Spotify', href: CHANNEL_URL.spotify, mark: 'spotify' },
   {
     label: 'Apple Podcasts',
     href: CHANNEL_URL.applePodcasts,
-    icon: 'listen',
     mark: 'applePodcasts',
   },
-  { label: 'Substack', href: CHANNEL_URL.substack, icon: 'read', mark: 'substack' },
+  { label: 'Substack', href: CHANNEL_URL.substack, mark: 'substack' },
   { label: 'Skool', href: CHANNEL_URL.skool, icon: 'gather' },
 ];
 
@@ -217,42 +221,33 @@ export const SITE_CHANNELS: ReadonlyArray<{
   },
 ];
 
-/** Where to find her, as `/lelanea` lists it beneath her biography. */
+/**
+ * Where to find her, as `/lelanea` lists it beneath her biography: entries of
+ * `SITE_LINKS`, picked by label, each with the handle that page shows beside
+ * it. Derived rather than restated, so a relabelled link or a changed mark is
+ * still one edit. A link the footer does not carry, or carries with no URL
+ * yet, is left out here too.
+ */
+const CREATOR_HANDLES: ReadonlyArray<{ label: string; handle?: string }> = [
+  // Its `detail` in SITE_LINKS already says what it is.
+  { label: 'Integrating Consciousness' },
+  { label: 'Instagram', handle: '@lelanea' },
+  { label: 'YouTube', handle: '@lelaneafulton' },
+  { label: 'Substack', handle: 'lelanea.substack.com' },
+];
+
 export const CREATOR_LINKS: ReadonlyArray<{
   label: string;
   detail: string;
   href: string;
-  icon: ChannelIcon;
+  icon?: ChannelIcon;
   mark?: ServiceMark;
-}> = [
-  {
-    label: 'Integrating Consciousness',
-    detail: 'Lelañea’s personal website',
-    href: CHANNEL_URL.site,
-    icon: 'site',
-  },
-  {
-    label: 'Instagram',
-    detail: '@lelanea',
-    href: CHANNEL_URL.instagram,
-    icon: 'instagram',
-    mark: 'instagram',
-  },
-  {
-    label: 'YouTube',
-    detail: '@lelaneafulton',
-    href: CHANNEL_URL.youtube,
-    icon: 'video',
-    mark: 'youtube',
-  },
-  {
-    label: 'Substack',
-    detail: 'lelanea.substack.com',
-    href: CHANNEL_URL.substack,
-    icon: 'read',
-    mark: 'substack',
-  },
-];
+}> = CREATOR_HANDLES.flatMap(({ label, handle }) => {
+  const link = SITE_LINKS.find((candidate) => candidate.label === label);
+  const detail = handle ?? link?.detail;
+  if (!link?.href || detail === undefined) return [];
+  return [{ label, detail, href: link.href, icon: link.icon, mark: link.mark }];
+});
 
 /** The public pages, in the order the header and footer list them. */
 export const SITE_NAV = [

@@ -5,9 +5,9 @@ export type PromiseGlyph = 'see' | 'delete' | 'export';
 /**
  * `/data`'s three promises as panels that stack as the reader scrolls (t-171).
  *
- * Each panel pins near the top of the screen and pauses there while the next
- * slides up over it, so the three are read one at a time and end as a neat
- * stack — a deliberate pace for the page's most important claims, done with
+ * Where the window is tall enough to hold a whole panel, each pins near the
+ * top of the screen and pauses there while the next slides up over it, so the
+ * three are read one at a time and end as a neat stack — a deliberate pace for the page's most important claims, done with
  * `position: sticky` alone. No script, nothing to switch off: with reduced
  * motion the panels still stack, because stacking is position, not animation.
  *

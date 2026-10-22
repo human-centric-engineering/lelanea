@@ -323,17 +323,43 @@ export const BEAT_MAX_WORDS = 14;
 
 /**
  * The fragment id a heading gets when a page asks for anchors (t-171): its
- * text, bold markers dropped, lower-cased and hyphenated. A page's contents
- * list links to the same function's output, so the two cannot disagree.
+ * text, bold markers dropped, lower-cased and hyphenated. A heading with no
+ * letters or digits to slug falls back to `section`, never to an empty id —
+ * `id=""` is invalid, and `href="#"` jumps to the top of the page.
+ *
+ * One heading's slug. A document's ids come from {@link headingAnchors}, which
+ * also keeps two headings with the same text apart.
  */
 export function headingAnchor(text: string): string {
-  return text
-    .replaceAll('**', '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  return (
+    text
+      .replaceAll('**', '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'section'
+  );
+}
+
+/**
+ * Every heading's fragment id in a block list, by block index (`undefined` for
+ * a block that is not a heading). A repeated slug takes `-2`, `-3`… in
+ * document order, so two headings with the same text get two ids and the
+ * second guide link lands on the second heading. `AuthoredDocument` and a
+ * page's contents list both read ids from here, so the two cannot disagree.
+ */
+export function headingAnchors(
+  blocks: FoundationalDocumentDetail['blocks']
+): (string | undefined)[] {
+  const seen = new Map<string, number>();
+  return blocks.map((block) => {
+    if (block.type !== 'heading') return undefined;
+    const slug = headingAnchor(block.text);
+    const count = (seen.get(slug) ?? 0) + 1;
+    seen.set(slug, count);
+    return count === 1 ? slug : `${slug}-${count}`;
+  });
 }
 
 /** Whether a paragraph is one of her short turns. See {@link BEAT_MAX_WORDS}. */
@@ -346,14 +372,15 @@ function AuthoredBlock({
   block,
   cadence,
   beats,
-  anchors,
+  anchorId,
   firstName,
   baseLevel,
 }: {
   block: FoundationalDocumentDetail['blocks'][number];
   cadence: boolean;
   beats: boolean;
-  anchors: boolean;
+  /** The heading's fragment id, from `headingAnchors`, when the page asks for them. */
+  anchorId: string | undefined;
   firstName: string | null | undefined;
   baseLevel: HeadingLevel;
 }): React.ReactNode {
@@ -375,11 +402,11 @@ function AuthoredBlock({
 
       return (
         <Heading
-          id={anchors ? headingAnchor(block.text) : undefined}
+          id={anchorId}
           className={cn(
             HEADING_TYPE,
             'mt-10 mb-3 text-2xl first:mt-0',
-            anchors && 'scroll-mt-[104px]'
+            anchorId !== undefined && 'scroll-mt-[104px]'
           )}
         >
           {block.number === undefined ? null : (
@@ -437,6 +464,8 @@ function BlockList({
   firstName: string | null | undefined;
   baseLevel: HeadingLevel;
 }): React.ReactNode {
+  const anchorIds = anchors ? headingAnchors(blocks) : [];
+
   return (
     <>
       {blocks.map((block, index) => (
@@ -445,7 +474,7 @@ function BlockList({
           block={block}
           cadence={cadence}
           beats={beats}
-          anchors={anchors}
+          anchorId={anchorIds[index]}
           firstName={firstName}
           baseLevel={baseLevel}
         />
