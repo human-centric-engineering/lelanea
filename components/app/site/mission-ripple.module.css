@@ -281,24 +281,15 @@
  * and the marks on it turn light: the life a deep-teal disc with a warm rim,
  * the words in the oyster ink. */
 :global(html.dark) .water {
-  filter: brightness(0.42) saturate(1.25) hue-rotate(-8deg);
+  opacity: 0.3;
+  filter: saturate(1.2);
 }
 
-:global(html.dark) .stage::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--color-lotus-pad-edge) 55%, transparent),
-    color-mix(in srgb, var(--color-lotus-pad) 70%, transparent)
-  );
-  pointer-events: none;
-}
-
-:global(html.dark) .stage > :not(img) {
-  z-index: 1;
+:global(html.dark) .stage {
+  /* The dusk is the stage's own ground, with the water laid over it part
+     transparent — no overlay layer, no z-index, nothing for the compositor
+     to separate. */
+  background: linear-gradient(to bottom, var(--color-lotus-pad-edge), var(--color-lotus-pad));
 }
 
 :global(html.dark) .caption,

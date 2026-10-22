@@ -149,11 +149,16 @@ export default async function HomePage() {
             {/* Decorative: the page's name is its `h1` a column away, so
               announcing the flower would only repeat it. It unfolds on every
               load, as the app's entry bloom does (owner, t-132). */}
+            <div className={styles.heroWater} aria-hidden="true" />
             <div className={styles.bloomArt}>
               {/* The water it sits on (owner, t-171): a soft teal fade, not a
                 band, and rings spreading slowly outward as on the closing
                 pond. Decorative. */}
-              <div className={styles.heroWater} aria-hidden="true">
+              {/* The flower's own ripples, carried on outward (owner, t-171):
+                centred on the rings baked into its water and the same shape,
+                they begin at the outermost of those and spread from there.
+                Painted before the flower, in ordinary order. Decorative. */}
+              <div className={styles.heroRings} aria-hidden="true">
                 <span />
                 <span />
                 <span />

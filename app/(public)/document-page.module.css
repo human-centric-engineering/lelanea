@@ -630,8 +630,22 @@
   position: relative;
   align-self: stretch;
   margin: 0;
-  /* The right edge dissolves into the page: water to the oyster. */
-  mask-image: linear-gradient(to right, black 68%, transparent);
+}
+
+/*
+ * The right edge dissolves into the page — drawn as an overlay in the page's
+ * own ground, NOT as a `mask-image`. On a real GPU every animating layer inside
+ * a masked element (the captions, the rings, the foot) was composited as its
+ * own rectangle without the mask's backdrop, and each showed as a dark box
+ * while the page loaded (owner, t-171). An overlay has no such failure.
+ */
+.companion::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(to right, transparent 64%, var(--color-background));
+  pointer-events: none;
 }
 
 .companion img {
@@ -667,7 +681,10 @@
     aspect-ratio: 16 / 9;
     max-height: 62vh;
     width: 100%;
-    mask-image: linear-gradient(to bottom, black 70%, transparent);
+  }
+
+  .companion::after {
+    background: linear-gradient(to bottom, transparent 66%, var(--color-background));
   }
 
   .readingText {

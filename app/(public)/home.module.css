@@ -73,7 +73,7 @@
 
 .bloomArt {
   position: relative;
-  isolation: isolate;
+  z-index: 1;
   width: min(470px, 100%);
 }
 
@@ -84,13 +84,19 @@
  * closing pond. Still for anyone who asks for less motion.
  */
 .heroWater {
+  /* A sibling BEFORE the flower, at z-index 0, rather than a child behind it
+     at -1 in an isolated group: on a real GPU the opening's canvas is its own
+     compositing layer, and the negative-z layer beneath it inside the group
+     was dropped under that rectangle — a box of bare ground round the bud in
+     dark mode (owner, t-171). Ordinary paint order cannot be dropped. Its top
+     is measured from the bloom column, which begins at the flower. */
   position: absolute;
   left: 50%;
-  top: 58%;
-  z-index: -1;
+  top: calc(8px + min(470px, 100%) * 0.36);
+  z-index: 0;
   /* Sized in its own right, not only from the flower: on narrower screens
      the flower shrinks, and a pool that shrank with it all but vanished. */
-  width: clamp(620px, 190%, 1040px);
+  width: clamp(620px, 210%, 1040px);
   aspect-ratio: 2;
   translate: -50% -50%;
   border-radius: 50%;
@@ -117,62 +123,73 @@
   pointer-events: none;
 }
 
-/* The rings, as on the pond: spreading slowly outward from under the bloom
-   and fading as they go. */
-.heroWater span {
+/*
+ * The flower's ripples, carried on outward (owner, t-171). The baked lotus has
+ * three rings in its water, centred 77.4% down its frame and 5.8 times wider
+ * than tall (`LOTUS_RIPPLES` at cy 4 in the frame's 163.3-high box). These
+ * share that centre and that shape: each starts at the outermost baked ring's
+ * size (0.935 of the frame's width) and spreads to just over twice the frame,
+ * fading as it goes. Inside the bloom's box, before the flower in paint order.
+ */
+.heroRings {
+  position: absolute;
+  left: 50%;
+  top: 77.4%;
+  width: 220%;
+  aspect-ratio: 5.8;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+.heroRings span {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  /* The lotus's own teal on the oyster, so the rings read as they spread;
-     the pale vein on charcoal, below. */
-  border: 1px solid color-mix(in srgb, var(--color-lotus-petal-outer) 75%, transparent);
-  opacity: 0.4;
-  scale: 0.32;
+  border: 1px solid color-mix(in srgb, var(--color-lotus-ripple) 70%, transparent);
+  opacity: 0;
+  scale: 0.425;
 }
 
-:global(html.dark) .heroWater span {
-  border-color: color-mix(in srgb, var(--color-lotus-vein) 70%, transparent);
-}
-
-.heroWater span:nth-child(2) {
-  opacity: 0.28;
-  scale: 0.47;
-}
-
-.heroWater span:nth-child(3) {
-  opacity: 0.14;
-  scale: 0.6;
+:global(html.dark) .heroRings span {
+  border-color: color-mix(in srgb, var(--color-lotus-vein) 60%, transparent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .heroWater span {
-    animation: heroSpread 10s var(--ease-brand) infinite;
+  .heroRings span {
+    animation: heroSpread 9s linear infinite;
   }
 
-  .heroWater span:nth-child(2) {
-    animation-delay: -3.33s;
+  .heroRings span:nth-child(2) {
+    animation-delay: -3s;
   }
 
-  .heroWater span:nth-child(3) {
-    animation-delay: -6.66s;
+  .heroRings span:nth-child(3) {
+    animation-delay: -6s;
+  }
+}
+
+/* Reduced motion: two still rings just beyond the baked three. */
+@media (prefers-reduced-motion: reduce) {
+  .heroRings span:nth-child(1) {
+    opacity: 0.22;
+    scale: 0.55;
+  }
+
+  .heroRings span:nth-child(2) {
+    opacity: 0.12;
+    scale: 0.7;
   }
 }
 
 @keyframes heroSpread {
   from {
-    opacity: 0;
-    scale: 0.22;
+    opacity: 0.4;
+    scale: 0.425;
   }
 
-  15% {
-    opacity: 0.75;
-  }
-
-  /* Gone by two-thirds of the pool's width, well inside its fade, so a ring
-     never draws a hard ellipse against the bare page. */
   to {
     opacity: 0;
-    scale: 0.68;
+    scale: 1;
   }
 }
 
@@ -399,6 +416,12 @@
 
   .bloomArt {
     width: 300px;
+  }
+
+  /* The flower is 300px here; the pool keeps to it. */
+  .heroWater {
+    top: calc(8px + 300px * 0.36);
+    width: 620px;
   }
 
   .creatorCard {
