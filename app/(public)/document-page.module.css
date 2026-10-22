@@ -137,8 +137,9 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px 22px;
-  margin-top: 24px;
-  padding-top: 18px;
+  /* Clear of the promises' stacked shadows above it. */
+  margin-top: 40px;
+  padding-top: 22px;
   border-top: 1px solid var(--color-divider);
 }
 
@@ -314,56 +315,179 @@
 }
 
 /* ================================================================ lineage
- * The fields she draws on, as tiles: three across on a desktop, two on an
- * iPad, one on a phone. Each is a heading and a sentence or two of names, so
- * a tile is the shape the content already has.
+ * The fields she draws on, as tributaries (t-171). A stream winds down the
+ * centre of the section — a teal fill shaped by a wave-shaped mask, so the
+ * colour is a token and only the SHAPE is drawn — and each field sits on
+ * alternate banks, joined to the water by a short line and a ring.
+ *
+ * Fields on opposite banks overlap vertically by a little, so the eye zigzags
+ * down the river rather than reading two half-empty columns. Below the iPad
+ * width the river runs down the left edge and every field sits to its right.
  */
-.lineage {
-  /* Columns rather than a grid: the tiles differ a lot in length, and a grid
-     row is as tall as its longest tile, which left holes under the short
-     ones. Columns pack them, masonry-style. */
-  columns: 3;
-  column-gap: 18px;
-  margin-top: 40px;
+.river {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 56px 0 0;
+  padding: 12px 0 24px;
+  list-style: none;
 }
 
-.lineageTile {
-  break-inside: avoid;
-  margin-bottom: 18px;
-  padding: 24px 24px 22px;
-  border-radius: var(--radius-lg);
-  background: var(--color-card);
-  border: 1px solid var(--color-card-border);
-  box-shadow: var(--shadow-rest);
-  font-size: 15.5px;
-  line-height: 1.65;
-}
-
-.lineageTile :global(h3) {
-  margin: 0 0 10px;
-  font-size: 21px;
-  line-height: 1.2;
-}
-
-/* A short teal hairline above each field: the same mark as the prose headings,
-   in the navigation teal rather than the ceremonial orange, since nine of
-   them sit side by side. */
-.lineageTile :global(h3)::before {
+.river::before {
   content: '';
-  display: block;
-  width: 24px;
-  height: 1px;
-  margin-bottom: 14px;
-  background: var(--color-secondary-ink);
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 26px;
+  translate: -50% 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-secondary-ink) 6%,
+    var(--color-secondary-ink) 94%,
+    transparent
+  );
+  /* The stream's course: a slow S-curve, repeated down the page. */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='160' viewBox='0 0 26 160'%3E%3Cpath d='M13 0 C 24 40, 24 40, 13 80 C 2 120, 2 120, 13 160' fill='none' stroke='black' stroke-width='1.6'/%3E%3C/svg%3E")
+    repeat-y center top / 26px 160px;
+  opacity: 0.7;
 }
 
-.lineageTile :global(p) {
-  margin: 0 0 0.8em;
+.tributary {
+  position: relative;
+  width: calc(50% - 56px);
+}
+
+.tributary:nth-child(odd) {
+  align-self: flex-start;
+  text-align: right;
+}
+
+.tributary:nth-child(even) {
+  align-self: flex-end;
+}
+
+/* Opposite banks overlap a little, so the read zigzags down the river. */
+.tributary + .tributary {
+  margin-top: -28px;
+}
+
+/* The line from the field to the water, and the ring where they meet. */
+.tributary::before {
+  content: '';
+  position: absolute;
+  top: 17px;
+  width: 40px;
+  height: 1px;
+  background: color-mix(in srgb, var(--color-secondary-ink) 45%, transparent);
+}
+
+.tributary::after {
+  content: '';
+  position: absolute;
+  top: 11px;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 1px solid var(--color-secondary-ink);
+  background: var(--color-background);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-secondary-ink) 9%, transparent);
+}
+
+.tributary:nth-child(odd)::before {
+  right: -48px;
+}
+
+.tributary:nth-child(odd)::after {
+  right: -62px;
+}
+
+.tributary:nth-child(even)::before {
+  left: -48px;
+}
+
+.tributary:nth-child(even)::after {
+  left: -62px;
+}
+
+.tributaryText {
+  padding: 2px 0 34px;
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: var(--color-muted-foreground);
+}
+
+.tributaryText :global(h3) {
+  margin: 0 0 8px;
+  font-size: clamp(21px, 2vw, 25px);
+  line-height: 1.2;
+  text-wrap: balance;
+  color: var(--color-heading);
+}
+
+.tributaryText :global(p) {
+  margin: 0 0 0.7em;
   line-height: inherit;
 }
 
-.lineageTile :global(p:last-child) {
+.tributaryText :global(p:last-child) {
   margin-bottom: 0;
+}
+
+/* Each field drifts in from its own bank as it reaches the reader. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .tributary {
+      animation: join linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
+}
+
+@keyframes join {
+  from {
+    opacity: 0;
+    translate: 0 24px;
+  }
+
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .river::before {
+    left: 13px;
+  }
+
+  .tributary,
+  .tributary:nth-child(odd),
+  .tributary:nth-child(even) {
+    align-self: stretch;
+    width: auto;
+    padding-left: 52px;
+    text-align: left;
+  }
+
+  .tributary + .tributary {
+    margin-top: 0;
+  }
+
+  .tributary:nth-child(odd)::before,
+  .tributary:nth-child(even)::before {
+    left: 20px;
+    right: auto;
+    width: 26px;
+  }
+
+  .tributary:nth-child(odd)::after,
+  .tributary:nth-child(even)::after {
+    left: 7px;
+    right: auto;
+  }
 }
 
 /* The coda: the lineage's closing section, set apart as the page's ending,
@@ -376,26 +500,6 @@
 .codaRipples {
   max-width: 420px;
   margin: 8px auto 0;
-}
-
-@media (max-width: 1100px) {
-  .lineage {
-    columns: 2;
-  }
-}
-
-@media (max-width: 620px) {
-  .lineage {
-    columns: 1;
-  }
-
-  .lineageTile {
-    margin-bottom: 12px;
-  }
-
-  .lineageTile {
-    padding: 20px;
-  }
 }
 
 @media (max-width: 1180px) {
@@ -475,7 +579,11 @@
 }
 
 /*
- * A drop cap on a page that opens with a long paragraph of hers. The
+ * A drop cap where a passage opens on a full paragraph of hers: `/mission`,
+ * and on `/lelanea` her biography and the lineage. Not where a passage opens
+ * on one of her short turns, which is already set as its own standfirst, and
+ * not on the legal documents, where an ornament would read as decoration over
+ * a disclosure. The
  * primary orange rather than the accent ink: the accent measures 2.9:1 on the
  * oyster, short of the 3:1 large text needs, and the primary clears 4.5.
  */
@@ -570,6 +678,9 @@
  * `/disclaimer`, `/terms`. The guide's own styles are `PageGuide`'s.
  */
 .withGuide {
+  /* Room beneath, so the sticky guide comes to rest above the section's
+     dividing line rather than on it (owner, t-171). */
+  padding-bottom: clamp(56px, 7vw, 92px);
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
   gap: clamp(36px, 5vw, 80px);
@@ -587,27 +698,134 @@
 }
 
 /* ================================================================= crisis
- * `/data`'s crisis passage (t-171). Its list of situations is ten short
- * lines; set in two columns where there is room, the whole passage — the
- * situations and what to do — fits in one glance instead of running the
- * instruction below the fold. The paragraphs keep their reading measure.
+ * `/data`'s crisis passage (t-171). Every word is the disclaimer's own and
+ * none of it is hidden, faded or moved by scrolling — the one place on the
+ * site where design only serves reading. Structure does the work:
+ *
+ *   - a terracotta rule down the left edge rather than an outline, so it
+ *     reads as weighted, not as an alert;
+ *   - the situations in a quieter inset with small terracotta markers, two
+ *     columns where there is room so the whole list is one glance;
+ *   - the instruction that follows them — "stop using this application
+ *     immediately" — set as the instruction it is;
+ *   - what to do next on a clear card of its own.
+ *
+ * The positional selectors follow the authored order (heading, two lines, the
+ * list, then three paragraphs). If that order changes the passage still reads
+ * correctly; it only loses emphasis, never words.
  */
+.crisisPanel {
+  position: relative;
+  padding: clamp(24px, 3.4vw, 40px) clamp(22px, 4vw, 48px);
+  padding-left: clamp(30px, 4.6vw, 56px);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-status-red-bg);
+}
+
+.crisisPanel::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--color-status-red);
+}
+
+.crisis {
+  max-width: none;
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.crisis :global(h3) {
+  margin: 0 0 14px;
+  font-size: clamp(26px, 2.8vw, 34px);
+}
+
+.crisis :global(p) {
+  max-width: 62ch;
+  margin: 0 0 10px;
+}
+
+/* The situations, inset. */
+.crisis :global(ul) {
+  margin: 16px 0 22px;
+  padding: 18px 24px;
+  list-style: none;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-background) 72%, transparent);
+}
+
+.crisis :global(li) {
+  position: relative;
+  padding: 5px 0 5px 22px;
+  break-inside: avoid;
+}
+
+.crisis :global(li)::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.95em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-status-red);
+}
+
+/* "stop using this application immediately." — the instruction. */
+.crisis :global(ul + p) {
+  margin: 0 0 18px;
+  font-family: var(--font-serif);
+  font-size: clamp(22px, 2.3vw, 28px);
+  line-height: 1.25;
+  color: var(--color-status-red-ink);
+}
+
+/* What to do next, on a clear card of its own. */
+.crisis :global(ul + p + p) {
+  max-width: none;
+  margin: 0 0 16px;
+  padding: 18px 22px;
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  box-shadow: var(--shadow-rest);
+  font-size: 18px;
+  color: var(--color-heading);
+}
+
 @media (min-width: 900px) {
-  .crisis {
-    max-width: none;
-  }
-
-  .crisis :global(p) {
-    max-width: 62ch;
-  }
-
   .crisis :global(ul) {
     columns: 2;
-    column-gap: 40px;
-    max-width: 52rem;
+    column-gap: 48px;
   }
+}
 
-  .crisis :global(li) {
-    break-inside: avoid;
-  }
+/* ================================================================== tints
+ * A page in sections gives alternate sections a whisper of colour, edge to
+ * edge (owner, t-171): a breath of the teal, then of the lotus's warmth. The
+ * section's content keeps the page's measure; only the ground runs full
+ * width, by a spread shadow clipped to the section's own height — no wrapper,
+ * so the markup and the outline are unchanged.
+ *
+ * A tinted section needs no dividing rule: the change of ground is the
+ * division.
+ */
+.tintTeal,
+.tintWarm {
+  border-top: 0;
+  clip-path: inset(0 -100vmax);
+}
+
+.tintTeal {
+  background: color-mix(in srgb, var(--color-secondary-ink) 6%, var(--color-background));
+  box-shadow: 0 0 0 100vmax
+    color-mix(in srgb, var(--color-secondary-ink) 6%, var(--color-background));
+}
+
+.tintWarm {
+  background: color-mix(in srgb, var(--color-lotus-core) 6%, var(--color-background));
+  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--color-lotus-core) 6%, var(--color-background));
 }

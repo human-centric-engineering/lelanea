@@ -2,7 +2,7 @@
  * Render "light through water", the public site's one picture (t-171).
  *   npm run water:image
  *
- * Writes `public/lelanea/light-through-water.webp`: sunlight coming down
+ * Writes `public/lelanea/water-light.webp`: sunlight coming down
  * through shallow water, softly out of focus, drawn in the lotus's own colours
  * so it belongs to the same pond as the mark. It stands in the place a
  * photograph would — the soft refracted photography on her own site is the
@@ -118,7 +118,7 @@ async function main() {
       const rv = wu * 0.6 + wv * 0.8;
       const fine = caustic(ru * 5.7 + 0.41, rv * 4.3 + 0.13, 12.7);
       const fade = 1 - smoothstep(0.05, 1.05, v) * 0.7;
-      colour = screen(colour, oyster, (lines * 0.6 + fine * 0.22) * fade);
+      colour = screen(colour, oyster, (lines * 0.42 + fine * 0.16) * fade);
 
       // Shafts of light from the upper right, where the sun enters.
       const angle = Math.atan2(v + 0.25, u - 0.95);
@@ -129,11 +129,18 @@ async function main() {
 
       // The warm bloom of the sun itself, the lotus centre's orange.
       const distance = Math.hypot((u - 0.84) * 1.25, v + 0.06);
-      colour = mix(colour, sun, 0.42 * Math.exp(-distance * distance * 4));
-      colour = screen(colour, glint, 0.5 * Math.exp(-distance * distance * 20));
+      colour = mix(colour, sun, 0.55 * Math.exp(-distance * distance * 2.6));
+      colour = screen(colour, glint, 0.5 * Math.exp(-distance * distance * 16));
 
-      // A little of the oyster over everything: muted, as the site is.
-      colour = mix(colour, oyster, 0.12);
+      // A second, lower warmth rising from the depth on the left: the lotus
+      // centre's orange, so the water carries the palette's warm note and
+      // not only its teals (owner, t-171).
+      const ember = Math.hypot((u - 0.18) * 1.1, v - 1.05);
+      colour = mix(colour, sun, 0.46 * Math.exp(-ember * ember * 2.2));
+
+      // Much of the oyster over everything: a soft ground for marks to sit on,
+      // muted as the site is, rather than a photograph competing with them.
+      colour = mix(colour, oyster, 0.38);
 
       const offset = (y * WIDTH + x) * 3;
       for (let i = 0; i < 3; i++) {
@@ -142,7 +149,7 @@ async function main() {
     }
   }
 
-  const out = path.join(root, 'public', 'lelanea', 'light-through-water.webp');
+  const out = path.join(root, 'public', 'lelanea', 'water-light.webp');
   mkdirSync(path.dirname(out), { recursive: true });
   // "Softly out of focus": the network should read as light, not as lines.
   const soft = await sharp(pixels, { raw: { width: WIDTH, height: HEIGHT, channels: 3 } })

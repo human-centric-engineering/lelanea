@@ -81,7 +81,7 @@ export const CREATOR_PORTRAIT: string | null = '/lelanea/creator.webp';
  * lotus tokens by `npm run water:image`. Stands where a photograph would, and
  * can be replaced by one at the same path.
  */
-export const LIGHT_THROUGH_WATER = '/lelanea/light-through-water.webp';
+export const LIGHT_THROUGH_WATER = '/lelanea/water-light.webp';
 
 /**
  * Her own images from lelaneafulton.com (t-171), copied here because the CSP

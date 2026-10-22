@@ -1,5 +1,6 @@
 import Image from 'next/image';
 
+import { LotusMark } from '@/components/app/ui/lotus-mark';
 import { LIGHT_THROUGH_WATER } from '@/lib/site/config';
 import { cn } from '@/lib/utils';
 import styles from '@/components/app/site/mission-ripple.module.css';
@@ -26,7 +27,18 @@ export const RIPPLE_CENTRE = 'one awakened life';
 // Five, matching the five ring sizes in `mission-ripple.module.css`.
 export const RIPPLE_RINGS = ['families', 'communities', 'workplaces', 'institutions', 'cultures'];
 
-export function MissionRipple({ className }: { className?: string }) {
+export function MissionRipple({
+  className,
+  captions = [],
+}: {
+  className?: string;
+  /**
+   * Up to three of her sentences, shown one after another above the rings as
+   * they grow — the page picks them out of the mission, so they are hers and
+   * never retyped here. Hidden where the panel is a wide band, with no room.
+   */
+  captions?: ReadonlyArray<string>;
+}) {
   return (
     <figure
       className={cn(styles.panel, className)}
@@ -41,6 +53,22 @@ export function MissionRipple({ className }: { className?: string }) {
         sizes="(max-width: 1100px) 100vw, 40vw"
         className={styles.water}
       />
+
+      {captions.length === 0 ? null : (
+        <div className={styles.captions} aria-hidden="true">
+          {captions.slice(0, 3).map((caption) => (
+            <p key={caption} className={styles.caption}>
+              {caption}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* The bloom the rings come from, resting at the foot of the panel. */}
+      <div className={styles.foot} aria-hidden="true">
+        <LotusMark size={58} water={false} />
+        <span className="brand-eyebrow">the mission</span>
+      </div>
 
       <div className={styles.ripple} aria-hidden="true">
         {RIPPLE_RINGS.map((word) => (

@@ -145,7 +145,7 @@ export default async function LelaneaPage() {
         />
       </section>
 
-      <section className={`${styles.section} ${styles.rule}`}>
+      <section className={`${styles.section} ${styles.tintTeal}`}>
         <div className={styles.creator}>
           {/* Her portrait, her name and where to find her, held beside the
               biography on a desktop and gathered into one row above it once
@@ -195,13 +195,13 @@ export default async function LelaneaPage() {
               renderStyle={creator.renderStyle}
               baseLevel={3}
               beats
-              className={`${styles.prose} ${styles.lede}`}
+              className={`${styles.prose} ${styles.lede} ${styles.dropcap}`}
             />
           </div>
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.rule}`}>
+      <section className={`${styles.section} ${styles.tintWarm}`}>
         <h2
           id="lineage"
           className="brand-display mb-7 scroll-mt-[104px] text-[clamp(32px,3.6vw,44px)]"
@@ -213,20 +213,25 @@ export default async function LelaneaPage() {
           blocks={lineageIntro}
           renderStyle={lineage.renderStyle}
           beats
-          className={`${styles.prose} ${styles.lede}`}
+          className={`${styles.prose} ${styles.lede} ${styles.dropcap}`}
         />
 
-        <div className={styles.lineage}>
+        {/* The fields she draws on as tributaries of one river (t-171): a
+            slow teal stream winds down the page and each field joins it from
+            alternate banks, with a ring where it meets the water. The
+            lineage is what flows into the work; the shape says so. */}
+        <ol className={styles.river}>
           {fields.map((group, index) => (
-            <AuthoredBlocks
-              key={index}
-              blocks={group}
-              renderStyle={lineage.renderStyle}
-              baseLevel={3}
-              className={styles.lineageTile}
-            />
+            <li key={index} className={styles.tributary}>
+              <AuthoredBlocks
+                blocks={group}
+                renderStyle={lineage.renderStyle}
+                baseLevel={3}
+                className={styles.tributaryText}
+              />
+            </li>
           ))}
-        </div>
+        </ol>
 
         {coda === undefined ? null : (
           <div className={styles.coda}>

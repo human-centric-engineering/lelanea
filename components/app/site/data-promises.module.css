@@ -1,0 +1,116 @@
+/*
+ * `/data`'s promises (t-171): three panels that pin and stack as the reader
+ * scrolls. Each pins a little lower than the last, so the stack shows the
+ * edge of every panel beneath the one on top, like pages laid down.
+ *
+ * Each panel has its own ground from the palette — the card, then a breath of
+ * the teal, then a breath of the lotus's warmth — so the three read as three.
+ */
+
+.promises {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin: 40px 0 0;
+  padding: 0 0 2vh;
+  list-style: none;
+}
+
+.promise {
+  position: sticky;
+  display: grid;
+  /* A fixed column for the numeral, so every panel's text starts on the same
+     line whatever the digits' widths. */
+  grid-template-columns: clamp(76px, 9vw, 128px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(20px, 4vw, 56px);
+  min-height: min(52vh, 420px);
+  padding: clamp(28px, 4vw, 56px);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-lift);
+}
+
+.promise:nth-child(1) {
+  top: 104px;
+  background: var(--color-card);
+}
+
+.promise:nth-child(2) {
+  top: 124px;
+  background:
+    linear-gradient(var(--color-secondary-wash), var(--color-secondary-wash)), var(--color-card);
+}
+
+.promise:nth-child(3) {
+  top: 144px;
+  background:
+    radial-gradient(
+      90% 120% at 100% 100%,
+      color-mix(in srgb, var(--color-lotus-core-light) 22%, transparent),
+      transparent 70%
+    ),
+    var(--color-card);
+}
+
+.number {
+  align-self: start;
+  font-family: var(--font-serif);
+  font-size: clamp(56px, 7vw, 96px);
+  line-height: 0.9;
+  color: var(--color-accent-ink);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 44ch;
+}
+
+.text p {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.7;
+  color: var(--color-foreground);
+}
+
+.glyph {
+  width: clamp(110px, 14vw, 180px);
+  height: auto;
+  color: var(--color-secondary-ink);
+  opacity: 0.85;
+}
+
+@media (max-width: 760px) {
+  .promise {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 14px;
+    min-height: 0;
+  }
+
+  .promise:nth-child(1) {
+    top: 96px;
+  }
+
+  .promise:nth-child(2) {
+    top: 108px;
+  }
+
+  .promise:nth-child(3) {
+    top: 120px;
+  }
+
+  .glyph {
+    position: absolute;
+    right: 20px;
+    top: 22px;
+    width: 72px;
+    opacity: 0.5;
+  }
+
+  .text p {
+    font-size: 16.5px;
+  }
+}

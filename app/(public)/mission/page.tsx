@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { MissionRipple } from '@/components/app/site/mission-ripple';
 import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
+import type { FoundationalDocumentDetail } from '@/lib/app/content/document-view';
 import { requireDocument } from '@/lib/app/content/sections';
 import styles from '@/app/(public)/document-page.module.css';
 
@@ -50,6 +51,27 @@ export const dynamic = 'force-dynamic';
  * @see .context/app/content.md — the pipeline, and why nothing here is retyped
  * @see .context/app/planning/design/lelanea.html — `#pg-mission`
  */
+/**
+ * The first sentence of hers that opens with `start`, from any paragraph of the
+ * document, with her bold markers removed — or null if she no longer wrote it,
+ * in which case the ripple simply shows one caption fewer (t-171). Found by its
+ * opening words so the sentence on screen is always the stored one, whole.
+ */
+function sentenceStarting(
+  blocks: FoundationalDocumentDetail['blocks'],
+  start: string
+): string | null {
+  for (const block of blocks) {
+    if (block.type !== 'paragraph') continue;
+    const found = block.text
+      .replaceAll('**', '')
+      .split(/(?<=[.!?])\s+/)
+      .find((sentence) => sentence.startsWith(start));
+    if (found) return found;
+  }
+  return null;
+}
+
 export default async function MissionPage() {
   const mission = await requireDocument('the_mission');
 
@@ -59,7 +81,14 @@ export default async function MissionPage() {
         {/* Her mission's one movement — a single awakened life widening to
             families, communities and beyond — drawn on the site's water, and
             held beside the text on a desktop (t-171). */}
-        <MissionRipple className={styles.companion} />
+        <MissionRipple
+          className={styles.companion}
+          captions={[
+            sentenceStarting(mission.blocks, 'Purpose begins within'),
+            sentenceStarting(mission.blocks, 'One awakened life'),
+            sentenceStarting(mission.blocks, 'It belongs to humanity'),
+          ].filter((caption): caption is string => caption !== null)}
+        />
 
         <div>
           {/* The category, not the prototype's "the mission" — the document

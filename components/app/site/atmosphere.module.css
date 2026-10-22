@@ -227,52 +227,112 @@
 /* ------------------------------------------------------------- closing */
 
 /*
- * The home page's closing band: the lotus on the water, and the way in. The
- * water is the same picture in both themes, so the marks on it use the cinema
- * tokens, which hold across themes too.
+ * The home page's closing band: a pond at dusk in the lotus's own deep teals,
+ * the bloom opening at its centre, rings spreading slowly from beneath it.
+ * Dark in both themes, as the cinema is — on the oyster it is the page's one
+ * deep moment, and on charcoal it still reads as water rather than as more
+ * of the ground.
  */
 .closing {
   position: relative;
   isolation: isolate;
   display: grid;
   place-items: center;
-  min-height: clamp(300px, 34vw, 400px);
+  min-height: clamp(440px, 46vw, 580px);
   margin-bottom: clamp(56px, 7vw, 92px);
   overflow: hidden;
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-rest);
+  background:
+    radial-gradient(
+      60% 55% at 50% 40%,
+      color-mix(in srgb, var(--color-lotus-petal-outer-edge) 85%, transparent),
+      transparent 75%
+    ),
+    radial-gradient(40% 30% at 50% 36%, var(--color-lotus-halation), transparent 80%),
+    linear-gradient(to bottom, var(--color-lotus-pad-edge), var(--color-lotus-pad) 70%);
+  box-shadow: var(--shadow-lift);
 }
 
-.closing > img {
+.pondRings {
+  position: absolute;
+  inset: 0;
   z-index: -1;
-  object-fit: cover;
-  object-position: 70% 20%;
+  pointer-events: none;
+}
+
+.pondRings span {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: min(760px, 120%);
+  aspect-ratio: 3.2;
+  translate: -50% -50%;
+  /* 50%, not a pill radius: on a 3.2:1 box that is an ellipse, as a ring on
+     water seen at an angle is. */
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--color-lotus-ripple-far) 55%, transparent);
+  opacity: 0.35;
+  scale: 0.55;
+}
+
+.pondRings span:nth-child(2) {
+  scale: 0.85;
+  opacity: 0.25;
+}
+
+.pondRings span:nth-child(3) {
+  scale: 1.15;
+  opacity: 0.15;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pondRings span {
+    animation: spread 12s var(--ease-brand) infinite;
+  }
+
+  .pondRings span:nth-child(2) {
+    animation-delay: -4s;
+  }
+
+  .pondRings span:nth-child(3) {
+    animation-delay: -8s;
+  }
+}
+
+@keyframes spread {
+  from {
+    opacity: 0.45;
+    scale: 0.35;
+  }
+
+  to {
+    opacity: 0;
+    scale: 1.45;
+  }
 }
 
 .closingInner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 40px 24px;
+  gap: 18px;
+  padding: 40px 24px 48px;
   text-align: center;
+}
+
+.closingBloom {
+  width: min(340px, 72vw);
+  /* The lotus centre's warm bloom, carried into the water around it. */
+  filter: drop-shadow(0 0 48px color-mix(in srgb, var(--color-lotus-core) 30%, transparent));
 }
 
 .closingEyebrow {
   margin: 0;
-  padding: 4px 12px;
-  border-radius: var(--radius-pill);
-  color: var(--color-cinema);
-  background: color-mix(in srgb, var(--color-cinema-ink) 80%, transparent);
+  color: var(--color-cinema-ink);
 }
 
 @media (max-width: 620px) {
   .closing {
     border-radius: var(--radius-lg);
   }
-}
-
-/* As on `/mission`: the water dims a little on a charcoal page. */
-:global(html.dark) .closing > img {
-  filter: brightness(0.82) saturate(0.95);
 }

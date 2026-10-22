@@ -1,11 +1,20 @@
 /*
- * The mission's ripple (t-171): a life at the centre of the water and the
- * circles it widens into. The water image is the same in both themes, as a
- * photograph would be, so the marks on it use the cinema tokens, which do not
- * change with the theme either.
+ * The mission's ripple (t-171): one awakened life, and the circles it widens
+ * into. The water picture is the same in both themes, as a photograph would
+ * be, so the marks on it use the cinema tokens, which hold across themes too.
+ *
+ * As the reader moves down the mission, the life begins as one large, soft
+ * circle alone on the water; it gathers itself smaller as each ring arrives,
+ * until it is a small bright centre inside everything it reached — the
+ * mission's own movement, from the inward to the collective. Each ring's word
+ * sits at its own point on the circle, like the bodies of an orrery, rather
+ * than stacked in a column.
+ *
+ * Without scroll-driven animation, or with reduced motion asked for, the
+ * picture is simply the finished one: the small centre and all five rings.
  *
  * The rings live in a square sized to the panel's SHORTER side — a container
- * query unit, so it fits the tall panel on a desktop and the wide band on an
+ * query unit — so they fit the tall panel on a desktop and the wide band on an
  * iPad or phone alike.
  */
 
@@ -18,23 +27,38 @@
 
 .water {
   object-fit: cover;
-  object-position: 70% 0%;
+  object-position: 60% 20%;
 }
 
 .ripple {
   position: absolute;
   left: 50%;
   top: 56%;
-  width: min(88cqw, 88cqh);
+  width: min(84cqw, 84cqh);
   aspect-ratio: 1;
   translate: -50% -50%;
 }
 
+/* A warm glow under everything, where the life is: the lotus centre's orange
+   carried into the water. */
+.ripple::before {
+  content: '';
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-lotus-core-light) 34%, transparent),
+    transparent 70%
+  );
+  filter: blur(6px);
+}
+
 /*
- * Five rings, from just outside the centre to the square's edge, evenly
- * spaced. Written out per ring rather than computed from a custom property:
- * the stylesheet guard holds every `var()` in `components/app` to a token
- * declared in `app/brand-theme.css`, and a ring index is not a token.
+ * Five rings, evenly spaced from just outside the centre to the square's
+ * edge. Written out per ring rather than computed from a custom property: the
+ * stylesheet guard holds every `var()` in `components/app` to a token declared
+ * in `app/brand-theme.css`, and a ring index is not a token.
  */
 .ring {
   position: absolute;
@@ -42,52 +66,95 @@
   top: 50%;
   aspect-ratio: 1;
   translate: -50% -50%;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-cinema-ink) 62%, transparent);
+  z-index: 1;
+  border-radius: 50%;
+  /* The lotus's own teal, which holds across themes as the picture does. */
+  border: 1px solid color-mix(in srgb, var(--color-lotus-petal-outer) 42%, transparent);
 }
 
-/*
- * Each ring's word sits on its edge, alternating top and bottom so that on a
- * short band the labels of neighbouring rings are twice as far apart.
- */
-.word {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  translate: -50% -50%;
-  padding: 3px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
-  font-size: 11.5px;
-  line-height: 1.4;
-  letter-spacing: 0.12em;
-  color: var(--color-cinema);
-  background: color-mix(in srgb, var(--color-cinema-ink) 84%, transparent);
-  backdrop-filter: blur(4px);
-}
-
+/* Each ring turned so its word lands at a different point of the compass;
+   the word is turned back so it always reads level. A word hangs BELOW its
+   bead, so the inner rings' words sit low on their circles, where the text
+   falls outward instead of into the centre's glow. */
 .ring:nth-child(1) {
-  width: 40.8%;
+  width: 40%;
+  rotate: 200deg;
 }
 
 .ring:nth-child(2) {
-  width: 55.6%;
+  width: 55%;
+  rotate: 118deg;
 }
 
 .ring:nth-child(3) {
-  width: 70.4%;
+  width: 70%;
+  rotate: 38deg;
 }
 
 .ring:nth-child(4) {
-  width: 85.2%;
+  width: 85%;
+  rotate: -128deg;
 }
 
 .ring:nth-child(5) {
   width: 100%;
+  rotate: -6deg;
 }
 
-.ring:nth-child(even) .word {
-  top: 100%;
+.ring:nth-child(1) .word {
+  rotate: -200deg;
+}
+
+.ring:nth-child(2) .word {
+  rotate: -118deg;
+}
+
+.ring:nth-child(3) .word {
+  rotate: -38deg;
+}
+
+.ring:nth-child(4) .word {
+  rotate: 128deg;
+}
+
+.ring:nth-child(5) .word {
+  rotate: 6deg;
+}
+
+/* The word, on the ring's line: her quote face, with a soft halo of the
+   oyster so it reads over water and ring alike — no chip, no box. A small
+   bead marks where it sits on the circle. */
+.word {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  /* The bead's centre on the ring's line, and the word turned back to level
+     about that same point, so the bead never leaves the circle. */
+  translate: -50% -3.5px;
+  transform-origin: 50% 3.5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: clamp(14px, 4cqmin, 19px);
+  line-height: 1;
+  color: var(--color-cinema);
+  text-shadow:
+    0 0 10px var(--color-cinema-ink),
+    0 0 18px var(--color-cinema-ink);
+}
+
+.word::after {
+  content: '';
+  order: -1;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-lotus-core);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-cinema-ink) 75%, transparent);
 }
 
 .centre {
@@ -96,63 +163,88 @@
   top: 50%;
   display: grid;
   place-items: center;
-  width: 24%;
+  width: 26%;
   aspect-ratio: 1;
   translate: -50% -50%;
-  padding: 6px;
-  border-radius: 999px;
+  border-radius: 50%;
   text-align: center;
-  font-family: var(--font-quote);
-  font-style: italic;
-  font-size: clamp(12px, 4.2cqmin, 17px);
-  line-height: 1.15;
-  color: var(--color-cinema);
-  background: color-mix(in srgb, var(--color-cinema-ink) 88%, transparent);
-  /* The lotus centre's warm bloom: where it begins. */
-  box-shadow: var(--shadow-bloom);
+  container-type: inline-size;
+  background: radial-gradient(
+    circle at 50% 40%,
+    var(--color-cinema-ink) 55%,
+    color-mix(in srgb, var(--color-cinema-ink) 70%, transparent)
+  );
+  box-shadow:
+    var(--shadow-bloom),
+    0 0 0 6px color-mix(in srgb, var(--color-cinema-ink) 30%, transparent);
 }
 
-/*
- * The rings arrive as the reader moves down the page, one per stretch of the
- * text, so the picture widens as the argument does. Only where scroll-driven
- * animation exists and motion is welcome; everywhere else they are all
- * present from the start, which is the same picture.
- */
+/* The words scale with the circle, so a large life reads as large. */
+.centre span {
+  padding: 0 12%;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: 19cqi;
+  line-height: 1.12;
+  color: var(--color-cinema);
+}
+
 @supports (animation-timeline: scroll()) {
   @media (prefers-reduced-motion: no-preference) {
+    .centre {
+      animation: gather linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0% 42%;
+    }
+
     .ring {
       animation: widen linear both;
       animation-timeline: scroll(root block);
     }
 
-    /* The first ring is there on arrival — a life already moving the water —
-       and the rest follow as the text does. */
     .ring:nth-child(1) {
-      animation: none;
+      animation-range: 12% 19%;
     }
 
     .ring:nth-child(2) {
-      animation-range: 6% 16%;
+      animation-range: 18% 25%;
     }
 
     .ring:nth-child(3) {
-      animation-range: 14% 24%;
+      animation-range: 24% 31%;
     }
 
     .ring:nth-child(4) {
-      animation-range: 22% 32%;
+      animation-range: 30% 37%;
     }
 
     .ring:nth-child(5) {
-      animation-range: 30% 40%;
+      animation-range: 36% 43%;
     }
+  }
+}
+
+/* The life gathers itself: large and alone first, then — quickly, so the
+   first ring has somewhere to be — smaller, then smaller still as the last
+   rings arrive. */
+@keyframes gather {
+  0% {
+    width: 64%;
+  }
+
+  28% {
+    width: 34%;
+  }
+
+  100% {
+    width: 26%;
   }
 }
 
 @keyframes widen {
   from {
     opacity: 0;
-    scale: 0.82;
+    scale: 0.8;
   }
 
   to {
@@ -161,8 +253,130 @@
   }
 }
 
-/* In dark mode the water is dimmed a little, as a photograph would be, so the
-   brightest thing on a charcoal page is not a decoration. */
+/* In dark mode the water is dimmed a little, as a photograph would be. */
 :global(html.dark) .water {
-  filter: brightness(0.82) saturate(0.95);
+  filter: brightness(0.85) saturate(0.95);
+}
+
+/*
+ * Her sentences above the rings (t-171): three, one at a time, crossfading as
+ * the rings grow — from "within" to "humanity". Stacked in one grid cell so
+ * they share a place. Without scroll-driven animation only the middle one —
+ * the mission's central sentence — is shown.
+ */
+.captions {
+  position: absolute;
+  left: 50%;
+  top: 9%;
+  display: grid;
+  width: min(84%, 30ch);
+  translate: -50% 0;
+  text-align: center;
+}
+
+.caption {
+  grid-area: 1 / 1;
+  margin: 0;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: clamp(18px, 5.4cqmin, 24px);
+  line-height: 1.3;
+  text-wrap: balance;
+  color: var(--color-cinema);
+  text-shadow: 0 0 14px var(--color-cinema-ink);
+  opacity: 0;
+}
+
+.caption:nth-child(2) {
+  opacity: 1;
+}
+
+/* Where the panel is a wide band, there is no room above the rings. */
+@container (aspect-ratio > 0.9) {
+  .captions {
+    display: none;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .caption {
+      animation-timeline: scroll(root block);
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+    }
+
+    .caption:nth-child(1) {
+      animation-name: captionFirst;
+      animation-range: 0% 16%;
+    }
+
+    .caption:nth-child(2) {
+      animation-name: captionMiddle;
+      animation-range: 12% 40%;
+    }
+
+    .caption:nth-child(3) {
+      animation-name: captionLast;
+      animation-range: 36% 46%;
+    }
+  }
+}
+
+@keyframes captionFirst {
+  0%,
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes captionMiddle {
+  0% {
+    opacity: 0;
+  }
+
+  15%,
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes captionLast {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* The foot of the panel: her mark and a quiet label, so the space below the
+   rings is held rather than left. Hidden on the wide band, as the captions
+   are. */
+.foot {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  translate: -50% 0;
+  color: var(--color-cinema);
+  opacity: 0.85;
+}
+
+@container (aspect-ratio > 0.9) {
+  .foot {
+    display: none;
+  }
 }

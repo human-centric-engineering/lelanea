@@ -49,6 +49,9 @@ describe('MissionRipple', () => {
     expect(figure.getAttribute('aria-label')).toContain('cultures');
     // The visible labels are hidden from the accessibility tree, so the
     // description is not read a second time word by word.
-    expect(figure.querySelector('[aria-hidden="true"]')?.textContent).toContain('communities');
+    const hidden = [...figure.querySelectorAll('[aria-hidden="true"]')].map((el) => el.textContent);
+    expect(hidden.some((text) => text?.includes('communities'))).toBe(true);
+    // Nothing visible inside the figure is outside a hidden layer.
+    expect(figure.querySelectorAll(':scope > :not([aria-hidden="true"]):not(img)')).toHaveLength(0);
   });
 });
