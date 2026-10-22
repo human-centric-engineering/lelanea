@@ -274,9 +274,62 @@
   }
 }
 
-/* In dark mode the water is dimmed a little, as a photograph would be. */
+/* ============================================================ dark mode
+ * On a charcoal page the pale water glared, and its fade into the text was a
+ * grey wash. In dark mode the water is the same picture at dusk — dimmed and
+ * deepened toward the pond's own teals, as on the home page's closing band —
+ * and the marks on it turn light: the life a deep-teal disc with a warm rim,
+ * the words in the oyster ink. */
 :global(html.dark) .water {
-  filter: brightness(0.85) saturate(0.95);
+  filter: brightness(0.42) saturate(1.25) hue-rotate(-8deg);
+}
+
+:global(html.dark) .stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-lotus-pad-edge) 55%, transparent),
+    color-mix(in srgb, var(--color-lotus-pad) 70%, transparent)
+  );
+  pointer-events: none;
+}
+
+:global(html.dark) .stage > :not(img) {
+  z-index: 1;
+}
+
+:global(html.dark) .caption,
+:global(html.dark) .word,
+:global(html.dark) .foot {
+  color: var(--color-cinema-ink);
+  text-shadow: 0 0 12px var(--color-lotus-pad);
+}
+
+:global(html.dark) .ring {
+  border-color: color-mix(in srgb, var(--color-lotus-vein) 38%, transparent);
+}
+
+:global(html.dark) .word::after {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-lotus-pad) 80%, transparent);
+}
+
+:global(html.dark) .centre {
+  background: radial-gradient(
+    circle at 50% 40%,
+    var(--color-lotus-petal-outer-edge) 50%,
+    var(--color-lotus-pad-edge)
+  );
+  box-shadow:
+    var(--shadow-bloom),
+    0 0 0 1px color-mix(in srgb, var(--color-lotus-core) 60%, transparent),
+    0 0 0 7px color-mix(in srgb, var(--color-lotus-petal-outer) 25%, transparent);
+}
+
+:global(html.dark) .centre span {
+  color: var(--color-cinema-ink);
 }
 
 /*

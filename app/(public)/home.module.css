@@ -103,7 +103,11 @@
     color-mix(in srgb, var(--color-lotus-petal-mid) 26%, transparent) 70%,
     transparent
   );
-  filter: blur(10px);
+  /* No `filter: blur` here, though it would soften the edge further: the
+     lotus's opening plays on a GPU-composited canvas above this pool, and a
+     filtered layer beneath it is dropped, leaving a box of bare page ground
+     around the flower in dark mode (owner, t-171). The gradient's own long
+     tail does the softening instead. */
   pointer-events: none;
 }
 
