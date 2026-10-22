@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import Link from 'next/link';
 
 import { InlineText } from '@/components/app/content/authored-document';
 import { Card } from '@/components/app/ui/card';
@@ -12,7 +13,7 @@ import { Ripples } from '@/components/app/site/ripples';
 import { WaitlistForm } from '@/components/app/site/waitlist-form';
 import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
-import { FLOWER_OF_LIFE, REFLECTION } from '@/lib/site/config';
+import { CREATOR_PORTRAIT, FLOWER_OF_LIFE, REFLECTION } from '@/lib/site/config';
 import styles from '@/app/(public)/home.module.css';
 
 /**
@@ -148,6 +149,28 @@ export default async function HomePage() {
           <div className={styles.bloomArt}>
             <Lotus size={300} water fluid />
           </div>
+
+          {/* Who made this (t-171), in the space beneath the bloom: her face,
+              her name and her titles, leading to her page. "Created by", not
+              "your guide": the app speaks in her voice, and the page must not
+              suggest she coaches each person herself. Desktop only — below it
+              the hero is one column and this would sit above the heading. */}
+          {CREATOR_PORTRAIT === null ? null : (
+            <Link href="/lelanea" className={styles.creatorCard}>
+              <span className={styles.creatorFace}>
+                <Image src={CREATOR_PORTRAIT} alt="" fill sizes="64px" />
+              </span>
+              <span className={styles.creatorText}>
+                <span className="brand-eyebrow text-muted-foreground">created by</span>
+                <span className="brand-display text-[22px] text-[var(--color-heading)]">
+                  Lelañea Fulton
+                </span>
+                <span className="text-muted-foreground text-[13.5px]">
+                  Transcendental Coach · PCC
+                </span>
+              </span>
+            </Link>
+          )}
         </div>
       </section>
 
