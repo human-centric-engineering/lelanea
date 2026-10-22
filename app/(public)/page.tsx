@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 
-import { InlineText, isBeat } from '@/components/app/content/authored-document';
+import { InlineText } from '@/components/app/content/authored-document';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { Lotus } from '@/components/app/ui/lotus';
 import { ChannelsSection } from '@/components/app/site/channels';
@@ -243,7 +243,7 @@ export default async function HomePage() {
                         // One `<p>` per beat — the cadence note honoured, "render
                         // each as its own line or beat". Her short turns are set
                         // in the quote face, as they are on the longer pages.
-                        <p key={beatIndex} data-beat={isBeat(beat) ? '' : undefined}>
+                        <p key={beatIndex}>
                           <InlineText text={beat} />
                         </p>
                       )

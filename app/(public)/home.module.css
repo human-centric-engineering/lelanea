@@ -553,25 +553,23 @@
 
 .chapterBody {
   max-width: 46ch;
-  font-size: 17px;
-  line-height: 1.7;
-  color: var(--color-foreground);
+  color: var(--color-heading);
 }
 
+/* Every line of all three chapters in her quote face (owner, t-171): the
+   passages are hers, spoken in turns, and one voice reads better than a mix
+   of italic turns and upright prose. */
 .chapterBody p {
-  margin: 0 0 0.55em;
+  margin: 0 0 0.5em;
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: clamp(19px, 1.6vw, 22px);
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 
 .chapterBody p:last-child {
   margin-bottom: 0;
-}
-
-.chapterBody p[data-beat] {
-  font-family: var(--font-quote);
-  font-style: italic;
-  font-size: 1.24em;
-  line-height: 1.4;
-  color: var(--color-heading);
 }
 
 @supports (animation-timeline: view()) {
@@ -674,8 +672,8 @@
     padding: 28px 0;
   }
 
-  .chapterBody {
-    font-size: 16px;
+  .chapterBody p {
+    font-size: 18.5px;
   }
 }
 
