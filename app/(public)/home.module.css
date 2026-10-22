@@ -88,17 +88,19 @@
   left: 50%;
   top: 58%;
   z-index: -1;
-  width: 150%;
-  aspect-ratio: 1.9;
+  /* Sized in its own right, not only from the flower: on narrower screens
+     the flower shrinks, and a pool that shrank with it all but vanished. */
+  width: clamp(620px, 190%, 1040px);
+  aspect-ratio: 2;
   translate: -50% -50%;
   border-radius: 50%;
   /* The closing pond's own deep teals, blended: darkest beneath the flower,
      dissolving into the oyster well before the edge (owner, t-171). */
   background: radial-gradient(
     closest-side,
-    color-mix(in srgb, var(--color-lotus-pad-edge) 72%, transparent),
-    color-mix(in srgb, var(--color-lotus-petal-outer-edge) 52%, transparent) 50%,
-    color-mix(in srgb, var(--color-lotus-petal-mid) 16%, transparent) 78%,
+    color-mix(in srgb, var(--color-lotus-pad-edge) 80%, transparent),
+    color-mix(in srgb, var(--color-lotus-petal-outer-edge) 58%, transparent) 42%,
+    color-mix(in srgb, var(--color-lotus-petal-mid) 26%, transparent) 70%,
     transparent
   );
   filter: blur(10px);
@@ -152,13 +154,13 @@
   }
 }
 
-/* The water may fade out into the page's side margins on wider screens; on a
-   phone, where there are none to speak of, it is clipped so the page never
-   scrolls sideways for it. */
-@media (max-width: 620px) {
-  .hero {
-    overflow-x: clip;
-  }
+/* The hero's pool fades out into the side margins and may reach past the
+   window's edge on a narrower screen. The whole page is clipped at the WINDOW
+   (a full-width wrapper), not at the hero, so the fade is never cut short and
+   the page never scrolls sideways for it. `clip`, not `hidden`: it creates no
+   scroll container, so the sticky elements below keep working. */
+.homeClip {
+  overflow-x: clip;
 }
 
 /* The bloom's column stacks the flower and, beneath it, who made this. */

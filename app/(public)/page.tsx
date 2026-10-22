@@ -130,7 +130,7 @@ export default async function HomePage() {
     .toSorted((a, b) => a.order - b.order);
 
   return (
-    <>
+    <div className={styles.homeClip}>
       <div className="mx-auto max-w-[1180px] px-[clamp(20px,5vw,72px)]">
         <section className={styles.hero}>
           <div>
@@ -298,6 +298,6 @@ export default async function HomePage() {
       {/* Outside the page's measure: the pond runs edge to edge, straight
         into the footer (owner, t-171). */}
       <ClosingBand />
-    </>
+    </div>
   );
 }
