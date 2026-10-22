@@ -287,7 +287,25 @@
   .whatThisIsImage {
     position: relative;
     top: auto;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 2 / 1;
+  }
+
+  /* Two columns of cards here, so an odd last card takes the full row
+     rather than sitting alone beside a gap. */
+  .whatThisIs .cards > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  /* The tier label above its modules on every row, not beside them on the
+     rows short enough to fit — a column that switches between the two reads
+     as a mistake. */
+  .tierRow {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .tierRow dt {
+    width: auto;
   }
 
   .journeyArt {
@@ -295,7 +313,7 @@
   }
 
   .whatThisIs .cards {
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero form {
@@ -342,5 +360,9 @@
 
   .whatThisIsImage {
     aspect-ratio: 4 / 3;
+  }
+
+  .whatThisIs .cards {
+    grid-template-columns: 1fr;
   }
 }

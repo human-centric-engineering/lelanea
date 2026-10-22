@@ -321,6 +321,21 @@ export function InlineText({ text }: { text: string }): React.ReactNode {
  */
 export const BEAT_MAX_WORDS = 14;
 
+/**
+ * The fragment id a heading gets when a page asks for anchors (t-171): its
+ * text, bold markers dropped, lower-cased and hyphenated. A page's contents
+ * list links to the same function's output, so the two cannot disagree.
+ */
+export function headingAnchor(text: string): string {
+  return text
+    .replaceAll('**', '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 /** Whether a paragraph is one of her short turns. See {@link BEAT_MAX_WORDS}. */
 export function isBeat(text: string): boolean {
   if (text.includes('\n')) return false;
@@ -331,12 +346,14 @@ function AuthoredBlock({
   block,
   cadence,
   beats,
+  anchors,
   firstName,
   baseLevel,
 }: {
   block: FoundationalDocumentDetail['blocks'][number];
   cadence: boolean;
   beats: boolean;
+  anchors: boolean;
   firstName: string | null | undefined;
   baseLevel: HeadingLevel;
 }): React.ReactNode {
@@ -357,7 +374,14 @@ function AuthoredBlock({
         HEADING_TAGS[Math.min(6, Math.max(baseLevel, baseLevel + block.level - 2)) - 2];
 
       return (
-        <Heading className={cn(HEADING_TYPE, 'mt-10 mb-3 text-2xl first:mt-0')}>
+        <Heading
+          id={anchors ? headingAnchor(block.text) : undefined}
+          className={cn(
+            HEADING_TYPE,
+            'mt-10 mb-3 text-2xl first:mt-0',
+            anchors && 'scroll-mt-[104px]'
+          )}
+        >
           {block.number === undefined ? null : (
             <span className="text-muted-foreground tabular-nums">{`${block.number}. `}</span>
           )}
@@ -402,12 +426,14 @@ function BlockList({
   blocks,
   cadence,
   beats = false,
+  anchors = false,
   firstName,
   baseLevel,
 }: {
   blocks: FoundationalDocumentDetail['blocks'];
   cadence: boolean;
   beats?: boolean;
+  anchors?: boolean;
   firstName: string | null | undefined;
   baseLevel: HeadingLevel;
 }): React.ReactNode {
@@ -419,6 +445,7 @@ function BlockList({
           block={block}
           cadence={cadence}
           beats={beats}
+          anchors={anchors}
           firstName={firstName}
           baseLevel={baseLevel}
         />
@@ -494,6 +521,11 @@ export interface AuthoredDocumentProps {
    */
   firstName?: string | null;
   className?: string;
+  /**
+   * Give each heading a fragment id from {@link headingAnchor}, for a page that
+   * lists its sections (t-171). Off by default.
+   */
+  anchors?: boolean;
 }
 
 /**
@@ -506,6 +538,7 @@ export function AuthoredDocument({
   document: doc,
   firstName = null,
   className,
+  anchors = false,
 }: AuthoredDocumentProps): React.ReactNode {
   return (
     <article className={cn('text-foreground', className)}>
@@ -520,6 +553,7 @@ export function AuthoredDocument({
       <BlockList
         blocks={doc.blocks}
         cadence={doc.renderStyle === 'cadence'}
+        anchors={anchors}
         firstName={firstName}
         baseLevel={2}
       />

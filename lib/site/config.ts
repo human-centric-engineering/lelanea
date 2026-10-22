@@ -196,7 +196,7 @@ export const SITE_CHANNELS: ReadonlyArray<{
     art: {
       // The series' first episode, "Introduction, Homage, and Prayer": the
       // show's own frame, cut at the file to leave the episode's caption out.
-      src: '/lelanea/channels/conversations-with-aya.webp',
+      src: '/lelanea/channels/conversations-with-aya-intro.webp',
       position: '40% 35%',
     },
     links: [{ label: 'YouTube', href: CHANNEL_URL.ayaOnYouTube, mark: 'youtube' }],
@@ -210,7 +210,7 @@ export const SITE_CHANNELS: ReadonlyArray<{
     name: 'Community',
     // Her Skool banner, cut at the file to her portrait and her name.
     art: {
-      src: '/lelanea/channels/integrating-consciousness-community.webp',
+      src: '/lelanea/channels/integrating-consciousness-community-portrait.webp',
       position: '50% 40%',
     },
     links: [{ label: 'Skool', href: CHANNEL_URL.skool, icon: 'gather' }],

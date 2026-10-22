@@ -270,7 +270,7 @@
   .creatorAside {
     position: static;
     flex-direction: row;
-    align-items: center;
+    align-items: flex-start;
     gap: 28px;
   }
 
@@ -566,7 +566,8 @@
 }
 
 /* ================================================================== guide
- * "On this page", beside `/lelanea`'s opening (t-171).
+ * A page with an "on this page" guide beside its text (t-171): `/lelanea`,
+ * `/disclaimer`, `/terms`. The guide's own styles are `PageGuide`'s.
  */
 .withGuide {
   display: grid;
@@ -575,63 +576,38 @@
   align-items: start;
 }
 
-.guide {
-  position: sticky;
-  top: 120px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 36px;
-  padding: 26px 24px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-divider);
-}
-
-.guide ol {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: guide;
-}
-
-.guide li {
-  counter-increment: guide;
-}
-
-.guide a {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
-  padding: 9px 0;
-  border-top: 1px solid var(--color-divider);
-  font-family: var(--font-serif);
-  font-size: 18px;
-  line-height: 1.25;
-  color: var(--color-heading);
-  transition: color 200ms var(--ease-brand);
-}
-
-.guide a::before {
-  content: counter(guide, decimal-leading-zero) / '';
-  padding-top: 3px;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-secondary-ink);
-}
-
-.guide a:hover {
-  color: var(--color-secondary-ink);
-  text-decoration: none;
-}
-
 @media (max-width: 1100px) {
   .withGuide {
     grid-template-columns: 1fr;
   }
 
-  .guide {
+  .withGuide > nav {
     display: none;
+  }
+}
+
+/* ================================================================= crisis
+ * `/data`'s crisis passage (t-171). Its list of situations is ten short
+ * lines; set in two columns where there is room, the whole passage — the
+ * situations and what to do — fits in one glance instead of running the
+ * instruction below the fold. The paragraphs keep their reading measure.
+ */
+@media (min-width: 900px) {
+  .crisis {
+    max-width: none;
+  }
+
+  .crisis :global(p) {
+    max-width: 62ch;
+  }
+
+  .crisis :global(ul) {
+    columns: 2;
+    column-gap: 40px;
+    max-width: 52rem;
+  }
+
+  .crisis :global(li) {
+    break-inside: avoid;
   }
 }

@@ -160,3 +160,9 @@
     scale: 1;
   }
 }
+
+/* In dark mode the water is dimmed a little, as a photograph would be, so the
+   brightest thing on a charcoal page is not a decoration. */
+:global(html.dark) .water {
+  filter: brightness(0.82) saturate(0.95);
+}

@@ -17,20 +17,21 @@ import styles from '@/components/app/site/mission-ripple.module.css';
  * does. Elsewhere, and for anyone who asks for less motion, they are simply
  * all there.
  *
- * The words are single words from her sentence, not a paraphrase of it. The
+ * The words are single words from her sentence, not a paraphrase of it, and
+ * `mission-ripple.test.tsx` fails if one stops appearing in her text. The
  * figure carries its meaning in `aria-label`, and the visible labels are
  * hidden from assistive technology so it is not read twice.
  */
-const CENTRE = 'one awakened life';
+export const RIPPLE_CENTRE = 'one awakened life';
 // Five, matching the five ring sizes in `mission-ripple.module.css`.
-const RINGS = ['families', 'communities', 'workplaces', 'institutions', 'cultures'];
+export const RIPPLE_RINGS = ['families', 'communities', 'workplaces', 'institutions', 'cultures'];
 
 export function MissionRipple({ className }: { className?: string }) {
   return (
     <figure
       className={cn(styles.panel, className)}
       role="img"
-      aria-label={`${CENTRE}, widening to ${RINGS.join(', ')}`}
+      aria-label={`${RIPPLE_CENTRE}, widening to ${RIPPLE_RINGS.join(', ')}`}
     >
       <Image
         src={LIGHT_THROUGH_WATER}
@@ -42,13 +43,13 @@ export function MissionRipple({ className }: { className?: string }) {
       />
 
       <div className={styles.ripple} aria-hidden="true">
-        {RINGS.map((word) => (
+        {RIPPLE_RINGS.map((word) => (
           <div key={word} className={styles.ring}>
             <span className={styles.word}>{word}</span>
           </div>
         ))}
         <div className={styles.centre}>
-          <span>{CENTRE}</span>
+          <span>{RIPPLE_CENTRE}</span>
         </div>
       </div>
     </figure>

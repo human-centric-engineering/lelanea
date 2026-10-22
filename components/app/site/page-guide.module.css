@@ -1,0 +1,56 @@
+/*
+ * "On this page" (t-171). Sticky beside the text it lists; scrolls within
+ * itself when a document has more sections than a screen holds (the terms
+ * have twenty).
+ */
+.guide {
+  position: sticky;
+  top: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 150px);
+  margin-top: 36px;
+  padding: 26px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-divider);
+}
+
+.guide > svg {
+  flex: none;
+}
+
+.guide ol {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide a {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  padding: 8px 0;
+  border-top: 1px solid var(--color-divider);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 1.25;
+  color: var(--color-heading);
+  transition: color 200ms var(--ease-brand);
+}
+
+.guide a:hover {
+  color: var(--color-secondary-ink);
+  text-decoration: none;
+}
+
+.number {
+  padding-top: 3px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary-ink);
+}

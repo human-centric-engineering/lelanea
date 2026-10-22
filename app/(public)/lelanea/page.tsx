@@ -3,6 +3,7 @@ import Image from 'next/image';
 
 import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
 import { CreatorLinks } from '@/components/app/site/channels';
+import { PageGuide } from '@/components/app/site/page-guide';
 import { Ripples } from '@/components/app/site/ripples';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { LotusMark } from '@/components/app/ui/lotus-mark';
@@ -135,21 +136,13 @@ export default async function LelaneaPage() {
         {/* A guide to a long page (t-171), in the empty half beside the
             opening: the three documents by their own titles, held in view on
             a desktop and absent below it, where the page is one column. */}
-        <nav className={styles.guide} aria-label="On this page">
-          <LotusMark size={44} water={false} />
-          <p className="brand-eyebrow text-muted-foreground">on this page</p>
-          <ol>
-            <li>
-              <a href="#heart">{philosophy.title}</a>
-            </li>
-            <li>
-              <a href="#creator">{creator.title}</a>
-            </li>
-            <li>
-              <a href="#lineage">{lineage.title}</a>
-            </li>
-          </ol>
-        </nav>
+        <PageGuide
+          items={[
+            { href: '#heart', label: philosophy.title },
+            { href: '#creator', label: creator.title },
+            { href: '#lineage', label: lineage.title },
+          ]}
+        />
       </section>
 
       <section className={`${styles.section} ${styles.rule}`}>

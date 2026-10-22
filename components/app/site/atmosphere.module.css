@@ -271,3 +271,8 @@
     border-radius: var(--radius-lg);
   }
 }
+
+/* As on `/mission`: the water dims a little on a charcoal page. */
+:global(html.dark) .closing > img {
+  filter: brightness(0.82) saturate(0.95);
+}

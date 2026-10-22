@@ -329,7 +329,7 @@ export default async function DataPage() {
             blocks={crisis}
             renderStyle={disclaimer.renderStyle}
             baseLevel={3}
-            className={styles.measure}
+            className={`${styles.measure} ${styles.crisis}`}
           />
         </section>
       </section>
