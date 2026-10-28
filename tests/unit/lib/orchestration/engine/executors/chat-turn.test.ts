@@ -26,7 +26,7 @@ vi.mock('@/lib/db/client', () => ({
   prisma: {
     aiConversation: { findUnique: vi.fn() },
     aiAgent: { findFirst: vi.fn() },
-    aiMessage: { findMany: vi.fn(), create: vi.fn() },
+    aiMessage: { create: vi.fn() },
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
       fn({
         aiMessage: { create: vi.fn(async () => ({ id: 'msg-stub' })) },
@@ -63,7 +63,7 @@ vi.mock('@/lib/orchestration/llm/agent-resolver', async (importOriginal) => {
 });
 
 vi.mock('@/lib/orchestration/llm/cost-tracker', () => ({
-  calculateCost: vi.fn(() => ({ inputCostUsd: 0.001, outputCostUsd: 0.002 })),
+  calculateCost: vi.fn(() => ({ inputCostUsd: 0.001, outputCostUsd: 0.002, totalCostUsd: 0.003 })),
   logCost: vi.fn(async () => null),
 }));
 
@@ -97,7 +97,7 @@ import {
   NoEligibleProviderError,
   NoProviderConfiguredError,
 } from '@/lib/orchestration/llm/agent-resolver';
-import { logCost } from '@/lib/orchestration/llm/cost-tracker';
+import { calculateCost, logCost } from '@/lib/orchestration/llm/cost-tracker';
 import { executeChatTurn } from '@/lib/orchestration/engine/executors/chat-turn';
 import {
   LATEST_AGENT_VERSION_ID_INCLUDE,
@@ -200,18 +200,20 @@ afterEach(() => {
 
 describe('chat_turn — happy path', () => {
   it('loads prior messages, sends [system, ...history, user] to provider, persists both new turns', async () => {
+    // One read: the conversation and its history, read through it so the
+    // owner layer lets the messages inherit the conversation's check.
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [
+        // Returned newest-first (DESC); executor reverses to chronological.
+        { role: 'assistant', content: 'A2' },
+        { role: 'user', content: 'U2' },
+        { role: 'assistant', content: 'A1' },
+        { role: 'user', content: 'U1' },
+      ],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([
-      // Returned newest-first (DESC); executor reverses to chronological.
-      { role: 'assistant', content: 'A2' },
-      { role: 'user', content: 'U2' },
-      { role: 'assistant', content: 'A1' },
-      { role: 'user', content: 'U1' },
-    ] as never);
 
     const result = await executeChatTurn(makeStep(), makeCtx());
 
@@ -224,6 +226,17 @@ describe('chat_turn — happy path', () => {
     const { provider } = await providerCall;
     const chatArgs = provider.chat.mock.calls[0];
     const messages = chatArgs[0] as Array<{ role: string; content: string }>;
+    expect(prisma.aiConversation.findUnique).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(prisma.aiConversation.findUnique).mock.calls[0][0]).toMatchObject({
+      where: { id: 'conv_1' },
+      select: {
+        messages: {
+          where: { role: { in: ['user', 'assistant'] } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        },
+      },
+    });
     expect(messages).toEqual([
       { role: 'system', content: 'You are a helpful agent.' },
       { role: 'user', content: 'U1' },
@@ -253,22 +266,31 @@ describe('chat_turn — happy path', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
 
     await executeChatTurn(makeStep({ historyLimit: 0 }), makeCtx());
 
-    // findMany NOT called when historyLimit=0
-    expect(prisma.aiMessage.findMany).not.toHaveBeenCalled();
+    // One read, asking for no history.
+    expect(prisma.aiConversation.findUnique).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(prisma.aiConversation.findUnique).mock.calls[0][0]).toMatchObject({
+      select: { messages: { take: 0 } },
+    });
+    const { provider } = await vi.mocked(getProviderWithFallbacks).mock.results[0].value;
+    expect(provider.chat.mock.calls[0][0]).toEqual([
+      { role: 'system', content: 'You are a helpful agent.' },
+      { role: 'user', content: 'hello agent' },
+    ]);
   });
 
   it('persistMessages=false skips the transaction', async () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     await executeChatTurn(makeStep({ persistMessages: false }), makeCtx());
 
@@ -307,6 +329,7 @@ describe('chat_turn — error paths', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(null);
 
@@ -327,6 +350,7 @@ describe('chat_turn — error paths', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(null);
 
@@ -340,9 +364,9 @@ describe('chat_turn — error paths', () => {
       vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
         id: 'conv_1',
         agentId: 'agent_1',
+        messages: [],
       } as never);
       vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-      vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
       vi.mocked(resolveAgentProviderAndModel).mockRejectedValue(err);
       try {
         await executeChatTurn(makeStep(), makeCtx());
@@ -393,9 +417,9 @@ describe('chat_turn — error paths', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
     vi.mocked(getProviderWithFallbacks).mockResolvedValue({
       provider: {
         chat: vi.fn(async () => {
@@ -415,9 +439,9 @@ describe('chat_turn — error paths', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
     vi.mocked(getProviderWithFallbacks).mockResolvedValue({
       provider: {
         chat: vi.fn(async () => {
@@ -441,9 +465,9 @@ describe('chat_turn — persistence resilience', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.$transaction).mockRejectedValue(new Error('DB down'));
 
     const result = await executeChatTurn(makeStep(), makeCtx());
@@ -469,9 +493,9 @@ describe('chat_turn — provider config precedence', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     await executeChatTurn(makeStep({ temperature: 0.9 }), makeCtx());
 
@@ -483,9 +507,9 @@ describe('chat_turn — provider config precedence', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     await executeChatTurn(makeStep(), makeCtx());
 
@@ -497,12 +521,12 @@ describe('chat_turn — provider config precedence', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue({
       ...mockAgent,
       temperature: null,
     } as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     await executeChatTurn(makeStep(), makeCtx());
 
@@ -514,9 +538,9 @@ describe('chat_turn — provider config precedence', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     await executeChatTurn(makeStep({ maxTokens: 1000 }), makeCtx());
 
@@ -528,12 +552,12 @@ describe('chat_turn — provider config precedence', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue({
       ...mockAgent,
       maxTokens: null,
     } as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     await executeChatTurn(makeStep(), makeCtx());
 
@@ -545,18 +569,45 @@ describe('chat_turn — provider config precedence', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue({
       ...mockAgent,
       reasoningEffort: 'high',
     } as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
     // narrowReasoningEffort mock returns the value verbatim — see top of file.
 
     await executeChatTurn(makeStep(), makeCtx());
 
     const { opts } = await lastChatCall();
     expect(opts.reasoningEffort).toBe('high');
+  });
+
+  it("forwards the agent's model parameters to the provider (t-911, t-913)", async () => {
+    vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
+      id: 'conv_1',
+      agentId: 'agent_1',
+      messages: [],
+    } as never);
+    vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue({
+      ...mockAgent,
+      stopSequences: ['END'],
+      topP: 0.8,
+      verbosity: 'low',
+      parallelToolCalls: false,
+      serviceTier: 'flex',
+    } as never);
+
+    await executeChatTurn(makeStep(), makeCtx());
+
+    const { opts } = await lastChatCall();
+    expect(opts).toMatchObject({
+      stopSequences: ['END'],
+      topP: 0.8,
+      verbosity: 'low',
+      parallelToolCalls: false,
+      serviceTier: 'flex',
+    });
   });
 });
 
@@ -567,9 +618,9 @@ describe('chat_turn — resilience to unusual upstream shapes', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
     vi.mocked(getProviderWithFallbacks).mockResolvedValueOnce({
       provider: {
         chat: vi.fn(async () => ({ content: null, usage: undefined })),
@@ -587,6 +638,7 @@ describe('chat_turn — resilience to unusual upstream shapes', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
     // String throw (not an Error instance) — exercises the branch where the
@@ -607,9 +659,9 @@ describe('chat_turn — resilience to unusual upstream shapes', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
     vi.mocked(getProviderWithFallbacks).mockResolvedValueOnce({
       provider: {
         chat: vi.fn(async () => {
@@ -635,12 +687,12 @@ describe('chat_turn — resilience to unusual upstream shapes', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue({
       ...mockAgent,
       versions: [],
     } as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     // Capture the transaction callback's inner tx writes by intercepting $transaction.
     const writes: Array<{ data: Record<string, unknown> }> = [];
@@ -669,12 +721,12 @@ describe('chat_turn — resilience to unusual upstream shapes', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue({
       ...mockAgent,
       versions: [{ id: 'agentver_42' }],
     } as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     const writes: Array<{ data: Record<string, unknown> }> = [];
     vi.mocked(prisma.$transaction).mockImplementationOnce((fn: unknown) =>
@@ -699,9 +751,9 @@ describe('chat_turn — resilience to unusual upstream shapes', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
 
     await executeChatTurn(makeStep(), makeCtx());
 
@@ -718,6 +770,46 @@ describe('chat_turn — resilience to unusual upstream shapes', () => {
   });
 });
 
+// ─── Provider code execution (t-956) ─────────────────────────────────────────
+
+describe('chat_turn — provider code execution cost', () => {
+  const codeExecution = { runs: 2, billedSeconds: 300, usdPerHour: 0.05 };
+
+  async function runWith(usage: Record<string, unknown>) {
+    vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
+      id: 'conv_1',
+      agentId: 'agent_1',
+      messages: [],
+    } as never);
+    vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
+    vi.mocked(getProviderWithFallbacks).mockResolvedValue({
+      provider: { chat: vi.fn(async () => ({ content: 'Computed.', usage })) } as never,
+      usedSlug: 'openai',
+    });
+    return executeChatTurn(makeStep(), makeCtx());
+  }
+
+  it('prices the call with the runs, and logs them on the cost row', async () => {
+    await runWith({ inputTokens: 30, outputTokens: 10, codeExecution });
+
+    expect(calculateCost).toHaveBeenCalledWith(
+      'gpt-4o-mini',
+      30,
+      10,
+      expect.objectContaining({ codeExecution })
+    );
+    expect(logCost).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 30, outputTokens: 10, codeExecution })
+    );
+  });
+
+  it('logs no code execution when the call ran none', async () => {
+    await runWith({ inputTokens: 30, outputTokens: 10 });
+
+    expect(vi.mocked(logCost).mock.calls[0][0].codeExecution).toBeUndefined();
+  });
+});
+
 // ─── logCost catch-handler is exercised ──────────────────────────────────────
 
 describe('chat_turn — logCost failure', () => {
@@ -725,9 +817,9 @@ describe('chat_turn — logCost failure', () => {
     vi.mocked(prisma.aiConversation.findUnique).mockResolvedValue({
       id: 'conv_1',
       agentId: 'agent_1',
+      messages: [],
     } as never);
     vi.mocked(prisma.aiAgent.findFirst).mockResolvedValue(mockAgent as never);
-    vi.mocked(prisma.aiMessage.findMany).mockResolvedValue([] as never);
     // First call rejects — exercises the .catch() handler on line 239.
     vi.mocked(logCost).mockRejectedValueOnce(new Error('cost log DB down'));
 

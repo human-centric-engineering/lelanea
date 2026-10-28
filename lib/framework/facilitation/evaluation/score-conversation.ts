@@ -18,6 +18,11 @@ import { logger } from '@/lib/logging';
 import { scoreResponse, type MetricScores } from '@/lib/orchestration/evaluations/score-response';
 import { loadFrameworkConversation } from '@/lib/framework/facilitation/evaluation/conversation';
 import { listScorableTurns } from '@/lib/framework/facilitation/evaluation/turns';
+import {
+  spendCapCodeInJudgeText,
+  SpendCapRefusedError,
+  type SpendCapCode,
+} from '@/lib/framework/shared/spend-caps';
 
 const ENTITY_TYPE = 'framework_conversation_eval';
 
@@ -56,7 +61,9 @@ function reasoningJson(scores: MetricScores): Prisma.InputJsonValue {
 
 /**
  * Score every turn of a framework conversation and persist the results (upsert per turn). Throws
- * `NotFoundError` (unknown conversation) or `ValidationError` (not a framework surface).
+ * `NotFoundError` (unknown conversation), `ValidationError` (not a framework surface), or
+ * `SpendCapRefusedError` once a monthly spend cap refuses a turn — after auditing the turns it
+ * scored, and carrying what they cost.
  */
 export async function scoreConversation(
   args: ScoreConversationArgs
@@ -69,6 +76,7 @@ export async function scoreConversation(
   const results: FrameworkConversationEval[] = [];
   let skippedTurns = 0;
   let totalCostUsd = 0;
+  let capRefusal: { code: SpendCapCode; cause: unknown } | null = null;
 
   for (const turn of turns) {
     let scored;
@@ -80,6 +88,14 @@ export async function scoreConversation(
         userId: actorUserId,
       });
     } catch (err) {
+      // A monthly spend cap is reached for every turn after this one too, so stop rather than skip
+      // — after auditing what was written. `scoreResponse` keeps only its judges' messages, so the
+      // cap is recognised by its words.
+      const capCode = err instanceof Error ? spendCapCodeInJudgeText(err.message) : null;
+      if (capCode !== null) {
+        capRefusal = { code: capCode, cause: err };
+        break;
+      }
       // All three judges failed for this turn (e.g. no active provider) — skip it, don't abort.
       logger.warn('Skipping a turn whose scoring failed', {
         conversationId,
@@ -91,6 +107,20 @@ export async function scoreConversation(
     }
 
     totalCostUsd += scored.costUsd;
+    // One judge's own agent budget can refuse it while the other two score: the turn is kept with
+    // that metric null, which an operator needs to hear about rather than find later.
+    const cappedJudges = (Object.keys(scored.scores) as (keyof MetricScores)[]).filter(
+      (metric) =>
+        scored.scores[metric].score === null &&
+        spendCapCodeInJudgeText(scored.scores[metric].reasoning) !== null
+    );
+    if (cappedJudges.length > 0) {
+      logger.warn('A monthly spend cap refused a metric judge; its score is stored as null', {
+        conversationId,
+        messageId: turn.messageId,
+        metrics: cappedJudges,
+      });
+    }
     const data = {
       conversationId,
       contextType: conversation.contextType,
@@ -122,9 +152,17 @@ export async function scoreConversation(
       scoredTurns: results.length,
       skippedTurns,
       totalCostUsd,
+      ...(capRefusal ? { stoppedBy: capRefusal.code } : {}),
     },
     clientIp: clientIp ?? null,
   });
+
+  if (capRefusal) {
+    throw new SpendCapRefusedError(capRefusal.code, undefined, {
+      cause: capRefusal.cause,
+      costUsd: totalCostUsd,
+    });
+  }
 
   return { conversationId, scoredTurns: results.length, skippedTurns, totalCostUsd, results };
 }

@@ -2,7 +2,13 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
-type Theme = 'dark' | 'light';
+import {
+  PREFERS_DARK_QUERY,
+  THEME_STORAGE_KEY,
+  readStoredTheme,
+  resolveTheme,
+  type Theme,
+} from '@/lib/theme';
 
 interface ThemeContextValue {
   /** The theme in force — an explicit choice, or the device's preference. */
@@ -36,24 +42,16 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 /**
  * LELAÑEA divergence — see `.context/app/divergences.md`, row 2.
  *
- * Upstream persisted the resolved SYSTEM preference to `localStorage` on first
- * paint, so from the second visit onward "hasn't chosen yet" was stored exactly
- * like "chose light", and a later OS switch was never followed. That shows on
- * any deployment — Sunrise's own white and near-black included — to anyone
- * whose OS preference changes after their first visit; it is the difference
- * between the app tracking your machine and ignoring it.
- *
- * Decision D4: the system preference is the DEFAULT; only the toggle persists a
- * choice. So this reads storage without writing to it, and follows the OS for
- * as long as nothing is stored. The storage key, the `<html>` class and the
- * hook's public shape are all unchanged from the platform's.
- *
- * The matching read in the no-flash script in `app/layout.tsx` had the same
- * write and lost it in the same commit; the two must agree or the first paint
- * disagrees with the first render.
+ * Sunrise fixed the persistence half of this row in 0.16.0 (#756): the shared
+ * `lib/theme.ts` reads storage without writing it, and the no-flash script in
+ * `app/layout.tsx` is now upstream's own. What is still ours is the third
+ * state. Decision D4 makes the system preference the DEFAULT and the toggle a
+ * choice, so `/app/settings` needs to report "following your device" and go
+ * back to it: `choice` and `clearTheme`, which the platform's hook does not
+ * publish. The storage key, the `<html>` class and the resolution itself are
+ * the platform's, imported from `lib/theme.ts`, so the first paint and the
+ * first render cannot disagree.
  */
-const STORAGE_KEY = 'theme';
-const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 /**
  * What this session asked for, regardless of whether storage accepted it.
@@ -65,21 +63,10 @@ const DARK_QUERY = '(prefers-color-scheme: dark)';
  */
 type SessionIntent = 'chose' | 'cleared' | null;
 
-/** The stored EXPLICIT choice, or null when the user has not made one. */
-function readStoredTheme(): Theme | null {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === 'light' || stored === 'dark' ? stored : null;
-  } catch {
-    // Private-mode or blocked storage: treat it as "no choice recorded".
-    return null;
-  }
-}
-
 function readSystemTheme(): Theme {
   // Same defensiveness as the subscription below: without `matchMedia` this
   // runs inside a state initializer, where a throw fails the render outright.
-  return window.matchMedia?.(DARK_QUERY).matches ? 'dark' : 'light';
+  return window.matchMedia?.(PREFERS_DARK_QUERY).matches ? 'dark' : 'light';
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -96,7 +83,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // otherwise the system preference. Neither writes.
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'light';
-    return readStoredTheme() ?? readSystemTheme();
+    return resolveTheme(readStoredTheme(), readSystemTheme() === 'dark');
   });
 
   /*
@@ -123,16 +110,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // NOT full cross-tab sync, and the distinction matters: a second tab STOPS
   // FOLLOWING once another tab writes a choice, but it does not adopt it, so it
   // can sit on the old theme until reload. Closing that needs a `storage`
-  // listener. Left alone on purpose — upstream has the same gap, so adding one
-  // would widen divergence row 2 beyond the defect daybreak#236 describes and
-  // make the eventual revert less clean.
+  // listener. Left alone on purpose — upstream's hook has the same gap, so
+  // adding one would widen divergence row 2 and make the eventual revert less
+  // clean.
   useEffect(() => {
     // Upstream only ever reached `matchMedia` when nothing was stored. This
     // subscription runs on every mount, so it must not assume the API exists:
     // `MediaQueryList.addEventListener` is missing on Safari < 14, and throwing
     // inside an effect takes down the tree via the nearest error boundary —
     // including for users with an explicit choice, who never needed this path.
-    const media = window.matchMedia?.(DARK_QUERY);
+    const media = window.matchMedia?.(PREFERS_DARK_QUERY);
     if (!media?.addEventListener) return;
 
     const onChange = (event: MediaQueryListEvent) => {
@@ -172,7 +159,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     sessionIntent.current = 'chose';
     setChoice(next);
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
       // Storage unavailable — the choice still applies for this session.
     }
@@ -195,7 +182,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     sessionIntent.current = 'cleared';
     setChoice(null);
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(THEME_STORAGE_KEY);
       // Downgrade to `null` once the removal is CONFIRMED, so `'cleared'` only
       // ever means "storage lied". Left latched, it outranked storage for the
       // rest of the session — so a tab that had cleared (including by clicking

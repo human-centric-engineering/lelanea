@@ -20,6 +20,9 @@ import { scoreConversation } from '@/lib/framework/facilitation/evaluation/score
 import { prisma } from '@/lib/db/client';
 import { listScorableTurns } from '@/lib/framework/facilitation/evaluation/turns';
 import { scoreResponse } from '@/lib/orchestration/evaluations/score-response';
+import { getUserFacingError } from '@/lib/orchestration/chat/error-messages';
+import { SpendCapRefusedError } from '@/lib/framework/shared/spend-caps';
+import { logger } from '@/lib/logging';
 import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
 import { NotFoundError, ValidationError } from '@/lib/api/errors';
 
@@ -106,5 +109,69 @@ describe('scoreConversation', () => {
     const result = await scoreConversation({ conversationId: 'c1', actorUserId: 'a' });
     expect(result).toMatchObject({ scoredTurns: 1, skippedTurns: 1, totalCostUsd: 0.01 });
     expect(prisma.frameworkConversationEval.upsert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('spend caps (Sunrise 0.15.0)', () => {
+  // What scoreResponse throws when all three judges' chat turns end in a cap refusal: their
+  // `errorMessage`s joined, each the registry's words for the cap (the chat handler's refusalText).
+  const capWords = (code: string) => {
+    const { message, action } = getUserFacingError(code);
+    return `${message} ${action}`;
+  };
+  const allJudgesRefused = (code: string) =>
+    new Error(
+      `All three judges failed to produce a score — faithfulness: ${capWords(code)}; groundedness: ${capWords(code)}; relevance: ${capWords(code)}`
+    );
+
+  it('stops at a turn whose judges a cap refused, after auditing the turns it scored', async () => {
+    vi.mocked(scoreResponse)
+      .mockResolvedValueOnce({ scores, costUsd: 0.01 })
+      .mockRejectedValueOnce(allJudgesRefused('global_budget_exceeded'));
+    const err = await scoreConversation({ conversationId: 'c1', actorUserId: 'a' }).catch(
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(SpendCapRefusedError);
+    expect(err).toMatchObject({ code: 'global_budget_exceeded', status: 402, costUsd: 0.01 });
+    // The first turn's row was written, and the run that wrote it is on the audit log.
+    expect(prisma.frameworkConversationEval.upsert).toHaveBeenCalledTimes(1);
+    expect(logAdminAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'framework_conversation_eval.score',
+        metadata: expect.objectContaining({ scoredTurns: 1, stoppedBy: 'global_budget_exceeded' }),
+      })
+    );
+  });
+
+  it('is not fooled by the cap’s words inside some other judge error', async () => {
+    // A provider error that echoes the turn it was asked to judge — itself a refused reply.
+    vi.mocked(scoreResponse).mockRejectedValueOnce(
+      new Error(
+        `All three judges failed to produce a score — faithfulness: 400 bad request: "${capWords('global_budget_exceeded')}"; groundedness: timeout; relevance: timeout`
+      )
+    );
+    const result = await scoreConversation({ conversationId: 'c1', actorUserId: 'a' });
+    expect(result).toMatchObject({ scoredTurns: 1, skippedTurns: 1 });
+  });
+
+  it('warns when a cap refused one judge while the others scored, and keeps the turn', async () => {
+    const warn = vi.spyOn(logger, 'warn');
+    vi.mocked(scoreResponse).mockResolvedValueOnce({
+      scores: {
+        ...scores,
+        faithfulness: {
+          score: null,
+          reasoning: `judge unavailable: ${capWords('budget_exceeded')}`,
+        },
+      },
+      costUsd: 0.01,
+    });
+    const result = await scoreConversation({ conversationId: 'c1', actorUserId: 'a' });
+    expect(result.scoredTurns).toBe(2);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('spend cap refused a metric judge'),
+      expect.objectContaining({ messageId: 'a1', metrics: ['faithfulness'] })
+    );
+    warn.mockRestore();
   });
 });

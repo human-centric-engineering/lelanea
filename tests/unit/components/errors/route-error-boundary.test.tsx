@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouteErrorBoundary } from '@/components/errors/route-error-boundary';
 
@@ -53,18 +53,29 @@ const envelope = (value: unknown): SessionResult => value as SessionResult;
 const validSession = (): SessionResult =>
   envelope({ data: { session: { id: 'sess-1' }, user: { id: 'user-1' } }, error: null });
 
-const expiredSession = (): SessionResult =>
+/** better-auth's answer for a missing or expired session: a 200 with null data. */
+const expiredSession = (): SessionResult => envelope({ data: null, error: null });
+
+/** A session refresh that failed: better-auth's only 401 from this call. */
+const refreshRejected = (): SessionResult =>
   envelope({
     data: null,
     error: { status: 401, statusText: 'UNAUTHORIZED', message: 'Session expired' },
   });
 
+/** The auth service failing: an error envelope that says nothing about the session. */
+const lookupFailed = (): SessionResult =>
+  envelope({
+    data: null,
+    error: { status: 500, statusText: 'INTERNAL_SERVER_ERROR', message: 'boom' },
+  });
+
 function renderBoundary(props: Partial<React.ComponentProps<typeof RouteErrorBoundary>> = {}) {
-  const reset = vi.fn();
+  const retry = vi.fn();
   const utils = render(
     <RouteErrorBoundary
       error={error}
-      reset={reset}
+      retry={retry}
       boundaryName="TestError"
       tag="test"
       title="Something went wrong"
@@ -73,7 +84,7 @@ function renderBoundary(props: Partial<React.ComponentProps<typeof RouteErrorBou
       {...props}
     />
   );
-  return { ...utils, reset };
+  return { ...utils, retry };
 }
 
 describe('RouteErrorBoundary', () => {
@@ -147,12 +158,68 @@ describe('RouteErrorBoundary', () => {
       expect(screen.queryByText('Session Expired')).not.toBeInTheDocument();
     });
 
-    it('treats a failed session lookup as expired', async () => {
-      vi.mocked(authClient.getSession).mockRejectedValue(new Error('network'));
+    it('shows the sign-in card when a session refresh is refused with a 401', async () => {
+      vi.mocked(authClient.getSession).mockResolvedValue(refreshRejected());
 
       renderBoundary({ checkSession: true });
 
       expect(await screen.findByText('Session Expired')).toBeInTheDocument();
+    });
+
+    // #1066: an auth outage is not an expired session
+    it('keeps the normal error card when the session lookup returns a server error', async () => {
+      vi.mocked(authClient.getSession).mockResolvedValue(lookupFailed());
+
+      renderBoundary({ checkSession: true });
+
+      await waitFor(() => expect(authClient.getSession).toHaveBeenCalledTimes(1));
+      // Let the resolved lookup settle before asserting the card did not swap.
+      await act(async () => {});
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+      expect(screen.queryByText('Session Expired')).not.toBeInTheDocument();
+      expect(logger.warn).toHaveBeenCalledWith('Session check failed in error boundary', {
+        boundaryName: 'TestError',
+        status: 500,
+      });
+    });
+
+    it('keeps the normal error card when the session lookup rejects', async () => {
+      vi.mocked(authClient.getSession).mockRejectedValue(new Error('network'));
+
+      renderBoundary({ checkSession: true });
+
+      await waitFor(() => expect(authClient.getSession).toHaveBeenCalledTimes(1));
+      await act(async () => {});
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+      expect(screen.queryByText('Session Expired')).not.toBeInTheDocument();
+      expect(logger.warn).toHaveBeenCalledWith('Session check failed in error boundary', {
+        boundaryName: 'TestError',
+        error: 'network',
+      });
+    });
+
+    it('clears the sign-in card when a later error finds a valid session', async () => {
+      vi.mocked(authClient.getSession).mockResolvedValueOnce(expiredSession());
+      const { rerender, retry } = renderBoundary({ checkSession: true });
+      expect(await screen.findByText('Session Expired')).toBeInTheDocument();
+
+      // Signed in again elsewhere; the boundary is handed a new error.
+      vi.mocked(authClient.getSession).mockResolvedValueOnce(validSession());
+      rerender(
+        <RouteErrorBoundary
+          error={new Error('second failure')}
+          retry={retry}
+          boundaryName="TestError"
+          tag="test"
+          title="Something went wrong"
+          description="An error occurred."
+          fallback={{ label: 'Dashboard', href: '/dashboard' }}
+          checkSession
+        />
+      );
+
+      expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+      expect(screen.queryByText('Session Expired')).not.toBeInTheDocument();
     });
 
     it('never calls getSession when checkSession is not set', async () => {
@@ -164,11 +231,11 @@ describe('RouteErrorBoundary', () => {
   });
 
   describe('actions', () => {
-    it('wires "Try again" to reset', async () => {
-      const { reset } = renderBoundary();
+    it('wires "Try again" to retry', async () => {
+      const { retry } = renderBoundary();
 
       await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
-      expect(reset).toHaveBeenCalledTimes(1);
+      expect(retry).toHaveBeenCalledTimes(1);
     });
 
     it('soft-navigates the fallback by default', async () => {

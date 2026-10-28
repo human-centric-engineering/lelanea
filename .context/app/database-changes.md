@@ -86,9 +86,13 @@ migration.
 
 Since Daybreak 0.6.0 (t-112), every `app_*` table carries `orgId`, backfilled
 to the install org (`'install'`), with a dormant `org_isolation` policy and a
-place in `leafOrgSources()` (`lib/app/leaf-data-export.ts`). A new model does
-the same, or Sunrise's `model-classification`, `policy-coverage` and
-`org-sources` guards fail naming it. The recipe is Daybreak's
+place in `LEAF_ORG_SOURCES` (`lib/app/leaf-org-export.ts`; until Daybreak 0.9.0,
+`leafOrgSources()` in `leaf-data-export.ts`). A new model does the same, or
+Sunrise's `model-classification`, `policy-coverage` and `org-sources` guards
+fail naming it. A model that links to a person is also classified in
+`LEAF_OWNER_CLASSIFICATION` (`lib/app/leaf-owner-classification.ts`), or the
+owner-classification guard names it; mark a user id that is not named `userId`
+or `…UserId` with `/// owner-classification: user-id` so the guard sees it. The recipe is Daybreak's
 (`.context/framework/building-on-daybreak.md`, "Tenancy"), and our two
 migrations dated 2026-10-03 are the worked example.
 

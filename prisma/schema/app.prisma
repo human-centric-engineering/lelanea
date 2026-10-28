@@ -45,7 +45,7 @@ enum AppWaitlistSource {
 /// `SET NULL` — not `Cascade` — because the row survives the account: the
 /// waitlist is a record of who asked, and erasing an account should not silently
 /// re-open a place. What it must NOT do is retain the person's email and their
-/// answers, so the erasure hook registered from `lib/app/leaf-bootstrap.ts`
+/// answers, so the erasure hook registered from `lib/app/leaf-erasure.ts`
 /// deletes the row outright inside the erasure transaction. The FK's `SET NULL`
 /// is the backstop for a row the hook cannot match, not the policy.
 model AppWaitlistEntry {
@@ -79,7 +79,7 @@ model AppWaitlistEntry {
   /// they said they wanted. Calling it a deletion is how a later reader concludes
   /// the Art. 17 duty was met by a click in the admin, which it was not — erasure
   /// still DELETES the row outright, through the hook registered from
-  /// `lib/app/leaf-bootstrap.ts`, and the Art. 15 export still has to disclose a
+  /// `lib/app/leaf-erasure.ts`, and the Art. 15 export still has to disclose a
   /// removed entry because we still hold it.
   removedAt         DateTime?
   /// When a removed address was last submitted through the public form again.
@@ -225,6 +225,7 @@ model AppKnowledgeDesignation {
   /// note, the row survives that admin's account, and a `user` FK here would
   /// make `eraseUser()` fail or silently rewrite the record of who designated
   /// what. Rendered as an id, resolved by the admin list when it can.
+  /// owner-classification: user-id
   designatedBy String?
   /// Set only on a document the knowledge mirror wrote, e.g.
   /// `foundational:the_mission` (f-content-seeds t-90). It names the app row the
@@ -1164,6 +1165,7 @@ model AppSlotDefinitionRevision {
   origin         AppSlotRevisionOrigin
   /// The admin who made the edit; null for the seed, and null once that admin's
   /// account is erased. Read `origin` to tell those apart.
+  /// owner-classification: user-id
   editorId       String?
   changedAt      DateTime              @default(now())
 
@@ -1342,6 +1344,7 @@ model AppFoundationalDocumentRevision {
   origin                  AppContentRevisionOrigin
   /// The admin who made the edit. Null for the seed, and null once that admin's
   /// account is erased. Read `origin` to tell the two apart.
+  /// owner-classification: user-id
   editorId                String?
   changedAt               DateTime                 @default(now())
 
@@ -1447,6 +1450,7 @@ model AppJourneyTierRevision {
   changedFields String[]
   origin        AppContentRevisionOrigin
   /// Null for the seed, and null once that admin's account is erased.
+  /// owner-classification: user-id
   editorId      String?
   changedAt     DateTime                 @default(now())
 
@@ -1520,6 +1524,7 @@ model AppJourneyModuleRevision {
   produces      Json?
   changedFields String[]
   origin        AppContentRevisionOrigin
+  /// owner-classification: user-id
   editorId      String?
   changedAt     DateTime                 @default(now())
 
@@ -1587,6 +1592,7 @@ model AppQuestionSetRevision {
   locale        String
   changedFields String[]
   origin        AppContentRevisionOrigin
+  /// owner-classification: user-id
   editorId      String?
   changedAt     DateTime                 @default(now())
 
@@ -1651,6 +1657,7 @@ model AppDiscoveryQuestionRevision {
   weight              Int                      @default(100)
   changedFields       String[]
   origin              AppContentRevisionOrigin
+  /// owner-classification: user-id
   editorId            String?
   changedAt           DateTime                 @default(now())
 
@@ -1767,6 +1774,7 @@ model AppResourceRevision {
   retired       Boolean                  @default(false)
   changedFields String[]
   origin        AppContentRevisionOrigin
+  /// owner-classification: user-id
   editorId      String?
   changedAt     DateTime                 @default(now())
 
@@ -1826,6 +1834,7 @@ model AppResourceWordsRevision {
   sourceId         String
   changedFields    String[]
   origin           AppContentRevisionOrigin
+  /// owner-classification: user-id
   editorId         String?
   changedAt        DateTime                 @default(now())
 
@@ -1923,6 +1932,7 @@ model AppVoiceOverlaySetRevision {
   status        AppVoiceContentStatus
   changedFields String[]
   origin        AppContentRevisionOrigin
+  /// owner-classification: user-id
   editorId      String?
   changedAt     DateTime                 @default(now())
 
@@ -1999,6 +2009,7 @@ model AppVoiceOverlayRevision {
   status        AppVoiceContentStatus
   changedFields String[]
   origin        AppContentRevisionOrigin
+  /// owner-classification: user-id
   editorId      String?
   changedAt     DateTime                 @default(now())
 
@@ -2072,6 +2083,7 @@ model AppVoiceGoldenSetRevision {
   status        AppVoiceContentStatus
   changedFields String[]
   origin        AppContentRevisionOrigin
+  /// owner-classification: user-id
   editorId      String?
   changedAt     DateTime                 @default(now())
 

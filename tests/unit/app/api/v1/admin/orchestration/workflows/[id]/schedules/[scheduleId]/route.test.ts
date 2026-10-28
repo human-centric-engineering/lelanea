@@ -31,15 +31,28 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(() => Promise.resolve(new Headers())),
 }));
 
-vi.mock('@/lib/db/client', () => ({
-  prisma: {
+vi.mock('@/lib/db/client', () => {
+  const prisma = {
     aiWorkflowSchedule: {
       findFirst: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
     },
     aiAdminAuditLog: { create: vi.fn() },
-  },
+    // Watched so a test can show a save asks erasure nothing (t-899)
+    dataErasureReceipt: { findMany: vi.fn() },
+    $transaction: vi.fn(),
+  };
+  prisma.$transaction.mockImplementation((cb: (tx: typeof prisma) => unknown) => cb(prisma));
+  return { prisma };
+});
+
+// The versioned save's check (t-899): stubbed here; what it compares is
+// tested in config-versions.test.ts and, at this route, in
+// schedules.route.test.ts.
+vi.mock('@/lib/orchestration/config-versions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/orchestration/config-versions')>()),
+  assertUnchangedSince: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/orchestration/audit/admin-audit-logger', () => ({
@@ -64,7 +77,10 @@ import {
 } from '@/app/api/v1/admin/orchestration/workflows/[id]/schedules/[scheduleId]/route';
 import { auth } from '@/lib/auth/config';
 import { prisma } from '@/lib/db/client';
+import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
 import { mockAdminUser, mockUnauthenticatedUser } from '@/tests/helpers/auth';
+import { assertUnchangedSince } from '@/lib/orchestration/config-versions';
+import { StaleRecordError } from '@/lib/api/errors';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -98,10 +114,13 @@ function makeGetRequest(): NextRequest {
   } as unknown as NextRequest;
 }
 
-function makePatchRequest(body: unknown): NextRequest {
+function makePatchRequest(body: unknown, ifMatch: string | null = '"loaded"'): NextRequest {
   const req = new Request('http://localhost:3000/test', {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(ifMatch === null ? {} : { 'If-Match': ifMatch }),
+    },
     body: JSON.stringify(body),
   });
   return req as unknown as NextRequest;
@@ -191,6 +210,8 @@ describe('PATCH /workflows/:id/schedules/:scheduleId', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+    vi.mocked(prisma.dataErasureReceipt.findMany).mockResolvedValue([]);
+    vi.mocked(assertUnchangedSince).mockResolvedValue(undefined);
     vi.mocked(prisma.aiWorkflowSchedule.findFirst).mockResolvedValue(mockScheduleRecord);
   });
 
@@ -334,6 +355,59 @@ describe('PATCH /workflows/:id/schedules/:scheduleId', () => {
         data: expect.objectContaining({ inputTemplate: newTemplate }),
       })
     );
+  });
+
+  it('checks the schedule is still at the version it was loaded at, before writing (t-899)', async () => {
+    vi.mocked(prisma.aiWorkflowSchedule.update).mockResolvedValue(mockScheduleRecord);
+
+    await updateSchedule(
+      makePatchRequest({ name: 'Renamed' }),
+      makeParams(VALID_WF_ID, VALID_SCHED_ID)
+    );
+
+    expect(assertUnchangedSince).toHaveBeenCalledWith(
+      prisma,
+      { kind: 'workflow-schedule', id: VALID_SCHED_ID },
+      ['"loaded"']
+    );
+    expect(vi.mocked(assertUnchangedSince).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(prisma.aiWorkflowSchedule.update).mock.invocationCallOrder[0]
+    );
+  });
+
+  it('refuses a save with no If-Match with 428, writing nothing (t-899)', async () => {
+    const res = await updateSchedule(
+      makePatchRequest({ name: 'Renamed' }, null),
+      makeParams(VALID_WF_ID, VALID_SCHED_ID)
+    );
+
+    expect(res.status).toBe(428);
+    expect(prisma.aiWorkflowSchedule.update).not.toHaveBeenCalled();
+  });
+
+  it('answers 412 and writes nothing when the schedule moved on (t-899)', async () => {
+    vi.mocked(assertUnchangedSince).mockRejectedValue(new StaleRecordError());
+
+    const res = await updateSchedule(
+      makePatchRequest({ name: 'Renamed' }),
+      makeParams(VALID_WF_ID, VALID_SCHED_ID)
+    );
+
+    expect(res.status).toBe(412);
+    expect(prisma.aiWorkflowSchedule.update).not.toHaveBeenCalled();
+    expect(logAdminAction).not.toHaveBeenCalled();
+  });
+
+  it('saves a template naming an address typed in, without asking who was erased (t-899)', async () => {
+    vi.mocked(prisma.aiWorkflowSchedule.update).mockResolvedValue(mockScheduleRecord);
+
+    const res = await updateSchedule(
+      makePatchRequest({ inputTemplate: { recipients: ['readded@example.com'] } }),
+      makeParams(VALID_WF_ID, VALID_SCHED_ID)
+    );
+
+    expect(res.status).toBe(200);
+    expect(prisma.dataErasureReceipt.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 401 when request is unauthenticated', async () => {

@@ -3,7 +3,8 @@
  *
  * Computes the USD cost of an LLM operation using the model registry,
  * writes granular cost rows to `AiCostLog`, aggregates spend by agent,
- * and enforces per-agent monthly budgets.
+ * and enforces the monthly budgets: the agent's, its org's, and the global
+ * cap.
  *
  * Local models always cost \$0 — we still record their token counts for
  * benchmarking, but `isLocal: true` rows contribute nothing to spend.
@@ -20,10 +21,22 @@
 import type { AiCostLog, Prisma } from '@/types/prisma';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
+import { keepRunningAfterResponse } from '@/lib/api/after-response';
 import { getAvailableModels, getModel } from '@/lib/orchestration/llm/model-registry';
+import { codeExecutionCostUsd as codeExecutionCostUsdOf } from '@/lib/orchestration/llm/code-execution';
 import { touchAgentLastActive } from '@/lib/orchestration/agents/touch-last-active';
+import {
+  globalCapStateOrSkip,
+  noteSpend,
+  orgCapStateOrSkip,
+  utcMonthStart,
+} from '@/lib/orchestration/llm/spend-caps';
 import type { AgentCostSummary, CostOperation, LocalSavingsResult } from '@/types/orchestration';
-import type { ModelInfo } from '@/lib/orchestration/llm/types';
+import {
+  WEB_SEARCH_USD_PER_REQUEST,
+  type LlmUsage,
+  type ModelInfo,
+} from '@/lib/orchestration/llm/types';
 
 /** Computed cost breakdown for a single operation. */
 export interface ComputedCost {
@@ -38,6 +51,19 @@ export interface ComputedCost {
    * "not priced", not "free"; `logCost` records that on the row.
    */
   unpriced?: true;
+  /**
+   * The part of `totalCostUsd` that paid for the provider's own web searches
+   * (`LlmUsage.webSearchRequests`), billed per search rather than per token.
+   * Neither input nor output, so it is in the total only. Absent when the
+   * call ran none.
+   */
+  webSearchCostUsd?: number;
+  /**
+   * The part of `totalCostUsd` that paid for the provider's own code runs
+   * (`LlmUsage.codeExecution`), billed by container time. An estimate (see
+   * `code-execution.ts`). In the total only; absent when the call ran none.
+   */
+  codeExecutionCostUsd?: number;
 }
 
 /**
@@ -82,9 +108,10 @@ export const PDF_USD_PER_PDF = 0.005;
  * `prisma/seeds/009-provider-models.ts` so admins running the seeded
  * registry see the same numbers in cost reports.
  *
- * Unknown / unseeded embedding models fall back to `0` — recorded for
- * volume tracking, but treated as free until promoted into this map or
- * the `AiProviderModel` table. Local providers (Ollama nomic-embed-text,
+ * A model missing from this map is priced from the model registry, which
+ * carries the Model Matrix's `costPerMillionTokens` (Google, Mistral and
+ * Cohere embeddings are priced there, not here). A model neither prices is
+ * recorded at $0 for volume tracking and marked unpriced. Local providers (Ollama nomic-embed-text,
  * etc.) are intentionally absent: the `provider.isLocal` flag flips them
  * to `isLocal: true` in `logCost` so they always cost $0.
  */
@@ -101,11 +128,14 @@ export const EMBEDDING_USD_PER_MILLION_TOKENS: Record<string, number> = {
 /**
  * Compute the USD cost of an embedding call from the model id and the
  * input-token count reported by the provider's `usage.prompt_tokens`.
- * Returns zeroed costs for unknown models (with a debug log) so an
- * out-of-table model still produces an `AiCostLog` row for volume
- * tracking — just without dollar attribution until added.
+ * The rate comes from `EMBEDDING_USD_PER_MILLION_TOKENS` first — the exact
+ * list price for the models it names — then from the registry, whose
+ * single matrix rate is exactly an embedding's one rate. A model neither
+ * prices returns zeroed costs with `unpriced: true`, so it still produces
+ * an `AiCostLog` row for volume tracking, marked as unknown, not free.
  *
- * Always returns `isLocal: false` — "rate unknown" is NOT "local". The
+ * Returns `isLocal: false` unless the registry lists the model at the local
+ * tier, as `calculateCost` does — "rate unknown" is NOT "local". The
  * caller is responsible for setting `isLocal` from `provider.isLocal`
  * (true Ollama-style local models) via `logCost`'s OR. An earlier
  * version inferred local-ness from a zero rate, which incorrectly
@@ -117,7 +147,23 @@ export function calculateEmbeddingCost(modelId: string, inputTokens: number): Co
   if (!Number.isFinite(inputTokens) || inputTokens <= 0) {
     return { inputCostUsd: 0, outputCostUsd: 0, totalCostUsd: 0, isLocal: false };
   }
-  const ratePerMillion = EMBEDDING_USD_PER_MILLION_TOKENS[modelId] ?? 0;
+  let ratePerMillion = EMBEDDING_USD_PER_MILLION_TOKENS[modelId];
+  if (ratePerMillion === undefined) {
+    const model = getModel(modelId);
+    if (model?.tier === 'local') {
+      return { inputCostUsd: 0, outputCostUsd: 0, totalCostUsd: 0, isLocal: true };
+    }
+    if (!model || model.pricingUnknown) {
+      // Debug, not warn: this runs on every knowledge search, twice (the
+      // embedder and `logCost` both cost the call), and the row it produces
+      // already says `pricing: 'unknown'`.
+      logger.debug('Embedding cost: model has no price, treating as zero cost', {
+        model: modelId,
+      });
+      return { inputCostUsd: 0, outputCostUsd: 0, totalCostUsd: 0, isLocal: false, unpriced: true };
+    }
+    ratePerMillion = model.inputCostPerMillion;
+  }
   const totalCostUsd = (inputTokens / 1_000_000) * ratePerMillion;
   return {
     inputCostUsd: totalCostUsd,
@@ -134,8 +180,19 @@ export interface LogCostParams {
   workflowExecutionId?: string;
   model: string;
   provider: string;
+  /** Every input token, cached or not (`LlmUsage.inputTokens`). */
   inputTokens: number;
   outputTokens: number;
+  /** The subset of `inputTokens` read from the prompt cache. */
+  cacheReadTokens?: number;
+  /** The subset of `inputTokens` written to the prompt cache. */
+  cacheWriteTokens?: number;
+  /** The tier that served the call, when priced apart (`LlmUsage.serviceTier`). */
+  serviceTier?: LlmUsage['serviceTier'];
+  /** The provider's own web searches the call ran (`LlmUsage.webSearchRequests`). */
+  webSearchRequests?: number;
+  /** The provider's own code runs the call made (`LlmUsage.codeExecution`). */
+  codeExecution?: LlmUsage['codeExecution'];
   operation: CostOperation;
   /**
    * Audio duration in milliseconds — required when `operation` is
@@ -234,7 +291,23 @@ export interface BudgetStatus {
    * so the chat handler can emit a more specific error code.
    */
   globalCapExceeded?: boolean;
+  /**
+   * Set when the agent's org has a cap of its own (`Org.settings.quotas
+   * .monthlyBudgetUsd`, §110 t-788): the cap and the org's month-to-date
+   * spend. Absent when the org has none, which is the default.
+   */
+  org?: { limit: number; spent: number };
+  /** Set when the org's month-to-date spend has met or passed its cap. */
+  orgCapExceeded?: boolean;
 }
+
+// The org and global caps live in `spend-caps.ts`, which the provider manager's
+// call-time gate also reads. Re-exported for the surfaces that show them.
+export {
+  getGlobalCapState,
+  getMonthToDateGlobalSpend,
+  type GlobalCapState,
+} from '@/lib/orchestration/llm/spend-caps';
 
 /**
  * Compute the USD cost of an operation for the given model and token
@@ -245,7 +318,35 @@ export interface BudgetStatus {
 export function calculateCost(
   modelId: string,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
+  usage: PricedUsage = {}
+): ComputedCost {
+  let cost = calculateTokenCost(modelId, inputTokens, outputTokens, usage);
+  // Billed whatever the model's token pricing: an unknown or unpriced model
+  // still paid for its searches and its code runs.
+  const searches = usage.webSearchRequests;
+  if (searches !== undefined && Number.isFinite(searches) && searches > 0) {
+    const webSearchCostUsd = searches * WEB_SEARCH_USD_PER_REQUEST;
+    cost = { ...cost, totalCostUsd: cost.totalCostUsd + webSearchCostUsd, webSearchCostUsd };
+  }
+  const codeExecutionCostUsd = usage.codeExecution
+    ? codeExecutionCostUsdOf(usage.codeExecution)
+    : 0;
+  if (Number.isFinite(codeExecutionCostUsd) && codeExecutionCostUsd > 0) {
+    cost = {
+      ...cost,
+      totalCostUsd: cost.totalCostUsd + codeExecutionCostUsd,
+      codeExecutionCostUsd,
+    };
+  }
+  return cost;
+}
+
+function calculateTokenCost(
+  modelId: string,
+  inputTokens: number,
+  outputTokens: number,
+  usage: PricedUsage
 ): ComputedCost {
   if (
     !Number.isFinite(inputTokens) ||
@@ -286,8 +387,21 @@ export function calculateCost(
     return { inputCostUsd: 0, outputCostUsd: 0, totalCostUsd: 0, isLocal: false, unpriced: true };
   }
 
-  const inputCostUsd = (inputTokens / 1_000_000) * model.inputCostPerMillion;
-  const outputCostUsd = (outputTokens / 1_000_000) * model.outputCostPerMillion;
+  // The cache counts are subsets of `inputTokens`, each billed at its own
+  // rate. Clamped so a provider over-reporting one can't price more input
+  // than there was.
+  const readTokens = clampTokens(usage.cacheReadTokens, inputTokens);
+  const writeTokens = clampTokens(usage.cacheWriteTokens, inputTokens - readTokens);
+  const uncachedTokens = inputTokens - readTokens - writeTokens;
+  const rates = cacheRates(model);
+  const tier = usage.serviceTier ? SERVICE_TIER_MULTIPLIER[usage.serviceTier] : 1;
+  const inputCostUsd =
+    ((uncachedTokens * model.inputCostPerMillion +
+      readTokens * rates.read +
+      writeTokens * rates.write) /
+      1_000_000) *
+    tier;
+  const outputCostUsd = (outputTokens / 1_000_000) * model.outputCostPerMillion * tier;
   return {
     inputCostUsd,
     outputCostUsd,
@@ -297,11 +411,77 @@ export function calculateCost(
 }
 
 /**
+ * What, beyond the token totals, changes a call's price: the parts of its
+ * input billed at prompt-cache rates, the tier that served it, and the web
+ * searches it ran. An `LlmUsage` fits.
+ */
+export type PricedUsage = Pick<
+  LlmUsage,
+  'cacheReadTokens' | 'cacheWriteTokens' | 'serviceTier' | 'webSearchRequests' | 'codeExecution'
+>;
+
+/**
+ * OpenAI's processing tiers against the standard rate. Flex is half price
+ * across the models that offer it. Priority runs 1.7–2× by model and the
+ * registry carries no per-tier rates, so 2× — over, never under, the real
+ * cost, which is the side a budget cap needs to err on.
+ */
+const SERVICE_TIER_MULTIPLIER: Record<NonNullable<LlmUsage['serviceTier']>, number> = {
+  flex: 0.5,
+  priority: 2,
+};
+
+/**
+ * Anthropic's published cache multipliers, for a model whose pricing source
+ * gave no cache rates: reads at 0.1× input, five-minute writes at 1.25×. A few
+ * models read cheaper still (Opus 5.5 at 0.05×, Fable 5.1 at 0.025×), so for
+ * them this overstates — the safe direction for a budget cap.
+ */
+const ANTHROPIC_CACHE_READ_MULTIPLIER = 0.1;
+const ANTHROPIC_CACHE_WRITE_MULTIPLIER = 1.25;
+
+/**
+ * Per-million rates for cache reads and writes: the model's own when its
+ * pricing source published them; Anthropic's multipliers for a Claude model
+ * without; otherwise the full input rate. OpenAI's discount varies by model
+ * (half to a tenth), so without a published rate a hit is priced as uncached
+ * input: never under the real cost.
+ */
+function cacheRates(model: ModelInfo): { read: number; write: number } {
+  const input = model.inputCostPerMillion;
+  const anthropic = model.provider === 'anthropic';
+  return {
+    read:
+      model.cacheReadCostPerMillion ??
+      (anthropic ? input * ANTHROPIC_CACHE_READ_MULTIPLIER : input),
+    write:
+      model.cacheWriteCostPerMillion ??
+      (anthropic ? input * ANTHROPIC_CACHE_WRITE_MULTIPLIER : input),
+  };
+}
+
+function clampTokens(count: number | undefined, ceiling: number): number {
+  if (count === undefined || !Number.isFinite(count) || count <= 0) return 0;
+  return Math.min(count, Math.max(ceiling, 0));
+}
+
+/**
  * Persist an `AiCostLog` row. Returns the created row on success, or
  * `null` if the Prisma write failed (error is logged, not thrown, so
  * the caller can continue serving the user-facing response).
+ *
+ * Kept alive past the response (t-903): most callers write `void logCost(...)`,
+ * and a cost row frozen part-way on a serverless host is spend the budget caps
+ * and the costs dashboard never see. The write registers itself with
+ * `keepRunningAfterResponse`.
  */
-export async function logCost(params: LogCostParams): Promise<AiCostLog | null> {
+export function logCost(params: LogCostParams): Promise<AiCostLog | null> {
+  const write = writeCostLog(params);
+  keepRunningAfterResponse(write, 'Cost log write', { operation: params.operation });
+  return write;
+}
+
+async function writeCostLog(params: LogCostParams): Promise<AiCostLog | null> {
   const isTranscription = params.operation === 'transcription';
   const isVision = params.operation === 'vision';
   const isEmbedding = params.operation === 'embedding';
@@ -313,7 +493,7 @@ export async function logCost(params: LogCostParams): Promise<AiCostLog | null> 
   } else if (isEmbedding) {
     cost = calculateEmbeddingCost(params.model, params.inputTokens);
   } else {
-    cost = calculateCost(params.model, params.inputTokens, params.outputTokens);
+    cost = calculateCost(params.model, params.inputTokens, params.outputTokens, params);
   }
   const isLocal = params.isLocal ?? cost.isLocal;
 
@@ -335,12 +515,38 @@ export async function logCost(params: LogCostParams): Promise<AiCostLog | null> 
   if (cost.unpriced && !isLocal) {
     metadata = { ...(metadata ?? {}), pricing: 'unknown' };
   }
+  // The row's costs include the tier's multiplier; this says why they differ
+  // from the model's list rate.
+  if (params.serviceTier) {
+    metadata = { ...(metadata ?? {}), serviceTier: params.serviceTier };
+  }
+  // The row's total includes what the searches cost; this says how many and
+  // how much, since neither cost column holds it.
+  if (cost.webSearchCostUsd !== undefined) {
+    metadata = {
+      ...(metadata ?? {}),
+      webSearchRequests: params.webSearchRequests,
+      webSearchCostUsd: cost.webSearchCostUsd,
+    };
+  }
+  // Likewise the code runs: how many, the container seconds billed (the
+  // measured runs, at least 5 minutes a container), and what they cost.
+  if (cost.codeExecutionCostUsd !== undefined && params.codeExecution) {
+    metadata = {
+      ...(metadata ?? {}),
+      codeExecutionRuns: params.codeExecution.runs,
+      codeExecutionBilledSeconds: params.codeExecution.billedSeconds,
+      codeExecutionCostUsd: cost.codeExecutionCostUsd,
+    };
+  }
 
   const data: Prisma.AiCostLogUncheckedCreateInput = {
     model: params.model,
     provider: params.provider,
     inputTokens: params.inputTokens,
     outputTokens: params.outputTokens,
+    ...(params.cacheReadTokens ? { cacheReadTokens: params.cacheReadTokens } : {}),
+    ...(params.cacheWriteTokens ? { cacheWriteTokens: params.cacheWriteTokens } : {}),
     inputCostUsd: cost.inputCostUsd,
     outputCostUsd: cost.outputCostUsd,
     totalCostUsd: cost.totalCostUsd,
@@ -369,6 +575,8 @@ export async function logCost(params: LogCostParams): Promise<AiCostLog | null> 
   try {
     const row = await prisma.aiCostLog.create({ data });
     touchAgentLastActive(params.agentId, row.createdAt);
+    // So this process's spend caps see the row before their cached totals expire.
+    noteSpend(row.orgId, row.totalCostUsd, row.createdAt);
     logger.debug('Cost logged', {
       agentId: params.agentId,
       model: params.model,
@@ -443,89 +651,66 @@ export async function getAgentCosts(
 }
 
 /**
- * Sum of every `AiCostLog.totalCostUsd` row created since the start of
- * the current UTC calendar month, across all agents. Used by the global
- * budget cap in `checkBudget` and by surfaces that show platform-wide
- * spend.
- */
-export async function getMonthToDateGlobalSpend(): Promise<number> {
-  const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const aggregate = await prisma.aiCostLog.aggregate({
-    where: { createdAt: { gte: monthStart } },
-    _sum: { totalCostUsd: true },
-  });
-  return aggregate._sum.totalCostUsd ?? 0;
-}
-
-/**
  * Report whether an agent is within its monthly budget.
  *
- * "Month" is the current calendar month in UTC. Agents without a
- * `monthlyBudgetUsd` are within the per-agent budget. Independently,
- * the singleton `AiOrchestrationSettings.globalMonthlyBudgetUsd` (if
- * set) imposes a month-to-date ceiling across the combined spend of
- * all agents. A global breach surfaces as `globalCapExceeded: true`
- * so the chat handler can distinguish it from a per-agent breach.
+ * "Month" is the current calendar month in UTC. Three caps apply, and the
+ * agent is within budget only when it is within all three:
+ *
+ * - the agent's own `monthlyBudgetUsd` (none when unset);
+ * - its org's `Org.settings.quotas.monthlyBudgetUsd` (none when unset), on the
+ *   org's combined spend — surfaced as `orgCapExceeded: true`;
+ * - the singleton `AiOrchestrationSettings.globalMonthlyBudgetUsd`, on every
+ *   org's combined spend — surfaced as `globalCapExceeded: true`.
+ *
+ * The flags let the chat handler say which cap was hit. A failure reading the
+ * org or global cap is logged and that cap skipped, so it never takes the
+ * per-agent check down.
+ *
+ * Only chat calls this. The org and global caps are also enforced on every
+ * paid vendor call by the provider manager's gate (`assertWithinSpendCaps` in
+ * `spend-caps.ts`), which is what holds workflows, evaluations and every other
+ * caller to them; chat checks first so the user is told which cap stopped the
+ * turn. Their month-to-date totals are cached for a few seconds there, which
+ * bounds how far another process's spend can carry a cap past its limit.
+ *
+ * Callers hold `withAgentBudgetLock`, which is keyed by agent: two agents in
+ * one org can both pass the org check at once and each overrun the org cap by
+ * up to one turn. The global cap has the same bound.
  */
 export async function checkBudget(agentId: string): Promise<BudgetStatus> {
   const agent = await prisma.aiAgent.findUnique({
     where: { id: agentId },
-    select: { monthlyBudgetUsd: true },
+    select: { monthlyBudgetUsd: true, orgId: true },
   });
   if (!agent) {
     throw new Error(`Agent ${agentId} not found`);
   }
 
-  const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-
-  const aggregate = await prisma.aiCostLog.aggregate({
-    where: { agentId, createdAt: { gte: monthStart } },
-    _sum: { totalCostUsd: true },
-  });
+  // Three independent reads. The org and global ones never reject: a cap that
+  // cannot be read is logged and skipped, so it never takes the per-agent
+  // check down.
+  const [aggregate, global, org] = await Promise.all([
+    prisma.aiCostLog.aggregate({
+      where: { agentId, createdAt: { gte: utcMonthStart() } },
+      _sum: { totalCostUsd: true },
+    }),
+    globalCapStateOrSkip({ agentId }),
+    orgCapStateOrSkip(agent.orgId ?? null, { agentId }),
+  ]);
   const spent = aggregate._sum.totalCostUsd ?? 0;
+  const globalCapExceeded = global?.exceeded ?? false;
+  const orgCapExceeded = org?.exceeded ?? false;
 
-  // Global-cap check comes first so an exhausted platform cap surfaces
-  // distinctly even for agents that have their own per-agent budget set.
-  let globalCapExceeded = false;
-  try {
-    const settings = await prisma.aiOrchestrationSettings.findUnique({
-      where: { slug: 'global' },
-      select: { globalMonthlyBudgetUsd: true },
-    });
-    const globalCap = settings?.globalMonthlyBudgetUsd ?? null;
-    if (globalCap !== null) {
-      const globalSpent = await getMonthToDateGlobalSpend();
-      if (globalSpent >= globalCap) {
-        globalCapExceeded = true;
-      }
-    }
-  } catch (err) {
-    // Settings lookup must never take the per-agent path down.
-    logger.warn('checkBudget: global cap lookup failed, falling back to per-agent only', {
-      agentId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-
-  if (agent.monthlyBudgetUsd === null || agent.monthlyBudgetUsd === undefined) {
-    return {
-      withinBudget: !globalCapExceeded,
-      spent,
-      limit: null,
-      remaining: null,
-      ...(globalCapExceeded ? { globalCapExceeded: true } : {}),
-    };
-  }
-
-  const withinAgentBudget = spent < agent.monthlyBudgetUsd;
+  const limit = agent.monthlyBudgetUsd ?? null;
+  const withinAgentBudget = limit === null || spent < limit;
   return {
-    withinBudget: withinAgentBudget && !globalCapExceeded,
+    withinBudget: withinAgentBudget && !orgCapExceeded && !globalCapExceeded,
     spent,
-    limit: agent.monthlyBudgetUsd,
-    remaining: agent.monthlyBudgetUsd - spent,
+    limit,
+    remaining: limit === null ? null : limit - spent,
     ...(globalCapExceeded ? { globalCapExceeded: true } : {}),
+    ...(org ? { org: { limit: org.limit, spent: org.spent } } : {}),
+    ...(orgCapExceeded ? { orgCapExceeded: true } : {}),
   };
 }
 

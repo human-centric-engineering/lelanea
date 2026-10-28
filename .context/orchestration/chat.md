@@ -126,13 +126,14 @@ Concretely:
 
 8. **`error`** — terminal alternative. Carries a stable `code` and user-safe `message`. See "Error codes" below.
 9. **`warning`** — non-terminal, may appear at any point. Carries `code` and `message`. Codes: `budget_warning` (agent at ≥80% spend), `input_flagged` (input guard detected a pattern), `output_flagged` (output guard detected a pattern), `citation_missing` / `citation_hallucinated` (citation guard detected a violation in `warn_and_continue` mode), `provider_retry` (falling back to next provider), `tool_not_advertised` (the model asked for a tool the agent was never offered this turn — refused before dispatch, and also emitted as the `capability.refused_not_advertised` hook event), `tool_unavailable` (the repeated-failure circuit breaker skipped a tool). Clients should display transiently and clear when the stream ends. **The embed widget currently drops `warning` frames entirely** — its event dispatch handles `start` / `content` / `content_reset` / `status` / `citations` / `approval_required` / `error` / `done` and nothing else — so every code above is admin-surface-only today. That predates the codes added for #488 and applies to all of them equally; it is worth knowing before relying on a warning reaching an end user.
-10. **`content_reset`** — emitted when the provider fallback activates mid-stream. Carries `reason: 'provider_fallback'`. **Clients must discard all buffered `content` deltas** received before this event and start accumulating fresh.
+10. **`content_reset`** — emitted when the provider fallback activates mid-stream. Carries `reason: 'provider_fallback'`. **Clients must discard all buffered `content` deltas** received before this event and start accumulating fresh. Discard any buffered `reasoning` deltas too.
+11. **`reasoning`** — admin-only, sent only when the request sets `includeTrace`. Carries `delta`: readable text of the model's reasoning, before or between `content` deltas. Claude sends a summary of its thinking (the adapter asks for `display: 'summarized'`), and OpenAI-compatible providers send their `reasoning_content` / `reasoning` deltas. OpenAI's own models send nothing here: Chat Completions does not return their reasoning summaries. When a tool loop makes more than one LLM call, the first delta of each later call starts with a blank line (`\n\n`). See [Reasoning summary](#reasoning-summary-admin-only).
 
 ## Pre-token latency
 
 Before the first `content` event, `runInner` does several database reads. The mutually independent ones — the entity context block (`buildContext`), per-user memories (`aiUserMemory.findMany`), and capability definitions (`getCapabilityDefinitions`) — run concurrently in one `Promise.all`, so their round trips overlap instead of stacking (#449). This matters most on serverless, where the app→Postgres round trip is paid per query. `capabilityDefinitions` is not consumed until the tool loop; it is hoisted into the batch because nothing in between affects it.
 
-The genuinely dependent reads stay sequential: cap settings → `loadOrCreateConversation` → `loadHistory` → the message count (only when `maxMessagesPerConversation` is set) → the user-message persist (skipped on an [agent-opened turn](#agent-opened-turns-and-app-metadata)). They chain on the conversation id, and the order is load-bearing: history is loaded before the new user message is written. Adding a read to the batch that depends on the resolved prompt or the built messages would be a reordering, not a scheduling change.
+The genuinely dependent reads stay sequential: cap settings → `loadOrCreateConversation` → the history read (`resolvePin` then `loadHistoryFromPin`, or `loadNewestHistory` with no pin) → the message count (only when `maxMessagesPerConversation` is set) → the user-message persist (skipped on an [agent-opened turn](#agent-opened-turns-and-app-metadata)). They chain on the conversation id, and the order is load-bearing: history is loaded before the new user message is written. Adding a read to the batch that depends on the resolved prompt or the built messages would be a reordering, not a scheduling change.
 
 ## Agent-opened turns and app metadata
 
@@ -161,12 +162,33 @@ await streamChat({
 | `role:'user'` row      | persisted                        | **none**                                                                                                           |
 | `start.messageId`      | present                          | **absent**                                                                                                         |
 | `message.created` hook | fires for `user` and `assistant` | `assistant` only                                                                                                   |
-| Model sees the text as | `user`                           | **`system`**                                                                                                       |
+| Model sees the text as | `user`                           | **`system`** (Anthropic: a last user turn headed as an app instruction — see below)                                |
 | Injection scanner      | runs                             | **skipped** — the text is composed by your own server, and scanning it would flag an app instructing its own agent |
 | Conversation title     | derived from `message`           | derived from the opener                                                                                            |
 
 `message` wins if both are supplied: the person's own words are the turn, and
 the opener is ignored rather than prepended.
+
+**On Anthropic** the opener cannot stay a `system` message: the provider moves
+system messages into the request's `system` field, and Anthropic only accepts
+a user turn last. The message-builder marks it `turnInstruction: true`, and
+the provider sends it in place as a user turn headed
+`[Instruction from the application, not a message from the user]`. Before
+sending, the provider re-words any copy of that heading in a user message's
+text (`(typed by the user: ...)`) or in a tool result
+(`(written in a tool result: ...)`), so the heading as written comes only from
+the opener. Matching ignores case, spacing, full-width characters, zero-width
+characters and soft hyphens; it accepts any of `[ ( 【 〔 〖` or no bracket at
+all, a missing second clause, and a heading split across adjacent text parts.
+It is a pattern, not a guarantee: look-alike letters from other alphabets
+(Cyrillic `о` for `o`) and text inside a PDF document are not checked. If history
+ends on a tool call with no reply after it (a `skipFollowup` capability such
+as `run_workflow` pending approval) and the request thinks, that call and its
+results are sent as a text note on the assistant turn
+(`[Called run_workflow; result: {...}]`) instead, since thinking blocks are
+not persisted and Anthropic would read the opener as continuing that turn. The
+note keeps the model from repeating a call that already ran. Without thinking
+the call is sent as it is. Nothing about the stored transcript changes.
 
 **A turn must carry something.** `message`, `openingTurn.content`, or at least
 one attachment — a request with none of the three is rejected with
@@ -330,11 +352,21 @@ Internal admin chat surfaces — the Learning Lab pattern advisor and quiz, the 
 | `errorCode`     | `CapabilityResult.error.code` when present                                                        |
 | `resultPreview` | First ~480 chars of `JSON.stringify(result)` — keeps the persisted JSON column compact            |
 
+**Provider web search.** A web search the provider ran itself (an agent with `providerTools.webSearch`, see [llm-providers.md](./llm-providers.md#provider-tools-web-search)) is never dispatched, so the handler reads it from the turn's replayable blocks (`providerToolTraces()`, `lib/orchestration/chat/provider-tool-traces.ts`) and adds one `ToolCallTrace` per search to the same list: slug `provider:web_search`, the query as `arguments`, `latencyMs` 0 (the provider reports none per search), `costUsd` 0.01 on a search that succeeded, and the result titles and URLs as `resultPreview`. On OpenAI there is one per `web_search_call` item: its `action` without the sources as `arguments`, the source URLs as `resultPreview`, and `costUsd` only on a `search` action that didn't fail. The `open_page` and `find_in_page` steps a reasoning model takes are listed too, unbilled. A code run the provider made (an agent with `providerTools.codeExecution`) is listed the same way, with slug `provider:code_execution`: the command or code as `arguments`, its measured run time as `latencyMs`, success from the exit code on Anthropic (`exit_N` otherwise), and on OpenAI from the item's status, with a Python traceback in its output read as a failure (`exception`), since OpenAI reports no exit code, and what it printed as `resultPreview`, ending with `Files made (not delivered): <names>` when it made any. A run has no `costUsd` of its own: its container is billed per reply with a 5-minute minimum, so the cost is on the call's cost row. A message's provenance keeps at most `MAX_PROVENANCE_CAPABILITY_CALLS` (64) traces, the read schema's limit. A longer list is fitted by `fitToolCallTraces()`, which drops provider runs from the end first, keeping the dispatched capabilities. On `includeTrace` each is also streamed as a `capability_result` with its slug; without it, only the persisted record carries it.
+
 **Persistence.** When `includeTrace: true`, the streaming handler also writes the accumulated `ToolCallTrace[]` onto the _terminal_ assistant message's `metadata.toolCalls`. The conversation trace viewer reads this through `messageMetadataSchema` and renders the same `<MessageTrace>` component used live. Pre-trace conversations have no `toolCalls` field and the strip is simply absent — no migration required.
 
 **Wire-format guarantee.** The consumer route does not thread `includeTrace` into `streamChat`, even if a client sets the flag in its POST body. A regression test in `tests/unit/app/api/v1/chat/stream/route.test.ts` locks this in: a body with `includeTrace: true` must result in `streamChat()` being called without that field. If you add a new consumer-facing chat surface, follow the same pattern — leave the flag unset.
 
 **Client integration.** The shared admin parser (`components/admin/orchestration/chat/chat-events.ts`) validates every SSE block through a discriminated-union Zod schema so the new `trace` field arrives strongly typed. UI consumers should never reach into `parseSseBlock`'s `data: Record<string, unknown>` for trace fields; route them through `parseChatStreamEvent()` instead.
+
+### Reasoning summary (admin-only)
+
+Providers yield the model's readable reasoning as `{ type: 'reasoning', text }` stream chunks. The streaming handler forwards each one as a `reasoning` event only when `includeTrace` is set, so consumer and embed streams never carry it.
+
+Whether or not `includeTrace` is set, the handler collects each LLM call's reasoning text and saves it as `metadata.reasoningSummary` on the assistant message written for that call. A turn that loops through tools therefore has one summary per assistant row. A provider fallback clears the text along with the content. Only the normal assistant-message write saves the summary; the budget, approval and error paths do not. The consumer messages route returns no metadata, so the saved text stays admin-only. Message metadata is part of the subject export and is erased with its conversation.
+
+This is the readable summary only. The signed thinking blocks that a Claude tool loop replays are separate (`LlmMessage.reasoning`; see [LLM providers](./llm-providers.md)).
 
 ### Input-token breakdown on the `done` event
 
@@ -400,7 +432,7 @@ The `actorLabel` is **server-set** by the route hit, never trusted from a body f
 
 After a successful POST, the card polls `GET /api/v1/orchestration/approvals/:id/status?token=…` (token-authenticated, permissive CORS) until the execution reaches a terminal state, then submits a synthesised follow-up message such as `"Workflow approved. Result: { ... }"` so the LLM gets a fresh turn carrying the workflow output.
 
-The chat / embed approve routes fire-and-forget call `resumeApprovedExecution` after the approval action succeeds, so the engine starts draining the resumed run immediately rather than waiting for the maintenance tick (~2 minute stale threshold). Without this, the chat card's 5-minute polling budget would often expire before the workflow had even started resuming. Rejection skips this — there's no further engine work to do.
+The chat / embed approve routes call `resumeApprovedExecution` in the background after the approval action succeeds, kept alive past the response by `after()` (t-846), so the engine starts draining the resumed run immediately rather than waiting for the maintenance tick (~2 minute stale threshold). Without this, the chat card's 5-minute polling budget would often expire before the workflow had even started resuming. Rejection skips this — there's no further engine work to do.
 
 For approval-only workflows (a single `human_approval` step), the synthesised follow-up's "result" is the approval payload (`{ approved, notes, actor }`) rather than meaningful business data, since that's the workflow's only step output. Multi-step workflows where the last step is an external call or transformation surface that step's output instead. Output is capped at 8000 characters in the synthesised follow-up — workflows that emit larger payloads (full datasets, file blobs) get a `[truncated; N chars total]` stub the LLM can ask the user about.
 
@@ -439,7 +471,7 @@ Hitting the cap emits `{ type: 'error', code: 'tool_loop_cap' }` and logs a warn
 
 **Lazy resolution.** Settings is loaded only when the agent has no `maxCostPerTurnUsd` of its own; agents that opted in skip the settings lookup entirely. Failure to load settings (DB hiccup, partial migration) is treated as "no cap" with a warning log — chat doesn't fail because the OPS table is briefly unavailable.
 
-**Scope limitation (v1).** Only the chat LLM's cost is summed against the per-turn cap. Tool capabilities that invoke their own LLMs (`search_knowledge_base` embeddings, the rolling summariser, `run_workflow`'s child execution) log their own `AiCostLog` rows but do not return `costUsd` from `CapabilityResult`, so they are not counted against the per-turn cap. The runaway cases this guard targets (loops that keep round-tripping the chat LLM) are fully covered.
+**Scope limitation (v1).** Only the chat LLM's cost is summed against the per-turn cap. Tool capabilities that invoke their own LLMs (`search_knowledge_base` embeddings, `run_workflow`'s child execution) log their own `AiCostLog` rows but do not return `costUsd` from `CapabilityResult`, so they are not counted against the per-turn cap. The rolling summariser is counted: its calls run before the first LLM iteration and their cost seeds the turn total (see [Rolling Conversation Summary](#rolling-conversation-summary)). The runaway cases this guard targets (loops that keep round-tripping the chat LLM) are fully covered.
 
 **Workflow `agent_call` parity.** The same per-turn cap (`agent.maxCostPerTurnUsd` → org `defaultMaxCostPerTurnUsd` → uncapped) is enforced inside `lib/orchestration/engine/executors/agent-call.ts`'s inner tool-iteration loop. So an agent with a per-turn cap is protected regardless of whether it's invoked through this streaming chat path or through a workflow `agent_call` step. The workflow variant aborts with `ExecutorError code: 'agent_call_budget_exceeded_per_turn'` (non-retriable) instead of emitting an SSE event — the step fails, carries its partial `tokensUsed`/`costUsd` onto the trace entry, and the workflow's error strategy (skip / continue / failure-branch) decides what happens next. See `.context/orchestration/engine.md` for the error-code table.
 
@@ -577,7 +609,17 @@ export function initAppGuardEventContributors(): void {
 
 ## Rolling Conversation Summary
 
-When conversation history exceeds the effective message-count cap (`AiAgent.maxHistoryMessages ?? MAX_HISTORY_MESSAGES`, default 50), the streaming handler represents the messages that fall out with a concise LLM summary instead of silently truncating them. This preserves the original problem, key decisions, and important context across long conversations.
+When the rows after the stored summary exceed the effective message-count cap (`AiAgent.maxHistoryMessages ?? MAX_HISTORY_MESSAGES`, default 50), the streaming handler represents the messages that fall out with a concise LLM summary instead of silently truncating them. This preserves the original problem, key decisions, and important context across long conversations.
+
+**History is read from the summary's pin onward.** The history read does not take "the newest N rows and hope the summary's pin is among them". With a stored summary it reads the rows strictly after `summaryUpToMessageId` (oldest first, at most `HISTORY_LOAD_LIMIT` = 200 per read); without one, or when the pin's row no longer exists, it reads the newest 200. So the summary always sees every row after the point it covers, however many a turn wrote (one parallel tool dispatch saves a row per call), and no headroom or clamp is needed to protect the pin. Verbatim memory is therefore at most `HISTORY_LOAD_LIMIT` however high `maxHistoryMessages` is (the field allows 500); the summary describes everything before (#655).
+
+**More than `HISTORY_LOAD_LIMIT` rows after the pin** (a long summariser outage, or a run of tool-heavy turns): the handler folds forward in **catch-up passes**, inline, before the reply streams. Each pass summarises the oldest rows of what was read — at most `SUMMARY_CATCHUP_MESSAGES` (100) and at most `SUMMARY_CHUNK_MAX_CHARS` (250,000) characters once each row is clipped to `SUMMARY_ROW_MAX_CHARS` (2,000), so one huge tool-result row cannot make a call that always fails (the ordinary summarisation obeys the same budget, and when every row is long it stops short and the next turn continues from the pin it persisted) — with the stored text's body as `previousSummary`, persists the new pin, and reads again. The summary always covers a contiguous prefix; nothing is skipped. A run of nothing but error markers just moves the pin past them.
+
+**Summariser work in a turn is bounded** because each call is one the user waits behind and pays for: at most `SUMMARY_MAX_CALLS_PER_TURN` (3) in total — catch-up passes and the ordinary summarisation together; every call's cost is added to the turn's cost (`turnCostUsd`), so the per-turn cap applies, and no call starts once the summariser's own spend has reached it; the request's abort signal is handed to the provider, and no call starts, and no pin is written, once the client has gone. Progress is persisted per call, so the next turn resumes where this one stopped. When a pass cannot run (the summariser falls back), the call budget is spent, the client left, or a concurrent turn moved the pin, the stored summary is kept exactly as it is, the newest 200 rows are shown, and the rows between the pin and them are announced as `[... up to N earlier messages omitted ...]` (the builder's `omittedBeforeHistory`; "up to" because the count includes error markers, which are never shown). Explicit, not silent.
+
+**Writes are compare-and-set.** The summary and its pin are written together with `updateMany`, filtered on the pin the turn read, so two concurrent turns cannot pair one's text with the other's pin. The one that loses the race discards its fold (it still uses it for its own prompt) and stops folding.
+
+**No pin yet, more than 200 rows** (a conversation that predates summarising), or the pin's row was deleted: the newest 200 are read and the rows older than them are `omitted`. A summary is then built even if nothing would otherwise leave the prompt (it is forced to cover at least the oldest row read, so it works at any cap, including 200 and above), pinned inside what was read. The gap is written **by the code**, not the model, as a first line of the saved text — `(up to N earlier messages may not be described in this summary.)` — and is stripped before the text goes to the summariser and put back after, so a summary the model paraphrases cannot paraphrase the gap away. A deleted pin keeps the old summary and adds the same note. If the summary cannot be built, the gap is announced as omitted and the next turn tries again.
 
 Agents that set `maxHistoryMessages` to a smaller value see summarisation kick in earlier; agents that set it to `0` get a pure-summary view of all prior turns (no verbatim history on any turn).
 
@@ -597,12 +639,12 @@ Because the boundary moves every turn, staying reusable means summarising **past
 
 ### How it works
 
-1. After loading history, the handler computes `requiredDrop = history.length - effectiveCap`. If it is zero, nothing here runs.
-2. It locates `summaryUpToMessageId` in the loaded rows. **Reuse** when that index is at or beyond `requiredDrop - 1` — no LLM call, and `historyDropCount` follows the summary's own boundary.
-3. Otherwise it **extends**: yields `{ type: 'status', message: 'Summarizing conversation history...' }` and calls `summarizeMessages()` with the stored text as `previousSummary` and only the messages it does not yet cover. The model folds them in.
+1. After loading history (and any catch-up passes), the handler computes `requiredDrop = rows.length - effectiveCap`, where `rows` are the loaded rows after the pin. If it is zero, nothing is summarised — but a stored summary is still rendered (it describes the rows before the first one loaded), labelled `[Conversation summary of earlier messages]` without a count.
+2. Otherwise it **extends**: yields `{ type: 'status', message: 'Summarizing conversation history...' }` and calls `summarizeMessages()` with the stored text as `previousSummary` and the oldest `requiredDrop + lookahead` loaded rows. The model folds them in. There is no separate "reuse" check: after an extension the pin sits `lookahead` rows past what was needed, so the next turns' rows after the pin stay within the cap and nothing runs.
+3. If the summariser falls back, is not allowed (call budget, cost, abort), or loses the compare-and-set, the stored summary is kept, nothing is persisted for that call, and the rows past the cap are announced as omitted.
 4. The result is persisted with the new pin, and passed to `buildMessages()`, which emits it as a `[Conversation summary of N earlier messages]` system message instead of the `[... N older messages omitted ...]` marker.
 
-**Extension keeps the cost proportional to what was added**, not to the length of the conversation — and it is what lets the summary outlive the rows. `loadHistory` returns at most the 200 most recent messages, so a pin eventually names a message that is no longer loaded; that is treated as "covers everything before this window", and the stored text is folded forward rather than discarded. Without that, anything older than 200 messages left the prompt and the summary at the same time.
+**Extension keeps the cost proportional to what was added**, not to the length of the conversation — and it is what lets the summary outlive the rows: the stored text is folded forward, never re-derived or discarded.
 
 **Budget:** the `routing` task-type model (budget tier, e.g. Haiku) via `getDefaultModelForTask('routing')`, capped at `maxTokens: 500`.
 
@@ -610,7 +652,7 @@ Because the boundary moves every turn, staying reusable means summarising **past
 
 **Failure:** `summarizeMessages` never throws; it returns `fellBack: true` — and it does so for an **empty completion** as well as an error, because a content filter or a reasoning model exhausting its 500-token budget is a failure too. `fellBack` is derived from the raw completion rather than by comparing the result to the placeholder: with the previous summary returned on failure, that comparison would report success and the caller would advance the pin over messages nothing describes. The handler **does not persist a `fellBack` result** — writing it would replace a good summary with a placeholder and record it as covering messages nothing describes, permanently, from one transient provider error. It drops only what the cap demands, uses what is stored, and tries again next turn.
 
-**Two things about stored summaries that are not obvious.** A row whose `summary` is the placeholder text is treated as _no summary at all_ (`isPlaceholderSummary`): the pre-#654 code persisted `fellBack` results unconditionally, so live conversations exist in that state, and folding one forward under the extend prompt — which requires earlier content to be carried forward — would propagate the apology indefinitely. And a stored summary whose pin has scrolled out of the 200-row window covers _none of the current dropped span_ while still being real context; it is rendered as `[Conversation summary of earlier messages]`, without a count, rather than being dropped or given an invented one.
+**Two things about stored summaries that are not obvious.** A row whose `summary` is the placeholder text is treated as _no summary at all_ (`isPlaceholderSummary`): the pre-#654 code persisted `fellBack` results unconditionally, so live conversations exist in that state, and folding one forward under the extend prompt — which requires earlier content to be carried forward — would propagate the apology indefinitely. And a stored summary covers _none of the loaded rows_ (they all come after its pin) while still being real context; it is rendered as `[Conversation summary of earlier messages]`, without a count, rather than being dropped or given an invented one.
 
 ## User Memory
 
@@ -654,10 +696,16 @@ Every terminal `error` event carries one of these stable `code` values:
 | `agent_not_found`        | `loadAgent` — no active `AiAgent` with that slug                  | Resolve the slug or activate the agent                                                                                   |
 | `conversation_not_found` | Supplied `conversationId` doesn't match userId/agentId/isActive   | Caller sent a stale or cross-user conversation id                                                                        |
 | `budget_exceeded`        | `checkBudget` returns `withinBudget: false` (initial or mid-loop) | Agent has spent more than `monthlyBudgetUsd` this calendar month                                                         |
+| `org_budget_exceeded`    | Same, with `orgCapExceeded: true`                                 | The agent's org has spent its `Org.settings.quotas.monthlyBudgetUsd` this calendar month                                 |
+| `global_budget_exceeded` | Same, with `globalCapExceeded: true` (checked first)              | Every org together has spent the install's `globalMonthlyBudgetUsd` this calendar month                                  |
 | `output_blocked`         | Output guard in `block` mode flagged the response                 | Admin has configured strict output filtering — response rejected by content policy                                       |
 | `tool_loop_cap`          | Tool loop exhausted `MAX_TOOL_ITERATIONS`                         | A confused model or broken capability is spinning                                                                        |
 | `input_blocked`          | Input guard in `block` mode flagged the message                   | Admin has configured strict input filtering — message rejected by security policy                                        |
 | `internal_error`         | Any other thrown exception                                        | Provider failure, DB outage, etc. `message` is a **generic** sanitized string — the raw error is logged server-side only |
+
+**A reached budget does not stop a local model.** When the agent's primary provider is local, the three budget codes are held rather than emitted: the turn answers on the local provider. `run()` wraps the turn in `withPaidCallHold`, and the handler sets the hold, so the provider manager's spend gate refuses every paid call the turn would make (a fallback, a failover mid-stream, the summarizer, embeddings, a tool) with the held code. Failover passes over a refused paid candidate without a `provider_retry` warning. If nothing local is left, the turn ends on the code with a `content_reset`, an error marker and the `budget_exceeded` webhook, as a refusal before the turn would. In the other direction, a paid primary the org or global cap refuses part way through fails over to a local fallback, and no circuit breaker hears of it. The org and global caps are enforced by the same gate on every paid call, chat or not; see [LLM providers → The spend gate](./llm-providers.md#the-spend-gate).
+
+The three budget messages are the error registry's words for the code (`getUserFacingError`), the same whether the turn was refused before it started or by the gate part way through. None names an amount.
 
 Dispatcher-level failures (`unknown_capability`, `rate_limited`, `requires_approval`, `invalid_args`, `execution_error`) surface as `capability_result` events with `success: false` — they're not fatal to the chat turn. The LLM sees them as tool errors unless `skipFollowup` is set.
 
@@ -677,7 +725,7 @@ Three internal modules under `lib/orchestration/chat/` are not exported from the
 
 - Primary export: `summarizeMessages(messages, providerSlug, fallbackSlugs, options?)` returning a `SummarizeResult`.
 - `options.previousSummary` switches it from _summarise_ to **extend**: the prior text and the delta go to the model together, under a prompt that requires the earlier content to be carried forward rather than replaced. `options.agentId` / `options.conversationId` attribute the cost row.
-- Called by the handler from the [Rolling Conversation Summary](#rolling-conversation-summary) flow once `history.length > effectiveCap` (where `effectiveCap = agent.maxHistoryMessages ?? MAX_HISTORY_MESSAGES`).
+- Called by the handler from the [Rolling Conversation Summary](#rolling-conversation-summary) flow once the rows after the stored summary's pin exceed the cap (`agent.maxHistoryMessages ?? MAX_HISTORY_MESSAGES`), and by the catch-up passes when more than `HISTORY_LOAD_LIMIT` rows follow the pin.
 - Runs on the **`routing` task-type model** (budget tier, e.g. Haiku) resolved via `getDefaultModelForTask('routing')` in the LLM settings resolver. Capped at `maxTokens: 500`.
 - Logs cost as a `CostOperation.CHAT` row against the caller's real agent and conversation, tagged `metadata.kind = 'conversation_summary'`. Both columns are foreign keys — pass a real row id or pass nothing; a placeholder is rejected and swallowed (#654).
 - **Never throws.** Any failure (provider down, LLM error, empty response) returns `fellBack: true` with `previousSummary` if there is one, and `FALLBACK_MESSAGE = '[Summary unavailable — earlier messages omitted]'` otherwise, so the chat turn keeps moving and a good summary is never destroyed by a bad call.

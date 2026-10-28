@@ -417,6 +417,7 @@ between the app and `/admin` shows one frame of the wrong palette
 
 The system preference is the **default**; only the toggle persists a choice.
 Nothing is written to `localStorage` until someone uses the toggle, and until
-then the app follows OS theme changes live. That is decision D4, and getting
-there meant changing two Sunrise files — [row 2](./divergences.md) explains what
-and why.
+then the app follows OS theme changes live. That is decision D4. Getting there
+first meant changing two Sunrise files; since Sunrise 0.16.0 (Daybreak 0.9.0)
+the persistence fix is upstream's, and what we still carry is the hook's third
+state, "follow my device" — [row 2](./divergences.md) explains what and why.

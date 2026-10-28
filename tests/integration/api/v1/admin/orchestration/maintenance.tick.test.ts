@@ -27,6 +27,14 @@ import {
 
 // ─── Module mocks ────────────────────────────────────────────────────────────
 
+// `after()` throws outside a real request scope. Recorded rather than run: the
+// background chain is already running when the route hands it over (t-844).
+const mockAfter = vi.hoisted(() => vi.fn());
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: mockAfter,
+}));
+
 vi.mock('@/lib/auth/config', () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
@@ -93,6 +101,9 @@ vi.mock('@/lib/orchestration/agents/reconcile-platform-agents', () => ({
   reconcilePlatformAgentsIfStale: vi.fn().mockResolvedValue({ reconciled: false }),
 }));
 
+// The pending-erasure retrier (t-842): its own module, mocked idle.
+vi.mock('@/lib/privacy/erasure-requests', () => ({ processPendingErasures: vi.fn() }));
+
 // ─── Imports ─────────────────────────────────────────────────────────────────
 
 import { auth } from '@/lib/auth/config';
@@ -111,6 +122,7 @@ import {
   enforceSystemRetentionPolicies,
 } from '@/lib/orchestration/retention';
 import { processPendingEvaluationRuns } from '@/lib/orchestration/evaluations/run-worker';
+import { processPendingErasures } from '@/lib/privacy/erasure-requests';
 import { __resetPlatformJobsForTests } from '@/lib/orchestration/maintenance/platform-jobs';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -182,6 +194,12 @@ describe('POST /api/v1/admin/orchestration/maintenance/tick', () => {
       exhausted: 0,
       errors: [],
     });
+    vi.mocked(processPendingErasures).mockResolvedValue({
+      claimed: 0,
+      erased: 0,
+      failed: 0,
+      pending: 0,
+    });
   });
 
   it('returns 401 when unauthenticated', async () => {
@@ -206,6 +224,8 @@ describe('POST /api/v1/admin/orchestration/maintenance/tick', () => {
     const response = await POST(makeRequest());
 
     expect(response.status).toBe(202);
+    // The background chain is kept alive past the response, not left floating.
+    expect(mockAfter).toHaveBeenCalledWith(expect.any(Promise));
     const body = await parseJson<{
       success: boolean;
       data: { schedules: unknown; backgroundTasks: string[]; durationMs: number };
@@ -224,6 +244,7 @@ describe('POST /api/v1/admin/orchestration/maintenance/tick', () => {
       'evaluationRuns',
       'auditLogRetention',
       'platformAgents',
+      'pendingErasures',
     ]);
     expect(body.data.durationMs).toEqual(expect.any(Number));
   });

@@ -15,7 +15,7 @@
  * `removedAt` filter. See the notes on each.
  *
  * @see lib/app/leaf-data-export.ts — the Art. 15 declaration and collector
- * @see lib/app/leaf-bootstrap.ts — where the Art. 17 hook is registered
+ * @see lib/app/leaf-erasure.ts — where the Art. 17 hook is registered
  * @see lib/app/user-created.ts — where the account-linking hook is registered
  * @see lib/app/waitlist/admin.ts — the admin read, the removal and the invitation
  */
@@ -24,7 +24,6 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logging';
 import { isRecord } from '@/lib/utils';
-import { registerErasureCleanupHook } from '@/lib/privacy/erasure-hooks';
 import { registerUserCreatedHook, type UserCreatedContext } from '@/lib/auth/user-created-hooks';
 
 /**
@@ -357,18 +356,6 @@ export async function eraseWaitlistEntriesForUser(ctx: {
     // No email, no id — the point of the erasure is that neither survives it.
     logger.info('Waitlist entries erased with user', { userId, count });
   }
-}
-
-/**
- * Wire the erasure hook. Called from `initLeafApp()` at server startup;
- * `registerErasureCleanupHook` is idempotent by name, so a repeated import
- * under HMR replaces rather than duplicates.
- */
-export function registerWaitlistErasureHook(): void {
-  registerErasureCleanupHook({
-    name: WAITLIST_ERASURE_HOOK,
-    scrubInTransaction: eraseWaitlistEntriesForUser,
-  });
 }
 
 /** The linking hook's key, exported so the wiring test can name it too. */

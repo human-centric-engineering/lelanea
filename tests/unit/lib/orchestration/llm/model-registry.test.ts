@@ -92,6 +92,159 @@ describe('refreshFromOpenRouter', () => {
     expect(registry.getModel('budget-model')?.tier).toBe('budget');
   });
 
+  it("prices a dotted Anthropic entry under the API's dashed id (#987)", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'anthropic/claude-haiku-5.5',
+            name: 'Anthropic: Claude Haiku 5.5',
+            context_length: 1_000_000,
+            pricing: { prompt: '0.0000001', completion: '0.0000005' },
+            supported_parameters: ['tools'],
+          },
+          {
+            id: 'anthropic/claude-3.7-sonnet:thinking',
+            name: 'Anthropic: Claude 3.7 Sonnet (thinking)',
+            context_length: 200_000,
+            pricing: { prompt: '0.000003', completion: '0.000015' },
+          },
+          {
+            id: 'openai/gpt-4.1',
+            name: 'GPT-4.1',
+            context_length: 1_000_000,
+            pricing: { prompt: '0.000002', completion: '0.000008' },
+          },
+        ],
+      }),
+    });
+
+    // The agent's id was unknown before the refresh — no fallback entry.
+    expect(registry.getModel('claude-haiku-5-5')).toBeUndefined();
+
+    await registry.refreshFromOpenRouter({ force: true });
+
+    const haiku = registry.getModel('claude-haiku-5-5');
+    expect(haiku?.id).toBe('claude-haiku-5-5');
+    expect(haiku?.provider).toBe('anthropic');
+    expect(haiku?.inputCostPerMillion).toBeCloseTo(0.1);
+    expect(haiku?.outputCostPerMillion).toBeCloseTo(0.5);
+    // OpenRouter's own ids still resolve, to the same entry.
+    expect(registry.getModel('claude-haiku-5.5')).toBe(haiku);
+    expect(registry.getModel('anthropic/claude-haiku-5.5')).toBe(haiku);
+    // Listed once, not once per key.
+    expect(
+      registry.getModelsByProvider('anthropic').filter((m) => m.name.includes('Haiku 5.5'))
+    ).toHaveLength(1);
+    // OpenRouter's variants keep their own id: the API has none for them.
+    expect(registry.getModel('claude-3.7-sonnet:thinking')?.id).toBe('claude-3.7-sonnet:thinking');
+    expect(registry.getModel('claude-3-7-sonnet:thinking')).toBeUndefined();
+    // Only Anthropic ids are rewritten: OpenAI's API id has the dot.
+    expect(registry.getModel('gpt-4.1')?.provider).toBe('openai');
+    expect(registry.getModel('gpt-4-1')).toBeUndefined();
+  });
+
+  it('keeps an entry OpenRouter lists under the dashed id over the dotted alias', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'anthropic/claude-sonnet-5-5',
+            name: 'Exact',
+            context_length: 1_000_000,
+            pricing: { prompt: '0.000002', completion: '0.00001' },
+          },
+          {
+            id: 'anthropic/claude-sonnet-5.5',
+            name: 'Dotted',
+            context_length: 1_000_000,
+            pricing: { prompt: '0.000009', completion: '0.00009' },
+          },
+        ],
+      }),
+    });
+
+    await registry.refreshFromOpenRouter({ force: true });
+
+    expect(registry.getModel('claude-sonnet-5-5')?.name).toBe('Exact');
+    expect(registry.getModel('claude-sonnet-5-5')?.inputCostPerMillion).toBeCloseTo(2);
+    expect(registry.getModel('claude-sonnet-5.5')?.name).toBe('Dotted');
+  });
+
+  it('keeps the dashed id in listings when a dotted entry replaces a fallback one', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'anthropic/claude-opus-4.6',
+            name: 'Anthropic: Claude Opus 4.6',
+            context_length: 1_000_000,
+            pricing: { prompt: '0.000005', completion: '0.000025' },
+          },
+        ],
+      }),
+    });
+    // The static fallback already holds `claude-opus-4-6`, at another price.
+    expect(registry.getModel('claude-opus-4-6')?.inputCostPerMillion).toBe(15);
+
+    await registry.refreshFromOpenRouter({ force: true });
+
+    expect(registry.getModel('claude-opus-4-6')?.inputCostPerMillion).toBeCloseTo(5);
+    // Discovery and the model pickers list by `id`; the API's id must survive.
+    const opusIds = registry
+      .getModelsByProvider('anthropic')
+      .map((m) => m.id)
+      .filter((id) => id.startsWith('claude-opus-4'));
+    expect(opusIds).toEqual(['claude-opus-4-6']);
+  });
+
+  it("keeps OpenRouter's aliased price over a matrix row's hand-entered one, as for any listed model", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'anthropic/claude-haiku-5.5',
+            name: 'Anthropic: Claude Haiku 5.5',
+            context_length: 1_000_000,
+            pricing: { prompt: '0.0000001', completion: '0.0000005' },
+          },
+        ],
+      }),
+    });
+    // The matrix row arrives first, with one blended rate for both sides.
+    registry.registerModels([
+      {
+        id: 'claude-haiku-5-5',
+        name: 'Claude Haiku 5.5',
+        provider: 'anthropic',
+        tier: 'budget',
+        inputCostPerMillion: 0.3,
+        outputCostPerMillion: 0.3,
+        maxContext: 200_000,
+        supportsTools: true,
+      },
+    ]);
+    expect(registry.getModel('claude-haiku-5-5')?.inputCostPerMillion).toBeCloseTo(0.3);
+
+    await registry.refreshFromOpenRouter({ force: true });
+
+    const haiku = registry.getModel('claude-haiku-5-5');
+    // The row is re-applied over the rebuilt catalogue: its descriptive
+    // fields stand, OpenRouter's published split wins on price.
+    expect(haiku?.name).toBe('Claude Haiku 5.5');
+    expect(haiku?.inputCostPerMillion).toBeCloseTo(0.1);
+    expect(haiku?.outputCostPerMillion).toBeCloseTo(0.5);
+    expect(registry.isMatrixOwnedFigure('claude-haiku-5-5', 'input')).toBe(false);
+  });
+
   it('deduplicates concurrent refresh calls', async () => {
     let resolveFetch: ((value: unknown) => void) | null = null;
     const pending = new Promise((resolve) => {
@@ -1347,5 +1500,74 @@ describe('registerModels', () => {
     expect(after?.inputCostPerMillion).toBe(2.5);
     expect(after?.outputCostPerMillion).toBe(7.5);
     expect(after?.maxContext).toBe(32_000);
+  });
+});
+
+describe('prompt-cache rates (t-909)', () => {
+  function serveOpenRouter(pricing: Record<string, string>): void {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        data: [{ id: 'acme/cache-model', name: 'Cache model', context_length: 100_000, pricing }],
+      }),
+    });
+  }
+
+  it("reads OpenRouter's cache read and write rates per million", async () => {
+    serveOpenRouter({
+      prompt: '0.000003',
+      completion: '0.000015',
+      input_cache_read: '0.0000003',
+      input_cache_write: '0.00000375',
+    });
+    await registry.refreshFromOpenRouter({ force: true });
+
+    const model = registry.getModel('cache-model');
+    expect(model?.cacheReadCostPerMillion).toBeCloseTo(0.3);
+    expect(model?.cacheWriteCostPerMillion).toBeCloseTo(3.75);
+  });
+
+  it('leaves the cache rates off when OpenRouter publishes none, rather than reading 0', async () => {
+    // 0 would price every cache hit as free.
+    serveOpenRouter({ prompt: '0.000003', completion: '0.000015', input_cache_read: 'n/a' });
+    await registry.refreshFromOpenRouter({ force: true });
+
+    const model = registry.getModel('cache-model');
+    expect(model).toBeDefined();
+    expect(model).not.toHaveProperty('cacheReadCostPerMillion');
+    expect(model).not.toHaveProperty('cacheWriteCostPerMillion');
+  });
+
+  const matrixRow = {
+    id: 'cache-model',
+    name: 'Cache model (matrix)',
+    provider: 'acme',
+    tier: 'mid' as const,
+    outputCostPerMillion: 0,
+    maxContext: 0,
+    supportsTools: true,
+  };
+
+  it('keeps the registry cache rates when a matrix row leaves its input rate alone', async () => {
+    serveOpenRouter({ prompt: '0.000003', completion: '0.000015', input_cache_read: '0.0000003' });
+    await registry.refreshFromOpenRouter({ force: true });
+
+    registry.registerModels([{ ...matrixRow, inputCostPerMillion: 0 }]);
+
+    expect(registry.getModel('cache-model')?.cacheReadCostPerMillion).toBeCloseTo(0.3);
+  });
+
+  it('drops the registry cache rates once the matrix row owns the input rate they were set against', async () => {
+    // A model the registry had at 0 takes the row's rate; the cache rate
+    // published beside that 0 no longer describes it.
+    serveOpenRouter({ prompt: '0', completion: '0', input_cache_read: '0.0000003' });
+    await registry.refreshFromOpenRouter({ force: true });
+
+    registry.registerModels([{ ...matrixRow, inputCostPerMillion: 5 }]);
+
+    const model = registry.getModel('cache-model');
+    expect(model?.inputCostPerMillion).toBe(5);
+    expect(model).not.toHaveProperty('cacheReadCostPerMillion');
   });
 });

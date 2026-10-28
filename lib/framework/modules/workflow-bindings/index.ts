@@ -3,7 +3,7 @@
  * a published `AiWorkflow` (spec §4.2). Writes go through `./service` (the sole
  * writer), reads through `./queries`, and the "event → workflow" dispatch through
  * `./dispatch` (`runModuleWorkflowBindings`, reused by f-engagement's event source).
- * Request schemas in `./api-schemas`. Sibling of the agent bindings (t-1) and
+ * Request schemas in `./api-schemas`; a template's save version (`If-Match`, t-151) in `./versions`. Sibling of the agent bindings (t-1) and
  * knowledge grants (t-4).
  */
 
@@ -15,6 +15,11 @@ export {
   type UpdateWorkflowBindingArgs,
   type UnbindWorkflowArgs,
 } from '@/lib/framework/modules/workflow-bindings/service';
+export {
+  bindingTemplateVersion,
+  withTemplateVersion,
+  type VersionedWorkflowBinding,
+} from '@/lib/framework/modules/workflow-bindings/versions';
 export {
   listModuleWorkflowBindings,
   type ModuleWorkflowBindingView,

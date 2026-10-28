@@ -15,6 +15,12 @@
  * folder) would fail `next build`. The reference lives only in this fork-owned
  * file, never in core — which is why `instrumentation.ts` calls this seam rather
  * than importing the framework directly.
+ *
+ * **This is the only `lib/app/` hook that may be async.** Do not copy its
+ * `async` onto the `initApp*` registration seams (`initAppJobs`,
+ * `initAppAuthorizationPolicy`, …): those must be synchronous, and one that
+ * returns a promise is refused and disabled at its first read. See
+ * `.context/architecture/fork-init-seams.md` — "A seam must be synchronous".
  */
 
 import { logger } from '@/lib/logging';

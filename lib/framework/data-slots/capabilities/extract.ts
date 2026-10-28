@@ -33,6 +33,7 @@ import {
   typedValueSchema,
   validateTypedValue,
 } from '@/lib/framework/data-slots/capabilities/typed-value';
+import { spendCapCodeOf } from '@/lib/framework/shared/spend-caps';
 
 /** Span phase tag for these completions (`gen_ai.operation.name` +
  *  `sunrise.evaluation.phase`) — this is slot capture, not evaluation. */
@@ -121,6 +122,20 @@ export async function extractTypedValue(
   } catch (err) {
     // Best-effort — a provider/parse/timeout failure must NOT fail the capture. The prose
     // `value` is still stored; only the typed gate value is absent (same as a no-op).
+    // A monthly spend cap's refusal (Sunrise 0.15.0) is the exception to logging quietly: it
+    // drops every typed value until the cap is raised, which an operator needs to see.
+    const capCode = spendCapCodeOf(err);
+    if (capCode !== null) {
+      logger.warn(
+        'fill_slot: a monthly spend cap refused prose→typed extraction; storing without a typed value',
+        {
+          agentId,
+          dataType,
+          code: capCode,
+        }
+      );
+      return null;
+    }
     logger.debug('fill_slot: prose→typed extraction failed; storing without a typed value', {
       agentId,
       dataType,

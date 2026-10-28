@@ -78,7 +78,7 @@ The endpoint caps at 500 conversations (`MAX_EXPORT_CONVERSATIONS`) and is rate-
 
 Route: `/admin/orchestration/conversations/:id`.
 
-Server component fetches conversation + messages in parallel via `serverFetch`. A missing conversation calls `notFound()` → 404 page.
+Server component fetches conversation + messages in parallel with `requireServerData(…, { notFound: true })`. A 404 from either calls `notFound()` → 404 page; any other failure throws to the admin error boundary rather than showing a missing conversation or an empty trace (#518).
 
 Header shows the title (or `"Untitled conversation"`), breadcrumb, agent name, creation date (localeDateString), and message count.
 
@@ -111,6 +111,8 @@ One card per `AiMessage`, ordered by `createdAt asc`. Each card shows:
 - **Provenance pin row** — small `outline` badges showing `agent <id-prefix>` and `workflow exec <id-prefix> @ <version-prefix>` when those scalars are populated on the message row. Mirrors the `SupervisorVerdictBadge` styling in `ExecutionDetailView` so the execution page and the conversation page share visual vocabulary. Omitted when no version pins are set (an agent with no `AiAgentVersion` rows, or an error marker written before the agent loaded).
 - **Raw toggle** — only appears when `metadata` has at least one key. Expands a `<pre>` with `JSON.stringify(metadata, null, 2)`.
 - **Inline tool-call trace** — when an assistant message carries `provenance.capabilityCalls` (always-on for capability-using assistant turns; not gated by `includeTrace`), `<MessageTrace>` (`components/admin/orchestration/chat/message-trace.tsx`) renders a collapsible strip with one card per dispatched capability: slug, args JSON, latency, success state, optional cost, and a result preview. Pre-feature conversations and capability-free turns leave `provenance` null and the strip is absent. See `.context/orchestration/chat.md#inline-trace-annotations-admin-only` for the full wire contract.
+
+- **Reasoning panel** — when an assistant message carries `metadata.reasoningSummary`, `<ReasoningPanel>` (`components/admin/orchestration/chat/reasoning-panel.tsx`) renders a collapsed "Reasoning · N words" toggle above the content. It expands to show the model's reasoning text. Messages without a summary show no panel.
 
 `toolCallId` is on the wire type but unused by the component — the tool-call linkage is reconstructed from the denormalised `capabilityCalls[]` array on the assistant turn rather than from cross-message parent/child references.
 

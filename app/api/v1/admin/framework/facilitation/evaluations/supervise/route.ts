@@ -8,7 +8,8 @@
  *      conversations → 400; unknown → 404; a conversation with no turns → 400.
  *
  * Admin-only; framework-tier path. Rate limiting is automatic via `proxy.ts`; the run is audited in
- * the service. Read the stored verdict back via GET /evaluations (the eval rows carry it).
+ * the service. Read the stored verdict back via GET /evaluations (the eval rows carry it). A monthly
+ * spend cap refusing the judge answers 402 with the cap's code (`SpendCapRefusedError`).
  */
 
 import { withAdminAuth } from '@/lib/auth/guards';

@@ -64,7 +64,7 @@ model SlotValue {
   id            String    @id @default(cuid())
   orgId         String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
   org           Org?      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  userId        String // FK to User.id — no @relation; ON DELETE CASCADE hand-written in the migration
+  userId        String // FK to User.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration
   slotSlug      String // definition slug, or a minted slug (open mode)
   version       Int // monotonic per (userId, slotSlug), starting at 1
   value         String    @db.Text // plain language — canonical for conversation

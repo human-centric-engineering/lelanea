@@ -96,6 +96,15 @@ const { prismaFake, store, resetStore } = vi.hoisted(() => {
     module: moduleModel,
     aiWorkflow,
     moduleWorkflowBinding,
+    // A versioned template save locks the row as it reads it (`SELECT "inputTemplate" … FOR NO
+    // KEY UPDATE`); the fake records the SQL and answers from the store.
+    lockedSql: [] as string[],
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      prismaFake.lockedSql.push(strings.join('?'));
+      const row = store.bindings.get(values[0] as string);
+      return row ? [{ inputTemplate: row.inputTemplate }] : [];
+    },
+    $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaFake)),
   };
 
   return {
@@ -106,6 +115,7 @@ const { prismaFake, store, resetStore } = vi.hoisted(() => {
       store.workflows.clear();
       store.bindings.clear();
       store.seq = 0;
+      prismaFake.lockedSql = [];
     },
   };
 });
@@ -113,13 +123,19 @@ const { prismaFake, store, resetStore } = vi.hoisted(() => {
 vi.mock('@/lib/db/client', () => ({ prisma: prismaFake }));
 vi.mock('@/lib/orchestration/audit/admin-audit-logger', () => ({ logAdminAction: vi.fn() }));
 
+import { bindingTemplateVersion } from '@/lib/framework/modules/workflow-bindings/versions';
 import {
   bindWorkflow,
   updateWorkflowBinding,
   unbindWorkflow,
 } from '@/lib/framework/modules/workflow-bindings/service';
 import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
-import { NotFoundError, ValidationError } from '@/lib/api/errors';
+import {
+  NotFoundError,
+  PreconditionRequiredError,
+  StaleRecordError,
+  ValidationError,
+} from '@/lib/api/errors';
 
 const USER = 'admin-1';
 
@@ -252,6 +268,7 @@ describe('updateWorkflowBinding', () => {
       bindingId: b.id,
       enabled: false,
       inputTemplate: { b: 2 },
+      loadedAt: [bindingTemplateVersion({ a: 1 })],
       userId: USER,
     });
     expect(updated.enabled).toBe(false);
@@ -273,9 +290,125 @@ describe('updateWorkflowBinding', () => {
       moduleSlug: 'reading',
       bindingId: b.id,
       inputTemplate: null,
+      loadedAt: [bindingTemplateVersion({ a: 1 })],
       userId: USER,
     });
     expect(store.bindings.get(b.id).inputTemplate).toBeNull();
+  });
+
+  describe('a template save is versioned (Hub t-151)', () => {
+    async function bound(inputTemplate: Record<string, unknown>) {
+      return bindWorkflow({
+        moduleSlug: 'reading',
+        workflowId: 'wf-1',
+        eventType: 'module.completed',
+        inputTemplate,
+        userId: USER,
+      });
+    }
+
+    it('refuses a save loaded before an erasure blanked the template, writing nothing', async () => {
+      const b = await bound({ to: 'erased@example.com', cc: 'kept@example.com' });
+      const loadedAt = [
+        bindingTemplateVersion({ to: 'erased@example.com', cc: 'kept@example.com' }),
+      ];
+      // Erasure blanks the address after the form loaded.
+      store.bindings.get(b.id).inputTemplate = { to: '', cc: 'kept@example.com' };
+
+      await expect(
+        updateWorkflowBinding({
+          moduleSlug: 'reading',
+          bindingId: b.id,
+          inputTemplate: { to: 'erased@example.com', cc: 'kept@example.com', subject: 'x' },
+          loadedAt,
+          userId: USER,
+        })
+      ).rejects.toBeInstanceOf(StaleRecordError);
+      expect(store.bindings.get(b.id).inputTemplate).toEqual({ to: '', cc: 'kept@example.com' });
+      expect(logAdminAction).toHaveBeenCalledTimes(1); // the bind only
+    });
+
+    it('answers a save with no loaded version as a missing precondition (428), not a stale one', async () => {
+      const b = await bound({ a: 1 });
+      for (const loadedAt of [undefined, []]) {
+        await expect(
+          updateWorkflowBinding({
+            moduleSlug: 'reading',
+            bindingId: b.id,
+            inputTemplate: { a: 2 },
+            loadedAt,
+            userId: USER,
+          })
+        ).rejects.toBeInstanceOf(PreconditionRequiredError);
+      }
+      expect(store.bindings.get(b.id).inputTemplate).toEqual({ a: 1 });
+    });
+
+    it('returns the saved binding with its new version', async () => {
+      const b = await bound({ a: 1 });
+      expect(b.version).toBe(bindingTemplateVersion({ a: 1 }));
+      const saved = await updateWorkflowBinding({
+        moduleSlug: 'reading',
+        bindingId: b.id,
+        inputTemplate: { a: 2 },
+        loadedAt: [b.version],
+        userId: USER,
+      });
+      expect(saved.version).toBe(bindingTemplateVersion({ a: 2 }));
+    });
+
+    it('saves at the current version, checked under the row lock, whatever the key order', async () => {
+      const b = await bound({ to: 'ops@example.com', locale: 'en' });
+      await updateWorkflowBinding({
+        moduleSlug: 'reading',
+        bindingId: b.id,
+        inputTemplate: { to: 'erased@example.com' },
+        // jsonb does not keep key order, so neither does the version.
+        loadedAt: [bindingTemplateVersion({ locale: 'en', to: 'ops@example.com' })],
+        userId: USER,
+      });
+      // An address typed into a freshly loaded form is the operator's intent, erased or not.
+      expect(store.bindings.get(b.id).inputTemplate).toEqual({ to: 'erased@example.com' });
+      expect(prismaFake.lockedSql).toHaveLength(1);
+      expect(prismaFake.lockedSql[0]).toMatch(/FROM framework_module_workflow/);
+      expect(prismaFake.lockedSql[0]).toMatch(/FOR NO KEY UPDATE/);
+    });
+
+    it('toggles enabled with no version and no lock', async () => {
+      const b = await bound({ a: 1 });
+      await updateWorkflowBinding({
+        moduleSlug: 'reading',
+        bindingId: b.id,
+        enabled: false,
+        userId: USER,
+      });
+      expect(store.bindings.get(b.id).enabled).toBe(false);
+      expect(prismaFake.$transaction).not.toHaveBeenCalled();
+      expect(prismaFake.lockedSql).toEqual([]);
+    });
+
+    it('404s when the binding is deleted between the guard and the locked read', async () => {
+      const b = await bound({ a: 1 });
+      // The belongs-to guard finds it; a concurrent unbind removes it before the locked read.
+      const realFindFirst = prismaFake.moduleWorkflowBinding.findFirst;
+      prismaFake.moduleWorkflowBinding.findFirst = async (args: {
+        where: { id: string; moduleId?: string };
+      }) => {
+        prismaFake.moduleWorkflowBinding.findFirst = realFindFirst;
+        const found = await realFindFirst(args);
+        store.bindings.delete(b.id);
+        return found;
+      };
+      await expect(
+        updateWorkflowBinding({
+          moduleSlug: 'reading',
+          bindingId: b.id,
+          inputTemplate: { a: 2 },
+          loadedAt: [bindingTemplateVersion({ a: 1 })],
+          userId: USER,
+        })
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
   });
 
   it('404s when the binding belongs to a different module', async () => {

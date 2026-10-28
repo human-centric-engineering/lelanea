@@ -84,7 +84,7 @@ model UserJourney {
   id         String   @id @default(cuid())
   orgId      String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
   org        Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  userId     String // FK to User.id — no @relation; ON DELETE CASCADE hand-written in the migration
+  userId     String // FK to User.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration
   graphSlug  String // the map being walked — plain string (F2), not an FK
   // Distinguishes parallel instances of the same map for one user (e.g. one user
   // supporting two different people through the same map — §8). NON-NULLABLE by
@@ -148,7 +148,7 @@ model JourneyEvent {
   id         String   @id @default(cuid())
   orgId      String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
   org        Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  userId     String // FK to User.id — no @relation; ON DELETE CASCADE hand-written in the migration (erasure path for EVERY event)
+  userId     String // FK to User.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration (erasure path for EVERY event)
   journeyId  String? // set for journey-traversal events; null for non-journey engagement
   nodeKey    String?
   moduleSlug String?
@@ -176,7 +176,7 @@ model FacilitationAgentBinding {
   id        String   @id @default(cuid())
   orgId     String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
   org       Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  agentId   String // FK to AiAgent.id — no @relation; ON DELETE CASCADE hand-written in the migration
+  agentId   String // FK to AiAgent.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration
   role      String // one facilitation seat, one agent (a role IS the seat); validated against FACILITATION_ROLES — unique per org, see @@unique([orgId, role]) below
   config    Json? // per-binding overrides (tone hints, etc.), opaque to the framework
   createdAt DateTime @default(now())
@@ -205,7 +205,7 @@ model FacilitationPolicy {
   kind      String // discriminator (auto_approval | …); CHECK-constrained in the migration, payload validated by facilitationPolicySchema
   enabled   Boolean  @default(true)
   payload   Json // per-kind config, validated by the kind's Zod schema
-  createdBy String? // FK to User.id — no @relation; ON DELETE SET NULL hand-written in the migration (retain on erasure)
+  createdBy String? // FK to User.id — no Prisma relation; ON DELETE SET NULL hand-written in the migration (retain on erasure)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -234,7 +234,7 @@ model StructureChangeProposal {
   proposedDefinition Json // the proposed content: a map definition, a module config value, or a policy payload
   status             String   @default("pending") // pending | approved | rejected | published — CHECK-constrained
   riskClass          String   @default("unclassified") // risk classification; the auto-approve taxonomy is deferred (§9.2)
-  createdBy          String // "agent:<slug>" or a user id — no @relation (admits agent authorship, X6)
+  createdBy          String // "agent:<slug>" or a user id — no Prisma relation (admits agent authorship, X6)
   reviewedBy         String? // approving/rejecting admin — FK to User.id; ON DELETE SET NULL hand-written
   rejectionReason    String?  @db.Text
   publishedVersionId String? // the FacilitationGraphVersion.id created on publish (set on approval, t-3)
@@ -330,7 +330,7 @@ model FrameworkJourneyNudge {
   id        String   @id @default(cuid())
   orgId     String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
   org       Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  userId    String // FK to User.id — no @relation; ON DELETE CASCADE hand-written in the migration (erasure path)
+  userId    String // FK to User.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration (erasure path)
   journeyId String   @unique // one throttle row per journey; the upsert key
   nodeKey   String // the next-step node last nudged toward (audit/debug)
   nudgedAt  DateTime @default(now())

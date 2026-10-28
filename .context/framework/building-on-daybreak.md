@@ -44,15 +44,19 @@ Daybreak reserves a leaf surface and keeps it empty for you — the same discipl
 inherits from Sunrise, applied one level down. **Fill the `leaf-*` files, not the
 bridges they delegate to.**
 
-| Fill this (yours)                 | NOT this (Daybreak's) | Registers                                                                                  |
-| --------------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
-| `lib/app/leaf-bootstrap.ts`       | `bootstrap.ts`        | one-time server boot work                                                                  |
-| `lib/app/leaf-admin-nav.ts`       | `admin-nav.ts`        | admin sidebar sections                                                                     |
-| `lib/app/leaf-db-drift.ts`        | `db-drift.ts`         | Prisma-unmodelled DB objects                                                               |
-| `lib/app/leaf-data-export.ts`     | `data-export.ts`      | your tables in a subject export, and their Art. 15 declarations                            |
-| `lib/app/leaf-brand.ts`           | `brand.ts`            | product name, legal entity, meta description                                               |
-| `lib/app/leaf-ci.ts`              | `ci.ts`               | your own coverage exclusions, whole-tree always-run tests and ownerless-surface exceptions |
-| `lib/app/leaf-platform-agents.ts` | `platform-agents.ts`  | agents every org gets its own instance of (Daybreak 0.7.0+)                                |
+| Fill this (yours)                       | NOT this (Daybreak's)      | Registers                                                                                  |
+| --------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
+| `lib/app/leaf-bootstrap.ts`             | `bootstrap.ts`             | one-time server boot work                                                                  |
+| `lib/app/leaf-admin-nav.ts`             | `admin-nav.ts`             | admin sidebar sections                                                                     |
+| `lib/app/leaf-db-drift.ts`              | `db-drift.ts`              | Prisma-unmodelled DB objects                                                               |
+| `lib/app/leaf-data-export.ts`           | `data-export.ts`           | your tables in a subject export, and their Art. 15 declarations                            |
+| `lib/app/leaf-org-export.ts`            | `org-export.ts`            | your `orgId` tables in an org export (Daybreak 0.8.0+)                                     |
+| `lib/app/leaf-brand.ts`                 | `brand.ts`                 | product name, legal entity, meta description                                               |
+| `lib/app/leaf-ci.ts`                    | `ci.ts`                    | your own coverage exclusions, whole-tree always-run tests and ownerless-surface exceptions |
+| `lib/app/leaf-platform-agents.ts`       | `platform-agents.ts`       | agents every org gets its own instance of (Daybreak 0.7.0+)                                |
+| `lib/app/leaf-owner-classification.ts`  | `owner-classification.ts`  | whether each of your user-linked models is personal, for the owner layer (Daybreak 0.8.0+) |
+| `lib/app/leaf-capability-seed-pairs.ts` | `capability-seed-pairs.ts` | your capability seeds' parity pairs and exemptions, test-only (Daybreak 0.8.0+)            |
+| `lib/app/leaf-erasure.ts`               | `erasure.ts`               | erasure cleanup for your data, and your stale-writer declarations (Daybreak 0.9.0+)        |
 
 Each bridge runs Daybreak's registration and then calls your `leaf-*` hook. Filling a
 bridge directly collides with Daybreak on your next merge — and in the
@@ -93,6 +97,22 @@ because core reads its own column vocabulary and cannot read yours: a table keye
 `authorId`, or reached by a join, is invisible to a scan and is exactly the table
 nobody remembers. Your section names must not collide with the framework tier's —
 the registry refuses a section another tier claimed.
+
+**`leaf-owner-classification.ts` is checked against your schema** (Sunrise 0.15.0).
+Sunrise's owner layer narrows an org member to their own rows, and its coverage guard
+fails naming any model with a user column (`userId`, `createdBy`, …) or a link to a
+personal model that nobody classified as `personal` (with its owner) or `not-personal`
+(with a reason). Classifying a model changes nothing at runtime until you mark it
+`enforced`. Since Sunrise 0.16.0 the guard also sees a `String` column named `…UserId`;
+mark a user id named any other way with a `/// owner-classification: user-id` doc line.
+
+**`leaf-erasure.ts` is where your erasure hooks and stale writers go** (Daybreak 0.9.0+).
+Sunrise 0.16.0's stale-writer guard (§122) fails naming any file of yours that writes a
+column erasure scrubs in place (a run's input or trace, a webhook delivery, a workflow
+definition, …) until you declare how it knows its copy is stale, with
+`registerStaleWriter()` from `initLeafErasureHooks()`. It reads only what
+`lib/app/erasure.ts` registers, which is why that file is Daybreak's bridge now. Prefix
+your hook names (`leaf:`): a name the framework uses replaces its hook.
 
 **Every other `lib/app/*` file is yours to fill as normal** (`capabilities.ts`,
 `context-contributors.ts`, `env.ts`, `rate-limit.ts`, `public-nav.ts`,
@@ -264,6 +284,7 @@ Then, because a release usually carries Sunrise migrations as well as Daybreak o
 npm install                  # the release may move dependencies
 npm run db:migrate:status    # what's pending
 npm run db:migrate:deploy    # apply (dev: db:migrate:dev)
+npm run db:seed              # new or changed seed units
 npm run db:drift-check
 ```
 
@@ -296,6 +317,12 @@ Wait for the Daybreak release. If something upstream is urgent, ask Daybreak to 
 Keep **your** version in files you own, keep **theirs** in files you don't, and add a
 follow-up rather than rewriting a Daybreak or Sunrise file in place. A one-line "keep
 mine" is a cheap merge; a rewritten framework file is not.
+
+**`CLAUDE.md`'s `hce-hub:bootstrap` block is Daybreak's** (Daybreak 0.8.0+). Sunrise
+no longer ships one, so Daybreak commits its own, and you inherit it. Left in place it
+points your agents at Daybreak's Hub project: replace it with your own project's block
+(the Hub's `get_project_bootstrap`), or move it to a gitignored `CLAUDE.local.md`. On a
+conflict there, keep yours.
 
 ---
 
@@ -344,10 +371,14 @@ onDelete: Cascade)`, `@@index([orgId])`. Prisma needs a back-relation line on
    `orgIsolationPolicySql('<table>')` from `lib/tenancy/isolation.ts` verbatim
    (`policy-coverage.test.ts` matches its text). See the two `framework_…`
    migrations dated 2026-09-25 for the pattern.
-4. **Declare it in the org export**: return it from `leafOrgSources()` in
-   `lib/app/leaf-data-export.ts`, as an `export` source scoped by `orgId` (full
-   rows, `omit` for a secret) or as an exclusion with a reason.
-   `lib/framework/privacy/org-sources.ts` has 18 worked examples.
+4. **Declare it in the org export**: register it from `initLeafOrgSources()` in
+   `lib/app/leaf-org-export.ts` with core's
+   `registerAppOrgSources({ tier: 'app', sources, excluded })`, as an `export`
+   source scoped by `orgId` (`ownedBy(orgId)` from `lib/privacy/org-sources.ts`;
+   full rows, `omit` for a secret) or as an exclusion with a reason.
+   `lib/framework/privacy/org-sources.ts` has 18 worked examples. (Before
+   Daybreak 0.8.0 this was `leafOrgSources()` in `leaf-data-export.ts`, which is
+   gone: Sunrise 0.15.0 ships the org-export seam it stood in for.)
 5. **Look rows up by their per-org key.** A read by slug is `findFirst({ where:
 { slug } })`, which the tenant context scopes. A write keyed on the unique uses
    the compound key with `requireOrgId()` from `lib/tenancy/context.ts`, which is

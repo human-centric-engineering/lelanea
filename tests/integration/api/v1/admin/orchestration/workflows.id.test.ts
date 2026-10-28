@@ -8,6 +8,7 @@
  * @see app/api/v1/admin/orchestration/workflows/[id]/route.ts
  */
 
+import { createHash } from 'node:crypto';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET, PATCH, DELETE } from '@/app/api/v1/admin/orchestration/workflows/[id]/route';
@@ -29,15 +30,24 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(() => Promise.resolve(new Headers())),
 }));
 
-vi.mock('@/lib/db/client', () => ({
-  prisma: {
+vi.mock('@/lib/db/client', () => {
+  const prisma = {
     aiWorkflow: {
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
     },
-  },
-}));
+    // The erased-person check runs in the write's transaction (t-805)
+    $executeRaw: vi.fn(async () => 1),
+    // A draft write's row lock (§122 t-900)
+    $queryRaw: vi.fn(async () => []),
+    dataErasureReceipt: { findMany: vi.fn(async () => []) },
+    user: { findMany: vi.fn(async () => []) },
+    $transaction: vi.fn(),
+  };
+  prisma.$transaction.mockImplementation((cb: (tx: typeof prisma) => unknown) => cb(prisma));
+  return { prisma };
+});
 
 vi.mock('@/lib/orchestration/audit/admin-audit-logger', () => ({
   logAdminAction: vi.fn(),
@@ -47,7 +57,9 @@ vi.mock('@/lib/orchestration/audit/admin-audit-logger', () => ({
 // ─── Imports after mocks ─────────────────────────────────────────────────────
 
 import { auth } from '@/lib/auth/config';
+import { workflowDefinitionVersion } from '@/lib/orchestration/config-versions';
 import { prisma } from '@/lib/db/client';
+import { uniqueViolationError } from '@/tests/helpers/prisma-errors';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -96,10 +108,20 @@ function makeWorkflow(overrides: Record<string, unknown> = {}) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeRequest(method = 'GET', body?: Record<string, unknown>): NextRequest {
+/** `If-Match` from a builder that loaded `makeWorkflow()` (§122 t-900). */
+const LOADED = () => workflowDefinitionVersion(makeWorkflow());
+
+function makeRequest(
+  method = 'GET',
+  body?: Record<string, unknown>,
+  ifMatch?: string
+): NextRequest {
   return {
     method,
-    headers: new Headers({ 'Content-Type': 'application/json' }),
+    headers: new Headers({
+      'Content-Type': 'application/json',
+      ...(ifMatch ? { 'If-Match': ifMatch } : {}),
+    }),
     json: () => Promise.resolve(body ?? {}),
     url: `http://localhost:3000/api/v1/admin/orchestration/workflows/${WORKFLOW_ID}`,
   } as unknown as NextRequest;
@@ -151,6 +173,16 @@ describe('GET /api/v1/admin/orchestration/workflows/:id', () => {
       expect(data.success).toBe(true);
       expect(data.data.id).toBe(WORKFLOW_ID);
     });
+
+    it('returns the definition version the builder sends back on save (§122 t-900)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWorkflow.findUnique).mockResolvedValue(makeWorkflow() as never);
+
+      const response = await GET(makeRequest(), makeParams(WORKFLOW_ID));
+
+      const data = await parseJson<{ data: { definitionVersion: string } }>(response);
+      expect(data.data.definitionVersion).toBe(LOADED());
+    });
   });
 
   describe('Error cases', () => {
@@ -176,6 +208,9 @@ describe('GET /api/v1/admin/orchestration/workflows/:id', () => {
 describe('PATCH /api/v1/admin/orchestration/workflows/:id', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$executeRaw).mockResolvedValue(1);
+    vi.mocked(prisma.dataErasureReceipt.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([]);
   });
 
   describe('Authentication & Authorization', () => {
@@ -235,7 +270,13 @@ describe('PATCH /api/v1/admin/orchestration/workflows/:id', () => {
       await PATCH(makeRequest('PATCH', { name: 'Updated' }), makeParams(WORKFLOW_ID));
 
       expect(vi.mocked(computeChanges).mock.calls.at(-1)?.[2]).toEqual({
-        ignoreKeys: ['updatedAt', 'createdAt'],
+        ignoreKeys: [
+          'updatedAt',
+          'createdAt',
+          'publishedVersion',
+          'draftDefinition',
+          'definitionVersion',
+        ],
       });
     });
 
@@ -280,18 +321,103 @@ describe('PATCH /api/v1/admin/orchestration/workflows/:id', () => {
       vi.mocked(prisma.aiWorkflow.update).mockResolvedValue(
         makeWorkflow({ draftDefinition: updatedDef }) as never
       );
-      // The route refetches with the published-version include after the
-      // saveDraft step before returning the response.
-      vi.mocked(prisma.aiWorkflow.findUniqueOrThrow).mockResolvedValue(
-        makeWorkflow({ draftDefinition: updatedDef }) as never
-      );
+      // The version check reads under the lock first; the route then
+      // refetches with the published-version include before responding.
+      vi.mocked(prisma.aiWorkflow.findUniqueOrThrow)
+        .mockResolvedValueOnce(makeWorkflow() as never)
+        .mockResolvedValueOnce(makeWorkflow({ draftDefinition: updatedDef }) as never);
 
       const response = await PATCH(
-        makeRequest('PATCH', { draftDefinition: updatedDef }),
+        makeRequest('PATCH', { draftDefinition: updatedDef }, LOADED()),
         makeParams(WORKFLOW_ID)
       );
 
       expect(response.status).toBe(200);
+    });
+
+    it('saves an erased address typed into a freshly loaded builder: a deliberate re-add (§122 t-900)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWorkflow.findUnique).mockResolvedValue(makeWorkflow() as never);
+      vi.mocked(prisma.aiWorkflow.findUniqueOrThrow).mockResolvedValue(makeWorkflow() as never);
+      vi.mocked(prisma.aiWorkflow.update).mockResolvedValue(makeWorkflow() as never);
+      vi.mocked(prisma.dataErasureReceipt.findMany).mockResolvedValue([
+        {
+          subjectUserId: 'cmerasedperson0000000000',
+          subjectEmailHash: createHash('sha256').update('gone@example.com').digest('hex'),
+          metadata: { addressVerified: true },
+        },
+      ] as never);
+      const draftNamingErasedAddress = {
+        steps: [
+          {
+            id: 'notify',
+            name: 'Notify',
+            type: 'send_notification',
+            config: { channel: 'email', to: 'Gone@Example.com', subject: 'Hi', bodyTemplate: 'x' },
+            nextSteps: [],
+          },
+        ],
+        entryStepId: 'notify',
+        errorStrategy: 'fail',
+      };
+
+      const response = await PATCH(
+        makeRequest('PATCH', { draftDefinition: draftNamingErasedAddress }, LOADED()),
+        makeParams(WORKFLOW_ID)
+      );
+
+      expect(response.status).toBe(200);
+      expect(prisma.aiWorkflow.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { draftDefinition: draftNamingErasedAddress } })
+      );
+    });
+
+    it('saves a draft naming an erased approver id with the id stripped (review round 2)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWorkflow.findUnique).mockResolvedValue(makeWorkflow() as never);
+      vi.mocked(prisma.aiWorkflow.update).mockResolvedValue(makeWorkflow() as never);
+      vi.mocked(prisma.aiWorkflow.findUniqueOrThrow).mockResolvedValue(makeWorkflow() as never);
+      vi.mocked(prisma.dataErasureReceipt.findMany).mockResolvedValue([
+        { subjectUserId: 'cmerasedapprover00000000', subjectEmailHash: null, metadata: null },
+      ] as never);
+
+      const response = await PATCH(
+        makeRequest(
+          'PATCH',
+          {
+            draftDefinition: {
+              steps: [
+                {
+                  id: 'approve',
+                  name: 'Approve',
+                  type: 'human_approval',
+                  config: { prompt: 'OK?', approverUserIds: ['cmerasedapprover00000000'] },
+                  nextSteps: [],
+                },
+              ],
+              entryStepId: 'approve',
+              errorStrategy: 'fail',
+            },
+          },
+          LOADED()
+        ),
+        makeParams(WORKFLOW_ID)
+      );
+
+      expect(response.status).toBe(200);
+      expect(prisma.aiWorkflow.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            draftDefinition: expect.objectContaining({
+              steps: [
+                expect.objectContaining({
+                  config: { prompt: 'OK?', approverUserIds: [] },
+                }),
+              ],
+            }),
+          },
+        })
+      );
     });
   });
 
@@ -316,9 +442,9 @@ describe('PATCH /api/v1/admin/orchestration/workflows/:id', () => {
     it('returns 409 for P2002 slug conflict on PATCH', async () => {
       vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
       vi.mocked(prisma.aiWorkflow.findUnique).mockResolvedValue(makeWorkflow() as never);
-      const p2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-        code: 'P2002',
-        clientVersion: '7.0.0',
+      const p2002 = uniqueViolationError({
+        index: 'ai_workflow_slug_key',
+        modelName: 'AiWorkflow',
       });
       vi.mocked(prisma.aiWorkflow.update).mockRejectedValue(p2002);
 
@@ -328,6 +454,29 @@ describe('PATCH /api/v1/admin/orchestration/workflows/:id', () => {
       );
 
       expect(response.status).toBe(409);
+    });
+
+    it('does not answer the slug message for a P2002 on another constraint (t-814)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWorkflow.findUnique).mockResolvedValue(makeWorkflow() as never);
+      const p2002 = uniqueViolationError({
+        index: 'ai_workflow_version_workflowId_version_key',
+        modelName: 'AiWorkflowVersion',
+      });
+      vi.mocked(prisma.aiWorkflow.update).mockRejectedValue(p2002);
+
+      const response = await PATCH(
+        makeRequest('PATCH', { slug: 'existing-slug' }),
+        makeParams(WORKFLOW_ID)
+      );
+
+      expect(response.status).toBe(400);
+      const otherData = await parseJson<{
+        error: { code: string; message: string; details?: unknown };
+      }>(response);
+      expect(otherData.error.code).toBe('VALIDATION_ERROR');
+      expect(otherData.error.message).toBe('A record with that value already exists');
+      expect(otherData.error.details).toBeUndefined();
     });
 
     it('returns 400 when updating draftDefinition with invalid schema', async () => {
@@ -379,12 +528,12 @@ describe('PATCH /api/v1/admin/orchestration/workflows/:id', () => {
       vi.mocked(prisma.aiWorkflow.update).mockResolvedValue(
         makeWorkflow({ draftDefinition: null }) as never
       );
-      vi.mocked(prisma.aiWorkflow.findUniqueOrThrow).mockResolvedValue(
-        makeWorkflow({ draftDefinition: null }) as never
-      );
+      vi.mocked(prisma.aiWorkflow.findUniqueOrThrow)
+        .mockResolvedValueOnce(makeWorkflow() as never)
+        .mockResolvedValueOnce(makeWorkflow({ draftDefinition: null }) as never);
 
       const response = await PATCH(
-        makeRequest('PATCH', { draftDefinition: null }),
+        makeRequest('PATCH', { draftDefinition: null }, LOADED()),
         makeParams(WORKFLOW_ID)
       );
 

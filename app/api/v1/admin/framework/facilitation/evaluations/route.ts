@@ -8,7 +8,13 @@
  *      summary + rows (201). Non-framework conversations → 400; unknown → 404.
  *
  * Admin-only; framework-tier path. Rate limiting is automatic via `proxy.ts`; the scoring run is
- * audited in the service. The eval review UI is `f-ops-views` (15).
+ * audited in the service. The eval review UI is `f-ops-views` (15). A monthly spend cap's refusal
+ * answers 402 with the cap's code (`SpendCapRefusedError`, Sunrise 0.15.0).
+ *
+ * **Platform-only, and must stay so without a review.** An org admin's eval sweep scores every
+ * member's framework conversations (`runAcrossOwners`), and the rows GET returns carry the judges'
+ * verdicts and notes on them. Opening this route with `tier: 'org'` would let an org admin read
+ * those for other members' conversations — decide that on purpose, not as a roster line.
  */
 
 import { withAdminAuth } from '@/lib/auth/guards';

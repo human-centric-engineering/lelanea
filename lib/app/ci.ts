@@ -327,7 +327,9 @@ export const appOwnerlessSurfaceExceptions: AppOwnerlessSurfaceException[] = [
     disposition: 'by-design',
     reason:
       'the `framework_eval_sweep` window: recent framework-surface conversations not yet ' +
-      'scored, filtered on `contextType` only. A scheduled step with no caller to scope to.',
+      'scored, filtered on `contextType` only. Usually a scheduled step with no caller; run by ' +
+      'an org admin it reads inside the sweep’s `runAcrossOwners` (Sunrise §115), because the ' +
+      'sweep evaluates the org’s conversations, not the caller’s.',
   },
   {
     path: 'lib/framework/facilitation/evaluation/turns.ts',

@@ -62,6 +62,8 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
       }
     };
 
+    const rawQuery = vi.fn().mockResolvedValue([]);
+    const rawExecute = vi.fn().mockResolvedValue(0);
     const userFindUnique = vi.fn();
     const userDelete = vi.fn().mockResolvedValue({ id: 'user-1' });
     const receiptCreate = vi.fn().mockResolvedValue({
@@ -72,12 +74,20 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
     const base = {
       get(_target: object, property: string | symbol): unknown {
         if (typeof property !== 'string') return undefined;
+        // Since Sunrise 0.16.0 core's export reads deliveries naming the
+        // subject, and its erasure bounds its lock waits, both in raw SQL.
+        // Neither touches our tables; inert here, as an empty table would be.
+        if (property === '$queryRaw') return rawQuery;
+        if (property === '$executeRaw') return rawExecute;
         if (property === 'user')
           // `findUniqueOrThrow`: core's erasure reads the address and its
           // verification to scope the contact-form delete (Sunrise 0.14.0).
           return {
             findUnique: userFindUnique,
             findUniqueOrThrow: userFindUnique,
+            // Since Sunrise 0.16.0 erasure clears this person from other
+            // people's pending erasures they requested as an admin.
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
             delete: userDelete,
           };
         if (property === 'dataErasureReceipt')

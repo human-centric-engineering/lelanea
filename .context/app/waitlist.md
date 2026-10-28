@@ -756,7 +756,7 @@ hand-written in the `app_waitlist_entry` migration with `ON DELETE SET NULL`.
 
 **`SET NULL` is not the erasure policy on its own.** It keeps the row, holding
 the person's email, name and answers, pointed at by nothing. So
-`lib/app/leaf-bootstrap.ts` registers an erasure cleanup hook that **deletes**
+`lib/app/leaf-erasure.ts` registers an erasure cleanup hook that **deletes**
 the matching rows inside the erasure transaction, using the same
 `subjectMatch()` as the export — reading the address from the transaction,
 before `tx.user.delete()` removes the row it would have read it from. A throw there

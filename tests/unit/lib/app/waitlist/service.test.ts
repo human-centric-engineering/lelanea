@@ -52,16 +52,10 @@ import {
   joinWaitlist,
   findWaitlistEntriesForSubject,
   eraseWaitlistEntriesForUser,
-  registerWaitlistErasureHook,
-  WAITLIST_ERASURE_HOOK,
   linkWaitlistEntryToUser,
   registerWaitlistLinkHook,
   WAITLIST_LINK_HOOK,
 } from '@/lib/app/waitlist/service';
-import {
-  getErasureCleanupHooks,
-  __resetErasureCleanupHooksForTests,
-} from '@/lib/privacy/erasure-hooks';
 import {
   dispatchUserCreated,
   __resetUserCreatedHooksForTests,
@@ -449,28 +443,6 @@ describe('eraseWaitlistEntriesForUser (GDPR Art. 17)', () => {
     // Swallowing here would report a successful erasure while leaving the
     // person's email on a public-form table.
     await expect(eraseWaitlistEntriesForUser(txContext())).rejects.toThrow('deadlock');
-  });
-});
-
-describe('registerWaitlistErasureHook', () => {
-  beforeEach(() => __resetErasureCleanupHooksForTests());
-
-  it('registers the in-transaction phase under a stable name', () => {
-    registerWaitlistErasureHook();
-
-    const hooks = getErasureCleanupHooks();
-    expect(hooks.map((hook) => hook.name)).toEqual([WAITLIST_ERASURE_HOOK]);
-    expect(hooks[0]?.scrubInTransaction).toBe(eraseWaitlistEntriesForUser);
-    // NOT `cleanupExternal`: that phase is best-effort and its failures are
-    // swallowed, which is wrong for a delete that must roll the erasure back.
-    expect(hooks[0]?.cleanupExternal).toBeUndefined();
-  });
-
-  it('is idempotent, so a repeated import under HMR does not double-register', () => {
-    registerWaitlistErasureHook();
-    registerWaitlistErasureHook();
-
-    expect(getErasureCleanupHooks()).toHaveLength(1);
   });
 });
 

@@ -13,7 +13,9 @@
  * vocabulary belongs to f-engagement/08), so it is a text field, not a picker; and there is no
  * registration gate (binding needs only that the module and workflow exist). A binding to a
  * workflow with no published version is legal but flagged "won't fire yet". Editing an existing
- * binding's `inputTemplate` post-bind is deferred (the PATCH supports it; set it at bind time).
+ * binding's `inputTemplate` post-bind is deferred (set it at bind time). The PATCH supports it,
+ * versioned: an editor sends the binding's `version` as `If-Match` and handles a 412 (Hub t-151).
+ * The `enabled` toggle below writes no template and needs neither.
  */
 
 import { useState } from 'react';

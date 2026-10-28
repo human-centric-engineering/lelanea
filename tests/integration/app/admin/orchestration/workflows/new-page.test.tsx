@@ -15,6 +15,10 @@
  *   serialised WorkflowDefinition
  * - After successful create, router.push is called to the edit URL
  *
+ * Failure path (#518):
+ * - A failed templates load shows a `role="alert"` notice above a working
+ *   builder, rather than a silently empty template menu
+ *
  * @see app/admin/orchestration/workflows/new/page.tsx
  */
 
@@ -63,9 +67,10 @@ vi.mock('@/hooks/use-theme', () => ({
 
 // ─── Other mocks ──────────────────────────────────────────────────────────────
 
-vi.mock('@/lib/api/server-fetch', () => ({
+// Only the network is faked: the real parseApiResponse and server-load run.
+vi.mock('@/lib/api/server-fetch', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/server-fetch')>()),
   serverFetch: vi.fn(),
-  parseApiResponse: vi.fn(),
 }));
 
 vi.mock('@/lib/api/client', () => ({
@@ -115,8 +120,10 @@ vi.mock('next/navigation', () => ({
   redirect: vi.fn(),
 }));
 
-import { apiClient } from '@/lib/api/client';
-import { serverFetch, parseApiResponse } from '@/lib/api/server-fetch';
+import { apiClient, APIClientError } from '@/lib/api/client';
+import { API } from '@/lib/api/endpoints';
+import { serverFetch } from '@/lib/api/server-fetch';
+import { apiFailure, apiSuccess } from '@/tests/helpers/api';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -149,16 +156,31 @@ describe('NewWorkflowPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(apiClient.get).mockResolvedValue([]);
-    vi.mocked(serverFetch).mockResolvedValue({ ok: true } as Response);
-    // Page calls getCapabilities() + getAgents() + getTemplates() in parallel — all use parseApiResponse
-    vi.mocked(parseApiResponse)
-      .mockResolvedValueOnce({ success: true, data: [] }) // capabilities
-      .mockResolvedValueOnce({ success: true, data: [] }) // agents
-      .mockResolvedValueOnce({ success: true, data: [MOCK_TEMPLATE] }); // templates
+    // Page loads capabilities, agents and templates in parallel; a fresh
+    // Response per call.
+    vi.mocked(serverFetch).mockImplementation(async (url: string) =>
+      url.startsWith(API.ADMIN.ORCHESTRATION.WORKFLOW_TEMPLATES)
+        ? apiSuccess([MOCK_TEMPLATE])
+        : apiSuccess([])
+    );
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('shows a notice above a working builder when the templates fail to load', async () => {
+    vi.mocked(serverFetch).mockImplementation(async (url: string) =>
+      url.startsWith(API.ADMIN.ORCHESTRATION.WORKFLOW_TEMPLATES) ? apiFailure(500) : apiSuccess([])
+    );
+
+    const { default: NewWorkflowPage } =
+      await import('@/app/admin/orchestration/workflows/new/page');
+
+    render(await NewWorkflowPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t load workflow templates/i);
+    expect(screen.getByTestId('pattern-palette')).toBeInTheDocument();
   });
 
   it('renders the pattern palette', async () => {
@@ -296,6 +318,75 @@ describe('NewWorkflowPage', () => {
     expect(body.name).toBe(MOCK_TEMPLATE.name);
     expect(body.workflowDefinition.steps).toHaveLength(TEMPLATE_DEFINITION.steps.length);
     expect(body.workflowDefinition.entryStepId).toBe(TEMPLATE_DEFINITION.entryStepId);
+    // A built-in comes from code, which erasure never touches: no source to check.
+    expect(body).not.toHaveProperty('copiedFrom');
+  });
+
+  describe('a custom template, which erasure scrubs like any workflow (§122 t-900)', () => {
+    const COPY_SOURCE = { workflowId: 'cmjbv4i3x00003wslotemplate', definitionVersion: '"tpl-v1"' };
+    const CUSTOM_TEMPLATE = {
+      ...MOCK_TEMPLATE,
+      source: 'custom',
+      slug: 'org-escalation',
+      name: 'Org Escalation',
+      copySource: COPY_SOURCE,
+    };
+
+    async function createFromCustomTemplate(user: ReturnType<typeof userEvent.setup>) {
+      vi.mocked(serverFetch).mockImplementation(async (url: string) =>
+        url.startsWith(API.ADMIN.ORCHESTRATION.WORKFLOW_TEMPLATES)
+          ? apiSuccess([CUSTOM_TEMPLATE])
+          : apiSuccess([])
+      );
+      const { default: NewWorkflowPage } =
+        await import('@/app/admin/orchestration/workflows/new/page');
+      render(await NewWorkflowPage({ searchParams: Promise.resolve({}) }));
+
+      await user.click(screen.getByRole('button', { name: /use template/i }));
+      await user.click(
+        await screen.findByRole('menuitem', { name: /org escalation/i, hidden: true })
+      );
+      await user.click(screen.getByRole('button', { name: /use this template/i }));
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('button', { name: /use this template/i })
+        ).not.toBeInTheDocument();
+      });
+      await user.click(
+        await screen.findByRole('button', { name: /create workflow/i, hidden: true })
+      );
+      await user.type(screen.getByRole('textbox', { name: /description/i }), 'From my template');
+      await user.click(screen.getByRole('button', { name: /save workflow/i }));
+      await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(1));
+    }
+
+    it('names the template and the version it loaded as copiedFrom', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      vi.mocked(apiClient.post).mockResolvedValue({ id: 'new-wf-1' });
+
+      await createFromCustomTemplate(user);
+
+      const [, options] = vi.mocked(apiClient.post).mock.calls[0];
+      expect((options?.body as { copiedFrom?: unknown }).copiedFrom).toEqual(COPY_SOURCE);
+    });
+
+    it('shows the reload prompt, naming the template, when the template moved on', async () => {
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      vi.mocked(apiClient.post).mockRejectedValue(
+        new APIClientError(
+          'The workflow or template this was copied from changed',
+          'STALE_RECORD',
+          412
+        )
+      );
+
+      await createFromCustomTemplate(user);
+
+      expect(
+        await screen.findByText(/the template it was started from, changed since you opened it/i)
+      ).toBeInTheDocument();
+      expect(routerPushMock).not.toHaveBeenCalled();
+    });
   });
 
   it('confirming dialog with empty canvas shows an inline error (no nodes to save)', async () => {

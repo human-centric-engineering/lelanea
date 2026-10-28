@@ -131,7 +131,7 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     calls: 2,
     why: 'SELECT 1 health checks — no tenant data (the playbook’s exempt row)',
   },
-  // DAYBREAK — the framework tier's three sites, every one on a `framework_*`
+  // DAYBREAK — the framework tier's five sites, every one on a `framework_*`
   // table (the boundary check `npm run framework:boundary` holds that line).
   // These rows are a fork edit to a Sunrise-owned test, and have to be: the
   // allowlist is a literal with no seam a fork can register through — the same
@@ -153,6 +153,16 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     why: 'pgvector `<=>` nearest-neighbour self-join on framework_node_embedding — map-scoped content, not subject data',
   },
   {
+    file: 'lib/framework/modules/workflow-bindings/service.ts',
+    calls: 1,
+    why: 'a versioned template save’s locking read of one framework_module_workflow row (`FOR NO KEY UPDATE`, the lock erasure’s scrub takes), keyed by id — config, not subject data',
+  },
+  {
+    file: 'lib/framework/privacy/erasure.ts',
+    calls: 1,
+    why: 'erasure’s locking read of framework_module_workflow binding templates (`FOR NO KEY UPDATE`, narrowed by `strpos` on the folded text), core’s `eraseFromSchedules` shape — runs in erasure’s system scope across every org, on purpose',
+  },
+  {
     file: 'lib/orchestration/chat/conversation-semantic-search.ts',
     calls: 1,
     why: 'pgvector cosine-distance conversation search (extracted from the search route for the isolation harness)',
@@ -161,6 +171,16 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     file: 'lib/orchestration/chat/message-embedder.ts',
     calls: 2,
     why: 'message-embedding vector INSERT/UPDATE (Prisma cannot write vector columns)',
+  },
+  {
+    file: 'lib/orchestration/config-versions.ts',
+    calls: 4,
+    why: "a versioned save of a webhook subscription, a schedule, the escalation list or a workflow's definition locks its row before it reads the version it checks (§122 t-899, t-900): `SELECT id … FOR NO KEY UPDATE`, as erasure takes on the same rows; Prisma has no row-lock call. Keyed on the row's id (the settings row on its slug), in the caller's org context, and it returns nothing",
+  },
+  {
+    file: 'lib/orchestration/engine/run-row-lock.ts',
+    calls: 1,
+    why: "an action on a run takes the run's row lock before it reads the trace it writes back (§122 t-901): `SELECT id … FOR NO KEY UPDATE`, as erasure and the engine's writes take; Prisma has no row-lock call. Keyed on the run's id, in the caller's org context, and it returns nothing",
   },
   {
     file: 'lib/orchestration/invite-tokens.ts',
@@ -191,6 +211,26 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     file: 'lib/orchestration/llm/cost-reports.ts',
     calls: 2,
     why: 'cost aggregation windows',
+  },
+  {
+    file: 'lib/privacy/config-recipients.ts',
+    calls: 3,
+    why: 'erasure (t-791): the settings singleton (a global model, no org) and the workflow drafts and versions that could name the person, read FOR UPDATE and narrowed by a text search Prisma cannot express; deliberately system-scoped at multi, since a person must be removed from every org’s workflows, like every erasure read',
+  },
+  {
+    file: 'lib/privacy/delivery-payloads.ts',
+    calls: 4,
+    why: 'deliveries whose payload names a person (JSON containment via the GIN index) and their redaction in SQL (t-783, t-806): the subject-access read, the in-transaction pass, and the pre-pass match and its chunked writes; system-scoped at multi, like every erasure and subject-access read',
+  },
+  {
+    file: 'lib/privacy/erased-subjects.ts',
+    calls: 6,
+    why: 'the advisory lock erasure and every recipient writer share (t-805): `pg_advisory_xact_lock(hashtextextended(key, 0))`, taken by a writer and by erasure’s wait outside its transaction, which first sets `lock_timeout` with `set_config` (a bound parameter, transaction-local; with `statement_timeout` too when an erasure with a deadline caps its own transaction, t-845); its `_shared` form, which a notification send and an approval pause take so they exclude only an erasure, not each other (t-841); and `pg_try_advisory_xact_lock`, which erasure and the scheduler tick try (t-839, t-840). Prisma has no call for any of them, and they touch no table, so RLS has nothing to filter',
+  },
+  {
+    file: 'lib/privacy/run-recipients.ts',
+    calls: 10,
+    why: "erasure (t-804): the schedules and other people's runs that could name the person, read FOR NO KEY UPDATE in pages and narrowed by a text search Prisma cannot express, plus `SELECT now()` for the run pre-pass's start time (the database clock, not the app's); deliberately system-scoped at multi, since a person must be removed from every org's runs, like every erasure read. And (t-843) a running workflow's own check for erasure receipts since its run started: `data_erasure_receipt` is install-wide (no orgId), and the subquery reads only the run's own row, in the org context the engine writes it under; and erasure's pass after its commit, which lists the runs not finished or written since by id and then locks each one by id (system-scoped, as every erasure read). And (§122 t-901) the same receipt check anchored on a copy's read time rather than a run's start, for a retroactive review: install-wide receipts only. And (t-882) a run's rows in other tables — running-step turns, step-dispatch results, lease events — read by the run's id and narrowed by the same text search, for the run erasure already holds locked; system-scoped like every erasure read",
   },
 ];
 

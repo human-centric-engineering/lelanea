@@ -51,6 +51,7 @@ const { prismaFake, store, resetStore } = vi.hoisted(() => {
 vi.mock('@/lib/db/client', () => ({ prisma: prismaFake }));
 
 import { listModuleWorkflowBindings } from '@/lib/framework/modules/workflow-bindings/queries';
+import { bindingTemplateVersion } from '@/lib/framework/modules/workflow-bindings/versions';
 import { NotFoundError } from '@/lib/api/errors';
 
 function seedModule(slug: string): void {
@@ -116,6 +117,20 @@ it('flags an unpublished workflow as not dispatchable', async () => {
 
   const [view] = await listModuleWorkflowBindings('reading');
   expect(view.workflow?.hasPublishedVersion).toBe(false);
+});
+
+it('returns each binding’s template version, the one a template save sends back', async () => {
+  seedModule('reading');
+  seedWorkflow('wf-1');
+  seedBinding('reading', 'wf-1', 'module.completed');
+  store.bindings[0].inputTemplate = { to: 'ops@example.com' };
+  seedBinding('reading', 'wf-1', 'module.entered');
+
+  const views = await listModuleWorkflowBindings('reading');
+  const byEvent = new Map(views.map((v) => [v.eventType, v.version]));
+  expect(byEvent.get('module.completed')).toBe(bindingTemplateVersion({ to: 'ops@example.com' }));
+  expect(byEvent.get('module.entered')).toBe(bindingTemplateVersion(null));
+  expect(byEvent.get('module.completed')).not.toBe(byEvent.get('module.entered'));
 });
 
 it('resolves workflow to null when the workflow row is missing', async () => {

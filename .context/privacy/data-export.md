@@ -229,12 +229,14 @@ erased — `smoke:erasure` is where that assertion belongs.
 
 A table can identify a person without declaring a Prisma relation to `User` —
 and then it is invisible to a relation-based scan, **and to the erasure
-cascade**. Sunrise has two, both in the manifest by hand:
+cascade**. Sunrise has four, all in the manifest by hand:
 
-| Table               | Identified by                    | How it is matched                                    |
-| ------------------- | -------------------------------- | ---------------------------------------------------- |
-| `ContactSubmission` | `email` — no user id at all      | `email`, exactly, normalised; verified accounts only |
-| `FeatureFlag`       | `createdBy String?`, no relation | `createdBy`, as an attribution source                |
+| Table                 | Identified by                                                          | How it is matched                                                                                                                  |
+| --------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `ContactSubmission`   | `email` — no user id at all                                            | `email`, exactly, normalised; verified accounts only                                                                               |
+| `FeatureFlag`         | `createdBy String?`, no relation                                       | `createdBy`, as an attribution source                                                                                              |
+| `AiWebhookDelivery`   | `destination` — an email-channel delivery's address; and its `payload` | `destination` (or a `previousDestinations` entry), exactly, normalised, verified accounts only; or the payload naming them (below) |
+| `AiEventHookDelivery` | its `payload` — the subject's id, or a conversation or run of theirs   | JSON containment on `payload.data`, through `lib/privacy/delivery-payloads.ts`                                                     |
 
 The guard casts **two nets**, because the first one missed both of these:
 
@@ -251,8 +253,43 @@ note, not an escape hatch — anything added to it still owes a reader a reason.
 
 Being invisible to the cascade means erasure needs its own step for each.
 `eraseUser()` deletes `ContactSubmission` rows through the same matcher the
-manifest uses (`contactSubmissionsOf()`); see
-[What `eraseUser()` Does Beyond the Cascade](./data-erasure.md#what-eraseuser-does-beyond-the-cascade).
+manifest uses (`contactSubmissionsOf()`), and redacts the address on
+`AiWebhookDelivery` rows through `webhookDeliveriesAddressedTo()` — a
+delivery outlives its subscription (§109 t-739), so the address a
+notification was emailed to stays on the row after the exported subscription
+is gone. And it redacts the subject from every delivery whose payload names
+them (t-783) — by their id (`userId`, `actorUserId`, `approverUserIds`), or the
+`conversationId` or `executionId` of a conversation or run of theirs.
+
+The export carries the same rows, matched by the same rule
+(`deliveriesNamingSubject()`), in two sections:
+
+- **`webhookDeliveries`** — each row with when, which event and whether it was
+  delivered, plus `sentTo` (the subject's own address, when it was emailed to
+  them) and `about` (when its payload names them). A row can carry both.
+  `sentTo` is never the row's `destination` or history, which after a
+  re-pointed retry can name a second person's inbox.
+- **`eventHookDeliveries`** — the same, with `about` only: a hook's URL is the
+  org's.
+
+`about` is `{ basis, data }`. For an event about the subject's own activity
+(`basis: 'activity'`) `data` is which event it was (`EVENT_RECORD_KEYS`) and
+what it said about them — an escalation's `reason` and `metadata`, an
+approval's `prompt`, a failure's message (`SUBJECT_TEXT_KEYS`). Nothing else:
+an event about their run can also carry the org's own configuration — a
+notification step's `webhookUrl`, which often holds a credential, approval
+links, the `body` an admin's template rendered — and that is not theirs. For a
+change they made (`basis: 'actor'`) it is which change — the agent, workflow
+or capability, not the change itself, which is the org's configuration, as an
+`attribution` source hands back the fact of authorship rather than the config.
+Other people never appear: not the colleagues in an approval's
+`approverUserIds` (a subject named there sees `approverUserIds: [themselves]`),
+not an administrator who force-failed the subject's run, nor the note they
+gave — on an admin action (`ADMIN_ACTION_EVENTS`) the free text is the
+admin's, even when the run it acted on is the subject's, and so is the
+`errorMessage` on the `workflow.failed` a force-fail also emits
+(`source: 'admin-force-fail'`).
+See [What `eraseUser()` Does Beyond the Cascade](./data-erasure.md#what-eraseuser-does-beyond-the-cascade).
 
 **Neither net can reach `ContactSubmission`.** It holds no user id in any
 column, only an email, so no mechanical scan finds it. That is the residual gap,
@@ -279,28 +316,40 @@ email verification off anyone can open an account under someone else's. So
 `ContactSubmission` is exported (and erased) only for an account whose
 `emailVerified` is true — `contactSubmissionsOf()` in
 `lib/privacy/contact-submissions.ts` returns no match otherwise. The app
-collector below receives `userId` and `email` only, so a fork table filled by
-an unauthenticated writer should read `emailVerified` off the user row itself.
+collector below is passed `emailVerified` too, so a fork table filled by an
+unauthenticated writer applies the same rule from it rather than reading the
+user row again.
 
 ## Extending It — the App Seam
 
 Fill in `collectAppSubjectData()` in `lib/app/data-export.ts`. It receives the
-subject's `userId` and `email` and returns sections that land under `app` in the
-bundle:
+subject's `userId`, `email` and `emailVerified`, and returns sections that land
+under `app` in the bundle.
+
+**`emailVerified` is passed but not declared.** `AppSubjectQuery` in the
+scaffold names only `userId` and `email`, and Sunrise does not edit that file
+once released. To read the flag, add it to your own copy of the type —
+`emailVerified: boolean;` — and core's call still type-checks either way,
+because it passes an object carrying all three fields. Only match rows by address when it is `true`:
 
 ```ts
 import { prisma } from '@/lib/db/client';
 import type { AppSubjectQuery, AppSubjectData } from '@/lib/app/data-export';
 
+// Assumes you added `emailVerified: boolean` to your `AppSubjectQuery`.
 export async function collectAppSubjectData({
   userId,
   email,
+  emailVerified,
 }: AppSubjectQuery): Promise<AppSubjectData> {
   const [invoices, enquiries] = await Promise.all([
     prisma.appInvoice.findMany({ where: { userId }, omit: { gatewayToken: true } }),
     // Exact, normalised the way YOUR enquiry writer normalises — this assumes it
-    // stores `emailSchema` output. See "Tables With No `User` FK".
-    prisma.appEnquiry.findMany({ where: { email: email.trim().toLowerCase() } }),
+    // stores `emailSchema` output. See "Tables With No `User` FK". An unproven
+    // address gets none: a public form records whatever address was typed.
+    emailVerified
+      ? prisma.appEnquiry.findMany({ where: { email: email.trim().toLowerCase() } })
+      : [],
   ]);
 
   return { invoices, enquiries };
@@ -418,10 +467,12 @@ second — it is never silently overwritten.
 
 ### What a malformed declaration does
 
-A row is dropped, with `logger.error`, if it has an empty model or section, a
-disposition that is neither `export` nor `attribution`, a description under 10
-characters, an exclusion reason under 20, a section already in use, a model
-claimed by another tier, or the same model as both a source and an exclusion.
+A row is dropped, with `logger.error`, if it is not an object (`null`, say), has
+an empty or non-string model or section, a disposition that is neither `export`
+nor `attribution`, a description under 10 characters, an exclusion reason under
+20, a section already in use, a model claimed by another tier, or the same model
+as both a source and an exclusion. An accepted exclusion keeps only `model` and
+the trimmed `reason`, since that is what `meta.excluded` shows the subject.
 
 Dropped is not silently accepted: the model stays unaccounted for, so the
 coverage guard fails naming it. Throwing instead would abort the rest of your

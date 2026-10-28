@@ -13,6 +13,8 @@ import { Prisma } from '@prisma/client';
 import { errorResponse } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logging';
+import { OwnerReadRefusedError } from '@/lib/db/owner-extension';
+import { isUniqueViolationOn, UNIQUE_CONSTRAINTS } from '@/lib/db/unique-violation';
 
 /**
  * Error code constants for consistent error handling across the API
@@ -31,6 +33,10 @@ export const ErrorCodes = {
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   // Conflict errors
   CONFLICT: 'CONFLICT',
+  // A save of a record that changed since it was loaded (412), or one that did
+  // not say which version it was loaded at (428) — `lib/api/record-version.ts`
+  STALE_RECORD: 'STALE_RECORD',
+  PRECONDITION_REQUIRED: 'PRECONDITION_REQUIRED',
   // File upload errors
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
   INVALID_FILE_TYPE: 'INVALID_FILE_TYPE',
@@ -163,6 +169,42 @@ export class ConflictError extends APIError {
 }
 
 /**
+ * A save of a record that has changed since the caller loaded it (412).
+ *
+ * The caller's `If-Match` names the version it loaded, and the record has
+ * moved on: another admin saved it, or an erasure scrubbed it. Nothing was
+ * written. The client reloads and makes its change again.
+ *
+ * @see lib/api/record-version.ts
+ */
+export class StaleRecordError extends APIError {
+  constructor(
+    message: string = 'This changed since you opened it. Reload to see the current version, then make your change again.'
+  ) {
+    super(message, ErrorCodes.STALE_RECORD, 412);
+    this.name = 'StaleRecordError';
+  }
+}
+
+/**
+ * A save that did not say which version of the record it was loaded at (428).
+ *
+ * The message is written for the admin who sees it, since forms show a
+ * route's message as it stands; an API client acts on the code, and the
+ * docs say what to send (`If-Match`, with the version its read returned).
+ *
+ * @see lib/api/record-version.ts
+ */
+export class PreconditionRequiredError extends APIError {
+  constructor(
+    message: string = 'This save did not say which version it was based on. Reload and try again.'
+  ) {
+    super(message, ErrorCodes.PRECONDITION_REQUIRED, 428);
+    this.name = 'PreconditionRequiredError';
+  }
+}
+
+/**
  * Centralized error handler for API routes
  *
  * Handles APIError instances, Zod validation errors, Prisma errors,
@@ -200,6 +242,16 @@ export function handleAPIError(error: unknown): Response {
     });
   }
 
+  // A narrowed caller's read of another member's rows (§115). Answered as the
+  // 404 a missing row gets, so the refusal does not confirm the row exists;
+  // the log line above carries the model and operation for whoever debugs it.
+  if (error instanceof OwnerReadRefusedError) {
+    return errorResponse('Resource not found', {
+      code: ErrorCodes.NOT_FOUND,
+      status: 404,
+    });
+  }
+
   // Handle Zod validation errors
   if (error instanceof z.ZodError) {
     // Transform Zod errors into a more readable format
@@ -222,19 +274,26 @@ export function handleAPIError(error: unknown): Response {
 
   // Handle Prisma errors
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    // Unique constraint violation (e.g., duplicate email)
+    // Unique constraint violation. Only a duplicate email is EMAIL_TAKEN,
+    // which clients render as "this email address is already registered".
+    // Any other collision keeps the 400 it always had, as VALIDATION_ERROR: the
+    // value is taken. Some routes answer 409 for "a concurrent change, please
+    // retry" and send every other unique violation here to tell the two apart
+    // (agent PATCH and import, bulk, instructions revert, backup import), and
+    // the knowledge section editor reads any 409 as an edit conflict (t-796).
     if (error.code === 'P2002') {
-      const rawTarget = error.meta?.target;
-      const target =
-        Array.isArray(rawTarget) && rawTarget.every((v): v is string => typeof v === 'string')
-          ? rawTarget
-          : [];
-      const field = target[0] || 'field';
-
-      return errorResponse(`${field.charAt(0).toUpperCase() + field.slice(1)} already exists`, {
-        code: ErrorCodes.EMAIL_TAKEN,
+      if (isUniqueViolationOn(error, UNIQUE_CONSTRAINTS.userEmail)) {
+        return errorResponse('Email already exists', {
+          code: ErrorCodes.EMAIL_TAKEN,
+          status: 400,
+          details: { field: 'email', constraint: 'unique' },
+        });
+      }
+      // No `details`: a VALIDATION_ERROR's details are a field → messages
+      // map, and the error does not say which field collided.
+      return errorResponse('A record with that value already exists', {
+        code: ErrorCodes.VALIDATION_ERROR,
         status: 400,
-        details: { field, constraint: 'unique' },
       });
     }
 

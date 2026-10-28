@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import '@/app/globals.css';
 import '@/app/brand-theme.css'; // fork-owned per-surface palette; must cascade after globals
 import { ThemeProvider } from '@/hooks/use-theme';
+import { NO_FLASH_THEME_SCRIPT } from '@/lib/theme';
 import { ErrorHandlingProvider } from '@/app/error-handling-provider';
 import { ConsentProvider } from '@/lib/consent';
 import { CookieBanner } from '@/components/cookie-consent';
@@ -62,24 +63,7 @@ export default async function RootLayout({
           nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
-            // LELAÑEA divergence (row 2): upstream also WROTE the resolved
-            // system preference back to localStorage here, which made "no
-            // choice yet" indistinguishable from "chose light" from the second
-            // visit onward — so a later OS switch was never followed. Decision
-            // D4 wants the system preference as the default and only the toggle
-            // to persist. Reading without writing is the whole fix; the storage
-            // key and the class remain the platform's.
-            __html: `
-              (function() {
-                try {
-                  const stored = localStorage.getItem('theme');
-                  const theme = (stored === 'light' || stored === 'dark')
-                    ? stored
-                    : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-                  document.documentElement.classList.add(theme);
-                } catch (e) {}
-              })();
-            `,
+            __html: NO_FLASH_THEME_SCRIPT,
           }}
         />
       </head>

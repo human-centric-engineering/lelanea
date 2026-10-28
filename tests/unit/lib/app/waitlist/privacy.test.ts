@@ -9,24 +9,26 @@
  *
  * So nothing between the entry point and the table is mocked. `exportUserData()`
  * reaches `lib/app/data-export.ts` → `lib/app/leaf-data-export.ts`, and
- * `eraseUser()` reaches the hook `initLeafApp()` registers. Only Prisma and the
- * object store are stubs.
+ * `eraseUser()` reaches the hook `lib/app/leaf-erasure.ts` registers through
+ * core's lazy init (`lib/app/erasure.ts`), with no boot step. Only Prisma and
+ * the object store are stubs, and the leaf erasure seam sits behind one switch
+ * so the negative case can turn it off.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads `lib/app/leaf-bootstrap.ts` and
+ * FORK NOTE — this reads `lib/app/leaf-erasure.ts` and
  * `lib/app/leaf-data-export.ts` for real, not through a mock
  * ---------------------------------------------------------------------------
  * That is the whole point of the file: mocking either seam would leave the
  * wiring — the thing that silently fails — untested, and would turn every case
  * below into an assertion about a mock.
  *
- * **What a fork should expect.** Upstream, both seams are empty: `initLeafApp()`
- * registers no erasure hook and `collectLeafSubjectData()` returns `{}`, so
+ * **What a fork should expect.** Upstream, both seams are empty:
+ * `initLeafErasureHooks()` registers no erasure hook and `collectLeafSubjectData()` returns `{}`, so
  * every case here would fail against a vanilla Daybreak. This file is Lelañea's
  * and exists only because Lelañea filled them; a fork inheriting it should
  * expect to rewrite it around its own tables rather than to pin ours.
  *
- * @see lib/app/leaf-data-export.ts · lib/app/leaf-bootstrap.ts
+ * @see lib/app/leaf-data-export.ts · lib/app/leaf-erasure.ts
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -65,6 +67,8 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
       }
     };
 
+    const rawQuery = vi.fn().mockResolvedValue([]);
+    const rawExecute = vi.fn().mockResolvedValue(0);
     const userFindUnique = vi.fn();
     const userDelete = vi.fn().mockResolvedValue({ id: 'user-1' });
     const receiptCreate = vi.fn().mockResolvedValue({
@@ -75,12 +79,20 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
     const base = {
       get(_target: object, property: string | symbol): unknown {
         if (typeof property !== 'string') return undefined;
+        // Since Sunrise 0.16.0 core's export reads deliveries naming the
+        // subject, and its erasure bounds its lock waits, both in raw SQL.
+        // Neither touches the waitlist; inert here, as an empty table would be.
+        if (property === '$queryRaw') return rawQuery;
+        if (property === '$executeRaw') return rawExecute;
         if (property === 'user')
           // `findUniqueOrThrow`: core's erasure reads the address and its
           // verification to scope the contact-form delete (Sunrise 0.14.0).
+          // `updateMany`: since Sunrise 0.16.0 erasure clears this person from
+          // other people's pending erasures they requested as an admin.
           return {
             findUnique: userFindUnique,
             findUniqueOrThrow: userFindUnique,
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
             delete: userDelete,
           };
         // The receipt table is read by the export and written by the erasure,
@@ -116,6 +128,21 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
   });
 
 vi.mock('@/lib/db/client', () => ({ prisma }));
+
+/**
+ * The REAL `leaf-erasure.ts`, behind one switch. Off stands for "the seam
+ * registers nothing", which is what the negative case needs; on, the seam runs
+ * exactly as shipped.
+ */
+const leafErasure = vi.hoisted(() => ({ on: true }));
+vi.mock('@/lib/app/leaf-erasure', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/app/leaf-erasure')>();
+  return {
+    initLeafErasureHooks: () => {
+      if (leafErasure.on) real.initLeafErasureHooks();
+    },
+  };
+});
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -126,7 +153,6 @@ vi.mock('@/lib/storage/upload', () => ({
 
 import { exportUserData } from '@/lib/privacy/export-user';
 import { eraseUser } from '@/lib/privacy/erase-user';
-import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 import { __resetErasureCleanupHooksForTests } from '@/lib/privacy/erasure-hooks';
 import { __resetAppSubjectSourceRegistryForTests } from '@/lib/privacy/subject-source-registry';
 
@@ -149,6 +175,7 @@ const ENTRY = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  leafErasure.on = true;
   resetDelegates();
   __resetAppSubjectSourceRegistryForTests();
   __resetErasureCleanupHooksForTests();
@@ -250,8 +277,6 @@ describe('subject access (Art. 15) reaches the waitlist', () => {
 
 describe('erasure (Art. 17) reaches the waitlist', () => {
   it('deletes the entry inside the erasure transaction', async () => {
-    await initLeafApp();
-
     await eraseUser({
       userId: 'user-1',
       userEmail: 'Ada@Example.com',
@@ -272,7 +297,6 @@ describe('erasure (Art. 17) reaches the waitlist', () => {
     // look like a sensible filter to whoever added it.
     delegateFor('appWaitlistEntry').deleteMany.mockResolvedValue({ count: 1 });
 
-    await initLeafApp();
     await eraseUser({
       userId: 'user-1',
       userEmail: 'Ada@Example.com',
@@ -288,8 +312,6 @@ describe('erasure (Art. 17) reaches the waitlist', () => {
   });
 
   it('deletes BEFORE the user row goes, so the email is still readable', async () => {
-    await initLeafApp();
-
     await eraseUser({
       userId: 'user-1',
       userEmail: 'Ada@Example.com',
@@ -301,11 +323,12 @@ describe('erasure (Art. 17) reaches the waitlist', () => {
     expect(deleteOrder).toBeLessThan(userDelete.mock.invocationCallOrder[0]);
   });
 
-  it('does NOT reach the waitlist when the leaf boot hook never ran', async () => {
+  it('does NOT reach the waitlist when the leaf erasure seam registers nothing', async () => {
     // The negative case that makes the positive one mean something. Without it,
     // "the row is deleted" would pass even if the FK cascade were doing the work
     // — and the FK is `SET NULL`, which for an email-keyed row does nothing at
     // all. This is the failure the hook exists to prevent, so it is asserted.
+    leafErasure.on = false;
     await eraseUser({
       userId: 'user-1',
       userEmail: 'Ada@Example.com',
@@ -317,7 +340,6 @@ describe('erasure (Art. 17) reaches the waitlist', () => {
   });
 
   it('rolls the erasure back rather than reporting success if the delete fails', async () => {
-    await initLeafApp();
     delegateFor('appWaitlistEntry').deleteMany.mockRejectedValue(new Error('deadlock'));
 
     await expect(
