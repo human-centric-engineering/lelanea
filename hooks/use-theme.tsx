@@ -110,9 +110,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // NOT full cross-tab sync, and the distinction matters: a second tab STOPS
   // FOLLOWING once another tab writes a choice, but it does not adopt it, so it
   // can sit on the old theme until reload. Closing that needs a `storage`
-  // listener. Left alone on purpose — upstream has the same gap, so adding one
-  // would widen divergence row 2 beyond the defect daybreak#236 describes and
-  // make the eventual revert less clean.
+  // listener. Left alone on purpose — upstream's hook has the same gap, so
+  // adding one would widen divergence row 2 and make the eventual revert less
+  // clean.
   useEffect(() => {
     // Upstream only ever reached `matchMedia` when nothing was stored. This
     // subscription runs on every mount, so it must not assume the API exists:
