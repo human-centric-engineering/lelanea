@@ -30,6 +30,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ThemeProvider, useTheme } from '@/hooks/use-theme';
+import { NO_FLASH_THEME_SCRIPT } from '@/lib/theme';
 
 /** A `matchMedia` we can drive, so an OS theme change is a real event. */
 function installMatchMedia(prefersDark: boolean) {
@@ -233,12 +234,14 @@ describe('ThemeProvider', () => {
     // Two implementations of one rule: the inline script runs before React and
     // stamps the class, the hook resolves it again on mount. If the script ever
     // regains the `setItem` this file exists to remove, the first visit would
-    // silently become an explicit choice again.
+    // silently become an explicit choice again. Since Sunrise 0.16.0 the script
+    // is upstream's, in `lib/theme.ts`, so this pins that the layout still uses
+    // it and that it still only reads.
     const layout = readFileSync(path.join(process.cwd(), 'app', 'layout.tsx'), 'utf8');
-    const script = layout.slice(layout.indexOf('__html:'), layout.indexOf('</head>'));
-    expect(script).toContain("localStorage.getItem('theme')");
-    expect(script).toContain('prefers-color-scheme: dark');
-    expect(script).not.toContain('localStorage.setItem');
+    expect(layout).toContain('__html: NO_FLASH_THEME_SCRIPT');
+    expect(NO_FLASH_THEME_SCRIPT).toContain("localStorage.getItem('theme')");
+    expect(NO_FLASH_THEME_SCRIPT).toContain('prefers-color-scheme: dark');
+    expect(NO_FLASH_THEME_SCRIPT).not.toContain('setItem');
   });
 });
 

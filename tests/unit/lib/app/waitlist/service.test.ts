@@ -458,8 +458,10 @@ describe('registerWaitlistErasureHook', () => {
   it('registers the in-transaction phase under a stable name', () => {
     registerWaitlistErasureHook();
 
-    const hooks = getErasureCleanupHooks();
-    expect(hooks.map((hook) => hook.name)).toEqual([WAITLIST_ERASURE_HOOK]);
+    // The read also runs core's lazy init, which registers the framework's hook
+    // beside ours (`lib/app/erasure.ts`); only ours is under test here.
+    const hooks = getErasureCleanupHooks().filter((hook) => hook.name === WAITLIST_ERASURE_HOOK);
+    expect(hooks).toHaveLength(1);
     expect(hooks[0]?.scrubInTransaction).toBe(eraseWaitlistEntriesForUser);
     // NOT `cleanupExternal`: that phase is best-effort and its failures are
     // swallowed, which is wrong for a delete that must roll the erasure back.
@@ -470,7 +472,9 @@ describe('registerWaitlistErasureHook', () => {
     registerWaitlistErasureHook();
     registerWaitlistErasureHook();
 
-    expect(getErasureCleanupHooks()).toHaveLength(1);
+    expect(
+      getErasureCleanupHooks().filter((hook) => hook.name === WAITLIST_ERASURE_HOOK)
+    ).toHaveLength(1);
   });
 });
 
