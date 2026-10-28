@@ -15,7 +15,7 @@
  * `removedAt` filter. See the notes on each.
  *
  * @see lib/app/leaf-data-export.ts — the Art. 15 declaration and collector
- * @see lib/app/leaf-bootstrap.ts — where the Art. 17 hook is registered
+ * @see lib/app/leaf-erasure.ts — where the Art. 17 hook is registered
  * @see lib/app/user-created.ts — where the account-linking hook is registered
  * @see lib/app/waitlist/admin.ts — the admin read, the removal and the invitation
  */

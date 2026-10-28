@@ -109,8 +109,12 @@ describe('the shell is behind the edge gate', () => {
     // with the Daybreak 0.9.0 sync, t-174), `proxy.ts` matched with a bare
     // `startsWith` and locked it behind login. This case characterised that
     // defect and was flipped when it started failing, as it said it would.
+    // A pass-through, not merely "no redirect": a refusal without a Location
+    // header (a 401, or a rewrite to the login page) would lock it just the same.
     const response = await proxy(request('/apply'));
-    expect(response?.headers.get('location') ?? null).toBeNull();
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('x-middleware-next')).toBe('1');
+    expect(response?.headers.get('location')).toBeNull();
   });
 });
 

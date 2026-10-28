@@ -44,7 +44,7 @@ const MANIFEST: ReadonlyArray<{ file: string; table: string; why: string }> = [
   {
     file: 'lib/app/agent/metering.ts',
     table: 'ai_conversation',
-    why: "An aggregate over ai_cost_log behind the admin meter and a member's own usage view (filtered to their userId): ai_conversation is joined only to read the seat (contextType/contextId) of a cost row with none of its own, and no conversation column or row is returned.",
+    why: "An aggregate over ai_cost_log behind the admin meter and a member's own usage view (filtered to their userId). ai_conversation is joined only to seat a cost row with none of its own: grouped by seat, the key returned is that conversation's contextId (a seat slug, not personal data), and no other conversation column or any row is returned.",
   },
   {
     file: 'lib/app/memory/delete-conversation.ts',

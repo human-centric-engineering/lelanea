@@ -45,7 +45,7 @@ enum AppWaitlistSource {
 /// `SET NULL` — not `Cascade` — because the row survives the account: the
 /// waitlist is a record of who asked, and erasing an account should not silently
 /// re-open a place. What it must NOT do is retain the person's email and their
-/// answers, so the erasure hook registered from `lib/app/leaf-bootstrap.ts`
+/// answers, so the erasure hook registered from `lib/app/leaf-erasure.ts`
 /// deletes the row outright inside the erasure transaction. The FK's `SET NULL`
 /// is the backstop for a row the hook cannot match, not the policy.
 model AppWaitlistEntry {
@@ -79,7 +79,7 @@ model AppWaitlistEntry {
   /// they said they wanted. Calling it a deletion is how a later reader concludes
   /// the Art. 17 duty was met by a click in the admin, which it was not — erasure
   /// still DELETES the row outright, through the hook registered from
-  /// `lib/app/leaf-bootstrap.ts`, and the Art. 15 export still has to disclose a
+  /// `lib/app/leaf-erasure.ts`, and the Art. 15 export still has to disclose a
   /// removed entry because we still hold it.
   removedAt         DateTime?
   /// When a removed address was last submitted through the public form again.

@@ -164,7 +164,7 @@ import {
   getRegisteredModules,
   __resetModuleRegistryForTests,
 } from '@/lib/framework/modules/registry';
-import { WAITLIST_ERASURE_HOOK } from '@/lib/app/waitlist/service';
+import { WAITLIST_ERASURE_HOOK, eraseWaitlistEntriesForUser } from '@/lib/app/waitlist/service';
 import { publicNavItems, footerNavItems, footerLegalItems } from '@/lib/app/public-nav';
 import { protectedNavItems } from '@/lib/app/protected-nav';
 import { appAuthLandingRoute, appAuthLandingLabel } from '@/lib/app/auth-landing';
@@ -1271,7 +1271,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(hooks.map((hook) => hook.name)).toEqual([WAITLIST_ERASURE_HOOK]);
       // In-transaction phase, not the best-effort external one: a throw must
       // roll the erasure back rather than being logged and swallowed.
-      expect(hooks[0]?.scrubInTransaction).toBeTypeOf('function');
+      expect(hooks[0]?.scrubInTransaction).toBe(eraseWaitlistEntriesForUser);
       expect(hooks[0]?.cleanupExternal).toBeUndefined();
       expect(getAppStaleWriters().filter((w) => !w.file.startsWith('lib/framework/'))).toEqual([]);
 

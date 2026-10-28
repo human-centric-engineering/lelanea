@@ -1147,7 +1147,7 @@ export function listMemoryEntriesForSubject(subject: MemorySubject): Promise<Mem
 }
 
 /**
- * An org's index rows, for the org export (`leaf-data-export.ts`). Full rows, as
+ * An org's index rows, for the org export (`leaf-org-export.ts`). Full rows, as
  * an `export` source must be: Prisma never reads an `Unsupported` column, so the
  * vectors are not among them.
  */

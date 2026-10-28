@@ -363,7 +363,7 @@ export function initLeafSubjectSources(): void {
 /**
  * Collect Lelañea's own data about one subject.
  *
- * Six sections: `waitlist`, `acknowledgements`, `budget`, `turns`, `safety` and `memory`. Each is returned whether or
+ * Seven sections: `waitlist`, `acknowledgements`, `budget`, `turns`, `safety`, `memory` and `journeyRecord`. Each is returned whether or
  * not the subject has a row — an empty array, never an omitted key. A declared
  * section missing from this object makes `exportUserData()` throw, and a key
  * set to `undefined` counts as missing because `JSON.stringify` drops it.
