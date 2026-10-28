@@ -25,6 +25,218 @@ process.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-28
+
+> **Ninth tagged Daybreak release: Sunrise 0.16.0.** It carries Sunrise
+> `v0.16.0` (the providers' own web search and code execution on agents, the
+> newer model parameters, prompt caching on Claude, and the end of §122's
+> erasure stale-write work) and the framework work it called for, in two PRs:
+> [#316](https://github.com/human-centric-engineering/daybreak/pull/316) (the
+> merge, and erasure reaching module workflow binding templates) and
+> [#317](https://github.com/human-centric-engineering/daybreak/pull/317) (a
+> versioned save of a binding's template).
+>
+> **Before deploying, read Sunrise's `[0.16.0]` "What a fork has to do":
+> three migrations, each adding nullable columns only**, then
+> `npm run db:seed`.
+>
+> **Two changes are breaking.** For a leaf that filled `lib/app/erasure.ts`:
+> it is Daybreak's bridge now, so move your registrations to the new
+> `lib/app/leaf-erasure.ts`. For any API client: Sunrise's versioned saves,
+> and a module binding's template save, now need `If-Match`. **Still do not
+> switch to `multi`:** the framework's boot syncs (modules, slot definitions)
+> are not yet run per org.
+
+### Added
+
+- **Erasure: your hooks and stale writers go in the new reserved
+  `lib/app/leaf-erasure.ts`** (`initLeafErasureHooks()`; Hub t-150). Sunrise
+  0.16.0's stale-writer guard (§122) fails on any file that writes a column
+  erasure scrubs in place until it says how it knows its copy is stale, and it
+  reads only what `initAppErasureHooks()` registers. Daybreak now fills
+  `lib/app/erasure.ts` as a bridge, its eleventh, and calls your hook after the
+  framework's. **Breaking for a leaf that filled `lib/app/erasure.ts`:** move
+  its registrations to `leaf-erasure.ts`, or keeping yours on the merge drops
+  the framework's hook from every erasure. Prefix your hook names (`leaf:`); a
+  name the framework uses (`framework:`) replaces its hook. A throwing leaf
+  init rolls the framework's registrations back with its own.
+- **Four new Sunrise scaffolds are yours to fill directly** — Daybreak keeps
+  them empty: `lib/app/credential-paths.ts` (route segments that are
+  credentials, collapsed in every log), `lib/app/admin-tier-routes.ts` (your
+  org-tier admin API routes, for core's roster test), `lib/app/admin-landing.ts`
+  (where `/admin` sends an org admin) and `lib/app/own-modules.ts`. **A leaf
+  that keeps modules of its own under `lib/app/` should list them in
+  `own-modules.ts`** and delete the rows it carried for them in `VERSIONING.md`,
+  the `CUSTOMIZATION.md` §4 table and `SEAM_DEFAULTS`; Daybreak declares none,
+  since its `lib/app/` files are a leaf's public surface.
+
+### Changed
+
+- **Sunrise 0.16.0 merged** (Hub t-150). Read its "What a fork has to do"
+  before deploying: three migrations adding nullable columns, then
+  `npm run db:seed`; API clients of the versioned workflow, settings, webhook
+  and schedule saves must send `If-Match`. The framework judge's cost rows now
+  carry Claude's cache split and price cached input at the cache rate.
+- **Owner classification sees more of your columns** (Sunrise #1067, #1069). The
+  guard now reads a user-id column whose comment mentions `@relation`, and a
+  `String` named `…UserId`. An unclassified model it newly sees fails it until
+  you classify it in `lib/app/leaf-owner-classification.ts`.
+- **A save of a module workflow binding's `inputTemplate` needs `If-Match`**
+  (Hub t-151). **Breaking for an API client:** `PATCH
+  /api/v1/admin/framework/modules/:slug/workflows/:bindingId` with
+  `inputTemplate` must send the binding's `version` (now on the GET list and on
+  the POST and PATCH responses) as `If-Match`. Without it the answer is `428
+  PRECONDITION_REQUIRED`, and once the template has moved on (another save, or
+  an erasure blanking an address) `412 STALE_RECORD`, with nothing written. A
+  PATCH of `enabled` alone, and a bind, are unchanged. This is core's §122
+  protocol (`lib/api/record-version.ts`), so a client already sending
+  `If-Match` to core's versioned saves does the same here. Daybreak's admin UI
+  has no template editor, so nothing in it changes.
+
+### Fixed
+
+- **Erasure now reaches module workflow binding templates** (Hub t-150). A
+  binding's `inputTemplate` is the operator's static input to a bound
+  workflow, as a schedule's is, but erasure blanked only schedules, so an
+  erased person's address stayed in a binding and went into every run it
+  started. Erasure now blanks a verified address there, audited per binding,
+  locking each binding it rewrites as it reads it, as core does schedules, so
+  an operator's save made meanwhile waits rather than being lost. The
+  dispatcher leaves out anyone erased since it read the binding and the
+  workflow, and the member who triggered the event if they were, from the
+  run's input and from the definition it runs, under erasure's locks, as
+  core's scheduler does. An address an operator re-enters after the erasure is
+  kept. A binding edit saved from a copy read before the erasure is refused
+  (the `If-Match` entry under Changed).
+
+## [0.8.0] — 2026-10-22
+
+> **Eighth tagged Daybreak release: Sunrise 0.15.0.** It carries Sunrise
+> `v0.15.0` (external plane §109, per-org quotas and monthly spend caps §110,
+> the org-admin console §111, within-org owner isolation §115, vendor support
+> access §121, an erasure programme, Next 16.4) and the framework work it
+> called for, in two PRs:
+> [#309](https://github.com/human-centric-engineering/daybreak/pull/309) (the
+> merge, with three seams moved onto Sunrise's) and
+> [#312](https://github.com/human-centric-engineering/daybreak/pull/312) (the
+> eval sweep for org admins, and spend-cap refusals from framework calls).
+>
+> **Before deploying, read Sunrise's `[0.15.0]` "What a fork has to do":
+> 17 migrations, eight of which take locks that scale with table size**, then
+> `npm run db:seed`.
+>
+> **Three seams change hands** (below). One is **breaking for a leaf that
+> declared org-export tables**: `leafOrgSources()` is gone from
+> `lib/app/leaf-data-export.ts`; declare them in the new
+> `lib/app/leaf-org-export.ts`. **A leaf also inherits Daybreak's Hub
+> bootstrap block in `CLAUDE.md`** and must replace it with its own.
+>
+> **At `TENANCY_MODE=single`, the default, little a user sees changes**:
+> module workflow bindings a member triggers run again, and a reached spend cap
+> now says so. **Still do not switch to `multi`:** the framework's boot syncs
+> (modules, slot definitions) are not yet run per org.
+
+### Changed
+
+- **Sunrise 0.15.0 merged** (Hub t-145). After `db:migrate:deploy` and
+  `db:seed`, `db:drift-check` reports 75 probes on a vanilla Daybreak. What
+  changes for a leaf:
+  - **Org export: declare your `orgId` tables in the new reserved
+    `lib/app/leaf-org-export.ts`** (`initLeafOrgSources()`, registering with
+    core's `registerAppOrgSources({ tier: 'app', … })`). **Breaking:**
+    `leafOrgSources()` is gone from `lib/app/leaf-data-export.ts`, and with it
+    the fork-carried `getOrgDataSources()` / `getOrgExcludedSources()` in core.
+    Sunrise 0.15.0 ships the seam those stood in for (§109, Sunrise #858), and
+    Daybreak fills `lib/app/org-export.ts` as a bridge. The framework's rows now
+    sit under the org bundle's `app` key, with a summary in `meta.app`, instead
+    of beside core's sections. A throwing leaf init rolls the framework's
+    declarations back too, and the org export then refuses every org until it
+    is fixed.
+  - **Owner classification: classify your user-linked models in the new
+    reserved `lib/app/leaf-owner-classification.ts`.** Sunrise's owner layer
+    (§115) has a coverage guard that fails naming any user-linked model nobody
+    classified. Daybreak fills `lib/app/owner-classification.ts` with the
+    framework's eleven models: journeys, node states, journey events, nudges and
+    slot values are `personal`; maps, policies, module versions, workflow
+    bindings and proposals are authored config, so `not-personal`. **None is
+    `enforced`**, so framework reads behave as before (whether to enforce
+    is t-148). **Keep `@relation` out of
+    a field's comment:** the guard's parser skips such a line (Sunrise #1067),
+    so the model goes unflagged, and a correct classification of it is
+    rejected. Daybreak's own schema comments now say "no Prisma relation".
+  - **Capability seed parity: your pairs go in the new reserved
+    `lib/app/leaf-capability-seed-pairs.ts`.** Sunrise's parity test now runs
+    every seed under a strict mock (#1013). Daybreak fills
+    `lib/app/capability-seed-pairs.ts` to exempt `_framework/000-framework-boot.ts`,
+    which reconciles through the app client as server boot does. Its capability
+    rows are each class's own `functionDefinition`, so they cannot drift.
+  - **`CLAUDE.md`: replace Daybreak's Hub bootstrap block with your own** (or
+    move it to a gitignored `CLAUDE.local.md`). Sunrise no longer ships one.
+    Daybreak commits its own, so a leaf inherits it, and left alone it points
+    the leaf's agents at Daybreak's Hub project. `CLAUDE.md` now ends with
+    `@AGENTS.md`, and Next 16.4's `next dev` writes its rules there.
+
+### Fixed
+
+- **Module workflow bindings run again when a member triggers them** (Hub
+  t-145). Sunrise 0.15.0 narrows a member's request to their own rows, and the
+  run a binding starts inherited that. The execution belongs to the binding's
+  author, so the engine's own reads of it were refused, and the bound workflow
+  never ran. Platform admins were unaffected. The drain now runs across owners,
+  as core's approval resume does. The execution's owner is unchanged.
+- **An org admin can run the framework eval sweep** (Hub t-146). Run through
+  the org-tier execute route, the sweep and its passes read every member's
+  conversations, which Sunrise 0.15.0 refuses a narrowed caller, so the step
+  failed. It now reads across owners: it scores the org's conversations, not
+  the caller's. Scheduled runs and platform admins were unaffected. The org
+  wall is unchanged. **The sweep's judge calls are now always attributed to
+  the service account**, as a scheduled run's already were, never to the
+  person who ran it: each judge turn is saved as a conversation owned by its
+  actor and quotes the turn it judges, so a manual run used to put those
+  turns in the runner's own conversation history. The execution still records
+  who started it.
+- **A spend cap's refusal of a framework LLM call now says so** (Hub t-147).
+  Since Sunrise 0.15.0 the agent, org and global monthly caps hold framework
+  calls too. The supervise and score admin routes answer `402` with the cap's
+  code (`budget_exceeded`, `org_budget_exceeded` or `global_budget_exceeded`)
+  instead of a 500. The eval sweep stops at the first refusal and fails its
+  step under that code, keeping what it spent, instead of counting every
+  later conversation as failed and reporting success; the failure names the
+  conversation it left part-evaluated, which a rerun will not pick up again,
+  for the on-demand scorers. A refused rubric or metric pass audits the turns
+  it scored before it stops, and the metric pass warns when a cap refuses one
+  of its three judges while the others score. Slot extraction still
+  stores the prose without a typed value, but logs the refusal at `warn`
+  rather than `debug`. A leaf can recognise one with
+  `lib/framework/shared/spend-caps.ts` (`spendCapCodeOf`, `SpendCapRefusedError`).
+
+### Security
+
+- **Sunrise 0.15.0's security fixes reach a leaf with this release.** A leaf
+  on Daybreak 0.7.0 or older is exposed to all of them until it takes it. Read
+  Sunrise's `[0.15.0]` Security section; in short:
+  - **Platform roles.** `PATCH /api/v1/users/[id]` and
+    `POST /api/v1/users/invite` wrote the body's `role` for any caller who
+    passed `withAdminAuth`, so on a fork whose admin policy admits org admins
+    there, an org admin could make anyone a platform admin. Only a platform
+    admin can now.
+  - **Demoted admins' keys.** An `admin`-scoped API key now stops working when
+    its owner stops being a platform admin.
+  - **Org admins and the platform.** A URL an org chooses can no longer reach
+    the platform's own network, and an org's configs can no longer read the
+    platform's env vars through `${env:NAME}` templates.
+  - **Members inside one org.** A narrowed caller's reads of another member's
+    memory, conversations, messages, workflow runs, evaluations and datasets
+    are refused at the query (§115).
+  - **URLs in logs, traces, audit rows and analytics** are reduced to their
+    origin or a collapsed path.
+  - **Dependencies.** Prisma 7.10.1 clears the `deepmerge-ts` alert
+    (GHSA-ggr8-5vv4-36mx, high), and mermaid 12.2.0 the `katex` one.
+- **The framework eval sweep no longer puts members' turns in the runner's
+  conversation history** (Hub t-146, #312). Its judge calls are saved as
+  conversations owned by their actor, quoting the turn judged; they are now
+  always the service account's.
+
 ## [0.7.0] — 2026-10-10
 
 > **Seventh tagged Daybreak release: Sunrise 0.14.0.** It carries Sunrise
@@ -1163,7 +1375,12 @@ the bridge row gained a third assertion.
   are documented in [`../../CHANGELOG.md`](../../CHANGELOG.md). Only the
   leaf-contract consequence is repeated above.
 
-[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.4.0...HEAD
+[unreleased]: https://github.com/human-centric-engineering/daybreak/compare/daybreak-v0.9.0...HEAD
+[0.9.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.9.0
+[0.8.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.8.0
+[0.7.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.7.0
+[0.6.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.6.0
+[0.5.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.5.0
 [0.4.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.4.0
 [0.3.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.3.0
 [0.2.0]: https://github.com/human-centric-engineering/daybreak/releases/tag/daybreak-v0.2.0

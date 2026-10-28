@@ -3,6 +3,13 @@
  * (`./score-conversation`, t-1) and the post-hoc supervisor (`./supervise`, t-2) may only run over a
  * framework surface (`facilitation`/`module`) conversation; this loads the conversation and enforces
  * that gate once, so the two adapters can't drift on which surfaces are eligible.
+ *
+ * **Owner layer (Sunrise §115).** This read is unconfined: it reads a conversation whoever owns
+ * it, which a caller the policy narrows is refused (`OwnerReadRefusedError`). Safe at every caller
+ * today: the sweep runs it inside `runAcrossOwners`, and the admin triggers
+ * (`/admin/framework/facilitation/evaluations[/supervise]`) are platform-only — a platform admin
+ * is not narrowed. Opening one of those routes with `tier: 'org'` is a reviewed diff
+ * (`ORG_TIER_ADMIN_ROUTES`); it would need the same `runAcrossOwners` around the call.
  */
 
 import { prisma } from '@/lib/db/client';

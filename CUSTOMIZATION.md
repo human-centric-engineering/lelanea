@@ -157,6 +157,12 @@ the test.
 - [ ] Initialize database: `npm run db:migrate:dev`
 - [ ] Start dev server: `npm run dev`
 - [ ] Test at `http://localhost:<your port>`
+- [ ] **If your fork is coordinated through the HCE Hub**, put its bootstrap
+      (from the Hub's `get_project_bootstrap` tool) in your copy of
+      `CLAUDE.md`, or in a gitignored `CLAUDE.local.md` per checkout. Sunrise
+      ships no bootstrap of its own. If you replaced the block between the old
+      `hce-hub:bootstrap` markers, the sync that removed Sunrise's copy
+      conflicts once: keep your block
 
 ### Claiming your own dev port
 
@@ -443,10 +449,14 @@ small and conflict-free.)
 | `lib/app/env.ts`                           | server env vars (`appEnvSchema`)                                                    | `lib/env.ts` startup parse (server)                                                                                                |
 | `lib/app/rate-limit.ts`                    | rate-limit tiers / rules                                                            | rate-limit middleware (middleware runtime)                                                                                         |
 | `lib/app/protected-routes.ts`              | extra authed route prefixes (append)                                                | `proxy.ts` edge redirect-to-login (proxy runtime)                                                                                  |
+| `lib/app/credential-paths.ts`              | route patterns whose segments are credentials (`[param]` in logs)                   | `collapseDynamicSegments()` → proxy, guards, error reports, Sentry, analytics (every runtime)                                      |
 | `lib/app/capabilities.ts`                  | agent capabilities (tools)                                                          | the capability registry (server route-handler)                                                                                     |
 | `lib/app/context-contributors.ts`          | prompt-context loaders (`buildContext` types)                                       | the chat context builder (server route-handler)                                                                                    |
 | `lib/app/admin-nav.ts`                     | admin sidebar sections                                                              | `admin-sidebar.tsx` (client)                                                                                                       |
 | `lib/app/leaf-admin-nav.ts`                | admin sidebar sections (your leaf's)                                                | `admin-sidebar.tsx` (client), via `admin-nav.ts`                                                                                   |
+| `lib/app/admin-tier.ts`                    | the fork's admin pages an org admin may open                                        | `orgTierAdminPages()` → the admin layout (server), which hands the list to `<AdminTierGate>`                                       |
+| `lib/app/admin-tier-routes.ts`             | the fork's admin API routes an org admin may call (`path#NAME`)                     | `tests/unit/scripts/ci/admin-tier-roster.test.ts` (CI / `/pre-pr`); the guard reads the call site                                  |
+| `lib/app/admin-landing.ts`                 | where an org admin lands at `/admin`                                                | `orgAdminLanding()` → `app/admin/page.tsx` (server)                                                                                |
 | `lib/app/db-drift.ts`                      | Prisma-unmodelled DB objects                                                        | `scripts/db/check-drift.ts` (CI / `/pre-pr`)                                                                                       |
 | `lib/app/leaf-db-drift.ts`                 | Prisma-unmodelled DB objects (your leaf's)                                          | `scripts/db/check-drift.ts` (CI / `/pre-pr`), via `db-drift.ts`                                                                    |
 | `lib/app/ci.ts`                            | coverage exclusions / always-run tests / ownerless-surface exceptions               | `vitest.config.ts` + `scripts/ci/scoped-tests.ts` + `lib/orchestration/access/ownerless-surfaces.ts` (CI / `/pre-pr`)              |
@@ -454,11 +464,14 @@ small and conflict-free.)
 | `lib/app/llm-providers.ts`                 | which LLM providers may be used                                                     | `resolveEligibleProviders` on first use (server)                                                                                   |
 | `lib/app/public-nav.ts`                    | public nav / footer link lists                                                      | `public-nav.tsx`, `public-footer.tsx` (client)                                                                                     |
 | `lib/app/protected-nav.ts`                 | authenticated nav link list                                                         | `protected-nav.tsx` (client)                                                                                                       |
+| `lib/app/footer.ts`                        | the footer's attribution / copyright line (`footerCopyright`)                       | `public-footer.tsx`, `protected-footer.tsx` (client)                                                                               |
 | `lib/app/auth-landing.ts`                  | where a signed-in user lands, and its label                                         | `lib/auth-landing/route.ts` → a dozen sites (proxy + server + client)                                                              |
 | `lib/app/emails.ts`                        | auth email template overrides                                                       | `lib/email/registry.ts` (server)                                                                                                   |
 | `lib/app/bootstrap.ts`                     | one-time server boot work (`initApp`)                                               | `instrumentation.ts` `register()` (server, all envs)                                                                               |
 | `lib/app/leaf-bootstrap.ts`                | one-time server boot work (your leaf's)                                             | `instrumentation.ts` `register()` (server, all envs), via `bootstrap.ts`                                                           |
 | `lib/app/user-created.ts`                  | react to a new account (`initAppUserCreatedHooks`)                                  | better-auth `user.create.after` (server)                                                                                           |
+| `lib/app/erasure.ts`                       | erasure cleanup for your data (`initAppErasureHooks`)                               | `eraseUser()` via `getErasureCleanupHooks()` (server)                                                                              |
+| `lib/app/leaf-erasure.ts`                  | erasure cleanup for your data, and your stale writers (your leaf's)                 | `eraseUser()` + the stale-writer guard (server + test), via `erasure.ts`                                                           |
 | `lib/app/jobs.ts`                          | recurring background work (`initAppJobs`)                                           | the maintenance tick (server)                                                                                                      |
 | `lib/app/eslint.config.mjs`                | ESLint import-boundary blocks (fork tiers)                                          | root `eslint.config.mjs` spread (lint)                                                                                             |
 | `lib/app/knowledge-access-contributors.ts` | extra docs for a restricted agent                                                   | `resolveAgentDocumentAccess()` (server route-handler)                                                                              |
@@ -469,6 +482,10 @@ small and conflict-free.)
 | `lib/app/surface.ts`                       | which URLs count as `admin` vs `consumer`                                           | `proxy.ts` classification + `<SurfaceSync>` (proxy + client)                                                                       |
 | `lib/app/data-export.ts`                   | subject-access export: tables + declarations                                        | `exportUserData()` + the coverage guard (server + test)                                                                            |
 | `lib/app/leaf-data-export.ts`              | leaf tables in a subject-access export                                              | `exportUserData()` (server route-handler), via `data-export.ts`                                                                    |
+| `lib/app/org-export.ts`                    | a fork's own `orgId` tables in the org export (`initAppOrgSources`)                 | `exportOrgData()` + the org-manifest coverage guard (server + test)                                                                |
+| `lib/app/leaf-org-export.ts`               | a fork's own `orgId` tables in the org export (your leaf's)                         | `exportOrgData()` + the org-manifest coverage guard (server + test), via `org-export.ts`                                           |
+| `lib/app/owner-classification.ts`          | which of a fork's models are private to one person                                  | `enforcedModels()` → the owner layer + the classification coverage guard (server + test)                                           |
+| `lib/app/leaf-owner-classification.ts`     | which of a fork's models are private to one person (your leaf's)                    | `enforcedModels()` → the owner layer + the classification coverage guard (server + test), via `owner-classification.ts`            |
 | `lib/app/mcp-resources.ts`                 | app-owned MCP resource types + URI scheme                                           | the MCP resource registry (server route-handler)                                                                                   |
 | `lib/app/evaluations.ts`                   | app evaluation graders (`initAppGraders`)                                           | the grader registry (server route-handler)                                                                                         |
 | `lib/app/account-sections.ts`              | extra sections on `/profile` + `/settings`                                          | `<AccountSections/>` on both account pages (server)                                                                                |
@@ -476,7 +493,11 @@ small and conflict-free.)
 | `lib/app/brand.ts`                         | product name, legal entity, meta description                                        | `lib/brand.ts` → metadata, footers, `<BrandMark>`, emails (server + client)                                                        |
 | `lib/app/leaf-brand.ts`                    | product name, legal entity, meta description (leaf)                                 | `lib/app/brand.ts` → `lib/brand.ts` (server + client)                                                                              |
 | `lib/app/reserved-tiers.ts`                | which reserved tiers THIS checkout occupies                                         | `tests/unit/reserved-fork-tiers.test.ts` + the metadata guard (test)                                                               |
+| `lib/app/own-modules.ts`                   | a leaf fork's own `lib/app/` modules, which are not seams                           | `tests/helpers/app-scaffolds.ts` → the seam-coverage guards (test)                                                                 |
+| `lib/app/capability-seed-pairs.ts`         | capability class per seeded slug; seeds the parity mock cannot run                  | `tests/unit/prisma/seeds/capability-class-seed-parity.test.ts` (test)                                                              |
+| `lib/app/leaf-capability-seed-pairs.ts`    | capability class per seeded slug; seeds the parity mock cannot run (your leaf's)    | `tests/unit/prisma/seeds/capability-class-seed-parity.test.ts` (test), via `capability-seed-pairs.ts`                              |
 | `lib/app/authorization.ts`                 | who may administer, and over whose data                                             | `withAuth` / `withAdminAuth` / the admin layout (server)                                                                           |
+| `lib/app/tenant-resolver.ts`               | which org a request is acting in (`registerAppTenantResolver`)                      | `proxy.ts` at module load → the `x-sunrise-org` header (proxy runtime)                                                             |
 | `lib/app/platform-agents.ts`               | agents every org gets its own instance of (`initAppPlatformAgents`)                 | the platform-agent registry → its reconcile (org creation, seed, maintenance tick)                                                 |
 | `lib/app/leaf-platform-agents.ts`          | agents every org gets its own instance of (your leaf's)                             | the platform-agent registry → its reconcile, via `platform-agents.ts`                                                              |
 | `lib/app/provider-credentials.ts`          | where a provider's API key comes from (`initAppProviderCredentials`)                | the provider manager, every time a provider is fetched (server)                                                                    |
@@ -512,6 +533,25 @@ small and conflict-free.)
 > reading a seam unmocked has one, and its docblock is honest about the shapes a
 > grep cannot catch. If you hit a core test that moves when you fill a seam and
 > it has **no** note, that is a bug worth filing.
+
+**Your own modules in `lib/app/` — `lib/app/own-modules.ts`.** Three core
+checks treat every entry in `lib/app/` as a seam owed a row: VERSIONING.md's
+Covered list, the table above, and `SEAM_DEFAULTS`. If you are a **leaf fork**
+(nobody forks you) and keep modules of your own there, list them instead of
+adding those rows:
+
+```ts
+export const appOwnModules: readonly string[] = ['lib/app/questionnaire/', 'lib/app/pricing.ts'];
+```
+
+A directory takes a trailing slash, a file none. All three checks skip what you
+list. An entry that names nothing, or that still has a row in VERSIONING.md,
+this table or `SEAM_DEFAULTS` (which every Sunrise seam has), fails the
+seam-coverage tests, so delete the rows you added for those modules before this
+file existed. Unlike other seams, filling this one needs no `SEAM_DEFAULTS`
+pin: its row checks your entries rather than asserting the file is empty. **A fork others build on should not declare**: its `lib/app/`
+modules are its own forks' public surface, and the VERSIONING.md rows are how
+they hear about a breaking change.
 
 **Why one file per concern and not one bootstrap call?** Next.js bundles middleware,
 server route-handlers, and the client as three separate module realms — a
@@ -702,7 +742,30 @@ The proxy **merges** these with the core prefixes (`/dashboard`, `/settings`,
 "is-logged-in-at-all" edge gate; per-resource ownership/membership checks stay in
 the `withAuth` / `withAdminAuth` guards. Malformed entries (anything not starting
 with `/`, including an empty string that would otherwise match every path) are
-dropped, so a typo can't lock the whole app behind the login redirect.
+dropped, so a typo can't lock the whole app behind the login redirect. Matching
+is by whole path segment: `/projects` covers `/projects` and `/projects/…`, not
+a public `/projectsroadmap` beside it.
+
+**Credential path segments — `lib/app/credential-paths.ts`.** When a route
+puts a credential in its path (a share, invite, join or room code, where holding
+the URL is the access), declare its pattern here so the code never reaches a log
+line, an error report or your analytics provider:
+
+```typescript
+// lib/app/credential-paths.ts — yours to edit (ships empty)
+export const appCredentialPaths: readonly string[] = ['/possibilities/[publicRef]', '/m/[joinRef]'];
+```
+
+Every logged, reported or analytics path goes through `collapseDynamicSegments()`
+(`lib/logging/redact-path.ts`). On its own it guesses from shape and leaves
+anything under 20 characters, so an 8-character room code would be logged on
+every request. A declared segment becomes `[param]` whatever its length. Write
+the pattern the way the route's folders are named: `[name]` for one segment,
+`[...name]` or `[[...name]]` for every segment from there on, with a literal
+first segment, leaving out route groups `(name)` and slots `@name`, which are
+not in the URL. A pattern covers the paths below it and matches further into a
+path (behind a `basePath` or a locale prefix). A malformed entry is skipped and
+`tests/unit/lib/logging/redact-path.test.ts` fails, naming it.
 
 **Agent capabilities — `lib/app/capabilities.ts`.** Fill in the auto-wired
 `initAppCapabilities()` with `registerAppCapability(new YourTool())` calls (your
@@ -745,7 +808,91 @@ dedupe key, and the heading's accessible name, so a wordmark image can't cost yo
 the label. (Daybreak fills `lib/app/admin-nav.ts` to register its own "Framework"
 section and then calls `initLeafAdminNav()`, so you edit the reserved
 `leaf-admin-nav.ts` seam it delegates to — never `admin-nav.ts` itself, which
-would conflict on a Daybreak upgrade.)
+would conflict on a Daybreak upgrade.) An item is shown to platform admins
+only unless it carries `tier: 'org'`, which also shows it to an org OWNER/ADMIN
+at `multi`. Mark it only when the page and the routes behind it are org-tier
+too (see [Authorization → Admin tiers](./.context/auth/authorization.md#admin-tiers)).
+
+**Org-tier admin pages — `lib/app/admin-tier.ts`.** Every admin page is the
+platform admins' alone unless it is listed as org-tier. Core lists its own in
+`ORG_TIER_ADMIN_PAGES`; list yours in the auto-wired
+`initAppOrgTierAdminPages()`:
+
+```ts
+// lib/app/admin-tier.ts — yours to edit (ships empty)
+import { registerOrgTierAdminPage } from '@/lib/auth/admin-tier';
+
+export function initAppOrgTierAdminPages(): void {
+  registerOrgTierAdminPage('/admin/reports');
+  registerOrgTierAdminPage('/admin/reports/[id]');
+}
+```
+
+A pattern is the page's path under `app/`: literal segments and `[x]` dynamic
+ones, nothing else (no route group, catch-all or trailing slash). It covers
+that one page, not the pages below it. Your pages go in a section of your own:
+the registrar throws on a pattern whose first segment is dynamic
+(`/admin/[slug]` would name every admin page) or is one of core's sections
+(`CORE_ADMIN_SECTIONS` — `orchestration`, `users` and the rest), so your list
+can never open a core page. Opening a page takes three declarations, each in
+your own files: the page here, its routes with
+`withAdminAuth(handler, { tier: 'org', ownership })`, and its nav item with
+`tier: 'org'` in `lib/app/leaf-admin-nav.ts`.
+`tests/unit/scripts/ci/admin-tier-roster.test.ts` fails if a listed page does
+not exist, if a listed `[x]` pattern also names a literal page beside it that
+is not listed, if an org-tier nav item points at an unlisted page, or if this
+function threw. It runs on the server only — the admin layout runs it and
+hands the list to the browser-side tier gate — and if it throws, none of its
+pages open.
+
+**Keeping core's orchestration platform-only.** Core opens its orchestration
+sections (agents, workflows, knowledge, conversations, the dashboard, costs and
+the rest) to an org OWNER/ADMIN at `multi`. If your customers are clients of a
+finished product and the orchestration layer is yours, not theirs, close it in
+the same init:
+
+```ts
+// lib/app/admin-tier.ts
+import { closeCoreOrgTierSection, registerOrgTierAdminPage } from '@/lib/auth/admin-tier';
+
+export function initAppOrgTierAdminPages(): void {
+  registerOrgTierAdminPage('/admin/leads');
+  closeCoreOrgTierSection('orchestration');
+}
+```
+
+The section's pages, nav items and admin API routes then admit platform admins
+only, as an undeclared surface does. Members and Support access stay open to
+org admins. A platform admin's console is unchanged. With no
+`appOrgAdminLandingRoute`, `/admin` sends an org admin to Members. If the init
+throws, nothing is closed.
+
+**Org-tier admin routes — `lib/app/admin-tier-routes.ts`.** A route opens to
+an org admin at its call site, `withAdminAuth(handler, { tier: 'org',
+ownership })`, and the roster test fails until it is listed. List yours here,
+not in core's `ORG_TIER_ADMIN_ROUTES`:
+
+```ts
+// lib/app/admin-tier-routes.ts — yours to edit (ships empty)
+export const APP_ORG_TIER_ADMIN_ROUTES: readonly string[] = [
+  'app/api/v1/app/reports/route.ts#GET',
+  'app/api/v1/app/reports/_lib/read-route.ts#withReportsRead',
+];
+```
+
+Each entry is the file's path from the repo root, `#`, then the HTTP method,
+or the name of a wrapper that bakes the tier in (list the wrapper, not each
+route that uses it). Nothing reads the list at runtime; it is how the opening
+shows in your diff. The roster test fails if a listed entry does not declare
+`tier: 'org'`, if one that declares it is listed nowhere, or if it has no
+`ownership`.
+
+**Where an org admin lands — `lib/app/admin-landing.ts`.** `/admin` sends an
+org OWNER/ADMIN to the orchestration dashboard. Point it elsewhere with
+`appOrgAdminLandingRoute = '/admin/reports'`. The page must be one they may
+open: a literal path under `/admin/` that core or `lib/app/admin-tier.ts`
+lists as org-tier, word for word (not one row of an `[x]` page). Otherwise `/admin` logs an error and uses the default, and
+the roster test fails. A platform admin still lands on the overview.
 
 **API-key scopes — `lib/app/api-key-scopes.ts`.** `AiApiKey.scopes` is a
 `String[]` in the schema, but the two places that decided what may go in it were
@@ -1005,8 +1152,9 @@ ALTER TABLE "AppUserProfile"
 > only reviews `@relation onDelete`, and your table has none. Skip the migration
 > FK and `prisma.user.delete()` either orphans your rows (a silent GDPR retention
 > violation) or throws `P2003` (erasure breaks for every user). For residual-PII
-> scrub or external cleanup the cascade can't reach, register a hook with
-> `lib/privacy/erasure-hooks.ts`. Full pattern:
+> scrub or external cleanup the cascade can't reach, register a hook from
+> `initAppErasureHooks()` in `lib/app/erasure.ts` (in a Daybreak leaf,
+> `initLeafErasureHooks()` in `lib/app/leaf-erasure.ts`). Full pattern:
 > [`.context/privacy/data-erasure.md`](./.context/privacy/data-erasure.md#app--fork-tables-relating-to-user).
 
 That hand-written FK is a **Prisma-unmodelled object**: Prisma computes desired

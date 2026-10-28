@@ -1,7 +1,7 @@
 /**
  * Tests for `lib/orchestration/backup/exporter.ts`
  *
- * Verifies that exportOrchestrationConfig() queries Prisma correctly,
+ * Verifies that exportOrchestrationConfig(SHARED_SCOPE) queries Prisma correctly,
  * assembles the backup payload structure, and excludes secrets.
  *
  * @see lib/orchestration/backup/exporter.ts
@@ -11,24 +11,53 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Mocks (declared before imports) ────────────────────────────────────────
 
+// The backup seal's key (§122 t-902). happy-dom hides the server env.
+vi.mock('@/lib/env', async (importOriginal) => ({
+  env: {
+    ...(await importOriginal<typeof import('@/lib/env')>()).env,
+    BETTER_AUTH_SECRET: 'test-secret-that-is-at-least-32-characters-long',
+  },
+}));
+
 const mockFindMany = vi.fn();
 const mockFindUnique = vi.fn();
+/** Records `model` and the tenant org each query ran in, in call order. */
+const queryLog = vi.hoisted(() => ({
+  entries: [] as { model: string; orgId: string | null | undefined }[],
+}));
+const mockTenantOrg = vi.hoisted(() => ({ read: (): string | null | undefined => undefined }));
+
+function logged(model: string) {
+  return (...a: unknown[]) => {
+    queryLog.entries.push({ model, orgId: mockTenantOrg.read() });
+    return model === 'aiOrchestrationSettings' ? mockFindUnique(...a) : mockFindMany(...a);
+  };
+}
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    aiAgent: { findMany: (...a: unknown[]) => mockFindMany(...a) },
-    aiCapability: { findMany: (...a: unknown[]) => mockFindMany(...a) },
-    aiWorkflow: { findMany: (...a: unknown[]) => mockFindMany(...a) },
-    aiWebhookSubscription: { findMany: (...a: unknown[]) => mockFindMany(...a) },
-    knowledgeTag: { findMany: (...a: unknown[]) => mockFindMany(...a) },
-    aiOrchestrationSettings: { findUnique: (...a: unknown[]) => mockFindUnique(...a) },
+    aiAgent: { findMany: logged('aiAgent') },
+    aiCapability: { findMany: logged('aiCapability') },
+    aiWorkflow: { findMany: logged('aiWorkflow') },
+    aiWebhookSubscription: { findMany: logged('aiWebhookSubscription') },
+    knowledgeTag: { findMany: logged('knowledgeTag') },
+    aiOrchestrationSettings: { findUnique: logged('aiOrchestrationSettings') },
   },
 }));
 
 // ─── Imports after mocks ─────────────────────────────────────────────────────
 
 import { exportOrchestrationConfig } from '@/lib/orchestration/backup/exporter';
+import { isSealedByThisInstall } from '@/lib/orchestration/backup/export-seal';
+import { getTenantContext } from '@/lib/tenancy/context';
+import type { BackupScope } from '@/lib/orchestration/backup/scope';
 import { BUILTIN_WORKFLOW_TEMPLATES } from '@/prisma/seeds/data/templates';
+
+// The real tenant context is used, so a query's org is observed, not assumed.
+mockTenantOrg.read = () => getTenantContext()?.orgId;
+
+const SHARED_SCOPE: BackupScope = { orgId: 'install', includeShared: true };
+const OWN_SCOPE: BackupScope = { orgId: 'org_customer', includeShared: false };
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -130,6 +159,7 @@ const settingsRow = {
 describe('exportOrchestrationConfig', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    queryLog.entries.length = 0;
   });
 
   it('returns payload with schemaVersion: 3', async () => {
@@ -141,7 +171,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.schemaVersion).toBe(3);
   });
@@ -156,13 +186,47 @@ describe('exportOrchestrationConfig', () => {
     mockFindUnique.mockResolvedValue(null);
 
     const before = new Date().toISOString();
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
     const after = new Date().toISOString();
 
     expect(typeof payload.exportedAt).toBe('string');
     // exportedAt should be a valid ISO date between before and after
     expect(payload.exportedAt.localeCompare(before)).toBeGreaterThanOrEqual(0);
     expect(payload.exportedAt.localeCompare(after)).toBeLessThanOrEqual(0);
+  });
+
+  it('stamps exportedAt before any read starts, and seals it (§122 t-902)', async () => {
+    // Each read finishes a minute after it starts, on the faked clock: an
+    // exportedAt stamped after the reads would be at least a minute late.
+    const START = new Date('2026-10-22T12:00:00.000Z');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(START);
+    try {
+      const later = <T>(value: T) => {
+        vi.setSystemTime(new Date(Date.now() + 60_000));
+        return Promise.resolve(value);
+      };
+      mockFindMany.mockImplementation(() => later([]));
+      mockFindUnique.mockImplementation(() => later(null));
+
+      const payload = await exportOrchestrationConfig(SHARED_SCOPE);
+
+      expect(payload.exportedAt).toBe(START.toISOString());
+      expect(
+        isSealedByThisInstall(
+          {
+            exportedAt: START.toISOString(),
+            orgId: 'install',
+            contacts: { subscriptions: [], escalation: [], workflows: [] },
+          },
+          payload.exportSeal
+        )
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      mockFindMany.mockReset();
+      mockFindUnique.mockReset();
+    }
   });
 
   it('maps agents array from DB rows', async () => {
@@ -174,7 +238,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.agents).toHaveLength(1);
     const exported = payload.data.agents[0];
@@ -204,7 +268,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    await exportOrchestrationConfig();
+    await exportOrchestrationConfig(SHARED_SCOPE);
 
     // First findMany call is for agents
     const firstCall = mockFindMany.mock.calls[0][0] as { where?: { isSystem?: boolean } };
@@ -220,7 +284,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.settings).toBeNull();
   });
@@ -234,11 +298,31 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(settingsRow);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.settings).not.toBeNull();
     expect(payload.data.settings?.defaultModels).toEqual({ chat: 'gpt-4o' });
     expect(payload.data.settings?.globalMonthlyBudgetUsd).toBeNull();
+  });
+
+  it('reads and exports the failed-webhook retention window (#838)', async () => {
+    mockFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
+    mockFindUnique.mockResolvedValue({ ...settingsRow, webhookDlqRetentionDays: 120 });
+
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
+
+    // The mock ignores `select`, so assert the column is actually asked for.
+    expect(mockFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ webhookDlqRetentionDays: true }),
+      })
+    );
+    expect(payload.data.settings?.webhookDlqRetentionDays).toBe(120);
   });
 
   it('webhook entries do not have a secret field (secrets are never exported)', async () => {
@@ -251,7 +335,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.webhooks).toHaveLength(1);
     expect(payload.data.webhooks[0]).not.toHaveProperty('secret');
@@ -269,9 +353,65 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.webhooks[0].channel).toBe('email');
+  });
+
+  it('seals the org and every contact address it exports, so neither can change (§122 t-902, t-900)', async () => {
+    const emailing = {
+      steps: [
+        {
+          id: 'n',
+          name: 'N',
+          type: 'send_notification',
+          config: { channel: 'email', to: 'Flow@Example.com', subject: 's', bodyTemplate: 'b' },
+          nextSteps: [],
+        },
+      ],
+      entryStepId: 'n',
+      errorStrategy: 'fail',
+    };
+    mockFindMany
+      .mockResolvedValueOnce([]) // agents
+      .mockResolvedValueOnce([]) // capabilities
+      .mockResolvedValueOnce([{ ...workflowRow, publishedVersion: { snapshot: emailing } }])
+      .mockResolvedValueOnce([
+        { ...webhookRow, channel: 'email', emailAddress: 'Ops@Example.com' },
+      ]);
+    mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
+    mockFindUnique.mockResolvedValue({
+      ...settingsRow,
+      escalationConfig: { emailAddresses: ['oncall@example.com'], notifyOnPriority: 'high' },
+    });
+
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
+
+    const facts = {
+      exportedAt: payload.exportedAt,
+      orgId: 'install',
+      contacts: {
+        subscriptions: ['ops@example.com'],
+        escalation: ['oncall@example.com'],
+        workflows: ['flow@example.com'],
+      },
+    };
+    expect(isSealedByThisInstall(facts, payload.exportSeal)).toBe(true);
+    expect(isSealedByThisInstall({ ...facts, orgId: 'org_customer' }, payload.exportSeal)).toBe(
+      false
+    );
+    expect(
+      isSealedByThisInstall(
+        { ...facts, contacts: { ...facts.contacts, escalation: [] } },
+        payload.exportSeal
+      )
+    ).toBe(false);
+    expect(
+      isSealedByThisInstall(
+        { ...facts, contacts: { ...facts.contacts, workflows: [] } },
+        payload.exportSeal
+      )
+    ).toBe(false);
   });
 
   it('returns all four data collections in the correct positions', async () => {
@@ -283,13 +423,65 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(settingsRow);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.agents).toHaveLength(1);
     expect(payload.data.capabilities).toHaveLength(1);
     expect(payload.data.workflows).toHaveLength(1);
     expect(payload.data.webhooks).toHaveLength(1);
     expect(payload.data.settings).not.toBeNull();
+  });
+
+  describe('the renamed-copy marker', () => {
+    /** Export the given workflow rows and return the metadata of each exported workflow. */
+    async function exportedMetadata(...metadata: unknown[]) {
+      const rows = metadata.map((m, i) => ({ ...workflowRow, slug: `wf-${i}`, metadata: m }));
+      mockFindMany
+        .mockResolvedValueOnce([]) // agents
+        .mockResolvedValueOnce([]) // capabilities
+        .mockResolvedValueOnce(rows) // workflows
+        .mockResolvedValueOnce([]); // webhooks
+      mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
+      mockFindUnique.mockResolvedValue(null);
+      const payload = await exportOrchestrationConfig(SHARED_SCOPE);
+      return payload.data.workflows.map((w) => w.metadata);
+    }
+
+    it('strips importedFromSlug and keeps the rest of the metadata', async () => {
+      const [meta] = await exportedMetadata({
+        owner: 'ops',
+        nested: { a: 1 },
+        importedFromSlug: 'other-org-slug',
+      });
+
+      expect(meta).toEqual({ owner: 'ops', nested: { a: 1 } });
+      expect(meta).not.toHaveProperty('importedFromSlug');
+    });
+
+    it('leaves metadata without the marker untouched', async () => {
+      const original = { owner: 'ops' };
+
+      const [meta] = await exportedMetadata(original);
+
+      expect(meta).toEqual({ owner: 'ops' });
+    });
+
+    it('exports metadata holding only the marker as an empty object', async () => {
+      const [meta] = await exportedMetadata({ importedFromSlug: 'x' });
+
+      expect(meta).toEqual({});
+    });
+
+    it.each([
+      ['null', null],
+      ['an array', ['importedFromSlug', 'x']],
+      ['a string', 'importedFromSlug'],
+      ['a number', 7],
+    ])('passes %s through unchanged', async (_label, value) => {
+      const [meta] = await exportedMetadata(value);
+
+      expect(meta).toEqual(value);
+    });
   });
 
   it('skips workflows that have no published version (no exportable snapshot)', async () => {
@@ -306,7 +498,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.workflows).toHaveLength(1);
     expect(payload.data.workflows[0].slug).toBe('onboarding-flow');
@@ -322,7 +514,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([tagRow]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.knowledgeTags).toHaveLength(1);
     expect(payload.data.knowledgeTags[0].slug).toBe('support');
@@ -343,7 +535,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.agents[0].knowledgeAccessMode).toBe('restricted');
   });
@@ -362,7 +554,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.agents[0].knowledgeAccessMode).toBe('full');
   });
@@ -389,7 +581,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     const exported = payload.data.agents[0];
     expect(exported.kind).toBe('chat');
@@ -414,7 +606,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.agents[0].grantedTagSlugs).toEqual(['billing', 'support']);
   });
@@ -436,7 +628,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.agents[0].grantedDocumentSlugs).toEqual([
       'doc-one-abc123ab',
@@ -457,7 +649,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    const payload = await exportOrchestrationConfig();
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
 
     expect(payload.data.agents[0].knowledgeCategories).toEqual([]);
   });
@@ -471,7 +663,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    await exportOrchestrationConfig();
+    await exportOrchestrationConfig(SHARED_SCOPE);
 
     // Second findMany call is for capabilities
     const capCall = mockFindMany.mock.calls[1][0] as { where?: { isSystem?: boolean } };
@@ -486,7 +678,7 @@ describe('exportOrchestrationConfig', () => {
     mockFindMany.mockResolvedValueOnce([]); // knowledgeTags
     mockFindUnique.mockResolvedValue(null);
 
-    await exportOrchestrationConfig();
+    await exportOrchestrationConfig(SHARED_SCOPE);
 
     // Third findMany call is for workflows. Two kinds are left out: a system
     // workflow, by its flag or its reserved slug (the seed's, as system agents
@@ -509,6 +701,83 @@ describe('exportOrchestrationConfig', () => {
     });
     expect([...(wfCall?.where?.NOT?.slug?.in ?? [])].sort()).toEqual(
       BUILTIN_WORKFLOW_TEMPLATES.map((t) => t.slug).sort()
+    );
+  });
+});
+
+describe('exportOrchestrationConfig — scope (§109 t-738)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    queryLog.entries.length = 0;
+    mockFindMany.mockResolvedValue([]);
+    mockFindUnique.mockResolvedValue(null);
+  });
+
+  it('runs every query inside the target org, not outside any tenant context', async () => {
+    await exportOrchestrationConfig({ orgId: 'org_customer', includeShared: true });
+
+    // All six queries ran, each seeing the target org as its tenant context.
+    expect(queryLog.entries.map((e) => e.model).sort()).toEqual([
+      'aiAgent',
+      'aiCapability',
+      'aiOrchestrationSettings',
+      'aiWebhookSubscription',
+      'aiWorkflow',
+      'knowledgeTag',
+    ]);
+    expect(queryLog.entries.every((e) => e.orgId === 'org_customer')).toBe(true);
+    // The scope does not leak out once the export has returned.
+    expect(getTenantContext()).toBeNull();
+  });
+
+  it('reads no shared-part table when includeShared is false, and emits them empty', async () => {
+    mockFindMany.mockResolvedValue([]);
+
+    const payload = await exportOrchestrationConfig(OWN_SCOPE);
+
+    expect(queryLog.entries.map((e) => e.model).sort()).toEqual([
+      'aiAgent',
+      'aiWebhookSubscription',
+      'aiWorkflow',
+    ]);
+    expect(queryLog.entries.every((e) => e.orgId === 'org_customer')).toBe(true);
+    expect(payload.data.capabilities).toEqual([]);
+    expect(payload.data.knowledgeTags).toEqual([]);
+    expect(payload.data.settings).toBeNull();
+  });
+
+  it('keeps the org-owned part when includeShared is false', async () => {
+    mockFindMany
+      .mockResolvedValueOnce([agentRow]) // agents
+      .mockResolvedValueOnce([workflowRow]) // workflows
+      .mockResolvedValueOnce([webhookRow]); // webhooks
+
+    const payload = await exportOrchestrationConfig(OWN_SCOPE);
+
+    expect(payload.data.agents.map((a) => a.slug)).toEqual(['support-bot']);
+    expect(payload.data.workflows.map((w) => w.slug)).toEqual(['onboarding-flow']);
+    expect(payload.data.webhooks.map((w) => w.url)).toEqual(['https://example.com/hook']);
+  });
+
+  it('emits capabilities, tags and settings when includeShared is true', async () => {
+    mockFindMany.mockImplementation(async () => []);
+    mockFindMany
+      .mockResolvedValueOnce([]) // agents
+      .mockResolvedValueOnce([capabilityRow]) // capabilities
+      .mockResolvedValueOnce([]) // workflows
+      .mockResolvedValueOnce([]) // webhooks
+      .mockResolvedValueOnce([{ slug: 'support', name: 'Support', description: null }]);
+    mockFindUnique.mockResolvedValue(settingsRow);
+
+    const payload = await exportOrchestrationConfig(SHARED_SCOPE);
+
+    expect(payload.data.capabilities.map((c) => c.slug)).toEqual(['web-search']);
+    expect(payload.data.knowledgeTags).toEqual([
+      { slug: 'support', name: 'Support', description: null },
+    ]);
+    expect(payload.data.settings).toMatchObject({ defaultModels: { chat: 'gpt-4o' } });
+    expect(mockFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { slug: 'global' } })
     );
   });
 });

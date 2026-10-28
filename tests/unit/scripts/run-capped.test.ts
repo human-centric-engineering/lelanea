@@ -31,8 +31,11 @@
 
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { describe, it, expect, vi } from 'vitest';
+import { z } from 'zod';
 
 import {
   BINS,
@@ -44,6 +47,7 @@ import {
   parseRequestedMb,
   resolveBin,
   resolveHeapMb,
+  unaidedLimitMb,
 } from '@/scripts/run-capped.mjs';
 
 const GB = 1024 ** 3;
@@ -109,6 +113,65 @@ describe('resolveHeapMb', () => {
       8192
     );
   });
+
+  it('hands out exactly what was asked for when there is no floor (#711)', () => {
+    // Under an inherited 6144 cap V8 reports 6336, and flooring at that handed
+    // the child 6336. Read through `unaidedLimitMb`, the floor drops out.
+    const defaultLimitMb = unaidedLimitMb({
+      nodeOptions: '--max-old-space-size=6144',
+      heapLimitBytes: 6336 * 1024 ** 2,
+    });
+    expect(resolveHeapMb({ requestedMb: 6144, totalMemBytes: 16 * GB, defaultLimitMb })).toBe(6144);
+  });
+
+  it('never returns more than the machine can back, whatever the floor (#711)', () => {
+    // The clamp is the rule the function exists to enforce, so it holds as a
+    // property: a floor or an ask above 75% of RAM still comes back at 75%.
+    for (const totalGb of [2, 4, 8, 16]) {
+      const affordable = Math.floor((totalGb * GB * MEMORY_FRACTION) / 1024 ** 2);
+      for (const defaultLimitMb of [0, 1024, 4288, 6336, 12288]) {
+        for (const requestedMb of [512, 6144, 9999]) {
+          const resolved = resolveHeapMb({
+            requestedMb,
+            totalMemBytes: totalGb * GB,
+            defaultLimitMb,
+          });
+          expect(resolved).toBeLessThanOrEqual(affordable);
+        }
+      }
+    }
+  });
+});
+
+describe('unaidedLimitMb', () => {
+  const limit = 6336 * 1024 ** 2;
+
+  it("reports V8's limit when nothing capped this process", () => {
+    expect(unaidedLimitMb({ nodeOptions: '--trace-warnings', heapLimitBytes: limit })).toBe(6336);
+  });
+
+  it('reports no floor when NODE_OPTIONS carries a cap (#711)', () => {
+    // The limit V8 reports is then the parent's cap, not Node's default.
+    expect(
+      unaidedLimitMb({
+        nodeOptions: '--max-old-space-size=6144',
+        heapLimitBytes: limit,
+      })
+    ).toBe(0);
+  });
+
+  it('keeps a command-line cap as the floor, since the child does not inherit it', () => {
+    // `node --max-old-space-size=12288 scripts/run-capped.mjs ...`: NODE_OPTIONS
+    // is clean, so the wrapper appends a cap. Dropping the floor here cut the
+    // child back to 6144, half of what the caller asked for.
+    const defaultLimitMb = unaidedLimitMb({
+      nodeOptions: '',
+      heapLimitBytes: 12480 * 1024 ** 2,
+    });
+    expect(resolveHeapMb({ requestedMb: 6144, totalMemBytes: 32 * GB, defaultLimitMb })).toBe(
+      12480
+    );
+  });
 });
 
 describe('buildEnv', () => {
@@ -143,11 +206,11 @@ describe('main', () => {
     const exit = vi.fn();
     const spawnFn = vi.fn();
 
-    await main(['tsc', '--noEmit'], { error, exit, spawnFn });
+    await main(['prettier', '--check', '.'], { error, exit, spawnFn });
 
     expect(spawnFn).not.toHaveBeenCalled();
     expect(exit).toHaveBeenCalledWith(1);
-    expect(error.mock.calls[0][0]).toContain('Unknown command "tsc"');
+    expect(error.mock.calls[0][0]).toContain('Unknown command "prettier"');
   });
 
   it('names the allowed commands so the message is actionable', async () => {
@@ -185,20 +248,7 @@ describe('main', () => {
       onSignal: vi.fn(),
     });
 
-    // This is the assertion that binds `main` to the real resolver: with
-    // nothing injected, what it emits must be what `resolveHeapMb` computes
-    // for this machine. Calling the same function rather than restating its
-    // arithmetic is what keeps that host-independent — both sides read the
-    // same host, so the runner's size cancels out.
-    //
-    // It matters because the case below injects the resolver. Without this,
-    // nothing asserts that the *default* is `resolveHeapMb` at all, and
-    // `resolveHeap = () => 512` passes the whole file — a wrapper handing V8
-    // a 512MB ceiling, green. A `/--max-old-space-size=\d+/` match, which is
-    // what stood here, cannot tell those apart.
-    expect(spawnFn.mock.calls[0][2].env.NODE_OPTIONS).toBe(
-      `--max-old-space-size=${resolveHeapMb({ requestedMb: undefined })}`
-    );
+    expect(spawnFn.mock.calls[0][2].env.NODE_OPTIONS).toMatch(/--max-old-space-size=\d+/);
   });
 
   it('defers to a cap the environment already set', async () => {
@@ -217,17 +267,6 @@ describe('main', () => {
 
   it('reads NODE_HEAP_MB as the requested cap', async () => {
     const spawnFn = vi.fn().mockReturnValue(fakeChild());
-    // Injected, so this asserts the *wiring* and not the runner. The previous
-    // version let the real clamp run and asserted the result was at least
-    // DEFAULT_HEAP_MB — a claim about the host, not about this code: true on a
-    // 16GB machine, false on the 2-core runner, which reports ~7938MB, of which
-    // 75% is 5953MB.
-    // It reds when a repo moves from GitHub's free 4-core/16GB public runner to
-    // the standard 2-core/8GB private one, with nothing in the code changed and
-    // the clamp behaving exactly as designed.
-    //
-    // Fork-carried fix for Sunrise #700 (adopted from hce-hub) — take Sunrise's
-    // version when it lands.
     const resolveHeap = vi.fn().mockReturnValue(7777);
 
     await main(['eslint', '.'], {
@@ -239,11 +278,30 @@ describe('main', () => {
       resolveHeap,
     });
 
-    // Two halves, and the first is the one the test is named for: the env var
-    // is parsed and handed on as the request. `resolveHeapMb` owns what happens
-    // to it from there, and has its own tests above for the clamping.
+    // The resolver is injected because the real one clamps to this machine's
+    // RAM: asserting the applied cap against DEFAULT_HEAP_MB failed on the
+    // ~8GB private runner ci.md tells forks to size for (#700). What `main`
+    // owns is passing the ask in and the answer on, so that is what is pinned.
     expect(resolveHeap).toHaveBeenCalledWith({ requestedMb: 9999 });
     expect(spawnFn.mock.calls[0][2].env.NODE_OPTIONS).toBe('--max-old-space-size=7777');
+  });
+
+  it('resolves with the real resolver when none is injected', async () => {
+    const spawnFn = vi.fn().mockReturnValue(fakeChild());
+
+    await main(['eslint', '.'], {
+      spawnFn,
+      env: {},
+      resolveCommand: () => '/bin/eslint',
+      exit: vi.fn(),
+      onSignal: vi.fn(),
+    });
+
+    // Compared with the resolver's own answer on this machine, not a fixed
+    // number, so it holds on any runner.
+    expect(spawnFn.mock.calls[0][2].env.NODE_OPTIONS).toBe(
+      `--max-old-space-size=${resolveHeapMb({ requestedMb: undefined })}`
+    );
   });
 
   it('forwards the child exit code', async () => {
@@ -369,6 +427,22 @@ describe('main', () => {
 
     expect(error.mock.calls[0][0]).toContain('Failed to start "eslint"');
     expect(exit).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('the bins package.json routes through the wrapper', () => {
+  it.each([
+    ['lint', 'eslint'],
+    ['type-check', 'tsc'],
+  ])('`npm run %s` launches %s through run-capped.mjs, and it is allowed', (script, bin) => {
+    // A cold type-check outgrew Node's default heap on larger forks and took
+    // `validate` down before lint ran (#693). Routing it here only helps if the
+    // allowlist agrees, or the wrapper refuses it with exit 1.
+    const { scripts } = z
+      .object({ scripts: z.record(z.string(), z.string()) })
+      .parse(JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')));
+    expect(scripts[script]).toMatch(new RegExp(`^node scripts/run-capped\\.mjs ${bin}\\b`));
+    expect(BINS).toContain(bin);
   });
 });
 

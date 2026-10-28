@@ -54,6 +54,7 @@ import {
 } from '@/lib/orchestration/agents/resolve-effective-prompt';
 import { registerStepType } from '@/lib/orchestration/engine/executor-registry';
 import { narrowReasoningEffort } from '@/lib/orchestration/llm/model-heuristics';
+import { modelParamOptions } from '@/lib/orchestration/llm/model-params';
 import { platformSlugWhere } from '@/lib/orchestration/agents/platform-agent-guard';
 import {
   LATEST_AGENT_VERSION_ID_INCLUDE,
@@ -88,11 +89,29 @@ export async function executeChatTurn(
     );
   }
 
-  // 2. Load conversation + agent in parallel.
+  // 2. Load conversation + agent in parallel. The conversation read carries
+  //    the prior messages too: user/assistant only — system rows are
+  //    auto-composed from agent settings, and tool rows belong to agent_call
+  //    paths that chat_turn deliberately doesn't replay — newest first to
+  //    honour `take`. Read through the conversation rather than by
+  //    `conversationId`: this executor has no session to narrow by, and the
+  //    owner layer (`lib/db/owner-extension.ts`) lets messages inherit the
+  //    check their conversation's read passed. One read, so the row that is
+  //    checked is the row whose history is replayed.
+  const historyLimit = config.historyLimit ?? DEFAULT_HISTORY_LIMIT;
   const [conversation, agent] = await Promise.all([
     prisma.aiConversation.findUnique({
       where: { id: conversationId },
-      select: { id: true, agentId: true },
+      select: {
+        id: true,
+        agentId: true,
+        messages: {
+          where: { role: { in: [...ROLES_TO_LOAD] } },
+          orderBy: { createdAt: 'desc' },
+          take: historyLimit,
+          select: { role: true, content: true },
+        },
+      },
     }),
     // One snapshot for the row and its newest version, so the pin names the
     // config this turn runs even if an edit commits mid-read.
@@ -187,25 +206,9 @@ export async function executeChatTurn(
   );
   const systemPrompt = composeSystemPromptString(resolvedPrompt);
 
-  // 5. Load prior messages. Order ASC so the array reads chronologically.
-  //    Restrict to user/assistant roles — system rows are auto-composed
-  //    from agent settings, and tool rows belong to agent_call paths
-  //    that chat_turn deliberately doesn't replay.
-  const historyLimit = config.historyLimit ?? DEFAULT_HISTORY_LIMIT;
-  const priorMessages =
-    historyLimit > 0
-      ? await prisma.aiMessage.findMany({
-          where: {
-            conversationId,
-            role: { in: [...ROLES_TO_LOAD] },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: historyLimit,
-          select: { role: true, content: true },
-        })
-      : [];
-  // findMany returned newest-first to honour `take`; flip to chronological.
-  const priorMessagesAsc = priorMessages.reverse();
+  // 5. Prior messages, read with the conversation in step 2.
+  //    Newest-first to honour `take`; flip to chronological.
+  const priorMessagesAsc = [...conversation.messages].reverse();
 
   // 6. Build the messages array.
   const messages: LlmMessage[] = [];
@@ -241,6 +244,7 @@ export async function executeChatTurn(
           ? { maxTokens: agent.maxTokens }
           : {}),
       ...(effectiveReasoning !== undefined ? { reasoningEffort: effectiveReasoning } : {}),
+      ...modelParamOptions(agent),
       signal: ctx.signal,
     });
   } catch (err) {
@@ -254,8 +258,12 @@ export async function executeChatTurn(
       // See the note in `llm-runner.ts`: the vendor billed this attempt.
       billedOnFailure ? billedOnFailure.inputTokens + billedOnFailure.outputTokens : 0,
       billedOnFailure
-        ? calculateCost(model, billedOnFailure.inputTokens, billedOnFailure.outputTokens)
-            .totalCostUsd
+        ? calculateCost(
+            model,
+            billedOnFailure.inputTokens,
+            billedOnFailure.outputTokens,
+            billedOnFailure
+          ).totalCostUsd
         : 0
     );
   }
@@ -268,9 +276,11 @@ export async function executeChatTurn(
   const computedCost = calculateCost(
     model,
     response.usage?.inputTokens ?? 0,
-    response.usage?.outputTokens ?? 0
+    response.usage?.outputTokens ?? 0,
+    response.usage
   );
-  const totalCostUsd = computedCost.inputCostUsd + computedCost.outputCostUsd;
+  // The total, not input + output: a web search is billed outside both.
+  const totalCostUsd = computedCost.totalCostUsd;
 
   // logCost is async but explicitly fire-and-forget per its contract.
   void logCost({
@@ -283,6 +293,11 @@ export async function executeChatTurn(
     model,
     inputTokens: response.usage?.inputTokens ?? 0,
     outputTokens: response.usage?.outputTokens ?? 0,
+    cacheReadTokens: response.usage?.cacheReadTokens,
+    cacheWriteTokens: response.usage?.cacheWriteTokens,
+    serviceTier: response.usage?.serviceTier,
+    webSearchRequests: response.usage?.webSearchRequests,
+    codeExecution: response.usage?.codeExecution,
     metadata: {
       ...(ctx.costLogMetadata ?? {}),
       stepId: step.id,

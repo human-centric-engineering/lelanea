@@ -76,7 +76,7 @@ model ModuleVersion {
   version       Int // monotonic per module, from 1
   snapshot      Json // the full Module.config as of this version (point-in-time)
   changeSummary String?  @db.Text
-  createdBy     String? // FK to User.id — no @relation; ON DELETE SET NULL hand-written in the migration
+  createdBy     String? // FK to User.id — no Prisma relation; ON DELETE SET NULL hand-written in the migration
   createdAt     DateTime @default(now())
 
   module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
@@ -114,7 +114,7 @@ model ModuleKnowledgeDocument {
   orgId      String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
   org        Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   moduleId   String
-  documentId String // FK to AiKnowledgeDocument.id — no @relation; ON DELETE CASCADE hand-written in the migration
+  documentId String // FK to AiKnowledgeDocument.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration
   createdAt  DateTime @default(now())
 
   module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
@@ -130,7 +130,7 @@ model ModuleKnowledgeTag {
   orgId     String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
   org       Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   moduleId  String
-  tagId     String // FK to KnowledgeTag.id — no @relation; ON DELETE CASCADE hand-written in the migration
+  tagId     String // FK to KnowledgeTag.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration
   createdAt DateTime @default(now())
 
   module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
@@ -171,10 +171,10 @@ model ModuleWorkflowBinding {
   org           Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   moduleId      String
   eventType     String // the module-lifecycle event that fires this (free-form, X1)
-  workflowId    String // FK to AiWorkflow.id — no @relation; ON DELETE CASCADE hand-written in the migration
+  workflowId    String // FK to AiWorkflow.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration
   inputTemplate Json? // operator's static input, merged under the event envelope at dispatch
   enabled       Boolean  @default(true) // gate firing without deleting the binding
-  createdBy     String? // FK to User.id — no @relation; ON DELETE SET NULL hand-written (retain on erasure)
+  createdBy     String? // FK to User.id — no Prisma relation; ON DELETE SET NULL hand-written (retain on erasure)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -210,7 +210,7 @@ model ModuleAgentBinding {
   orgId     String? // org this row belongs to (§34 f-framework-tenancy / Sunrise §107); backfilled to the install org, NOT NULL is a later stage
   org       Org?     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   moduleId  String
-  agentId   String // FK to AiAgent.id — no @relation; ON DELETE CASCADE hand-written in the migration
+  agentId   String // FK to AiAgent.id — no Prisma relation; ON DELETE CASCADE hand-written in the migration
   role      String // one of the module's declared agentRoles (validated at bind time)
   isPrimary Boolean  @default(false) // the module's lead seat (e.g. chat companion); ≤ 1 per module
   config    Json? // per-binding overrides (tone hints, etc.), opaque to the framework

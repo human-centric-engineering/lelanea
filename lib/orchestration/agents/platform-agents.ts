@@ -33,7 +33,7 @@
  * Server-only (`node:crypto`).
  */
 import { createHash } from 'node:crypto';
-import type { AiAgent } from '@prisma/client';
+import type { AiAgent, AiProviderConfig, AiProviderModel } from '@prisma/client';
 
 import { initAppPlatformAgents } from '@/lib/app/platform-agents';
 import { createAppInitGate, restoreMap } from '@/lib/fork-init';
@@ -90,6 +90,63 @@ export interface PlatformAgentBinding {
   model: string;
 }
 
+/**
+ * The provider and model rows a `defaultBinding` picks from (t-816). Both
+ * tables are global, so the rows are the same for every org; only which of
+ * them an org may use differs, and that is the pick's to ask, in the org's
+ * scope (policy, eligibility, credential). The maintenance job hands every
+ * org of one run the same catalogue, so a pass over N orgs reads each table
+ * once rather than N times. Every other caller gets a fresh one.
+ *
+ * Each read is made on first use, through the `db` of whichever caller asks
+ * first, and kept for the catalogue's life; a read that fails is not kept, so
+ * the next org asks again. So a provider or model switched on or off while a
+ * run is part-way through is seen by the next run, 15 minutes on — the same
+ * order of staleness the policy's 60-second provider-row cache accepts.
+ *
+ * The rows are frozen, since every org of the run is handed the same objects.
+ */
+export interface PlatformAgentCatalogue {
+  /** Every active provider row, oldest first. */
+  activeProviders(db: TenancyClient): Promise<ReadonlyArray<Readonly<AiProviderConfig>>>;
+  /** Every active model row. */
+  activeModels(db: TenancyClient): Promise<ReadonlyArray<Readonly<AiProviderModel>>>;
+}
+
+/** A catalogue that reads each table at most once (see {@link PlatformAgentCatalogue}). */
+export function createPlatformAgentCatalogue(): PlatformAgentCatalogue {
+  return {
+    activeProviders: once((db) =>
+      db.aiProviderConfig.findMany({ where: { isActive: true }, orderBy: { createdAt: 'asc' } })
+    ),
+    activeModels: once((db) => db.aiProviderModel.findMany({ where: { isActive: true } })),
+  };
+}
+
+/**
+ * `read`, made on the first call and shared by the rest — unless it fails.
+ * Each row is frozen, and so are its array columns (a model's `capabilities`),
+ * so one org's pick cannot change what the next is handed.
+ */
+function once<T extends object>(
+  read: (db: TenancyClient) => Promise<T[]>
+): (db: TenancyClient) => Promise<ReadonlyArray<Readonly<T>>> {
+  let answer: Promise<ReadonlyArray<Readonly<T>>> | undefined;
+  return (db) =>
+    (answer ??= read(db).then(
+      (rows) => Object.freeze(rows.map(freezeRow)),
+      (error: unknown) => {
+        answer = undefined;
+        throw error;
+      }
+    ));
+}
+
+function freezeRow<T extends object>(row: T): Readonly<T> {
+  for (const value of Object.values(row)) if (Array.isArray(value)) Object.freeze(value);
+  return Object.freeze(row);
+}
+
 export interface PlatformAgentDefinition {
   /** The agent's slug in every org. Unique in the registry. */
   slug: string;
@@ -129,12 +186,46 @@ export interface PlatformAgentDefinition {
    */
   defaults?: Partial<Pick<AiAgent, Exclude<PlatformAgentOrgTunableField, 'providerConfig'>>>;
   /**
-   * A provider and model to pin while the org has chosen neither. Consulted
-   * when the instance is created, and on each reconcile while BOTH are still
-   * empty (the "inherit at runtime" contract of `agent-resolver.ts`) — so an
-   * org's own choice is never overwritten. Returns `null` to keep inheriting.
+   * The provider and model the platform keeps the instance on while it owns
+   * the binding (`AiAgent.bindingOwner`, t-798). Asked when the instance is
+   * created and, while the binding is the platform's, by the maintenance job
+   * every pass: the agent moves whenever the answer changes, and `null` puts
+   * it on "inherit at runtime" (`agent-resolver.ts`). Never asked once the org
+   * owns the binding, so an org's own choice is never overwritten.
+   *
+   * So it must be deterministic — a total order with no locale-dependent
+   * comparison, or the agent moves back and forth between passes — and cheap,
+   * and it must THROW when it cannot answer: `null` means "nothing
+   * qualifies" and moves the agent, where a throw leaves it as it is and is
+   * asked again next pass. A definition that also sets `defaults.provider` or
+   * `defaults.model` gives the org that starting binding instead.
+   *
+   * Read provider and model rows from `catalogue` rather than `db`, so one
+   * maintenance run reads them once for every org (t-816). The org-specific
+   * filters stay per call (t-819): `resolveEligibleProviders` with
+   * `onFailure: 'throw'`, so a resolver that is down throws rather than
+   * answers "nothing", and `classifyProvidersByCredential`, which keeps the
+   * rows a credential resolver failed for apart from the ones with no key.
    */
-  defaultBinding?: (db: TenancyClient) => Promise<PlatformAgentBinding | null>;
+  defaultBinding?: (
+    db: TenancyClient,
+    catalogue: PlatformAgentCatalogue
+  ) => Promise<PlatformAgentBinding | null>;
+}
+
+/**
+ * Whether the platform picks this definition's provider and model (t-798): it
+ * has a `defaultBinding` and sets no starting provider or model of its own.
+ * One that does has given the org a value to tune, so that binding is the
+ * org's. The one rule for the reconcile and for the routes that set
+ * `AiAgent.bindingOwner`.
+ */
+export function definitionPicksBinding(definition: PlatformAgentDefinition): boolean {
+  return (
+    definition.defaultBinding !== undefined &&
+    !definition.defaults?.provider &&
+    !definition.defaults?.model
+  );
 }
 
 /**
@@ -158,6 +249,11 @@ export const PLATFORM_AGENT_BASELINE = {
   runtimePromptManaged: false,
   runtimePromptNote: null,
   reasoningEffort: null,
+  stopSequences: [],
+  topP: null,
+  verbosity: null,
+  parallelToolCalls: null,
+  providerTools: null,
   maxHistoryTokens: null,
   maxHistoryMessages: null,
   inputGuardMode: null,

@@ -11,12 +11,28 @@
  * `workflowId` and `createdBy` have no Prisma relation (the X6 boundary keeps reverse
  * fields off the core `AiWorkflow` / `User` models), so their FKs + delete rules live
  * in the migration SQL. Every write emits a `logAdminAction` audit entry (spec §7).
+ *
+ * **A save of `inputTemplate` is versioned** (Sunrise §122's protocol, `lib/api/record-version.ts`;
+ * Hub t-151). Erasure blanks an erased person's address in binding templates
+ * (`lib/framework/privacy/erasure.ts`), so a client holding a copy read before the erasure would
+ * put the address back by saving it. Every read returns the template's {@link bindingTemplateVersion};
+ * an update that writes the template sends it back as `If-Match`, and is refused (412) once the
+ * template has moved on, an erasure included, under the row lock erasure's scrub takes (the
+ * version is `./versions`). A save of
+ * `enabled` alone writes nothing erasure scrubs and is not checked; a create is new intent.
  */
 
 import { Prisma } from '@prisma/client';
 import type { ModuleWorkflowBinding } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
-import { NotFoundError, ValidationError } from '@/lib/api/errors';
+import { NotFoundError, PreconditionRequiredError, ValidationError } from '@/lib/api/errors';
+import { assertCurrentVersion } from '@/lib/api/record-version';
+import {
+  bindingTemplateVersion,
+  withTemplateVersion,
+  type VersionedWorkflowBinding,
+} from '@/lib/framework/modules/workflow-bindings/versions';
+import { WRITER_TRANSACTION_OPTIONS } from '@/lib/privacy/erased-subjects';
 import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
 import { mapPrismaWriteError } from '@/lib/framework/shared/prisma-errors';
 
@@ -103,7 +119,7 @@ export interface BindWorkflowArgs {
  * Prisma constraint error. The binding records its author in `createdBy` (retained on
  * erasure) — that id becomes the triggered execution's `userId` at dispatch.
  */
-export async function bindWorkflow(args: BindWorkflowArgs): Promise<ModuleWorkflowBinding> {
+export async function bindWorkflow(args: BindWorkflowArgs): Promise<VersionedWorkflowBinding> {
   const {
     moduleSlug,
     workflowId,
@@ -145,7 +161,7 @@ export async function bindWorkflow(args: BindWorkflowArgs): Promise<ModuleWorkfl
     clientIp: clientIp ?? null,
   });
 
-  return binding;
+  return withTemplateVersion(binding);
 }
 
 export interface UpdateWorkflowBindingArgs {
@@ -154,6 +170,11 @@ export interface UpdateWorkflowBindingArgs {
   enabled?: boolean;
   /** `undefined` = leave unchanged; `null` = clear; object = set. */
   inputTemplate?: Record<string, unknown> | null;
+  /**
+   * The template versions the save was loaded at (`If-Match`). Required when `inputTemplate` is
+   * given — the route answers 428 without one — and ignored otherwise.
+   */
+  loadedAt?: readonly string[];
   userId: string;
   clientIp?: string | null;
 }
@@ -161,30 +182,47 @@ export interface UpdateWorkflowBindingArgs {
 /**
  * Update a binding's `enabled` flag and/or its `inputTemplate`. The binding must
  * belong to the named module (else 404). Changing the event or workflow is an
- * unbind + rebind, not a patch.
+ * unbind + rebind, not a patch. A template write is checked against `loadedAt` under the row
+ * lock, and refused with 412 when the template moved on (see the header).
  */
 export async function updateWorkflowBinding(
   args: UpdateWorkflowBindingArgs
-): Promise<ModuleWorkflowBinding> {
-  const { moduleSlug, bindingId, enabled, inputTemplate, userId, clientIp } = args;
+): Promise<VersionedWorkflowBinding> {
+  const { moduleSlug, bindingId, enabled, inputTemplate, loadedAt, userId, clientIp } = args;
+  // A template save with no version is answered as the missing precondition it is (428), not as
+  // a stale one (412): reloading would never fix it.
+  if (inputTemplate !== undefined && (loadedAt === undefined || loadedAt.length === 0)) {
+    throw new PreconditionRequiredError();
+  }
 
   const moduleId = await loadModuleId(moduleSlug);
   await loadBindingInModule(moduleId, bindingId);
 
+  const data: Prisma.ModuleWorkflowBindingUpdateInput = {
+    ...(enabled !== undefined ? { enabled } : {}),
+    ...(inputTemplate !== undefined
+      ? {
+          inputTemplate:
+            inputTemplate === null ? Prisma.JsonNull : (inputTemplate as Prisma.InputJsonValue),
+        }
+      : {}),
+  };
+
   let binding: ModuleWorkflowBinding;
   try {
-    binding = await prisma.moduleWorkflowBinding.update({
-      where: { id: bindingId },
-      data: {
-        ...(enabled !== undefined ? { enabled } : {}),
-        ...(inputTemplate !== undefined
-          ? {
-              inputTemplate:
-                inputTemplate === null ? Prisma.JsonNull : (inputTemplate as Prisma.InputJsonValue),
-            }
-          : {}),
-      },
-    });
+    binding =
+      inputTemplate === undefined
+        ? await prisma.moduleWorkflowBinding.update({ where: { id: bindingId }, data })
+        : await prisma.$transaction(async (tx) => {
+            // The lock erasure's scrub takes on a binding it rewrites, so an erasure and this
+            // save are ordered: whichever is second sees the other's write.
+            const [row] = await tx.$queryRaw<Array<{ inputTemplate: Prisma.JsonValue }>>`
+              SELECT "inputTemplate" FROM framework_module_workflow
+              WHERE id = ${bindingId} FOR NO KEY UPDATE`;
+            if (!row) throw new NotFoundError('Binding was removed concurrently');
+            assertCurrentVersion(loadedAt ?? [], bindingTemplateVersion(row.inputTemplate));
+            return tx.moduleWorkflowBinding.update({ where: { id: bindingId }, data });
+          }, WRITER_TRANSACTION_OPTIONS);
   } catch (err) {
     // A concurrent unbind (P2025) → 404 instead of a raw 500.
     rethrowWorkflowBindingWriteError(err, { moduleSlug });
@@ -205,7 +243,7 @@ export async function updateWorkflowBinding(
     clientIp: clientIp ?? null,
   });
 
-  return binding;
+  return withTemplateVersion(binding);
 }
 
 export interface UnbindWorkflowArgs {

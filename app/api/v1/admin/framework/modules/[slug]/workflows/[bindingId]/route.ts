@@ -4,6 +4,9 @@
  *
  * PATCH  /api/v1/admin/framework/modules/:slug/workflows/:bindingId — toggle the
  *        `enabled` flag and/or replace `inputTemplate` (`inputTemplate: null` clears).
+ *        A PATCH that writes `inputTemplate` must send the `version` it read as `If-Match`:
+ *        428 without one, 412 `STALE_RECORD` once the template moved on (an erasure
+ *        included), nothing written (Hub t-151; the service's header has the why).
  * DELETE /api/v1/admin/framework/modules/:slug/workflows/:bindingId — unbind.
  *
  * Admin-only; framework-tier path. The binding must belong to the named module (else
@@ -13,6 +16,7 @@
 
 import { withAdminAuth } from '@/lib/auth/guards';
 import { successResponse } from '@/lib/api/responses';
+import { requireIfMatch } from '@/lib/api/record-version';
 import { validateRequestBody } from '@/lib/api/validation';
 import { getRouteLogger } from '@/lib/api/context';
 import { getClientIP } from '@/lib/security/ip';
@@ -35,12 +39,15 @@ export const PATCH = withAdminAuth<{ slug: string; bindingId: string }>(
     const bindingId = parseWorkflowBindingId(rawBindingId);
 
     const body = await validateRequestBody(request, updateWorkflowBindingBodySchema);
+    // Only a template write is versioned: `enabled` is nothing erasure scrubs.
+    const loadedAt = body.inputTemplate !== undefined ? requireIfMatch(request) : undefined;
 
     const binding = await updateWorkflowBinding({
       moduleSlug: slug,
       bindingId,
       enabled: body.enabled,
       inputTemplate: body.inputTemplate,
+      loadedAt,
       userId: session.user.id,
       clientIp,
     });

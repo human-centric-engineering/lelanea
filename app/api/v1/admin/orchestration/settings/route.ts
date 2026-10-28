@@ -29,27 +29,50 @@ import { invalidateSettingsCache } from '@/lib/orchestration/llm/settings-resolv
 import { invalidateOrchestrationSettingsCache } from '@/lib/orchestration/settings';
 import { getEmbeddingModels } from '@/lib/orchestration/llm/embedding-models';
 import { parseAudioDefault } from '@/lib/orchestration/llm/audio-default';
-import { updateOrchestrationSettingsSchema } from '@/lib/validations/orchestration';
+import {
+  costLogsOutliveExecutions,
+  updateOrchestrationSettingsSchema,
+} from '@/lib/validations/orchestration';
+import { WRITER_TRANSACTION_OPTIONS } from '@/lib/privacy/erased-subjects';
+import { requireIfMatch } from '@/lib/api/record-version';
+import { assertUnchangedSince, escalationVersion } from '@/lib/orchestration/config-versions';
 import { logAdminAction, computeChanges } from '@/lib/orchestration/audit/admin-audit-logger';
 import {
   getOrchestrationSettings,
   hydrateSettings,
+  parseEscalationConfig,
   parseStoredDefaults,
 } from '@/lib/orchestration/settings';
 import { TASK_TYPES, type TaskType } from '@/types/orchestration';
 
 export const GET = withAdminAuth(async (request) => {
   const log = await getRouteLogger(request);
-  const settings = await getOrchestrationSettings();
+  // The escalation list, and its version for a save of it to send as If-Match
+  // (§122 t-899), both from one read of the row rather than from the 30 s
+  // cache `getOrchestrationSettings` serves the rest from: the cache is per process, so on another instance it can still hold
+  // a list an erasure has since scrubbed, and a stale list beside a current
+  // version would pass the save's check and write the person back.
+  const [settings, stored] = await Promise.all([
+    getOrchestrationSettings(),
+    prisma.aiOrchestrationSettings.findUnique({
+      where: { slug: 'global' },
+      select: { escalationConfig: true },
+    }),
+  ]);
+  const body = {
+    ...settings,
+    escalationConfig: parseEscalationConfig(stored?.escalationConfig),
+    escalationVersion: escalationVersion(stored?.escalationConfig),
+  };
 
-  const etag = computeETag(settings);
+  const etag = computeETag(body);
   const notModified = checkConditional(request, etag);
   if (notModified) return notModified;
 
   log.info('Orchestration settings fetched', {
     hasGlobalCap: settings.globalMonthlyBudgetUsd !== null,
   });
-  return successResponse(settings, undefined, { headers: { ETag: etag } });
+  return successResponse(body, undefined, { headers: { ETag: etag } });
 });
 
 export const PATCH = withAdminAuth(
@@ -73,6 +96,9 @@ export const PATCH = withAdminAuth(
     await hydrateModelRegistryFromDb();
 
     const body = await validateRequestBody(request, updateOrchestrationSettingsSchema);
+    // A save of the escalation list says which version it loaded (§122
+    // t-899); a save of anything else on the row does not need to.
+    const loadedAt = body.escalationConfig !== undefined ? requireIfMatch(request) : undefined;
 
     // Validate the active-embedding-model FK against the model matrix. The
     // Zod schema only enforces "non-empty string", since the foreign key
@@ -184,6 +210,13 @@ export const PATCH = withAdminAuth(
     // (see the refine on `updateOrchestrationSettingsSchema`). The schema catches
     // a whole-form save; this catches a patch that moves one side only, which is
     // what the API surface allows and the UI does not do.
+    //
+    // Only a body that names one of the two is checked, as on the org route
+    // (`incoherentRetentionPair`): a row persisted before #839 tightened the
+    // rule (finite cost logs, executions kept for ever) must not 400 a PATCH
+    // that changes something unrelated, such as the budget.
+    const touchesRetentionPair =
+      body.costLogRetentionDays !== undefined || body.executionRetentionDays !== undefined;
     const effectiveCostLogDays =
       body.costLogRetentionDays !== undefined
         ? body.costLogRetentionDays
@@ -193,12 +226,15 @@ export const PATCH = withAdminAuth(
         ? body.executionRetentionDays
         : (existing?.executionRetentionDays ?? null);
     if (
-      effectiveCostLogDays !== null &&
-      effectiveExecutionDays !== null &&
-      effectiveCostLogDays < effectiveExecutionDays
+      touchesRetentionPair &&
+      !costLogsOutliveExecutions(effectiveCostLogDays, effectiveExecutionDays)
     ) {
+      const keeping =
+        effectiveExecutionDays === null
+          ? 'executions you are keeping for ever'
+          : `executions you are keeping for ${effectiveExecutionDays} days`;
       return errorResponse(
-        `Cost log retention (${effectiveCostLogDays} days) must be at least as long as execution retention (${effectiveExecutionDays} days), or the cost breakdown empties out for executions you are still keeping`,
+        `Cost log retention (${effectiveCostLogDays} days) is shorter than execution retention, so the cost breakdown empties out for ${keeping}. Lengthen costLogRetentionDays, or set it to null to keep cost logs for ever.`,
         {
           code: 'VALIDATION_ERROR',
           status: 400,
@@ -259,6 +295,9 @@ export const PATCH = withAdminAuth(
     if (body.webhookRetentionDays !== undefined) {
       updateData.webhookRetentionDays = body.webhookRetentionDays;
     }
+    if (body.webhookDlqRetentionDays !== undefined) {
+      updateData.webhookDlqRetentionDays = body.webhookDlqRetentionDays;
+    }
     if (body.costLogRetentionDays !== undefined) {
       updateData.costLogRetentionDays = body.costLogRetentionDays;
     }
@@ -301,18 +340,30 @@ export const PATCH = withAdminAuth(
         : { disconnect: true };
     }
 
-    const row = await prisma.aiOrchestrationSettings.upsert({
-      where: { slug: 'global' },
-      create: {
-        slug: 'global',
-        defaultModels: mergedDefaults,
-        globalMonthlyBudgetUsd: body.globalMonthlyBudgetUsd ?? null,
-        searchConfig: body.searchConfig
-          ? (body.searchConfig as unknown as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-      },
-      update: updateData,
-    });
+    // The form saves its whole escalation list, so one opened before a person
+    // was erased would write their address back. Refused when the list has
+    // moved on since it was loaded (§122 t-899), under the lock erasure takes;
+    // a list typed into a freshly loaded form is saved, erased or not.
+    const row = await prisma.$transaction(async (tx) => {
+      if (loadedAt) await assertUnchangedSince(tx, { kind: 'escalation-list' }, loadedAt);
+      return tx.aiOrchestrationSettings.upsert({
+        where: { slug: 'global' },
+        create: {
+          slug: 'global',
+          defaultModels: mergedDefaults,
+          globalMonthlyBudgetUsd: body.globalMonthlyBudgetUsd ?? null,
+          searchConfig: body.searchConfig
+            ? (body.searchConfig as unknown as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+          // A first save of the list writes it, so the version this answers
+          // with is the list's, not an empty row's (t-899).
+          ...(updateData.escalationConfig !== undefined
+            ? { escalationConfig: updateData.escalationConfig }
+            : {}),
+        },
+        update: updateData,
+      });
+    }, WRITER_TRANSACTION_OPTIONS);
 
     invalidateSettingsCache();
     // The singleton itself is cached for 30s now (#442) — clear it here so a save
@@ -335,7 +386,10 @@ export const PATCH = withAdminAuth(
       globalCapSet: row.globalMonthlyBudgetUsd !== null,
     });
 
-    return successResponse(hydrateSettings(row));
+    return successResponse({
+      ...hydrateSettings(row),
+      escalationVersion: escalationVersion(row.escalationConfig),
+    });
   },
   { writesSharedSettings: true }
 );

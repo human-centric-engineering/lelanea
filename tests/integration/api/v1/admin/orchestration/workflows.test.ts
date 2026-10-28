@@ -28,7 +28,6 @@ import {
   mockAuthenticatedUser,
   mockUnauthenticatedUser,
 } from '@/tests/helpers/auth';
-import { Prisma } from '@prisma/client';
 
 // ─── Mock dependencies ───────────────────────────────────────────────────────
 
@@ -46,6 +45,9 @@ const txMocks = {
   workflowUpdate: vi.fn(),
   workflowFindUniqueOrThrow: vi.fn(),
   versionCreate: vi.fn(),
+  // A copy's source, read under its row lock (§122 t-900).
+  queryRaw: vi.fn(async () => []),
+  workflowFindUnique: vi.fn(),
 };
 
 vi.mock('@/lib/db/client', () => ({
@@ -60,7 +62,9 @@ vi.mock('@/lib/db/client', () => ({
     },
     $transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
       cb({
+        $queryRaw: txMocks.queryRaw,
         aiWorkflow: {
+          findUnique: txMocks.workflowFindUnique,
           create: txMocks.workflowCreate,
           update: txMocks.workflowUpdate,
           findUniqueOrThrow: txMocks.workflowFindUniqueOrThrow,
@@ -79,7 +83,9 @@ vi.mock('@/lib/orchestration/audit/admin-audit-logger', () => ({
 // ─── Imports after mocks ─────────────────────────────────────────────────────
 
 import { auth } from '@/lib/auth/config';
+import { workflowDefinitionVersion } from '@/lib/orchestration/config-versions';
 import { prisma } from '@/lib/db/client';
+import { uniqueViolationError } from '@/tests/helpers/prisma-errors';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -343,9 +349,9 @@ describe('POST /api/v1/admin/orchestration/workflows', () => {
   describe('Conflict errors', () => {
     it('returns 409 when slug already exists (P2002)', async () => {
       vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
-      const p2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-        code: 'P2002',
-        clientVersion: '7.0.0',
+      const p2002 = uniqueViolationError({
+        index: 'ai_workflow_slug_key',
+        modelName: 'AiWorkflow',
       });
       txMocks.workflowCreate.mockRejectedValue(p2002);
 
@@ -355,6 +361,87 @@ describe('POST /api/v1/admin/orchestration/workflows', () => {
       const data = await parseJson(response);
       expect(data).toMatchObject({ success: false, error: { code: 'CONFLICT' } });
     });
+
+    it('does not answer the slug message for a P2002 on another constraint (t-814)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      const p2002 = uniqueViolationError({
+        index: 'ai_workflow_version_workflowId_version_key',
+        modelName: 'AiWorkflowVersion',
+      });
+      txMocks.workflowCreate.mockRejectedValue(p2002);
+
+      const response = await POST(makePostRequest(VALID_WORKFLOW));
+
+      expect(response.status).toBe(400);
+      const otherData = await parseJson<{
+        error: { code: string; message: string; details?: unknown };
+      }>(response);
+      expect(otherData.error.code).toBe('VALIDATION_ERROR');
+      expect(otherData.error.message).toBe('A record with that value already exists');
+      expect(otherData.error.details).toBeUndefined();
+    });
+  });
+});
+
+describe('POST /api/v1/admin/orchestration/workflows — a copy of a stored workflow (§122 t-900)', () => {
+  const SOURCE_ID = 'cmjbv4i3x00003wslotemplate';
+  const SOURCE = {
+    draftDefinition: null,
+    publishedVersionId: 'wfv-src',
+    publishedVersion: { snapshot: VALID_WORKFLOW.workflowDefinition },
+  };
+  const COPIED_AT = workflowDefinitionVersion(SOURCE);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+    txMocks.workflowCreate.mockResolvedValue({ id: 'wf-new' });
+    txMocks.versionCreate.mockResolvedValue({ id: 'wfv-new', version: 1 });
+    txMocks.workflowFindUniqueOrThrow.mockResolvedValue(makeWorkflow());
+  });
+
+  it('creates the copy when its source is still at the version it was copied at', async () => {
+    txMocks.workflowFindUnique.mockResolvedValue(SOURCE);
+
+    const response = await POST(
+      makePostRequest({
+        ...VALID_WORKFLOW,
+        copiedFrom: { workflowId: SOURCE_ID, definitionVersion: COPIED_AT },
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(txMocks.workflowFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SOURCE_ID } })
+    );
+  });
+
+  it('412s, creating no version, when an erasure scrubbed the source since it was copied', async () => {
+    txMocks.workflowFindUnique.mockResolvedValue({
+      ...SOURCE,
+      publishedVersion: { snapshot: { steps: [], scrubbed: true } },
+    });
+
+    const response = await POST(
+      makePostRequest({
+        ...VALID_WORKFLOW,
+        copiedFrom: { workflowId: SOURCE_ID, definitionVersion: COPIED_AT },
+      })
+    );
+
+    expect(response.status).toBe(412);
+    const body = await parseJson<{ error: { code: string } }>(response);
+    expect(body.error.code).toBe('STALE_RECORD');
+    expect(txMocks.versionCreate).not.toHaveBeenCalled();
+  });
+
+  it('400s a copiedFrom that is not a workflow id and a version', async () => {
+    const response = await POST(
+      makePostRequest({ ...VALID_WORKFLOW, copiedFrom: { workflowId: 'nope' } })
+    );
+
+    expect(response.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 

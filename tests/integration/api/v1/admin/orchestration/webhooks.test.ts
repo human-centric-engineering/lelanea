@@ -24,15 +24,18 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(() => Promise.resolve(new Headers())),
 }));
 
-vi.mock('@/lib/db/client', () => ({
-  prisma: {
+vi.mock('@/lib/db/client', () => {
+  const prisma = {
     aiWebhookSubscription: {
       findMany: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
     },
-  },
-}));
+    // Watched so a test can show a create asks erasure nothing (t-899)
+    dataErasureReceipt: { findMany: vi.fn(async () => []) },
+  };
+  return { prisma };
+});
 
 vi.mock('@/lib/orchestration/audit/admin-audit-logger', () => ({
   logAdminAction: vi.fn(),
@@ -69,6 +72,11 @@ const VALID_BODY = {
   description: 'Test webhook',
 };
 
+import {
+  SUBSCRIPTION_VERSION_SELECT,
+  subscriptionVersion,
+} from '@/lib/orchestration/config-versions';
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('Webhook CRUD', () => {
@@ -99,7 +107,39 @@ describe('Webhook CRUD', () => {
 
       const call = (prisma.aiWebhookSubscription.findMany as ReturnType<typeof vi.fn>).mock
         .calls[0][0];
-      expect(call.where.createdBy).toBe(ADMIN_ID);
+      // The caller's own subscriptions, plus ones whose creator was erased
+      // (the default policy lets an admin manage those); never another admin's.
+      expect(call.where).toEqual({
+        AND: [{ OR: [{ createdBy: ADMIN_ID }, { createdBy: null }] }],
+      });
+    });
+
+    it("returns each row's version, as the row's own PATCH computes it (t-899)", async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      const row = {
+        id: 'sub-1',
+        channel: 'email',
+        url: null,
+        emailAddress: 'ops@example.com',
+        events: ['workflow_failed'],
+        agentIds: [],
+        workflowIds: [],
+        isActive: true,
+        description: null,
+        maxAttempts: 3,
+        retryBackoffMs: [10000],
+      };
+      vi.mocked(prisma.aiWebhookSubscription.findMany).mockResolvedValue([row] as never);
+      vi.mocked(prisma.aiWebhookSubscription.count).mockResolvedValue(1);
+
+      const res = await GET(makeGetRequest());
+
+      const body = (await res.json()) as { data: Array<{ version: string }> };
+      expect(body.data[0].version).toBe(subscriptionVersion(row));
+      const select = vi.mocked(prisma.aiWebhookSubscription.findMany).mock.calls[0][0]?.select;
+      for (const field of Object.keys(SUBSCRIPTION_VERSION_SELECT)) {
+        expect(select).toHaveProperty(field, true);
+      }
     });
   });
 
@@ -170,6 +210,38 @@ describe('Webhook CRUD', () => {
       const call = (prisma.aiWebhookSubscription.create as ReturnType<typeof vi.fn>).mock
         .calls[0][0];
       expect(call.data.createdBy).toBe(ADMIN_ID);
+    });
+
+    it('creates an email subscription for an address typed in, without asking who was erased (t-899)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWebhookSubscription.create).mockResolvedValue({
+        id: 'sub-1',
+        channel: 'email',
+        url: null,
+        emailAddress: 'readded@example.com',
+        events: ['workflow_failed'],
+        agentIds: [],
+        workflowIds: [],
+        isActive: true,
+        description: null,
+        maxAttempts: 3,
+        retryBackoffMs: [10000, 60000, 300000],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+
+      const res = await POST(
+        makePostRequest({
+          channel: 'email',
+          emailAddress: 'readded@example.com',
+          events: ['workflow_failed'],
+        })
+      );
+
+      expect(res.status).toBe(201);
+      expect(prisma.dataErasureReceipt.findMany).not.toHaveBeenCalled();
+      const body = (await res.json()) as { data: { version: string } };
+      expect(body.data.version).toMatch(/^"[\w-]{27}"$/);
     });
   });
 });

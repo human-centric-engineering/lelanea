@@ -146,6 +146,8 @@ export interface ModuleWorkflowBindingListItem {
   enabled: boolean;
   /** The operator's static run input, or null. */
   inputTemplate: Record<string, unknown> | null;
+  /** The template's version: what a save of `inputTemplate` sends back as `If-Match` (t-151). */
+  version: string;
   /** ISO 8601 string (a JSON-serialized `DateTime`). */
   createdAt: string;
   updatedAt: string;

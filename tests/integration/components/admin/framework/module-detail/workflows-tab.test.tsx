@@ -37,6 +37,7 @@ function binding(over: Partial<ModuleWorkflowBindingListItem> = {}): ModuleWorkf
     eventType: 'module.entered',
     enabled: true,
     inputTemplate: null,
+    version: '"v1"',
     createdAt: '2026-02-01T00:00:00.000Z',
     updatedAt: '2026-02-01T00:00:00.000Z',
     workflow: {

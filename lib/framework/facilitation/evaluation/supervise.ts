@@ -29,6 +29,7 @@ import { logger } from '@/lib/logging';
 import { CostOperation, type SupervisorReport } from '@/types/orchestration';
 import { calculateCost, logCost } from '@/lib/orchestration/llm/cost-tracker';
 import { getProvider } from '@/lib/orchestration/llm/provider-manager';
+import { rethrowSpendCapRefusal } from '@/lib/framework/shared/spend-caps';
 import { getModel } from '@/lib/orchestration/llm/model-registry';
 import { getDefaultModelForTask } from '@/lib/orchestration/llm/settings-resolver';
 import { JUDGE_MODEL } from '@/lib/orchestration/evaluations/judge-model';
@@ -84,7 +85,8 @@ export interface SuperviseConversationResult {
 /**
  * Supervise a framework conversation and persist the verdict on its terminal-turn eval row (upsert).
  * Throws `NotFoundError` (unknown conversation), `ValidationError` (not a framework surface, or no
- * scorable turns), or an unknown-model `ValidationError`.
+ * scorable turns), an unknown-model `ValidationError`, or `SpendCapRefusedError` (a monthly spend
+ * cap refused the judge call).
  */
 export async function superviseConversation(
   args: SuperviseConversationArgs
@@ -134,11 +136,13 @@ export async function superviseConversation(
       modelOverride: [`Model "${modelId}" is not in the model registry`],
     });
   }
+  // A monthly spend cap (Sunrise 0.15.0) can refuse the judge here or at the call below; either
+  // way it surfaces as a `SpendCapRefusedError`, so the route answers a budget error, not a 500.
   const provider = await getProvider(modelInfo.provider, {
     task: 'chat',
     source: operatorChoice === null ? 'primary' : 'explicit',
     primarySlug: null,
-  });
+  }).catch(rethrowSpendCapRefusal);
 
   // Provider-agnostic LLM shim (copied from the execution-review route). Bills cost per call as a
   // side-effect, attributed to the framework conversation and to the admin (or service account)
@@ -146,11 +150,20 @@ export async function superviseConversation(
   // real `User.id` — an admin session or `resolveActorUserId` in the sweep step — so it needs no
   // synthetic-id guard (Sunrise #708).
   const llmCall: LlmCallShim = async (prompt, opts) => {
-    const response = await provider.chat([{ role: 'user', content: prompt }], {
-      model: modelId,
-      temperature: opts.temperature,
-    });
-    const cost = calculateCost(modelId, response.usage.inputTokens, response.usage.outputTokens);
+    const response = await provider
+      .chat([{ role: 'user', content: prompt }], {
+        model: modelId,
+        temperature: opts.temperature,
+      })
+      .catch(rethrowSpendCapRefusal);
+    // The usage rides along so a cached Claude prompt is priced at the cache rate: since Sunrise
+    // 0.16.0 `inputTokens` counts cached input too (t-909).
+    const cost = calculateCost(
+      modelId,
+      response.usage.inputTokens,
+      response.usage.outputTokens,
+      response.usage
+    );
     void logCost({
       conversationId,
       userId: actorUserId,
@@ -158,6 +171,9 @@ export async function superviseConversation(
       provider: modelInfo.provider,
       inputTokens: response.usage.inputTokens,
       outputTokens: response.usage.outputTokens,
+      cacheReadTokens: response.usage.cacheReadTokens,
+      cacheWriteTokens: response.usage.cacheWriteTokens,
+      serviceTier: response.usage.serviceTier,
       operation: CostOperation.EVALUATION,
       isLocal: cost.isLocal,
       metadata: { phase: 'framework_conversation_supervisor' },

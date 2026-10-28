@@ -27,6 +27,8 @@ import { prisma } from '@/lib/db/client';
 import { getProvider } from '@/lib/orchestration/llm/provider-manager';
 import { resolveAgentProviderAndModel } from '@/lib/orchestration/llm/agent-resolver';
 import { runStructuredCompletion } from '@/lib/orchestration/llm/structured-completion';
+import { logger } from '@/lib/logging';
+import { SpendCapExceededError } from '@/lib/orchestration/llm/spend-caps';
 
 const agentRow = { provider: 'openai', model: 'gpt-x', fallbackProviders: [] };
 
@@ -112,5 +114,32 @@ describe('extractTypedValue', () => {
   it('degrades to null when the agent DB lookup itself errors (best-effort contract)', async () => {
     vi.mocked(prisma.aiAgent.findUnique).mockRejectedValue(new Error('pool exhausted'));
     await expect(extractTypedValue('number', 'about seven', 'agent-1')).resolves.toBeNull();
+  });
+});
+
+describe('spend caps (Sunrise 0.15.0)', () => {
+  it('logs a cap refusal at warn, naming the cap, and still degrades to no typed value', async () => {
+    vi.mocked(runStructuredCompletion).mockRejectedValue(
+      new SpendCapExceededError('org', 'openai')
+    );
+    expect(await extractTypedValue('number', 'about seven', 'agent-1')).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('spend cap'),
+      expect.objectContaining({ agentId: 'agent-1', code: 'org_budget_exceeded' })
+    );
+    expect(logger.debug).not.toHaveBeenCalledWith(
+      expect.stringContaining('extraction failed'),
+      expect.anything()
+    );
+  });
+
+  it('keeps any other failure at debug', async () => {
+    vi.mocked(runStructuredCompletion).mockRejectedValue(new Error('timeout'));
+    expect(await extractTypedValue('number', 'about seven', 'agent-1')).toBeNull();
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.stringContaining('extraction failed'),
+      expect.objectContaining({ error: 'timeout' })
+    );
   });
 });

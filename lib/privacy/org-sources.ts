@@ -38,13 +38,13 @@
  * @see .context/privacy/org-export.md — the guide
  */
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import type { SourceDisposition, AttributionRow } from '@/lib/privacy/export-sources';
 import { INVITATION_IDENTIFIER_PREFIX } from '@/lib/utils/invitation-token';
 import { toSafeHook, type SafeHook } from '@/lib/orchestration/hooks/serialize';
 import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
 import { isMultiTenant } from '@/lib/tenancy/context';
-import { collectAppOrgSources } from '@/lib/app/data-export';
 
 /** Identity of the org being exported. */
 export interface OrgQuery {
@@ -85,8 +85,15 @@ const byCreatedAt = { createdAt: 'asc' } as const;
  * at `multi` is an orphan, not the install org's. The credential attributions
  * below deliberately do NOT use this — a `NULL`-org API key is a platform
  * credential, not the org's.
+ *
+ * Exported for a fork's own org sources (`lib/app/org-export.ts`, §109
+ * t-737): a fork table is stamped like core's, so its `NULL`-org rows — those
+ * written under `runAsSystem`, which stamps nothing — are the install org's at
+ * `single` too, and a plain `where: { orgId }` would leave them out.
  */
-function ownedBy(orgId: string): { orgId: string } | { OR: [{ orgId: string }, { orgId: null }] } {
+export function ownedBy(
+  orgId: string
+): { orgId: string } | { OR: [{ orgId: string }, { orgId: null }] } {
   if (orgId === INSTALL_ORG_ID && !isMultiTenant()) return { OR: [{ orgId }, { orgId: null }] };
   return { orgId };
 }
@@ -96,6 +103,28 @@ function toAttribution(
   rows: { id: string; label: string | null; createdAt: Date }[]
 ): AttributionRow[] {
   return rows.map((row) => ({ id: row.id, label: row.label, createdAt: row.createdAt }));
+}
+
+/**
+ * A running-step row's turns without `agent_call` reasoning — signed thinking
+ * blocks kept only so a resumed tool loop can replay them. The trace copy of
+ * the turns drops them too; a paused or in-flight step's row would otherwise
+ * hand them out.
+ */
+function withoutReasoning(turns: Prisma.JsonValue | null): Prisma.JsonValue | null {
+  if (!Array.isArray(turns)) return turns;
+  return turns.map((turn) => {
+    if (
+      turn === null ||
+      typeof turn !== 'object' ||
+      Array.isArray(turn) ||
+      !('reasoning' in turn)
+    ) {
+      return turn;
+    }
+    const { reasoning: _reasoning, ...rest } = turn;
+    return rest;
+  });
 }
 
 /**
@@ -117,6 +146,22 @@ export const ORG_DATA_SOURCES: OrgDataSource[] = [
       prisma.orgMembership.findMany({
         where: { orgId },
         include: { user: { select: { id: true, name: true, email: true } } },
+        orderBy: byCreatedAt,
+      }),
+  },
+  {
+    model: 'OrgSupportGrant',
+    section: 'supportGrants',
+    disposition: 'export',
+    description:
+      'Every time the organisation let the platform’s support staff in: at what level, why, for how long, who granted it, and who ended it. The names of those people ride along; nothing else about them is included.',
+    fetch: ({ orgId }) =>
+      prisma.orgSupportGrant.findMany({
+        where: { orgId },
+        include: {
+          grantedBy: { select: { id: true, name: true } },
+          revokedBy: { select: { id: true, name: true } },
+        },
         orderBy: byCreatedAt,
       }),
   },
@@ -298,7 +343,8 @@ export const ORG_DATA_SOURCES: OrgDataSource[] = [
     model: 'AiEventHookDelivery',
     section: 'eventHookDeliveries',
     disposition: 'export',
-    description: 'Each attempt to deliver an event to a hook, with the payload and the outcome.',
+    description:
+      'Each attempt to deliver an event to a hook: the payload, the outcome, and where it was sent. The address is recorded as its origin only, so it holds no credential, with a keyed fingerprint of the full address.',
     fetch: ({ orgId }) =>
       prisma.aiEventHookDelivery.findMany({
         where: ownedBy(orgId),
@@ -323,7 +369,7 @@ export const ORG_DATA_SOURCES: OrgDataSource[] = [
     section: 'webhookDeliveries',
     disposition: 'export',
     description:
-      'Each attempt to deliver an event to a webhook subscription, with the payload and the outcome.',
+      'Each attempt to deliver an event to a webhook subscription: the payload, the outcome, and where it was sent. A URL is recorded as its origin only, so it holds no credential, with a keyed fingerprint of the full address.',
     fetch: ({ orgId }) =>
       prisma.aiWebhookDelivery.findMany({
         where: ownedBy(orgId),
@@ -561,12 +607,15 @@ export const ORG_DATA_SOURCES: OrgDataSource[] = [
     model: 'AiWorkflowRunningStep',
     section: 'workflowRunningSteps',
     disposition: 'export',
-    description: 'Per-step timing and turn records for each run.',
-    fetch: ({ orgId }) =>
-      prisma.aiWorkflowRunningStep.findMany({
+    description:
+      'Per-step timing and turn records for each run. Model thinking kept for resuming a step is not included.',
+    fetch: async ({ orgId }: OrgQuery): Promise<unknown[]> => {
+      const rows = await prisma.aiWorkflowRunningStep.findMany({
         where: ownedBy(orgId),
         orderBy: { startedAt: 'asc' },
-      }),
+      });
+      return rows.map((row) => ({ ...row, turns: withoutReasoning(row.turns) }));
+    },
   },
 
   // ---------------------------------------------------------------------
@@ -652,31 +701,3 @@ export const ORG_EXCLUDED_SOURCES: OrgExcludedSource[] = [
       'Engine lease bookkeeping for stuck-execution recovery — lease tokens and heartbeat events, nothing the organisation authored; the executions themselves are exported.',
   },
 ];
-
-// ─── DAYBREAK fork-first seam (Hub t-134, §34 f-framework-tenancy) ───────────
-//
-// "Not a fork seam yet" (header) was true of core; a fork whose own models
-// carry `orgId` — Daybreak's 19 framework tables — has no other way to satisfy
-// the coverage guard than rows in the lists above. This is the generic seam
-// §109 anticipates, shaped like the subject manifest's: the `lib/app/data-export.ts`
-// bridge contributes sources and exclusions, pulled lazily on every read (never
-// registered at boot, so nothing is lost when a registry resets). With an empty
-// contribution both getters return exactly the lists above — behaviour-neutral
-// at rest, pinned by tests/unit/lib/framework/privacy/org-sources.test.ts.
-// Ledgered in .context/framework/upstream-asks.md; delete when §109 ships its own.
-
-/** What the `lib/app` bridge contributes to the org manifest. */
-export interface AppOrgSourceContribution {
-  sources: OrgDataSource[];
-  excluded: OrgExcludedSource[];
-}
-
-/** Every org-export source: core's, then the app bridge's. */
-export function getOrgDataSources(): OrgDataSource[] {
-  return [...ORG_DATA_SOURCES, ...collectAppOrgSources().sources];
-}
-
-/** Every deliberately excluded model: core's, then the app bridge's. */
-export function getOrgExcludedSources(): OrgExcludedSource[] {
-  return [...ORG_EXCLUDED_SOURCES, ...collectAppOrgSources().excluded];
-}

@@ -37,6 +37,8 @@ import { loadFrameworkConversation } from '@/lib/framework/facilitation/evaluati
 import { listScorableTurns } from '@/lib/framework/facilitation/evaluation/turns';
 import { runSupervisorAssessment } from '@/lib/orchestration/supervisor';
 import { getProvider } from '@/lib/orchestration/llm/provider-manager';
+import { SpendCapExceededError } from '@/lib/orchestration/llm/spend-caps';
+import { SpendCapRefusedError } from '@/lib/framework/shared/spend-caps';
 import { getModel } from '@/lib/orchestration/llm/model-registry';
 import { getDefaultModelForTask } from '@/lib/orchestration/llm/settings-resolver';
 import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
@@ -228,7 +230,13 @@ describe('superviseConversation', () => {
     it('calls the provider, bills cost against the conversation, and returns the shaped result', async () => {
       const chat = vi.fn().mockResolvedValue({
         content: 'the verdict',
-        usage: { inputTokens: 100, outputTokens: 40 },
+        usage: {
+          inputTokens: 100,
+          outputTokens: 40,
+          cacheReadTokens: 60,
+          cacheWriteTokens: 10,
+          serviceTier: 'flex',
+        },
       });
       vi.mocked(getProvider).mockResolvedValue({ chat } as never);
 
@@ -241,9 +249,21 @@ describe('superviseConversation', () => {
         model: 'judge-x',
         temperature: 0.2,
       });
-      expect(calculateCost).toHaveBeenCalledWith('judge-x', 100, 40);
+      // The usage is passed on so cached input is priced at the cache rate (Sunrise 0.16.0 t-909).
+      expect(calculateCost).toHaveBeenCalledWith(
+        'judge-x',
+        100,
+        40,
+        expect.objectContaining({ cacheReadTokens: 60, cacheWriteTokens: 10, serviceTier: 'flex' })
+      );
       expect(logCost).toHaveBeenCalledWith(
-        expect.objectContaining({ conversationId: 'c1', operation: 'evaluation' })
+        expect.objectContaining({
+          conversationId: 'c1',
+          operation: 'evaluation',
+          cacheReadTokens: 60,
+          cacheWriteTokens: 10,
+          serviceTier: 'flex',
+        })
       );
       expect(out).toEqual({ content: 'the verdict', tokensUsed: 140, costUsd: 0.03 });
     });
@@ -274,5 +294,33 @@ describe('superviseConversation', () => {
     });
     await superviseConversation({ conversationId: 'c1', actorUserId: 'a' });
     expect(logAdminAction).toHaveBeenCalledWith(expect.objectContaining({ entityName: 'module' }));
+  });
+});
+
+describe('spend caps (Sunrise 0.15.0)', () => {
+  it('surfaces a cap refusing the judge provider as a SpendCapRefusedError (402), not a raw provider error', async () => {
+    vi.mocked(getProvider).mockRejectedValue(new SpendCapExceededError('global', 'openai'));
+    const err = await superviseConversation({ conversationId: 'c1', actorUserId: 'a' }).catch(
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(SpendCapRefusedError);
+    expect(err).toMatchObject({ code: 'global_budget_exceeded', status: 402 });
+    // Core's operator message, which names who can raise the cap.
+    expect((err as Error).message).toContain('global monthly AI budget');
+    expect(prisma.frameworkConversationEval.upsert).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a cap refusing the judge call itself the same way', async () => {
+    vi.mocked(getProvider).mockResolvedValue({
+      chat: vi.fn().mockRejectedValue(new SpendCapExceededError('org', 'openai')),
+    } as never);
+    // Drive the real llmCall the service hands the supervisor core.
+    vi.mocked(runSupervisorAssessment).mockImplementation(async (params) => {
+      await params.llmCall('prompt', { temperature: 0 });
+      throw new Error('unreachable');
+    });
+    await expect(
+      superviseConversation({ conversationId: 'c1', actorUserId: 'a' })
+    ).rejects.toMatchObject({ name: 'SpendCapRefusedError', code: 'org_budget_exceeded' });
   });
 });

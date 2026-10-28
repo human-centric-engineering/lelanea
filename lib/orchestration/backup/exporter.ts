@@ -4,16 +4,59 @@
  * Exports agents, capabilities, workflows, webhook subscriptions, and
  * settings as a versioned JSON payload. Excludes secrets, embeddings,
  * and user-specific data.
+ *
+ * **Scoped to one org** (§109 t-738). The org's own part — agents, workflows,
+ * webhook subscriptions — is read inside `runAsOrg(scope.orgId)`, so at
+ * `multi` the `org_isolation` policy returns that org's rows whoever asks. The
+ * shared part — capabilities, knowledge tags, the `global` settings — is read
+ * only when `scope.includeShared`; otherwise the bundle carries it empty
+ * (`[]`, `[]`, `null`), which every importer reads as "nothing to write".
+ * `resolveBackupScope()` decides both; this function trusts what it is given.
  */
 
 import { prisma } from '@/lib/db/client';
+import { runAsOrg } from '@/lib/tenancy/context';
 import type { BackupPayload } from '@/lib/orchestration/backup/schema';
+import { bundleContacts, sealExport } from '@/lib/orchestration/backup/export-seal';
+import type { BackupScope } from '@/lib/orchestration/backup/scope';
+import { IMPORTED_FROM_SLUG_KEY } from '@/lib/orchestration/backup/schema';
+import { z } from 'zod';
+import { REASONING_EFFORTS } from '@/lib/orchestration/llm/types';
+import {
+  narrowProviderTools,
+  narrowServiceTier,
+  narrowVerbosity,
+} from '@/lib/orchestration/llm/model-params';
 import {
   BUILTIN_TEMPLATE_SLUGS,
   SYSTEM_WORKFLOW_SLUGS,
 } from '@/lib/orchestration/workflows/template-catalogue';
 
-export async function exportOrchestrationConfig(): Promise<BackupPayload> {
+/**
+ * Workflow metadata without the importer's renamed-copy marker: it names a
+ * slug held by another org on THIS install, and carried into a bundle it could
+ * redirect a later import somewhere the marker means nothing.
+ */
+function withoutImportMarker(metadata: unknown): unknown {
+  const parsed = z.record(z.string(), z.unknown()).safeParse(metadata);
+  if (!parsed.success || !(IMPORTED_FROM_SLUG_KEY in parsed.data)) return metadata;
+  const { [IMPORTED_FROM_SLUG_KEY]: _marker, ...rest } = parsed.data;
+  return rest;
+}
+
+export function exportOrchestrationConfig(scope: BackupScope): Promise<BackupPayload> {
+  return runAsOrg(scope.orgId, () => readConfig(scope.includeShared, scope.orgId));
+}
+
+async function readConfig(includeShared: boolean, orgId: string): Promise<BackupPayload> {
+  // Stamped before the reads start, so the copy is no older than the date the
+  // importer trusts (§122 t-902): the reads share no snapshot, and one that
+  // ran before an erasure committed may still name the person.
+  const exportedAt = new Date().toISOString();
+  /** The shared-part query when it is included, else its empty value without a read. */
+  const sharedOr = <T>(empty: T, read: () => Promise<T>): Promise<T> =>
+    includeShared ? read() : Promise.resolve(empty);
+
   const [agents, capabilities, workflows, webhooks, knowledgeTags, settings] = await Promise.all([
     prisma.aiAgent.findMany({
       where: { isSystem: false },
@@ -52,6 +95,12 @@ export async function exportOrchestrationConfig(): Promise<BackupPayload> {
         // persona/guardrails/toggles lost). Restored here for full fidelity.
         kind: true,
         reasoningEffort: true,
+        stopSequences: true,
+        topP: true,
+        verbosity: true,
+        parallelToolCalls: true,
+        serviceTier: true,
+        providerTools: true,
         persona: true,
         guardrails: true,
         personaMode: true,
@@ -66,22 +115,24 @@ export async function exportOrchestrationConfig(): Promise<BackupPayload> {
         grantedDocuments: { select: { document: { select: { slug: true } } } },
       },
     }),
-    prisma.aiCapability.findMany({
-      where: { isSystem: false },
-      select: {
-        name: true,
-        slug: true,
-        description: true,
-        category: true,
-        functionDefinition: true,
-        executionType: true,
-        executionHandler: true,
-        executionConfig: true,
-        requiresApproval: true,
-        rateLimit: true,
-        isActive: true,
-      },
-    }),
+    sharedOr([], () =>
+      prisma.aiCapability.findMany({
+        where: { isSystem: false },
+        select: {
+          name: true,
+          slug: true,
+          description: true,
+          category: true,
+          functionDefinition: true,
+          executionType: true,
+          executionHandler: true,
+          executionConfig: true,
+          requiresApproval: true,
+          rateLimit: true,
+          isActive: true,
+        },
+      })
+    ),
     // The built-in templates are served from code, not backed up (§116
     // t-727): a TEMPLATE row holding a built-in slug is a seed-era copy of
     // one. A row with that slug that is an ordinary workflow (a retired row
@@ -119,34 +170,39 @@ export async function exportOrchestrationConfig(): Promise<BackupPayload> {
         isActive: true,
       },
     }),
-    prisma.knowledgeTag.findMany({
-      select: {
-        slug: true,
-        name: true,
-        description: true,
-      },
-    }),
-    prisma.aiOrchestrationSettings.findUnique({
-      where: { slug: 'global' },
-      select: {
-        defaultModels: true,
-        globalMonthlyBudgetUsd: true,
-        searchConfig: true,
-        defaultApprovalTimeoutMs: true,
-        approvalDefaultAction: true,
-        inputGuardMode: true,
-        outputGuardMode: true,
-        citationGuardMode: true,
-        webhookRetentionDays: true,
-        costLogRetentionDays: true,
-        auditLogRetentionDays: true,
-        executionRetentionDays: true,
-        evaluationRetentionDays: true,
-        maxConversationsPerUser: true,
-        maxMessagesPerConversation: true,
-        escalationConfig: true,
-      },
-    }),
+    sharedOr([], () =>
+      prisma.knowledgeTag.findMany({
+        select: {
+          slug: true,
+          name: true,
+          description: true,
+        },
+      })
+    ),
+    sharedOr(null, () =>
+      prisma.aiOrchestrationSettings.findUnique({
+        where: { slug: 'global' },
+        select: {
+          defaultModels: true,
+          globalMonthlyBudgetUsd: true,
+          searchConfig: true,
+          defaultApprovalTimeoutMs: true,
+          approvalDefaultAction: true,
+          inputGuardMode: true,
+          outputGuardMode: true,
+          citationGuardMode: true,
+          webhookRetentionDays: true,
+          webhookDlqRetentionDays: true,
+          costLogRetentionDays: true,
+          auditLogRetentionDays: true,
+          executionRetentionDays: true,
+          evaluationRetentionDays: true,
+          maxConversationsPerUser: true,
+          maxMessagesPerConversation: true,
+          escalationConfig: true,
+        },
+      })
+    ),
   ]);
 
   // Flatten the published version snapshot back to the wire shape that the
@@ -166,7 +222,7 @@ export async function exportOrchestrationConfig(): Promise<BackupPayload> {
             patternsUsed: w.patternsUsed,
             isActive: w.isActive,
             isTemplate: w.isTemplate,
-            metadata: w.metadata,
+            metadata: withoutImportMarker(w.metadata),
           },
         ]
       : []
@@ -177,7 +233,7 @@ export async function exportOrchestrationConfig(): Promise<BackupPayload> {
   // nested entity each) — flatten them before serialising. The narrowing tables
   // and helper are loop-invariant, so they live outside the per-agent map.
   const retrievalModes = ['model', 'first_turn', 'every_turn', 'keywords'] as const;
-  const reasoningEfforts = ['minimal', 'low', 'medium', 'high'] as const;
+  const reasoningEfforts = REASONING_EFFORTS;
   const narrowMode = (m: string) => (m === 'append' ? ('append' as const) : ('override' as const));
   const flattenedAgents = agents.map((a) => {
     const {
@@ -190,6 +246,9 @@ export async function exportOrchestrationConfig(): Promise<BackupPayload> {
       voiceMode,
       guardrailsMode,
       reasoningEffort,
+      verbosity,
+      serviceTier,
+      providerTools,
       ...rest
     } = a;
     return {
@@ -207,6 +266,9 @@ export async function exportOrchestrationConfig(): Promise<BackupPayload> {
       reasoningEffort: (reasoningEfforts as readonly string[]).includes(reasoningEffort ?? '')
         ? (reasoningEffort as (typeof reasoningEfforts)[number])
         : null,
+      verbosity: narrowVerbosity(verbosity) ?? null,
+      serviceTier: narrowServiceTier(serviceTier) ?? null,
+      providerTools: narrowProviderTools(providerTools) ?? null,
       // `knowledgeCategories` was dropped from the DB in Phase 6 but the
       // backup schema keeps the field on the wire for older importers
       // that still read it. Always emit empty.
@@ -229,7 +291,16 @@ export async function exportOrchestrationConfig(): Promise<BackupPayload> {
 
   return {
     schemaVersion: 3 as const,
-    exportedAt: new Date().toISOString(),
+    exportedAt,
+    exportSeal: sealExport({
+      exportedAt,
+      orgId,
+      contacts: bundleContacts({
+        webhooks: exportedWebhooks,
+        settings,
+        workflows: flattenedWorkflows,
+      }),
+    }),
     data: {
       agents: flattenedAgents,
       capabilities,

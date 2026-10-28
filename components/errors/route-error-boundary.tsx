@@ -42,8 +42,12 @@ export interface RouteErrorFallbackAction {
 export interface RouteErrorBoundaryProps {
   /** The error Next.js handed the boundary */
   error: Error & { digest?: string };
-  /** The reset callback Next.js handed the boundary */
-  reset: () => void;
+  /**
+   * The retry callback Next.js handed the boundary. Not `reset`: `reset` only
+   * re-renders, so a page whose server data load failed would fail the same
+   * way again. `retry` re-fetches the segment first.
+   */
+  retry: () => void;
   /** Identifies the boundary in logs, e.g. `"AdminError"` */
   boundaryName: string;
   /** Sentry `boundary` tag, e.g. `"admin"` */
@@ -70,7 +74,7 @@ export interface RouteErrorBoundaryProps {
 
 export function RouteErrorBoundary({
   error,
-  reset,
+  retry,
   boundaryName,
   tag,
   title,
@@ -118,13 +122,33 @@ export function RouteErrorBoundary({
         // session itself is `data`. Testing the envelope for truthiness would
         // never fire, so the expiry card would only ever appear on a thrown
         // request.
-        const { data: session } = await authClient.getSession();
-        if (!session) {
+        //
+        // A missing or expired session comes back as a 200 with null `data`,
+        // and a failed refresh as a 401. Anything else is the lookup failing,
+        // not the session: an auth outage should offer "try again", not tell a
+        // signed-in user to sign in.
+        //
+        // Each new error re-checks, so a valid session clears an expiry card an
+        // earlier error raised (signed in again in another tab, say).
+        const { data: session, error: sessionError } = await authClient.getSession();
+        if (session) {
+          setIsSessionExpired(false);
+        } else if (!sessionError || sessionError.status === 401) {
           setIsSessionExpired(true);
           logger.warn('Session expired in error boundary', { boundaryName });
+        } else {
+          logger.warn('Session check failed in error boundary', {
+            boundaryName,
+            status: sessionError.status,
+          });
         }
-      } catch {
-        setIsSessionExpired(true);
+      } catch (checkError) {
+        // The request itself failed, so the session is unknown — keep the
+        // normal error card and its retry.
+        logger.warn('Session check failed in error boundary', {
+          boundaryName,
+          error: checkError instanceof Error ? checkError.message : String(checkError),
+        });
       }
     };
 
@@ -162,7 +186,7 @@ export function RouteErrorBoundary({
       error={error}
       containerClassName={containerClassName}
       actions={[
-        { label: 'Try again', onClick: reset },
+        { label: 'Try again', onClick: retry },
         {
           label: fallback.label,
           onClick: () => {

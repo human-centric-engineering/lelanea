@@ -360,9 +360,10 @@ export async function eraseWaitlistEntriesForUser(ctx: {
 }
 
 /**
- * Wire the erasure hook. Called from `initLeafApp()` at server startup;
- * `registerErasureCleanupHook` is idempotent by name, so a repeated import
- * under HMR replaces rather than duplicates.
+ * Wire the erasure hook. Called from `initLeafErasureHooks()`
+ * (`lib/app/leaf-erasure.ts`), which core runs lazily the first time erasure
+ * reads its hooks; `registerErasureCleanupHook` is idempotent by name, so a
+ * repeated run replaces rather than duplicates.
  */
 export function registerWaitlistErasureHook(): void {
   registerErasureCleanupHook({

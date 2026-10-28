@@ -32,7 +32,6 @@
 import { registerModule } from '@/lib/framework/modules/registry';
 import { getModuleDefinitions } from '@/lib/app/modules/definitions';
 import { registerJourneyModules } from '@/lib/app/onboarding/discovery-slots';
-import { registerWaitlistErasureHook } from '@/lib/app/waitlist/service';
 import { registerFacilitationTurnHook } from '@/lib/framework/facilitation/agents/turn-hook';
 import { runRecordedTurn } from '@/lib/app/agent/turns';
 import { excludeFromConsumerChat } from '@/lib/orchestration/chat/consumer-exclusions';
@@ -41,15 +40,6 @@ import { registerGlobalSlotDefinitionProvider } from '@/lib/framework/data-slots
 import { loadAppGlobalSlotDefinitions } from '@/lib/app/slots/global-provider';
 
 export function initLeafApp(): Promise<void> {
-  // GDPR Art. 17. `app_waitlist_entry` is keyed by EMAIL, so the FK cascade
-  // cannot reach the rows of anyone who joined before signing up — which is
-  // everyone who has not accepted an invitation, since only the user-created
-  // hook (`lib/app/user-created.ts`) writes `userId`. Without this hook an
-  // erased account would leave that person's address, name and stated intent
-  // on a table nothing points at. See `lib/app/waitlist/service.ts`. First,
-  // because it cannot fail and must not be skipped by anything below that can.
-  registerWaitlistErasureHook();
-
   // §08 t-54. Every turn on a facilitation seat is claimed by its id, tagged with
   // its seat and recorded (`lib/app/agent/turns.ts`). Before anything that can
   // throw: with no hook the route falls back to the pass-through, and the agent's

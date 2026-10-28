@@ -16,6 +16,2203 @@ release process.
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-27
+
+> **Alpha release.** Twenty-second tagged Sunrise release. **MINOR bump**. It
+> lets agents use the providers' own tools: web search on Claude and on
+> OpenAI (through a new opt-in Responses API path), and code execution on
+> both. It adds the newer model parameters (stop sequences, top P, verbosity,
+> parallel tool calls, service tier, `xhigh` and `max` reasoning effort),
+> prompt caching on Claude with cache-priced cost rows, the model's reasoning
+> summary in the admin chat and trace, and Claude thinking blocks kept across
+> a tool loop. And it finishes erasure's stale-write protection (§122):
+> versioned saves that require `If-Match`, backups this install sealed,
+> actions on a run under its row lock, and deliveries checked for erasures
+> since their copy was taken. Measured against `v0.15.0`: 36 PRs merged, no
+> direct commits, 16 issues closed (15 fixed, 1 declined); the suite is 1,400
+> files and 30,364 tests.
+>
+> ## What a fork has to do
+>
+> **Three migrations, then `npm run db:seed`.** All three only add nullable
+> columns (one with a constant default), so none rewrites or scans a table:
+> `20261026120000_cost_log_cache_tokens` (`ai_cost_log`),
+> `20261026130000_agent_model_params` and
+> `20261027100000_agent_provider_tools` (`ai_agent`). The seed re-runs the
+> platform-agents unit, whose reconcile now shares one provider catalogue
+> across orgs; its result is unchanged.
+>
+> **API clients must read before they write.** These routes now require the
+> record's version back as `If-Match`, and answer `428
+> PRECONDITION_REQUIRED` without it and `412 STALE_RECORD` once the record
+> moved on, an erasure included, with nothing written:
+>
+> - `PATCH /workflows/:id` with `draftDefinition`, `POST
+>   /workflows/:id/publish` and `POST /workflows/:id/discard-draft`
+>   (`definitionVersion` from `GET /workflows/:id`). `POST /workflows` with
+>   `copiedFrom` is refused with 412 when its source moved on.
+> - `PATCH /settings` with `escalationConfig` (`escalationVersion`), `PATCH
+>   /webhooks/:id` and `PATCH /workflows/:id/schedules/:scheduleId`
+>   (`version`).
+>
+> **Your type-check will flag:** a hand-built `ErasureExternalContext` or
+> `ErasureTxContext` (new required `email` and `emailVerified`), and the
+> removed `refuseErasedSubjects` (see Removed).
+>
+> **Your tests will flag:**
+>
+> - **`stale-writers.test.ts`, new in this release**, fails for any fork file
+>   that writes a column erasure scrubs in place (`SCRUBBED_COLUMNS`, on
+>   `AiWorkflowExecution`, `AiWorkflowRunningStep`, `AiWorkflowStepDispatch`,
+>   `AiWorkflowExecutionLeaseEvent`, `AiWebhookDelivery`,
+>   `AiEventHookDelivery`, `AiWorkflow`, `AiWorkflowVersion`,
+>   `AiOrchestrationSettings`, `AiWebhookSubscription` and
+>   `AiWorkflowSchedule`), until it declares how it knows its copy is stale
+>   with `registerStaleWriter()`.
+> - **The owner-classification test** now counts a `String` column named
+>   `…UserId` as a user link, so an unclassified one fails until it is
+>   classified in `lib/app/owner-classification.ts`.
+> - **A test asserting Anthropic's joined `system` string**: it is now sent as
+>   one text block per system message.
+>
+> **Changes a build will not catch:**
+>
+> - **Claude's `inputTokens` now counts cached input**, as OpenAI's already
+>   did. A fork that prices `inputTokens` itself should pass the usage to
+>   `calculateCost`, or it prices cache hits at the full rate.
+> - **Backups are now sealed.** A backup this install sealed keeps contacts
+>   re-added after an erasure when restored into the same org. Every bundle
+>   exported before 0.16.0 is unsealed, so restoring one strips anyone ever
+>   erased, as before. Rotating `BETTER_AUTH_SECRET` unseals the bundles
+>   sealed before it.
+> - **The app export collector is also passed `emailVerified`.** A
+>   collector that spreads its argument into a Prisma query passes the extra
+>   field, which Prisma refuses on a model without that column.
+> - **Erasure checks count only erasures since a copy was taken.** A
+>   `send_notification` step emails an address re-entered after an older
+>   erasure again; deliveries naming someone hold a database connection while
+>   they wait for an erasure's locks (up to 30 s).
+> - **Provider tools are off until an agent turns them on**, and then they
+>   cost: $0.01 a web search, and code execution's container time, estimated
+>   as the measured run time with a 5-minute minimum per container. Files the
+>   code makes are not delivered; Anthropic's copies are deleted. Turning on
+>   Anthropic web search needs an organisation admin to enable it in the
+>   Console.
+> - **Replayed provider blocks.** The new `LlmReasoningBlock` rides on
+>   `LlmResponse.reasoning` and the `done` chunk: Claude's thinking, and both
+>   providers' web search and code runs. A fork with its own tool loop must
+>   copy `reasoning` onto the assistant message it appends, or Claude rejects
+>   a thinking turn and the searches and code runs are lost. A fork that
+>   checks `agent_call` turns against its own schema must accept the blocks,
+>   or a resumed step starts again.
+> - **An agent's fallbacks never include its own primary**, and a platform
+>   agent's `defaultBinding` is now called with a shared `catalogue` (a
+>   one-argument one still works).
+> - **The Anthropic SDK (0.137) traces itself with OpenTelemetry** when a
+>   global `TracerProvider` is registered, sending `traceparent` and
+>   metadata-only spans. Sunrise registers none; a fork that does can opt out
+>   with `ANTHROPIC_OPEN_TELEMETRY=false`.
+>
+> **Dependencies.** Late October's bumps, including two majors:
+> `@hookform/resolvers` 6, whose only break is the effect-ts resolver (Sunrise
+> uses `/zod`), and happy-dom 21, test-only, which makes CSS and iframe loading
+> opt-in, so a fork's component tests that rely on either must switch it on.
+> Also `@anthropic-ai/sdk` 0.137, better-auth 1.7.13, dompurify 3.4.17 and
+> fast-uri 3.1.9 (see Security). Held back in `.github/dependabot.yml`: undici
+> 8, `@anthropic-ai/sdk` 1.x, OpenTelemetry 3.x, and `@opentelemetry/api`
+> 1.10, which every OpenTelemetry 2.x package caps its peer below.
+>
+> **Dependency alerts accepted for this release:**
+>
+> - `zod` < 4.6.6 (high, memory exhaustion on oversized input), under
+>   `@vercel/blob` → `@vercel/oidc` → `@vercel/cli-config`, which pins zod
+>   4.1.11 exactly; no release of it takes a patched zod yet. That copy only
+>   validates the Vercel CLI's own config files on disk, not untrusted input.
+>   Sunrise's own zod is 4.6.7.
+> - `postcss-selector-parser` (moderate), under `@tailwindcss/typography`, as
+>   in 0.15.0: the fix is in a major the plugin doesn't accept yet, and it
+>   parses only the app's own CSS, at build time.
+
+### Added
+
+- **The providers' own code execution on agents (t-956).** `ProviderTools`
+  gains `codeExecution` (`{}`, stored in `AiAgent.providerTools` beside
+  `webSearch`), with a switch on the agent form. On Claude Opus, Sonnet and
+  Haiku 4.5 and later (new `acceptsCodeExecution()`) Anthropic's
+  `code_execution_20260521` tool is sent; on OpenAI itself the request takes
+  the Responses API path with `code_interpreter` in a no-network container
+  (new `acceptsOpenAiCodeInterpreter()`, `takenProviderTools()`,
+  `codeInterpreterRefusal()`). `LlmReasoningBlock` gains
+  `code_execution_tool_result` and `openai_code_interpreter_call`, and
+  `server_tool_use` now also names `bash_code_execution` /
+  `text_editor_code_execution`. A tool loop replays them, so the next call
+  reuses the container, and the `agent_call` checkpoint keeps them. What the
+  code prints reaches the model and the trace (`provider:code_execution`);
+  files it makes are not delivered, and Anthropic's copies are deleted from
+  its Files storage straight after the call that made them. New `LlmUsage.codeExecution`
+  (`{ runs, billedSeconds, usdPerHour }`) is priced by `calculateCost` and
+  stamped on the cost row: each container a reply uses is billed the larger
+  of its measured run time and 5 minutes (`lib/orchestration/llm/code-execution.ts`),
+  an estimate since neither provider reports the time. On OpenAI, with code execution on, the search limit isn't sent as `max_tool_calls`, which would cap code runs too. New exports on
+  `@/lib/orchestration/llm`: `CodeExecutionOptions`, `CodeExecutionUsage`,
+  `CODE_EXECUTION_MIN_BILLED_SECONDS`, `CODE_EXECUTION_USD_PER_HOUR`,
+  `AnthropicCodeExecutionContent` and `AnthropicServerToolName`. New
+  `withProviderTool()` sets one provider tool and keeps the others: turning
+  web search off on the form no longer clears the whole value. **Forks:** a
+  consumer that switches on `LlmReasoningBlock.type`, or reads
+  `server_tool_use` as a web search, meets the new variants and names; a fork
+  that checks `agent_call` turns against its own schema must accept them; a
+  fork that logs cost itself should pass `codeExecution` to `logCost` beside
+  `webSearchRequests`.
+
+- **OpenAI's web search on agents, through the Responses API (t-955).** An
+  agent with `providerTools.webSearch` on OpenAI itself (`api.openai.com`)
+  now searches. The request goes through the Responses API
+  (`lib/orchestration/llm/openai-responses.ts`) when the model offers web
+  search (new `acceptsOpenAiWebSearch()`, plus `acceptsOpenAiWebSearchFilters()`
+  when a site list is set) and isn't structured output or at `minimal`
+  effort. Every other OpenAI-compatible request stays on Chat Completions
+  unchanged. The path is stateless (`store: false`). `LlmReasoningBlock`
+  gains `openai_reasoning` and `openai_web_search_call` variants, which a
+  tool loop replays and the `agent_call` checkpoint keeps; the Anthropic
+  adapter leaves them out. Reasoning summaries stream as `reasoning` chunks,
+  and an unverified OpenAI organisation's refusal is retried without them.
+  On OpenAI a site with a path is sent as its host. The search limit caps
+  each call, not the reply: `spendWebSearches()` now keeps the agent's whole
+  limit on the new `WebSearchOptions.replyLimit`. Searches cost $0.01 each and
+  show in the trace, as on Anthropic. `stopSequences` is dropped on this
+  path. A replayed reasoning item OpenAI can't decrypt (`400
+  invalid_encrypted_content`, as a damaged checkpoint gets) is retried once
+  without the reasoning items, keeping the search and code items; it is
+  meant for a fallback onto another organisation's credential too (t-959).
+  **Forks:** a fork `LlmProvider` or consumer that switches on
+  `LlmReasoningBlock.type` meets two more variants. A fork that checks
+  `agent_call` turns against its own schema must accept them, or a resumed
+  OpenAI step starts again.
+
+- **Anthropic's web search on agents (t-912).** New `LlmOptions.providerTools`
+  (`ProviderTools`, `WebSearchOptions` in `lib/orchestration/llm/types.ts`)
+  sends Anthropic's `web_search` server tool, with a search limit and allowed
+  or blocked domains, on Claude models that offer it (`acceptsWebSearch()`).
+  `AiAgent` gains a nullable `providerTools` JSON column (migration
+  `20261027100000_agent_provider_tools`), platform-owned on a platform agent,
+  in the agent registry, the create / update / export / backup schemas
+  (`agentProviderToolsField`, `providerToolsSchema`) and a Web search control
+  on the agent form. `LlmReasoningBlock` gains `server_tool_use` and
+  `web_search_tool_result` variants (results as `WebSearchResult`), returned in
+  order with thinking blocks so a tool loop replays the searches. A
+  `pause_turn` stop is now sent back to carry on (up to three times) instead of
+  read as a finished answer. `WebSearchOptions.maxUses` caps one reply, not
+  one request: the adapter sends each paused-turn continuation the searches
+  left, and `spendWebSearches()` (`lib/orchestration/llm/model-params.ts`)
+  does the same for a tool loop's next call; at 0 the tool comes off and a
+  search left waiting gets Anthropic's `max_uses_exceeded` result.
+  `AgentCallTurn` gains an optional `webSearchRequests`, so the cap holds
+  across an `agent_call` resume.
+  `LlmUsage.webSearchRequests` counts the searches; `calculateCost` adds
+  `WEB_SEARCH_USD_PER_REQUEST` ($0.01) a search to the total and reports it as
+  `webSearchCostUsd`, and `logCost` (new `LogCostParams.webSearchRequests`)
+  records both in the row's metadata. Each search is a `provider:web_search`
+  entry in the chat trace. **Forks:** an `AiAgent` fixture typed against
+  Prisma needs `providerTools`; a fork tool loop that sends `providerTools`
+  should pass each call's options through `spendWebSearches()`, or the search
+  limit applies per call; a fork `LlmProvider` or consumer that switches
+  on `LlmReasoningBlock.type` meets two new variants; a consumer that summed
+  `inputCostUsd + outputCostUsd` for a total should read `totalCostUsd`.
+
+- **The model's reasoning in the admin chat and trace (t-953).** `StreamChunk`
+  (`lib/orchestration/llm/types.ts`) gains a `{ type: 'reasoning'; text }`
+  variant, yielded as the model reasons: Claude's thinking deltas (adaptive
+  models now send `thinking.display: 'summarized'`, since they default to
+  `'omitted'`), and the `reasoning_content` / `reasoning` deltas some
+  OpenAI-compatible providers (DeepSeek, OpenRouter, vLLM) put on Chat
+  Completions. OpenAI's own summaries need the Responses API, so they come
+  only on its web search path (t-955). `ChatEvent` gains `{ type: 'reasoning'; delta }`, sent only when
+  the request sets `includeTrace`, so consumer and embed streams don't carry
+  it. `MessageMetadata.reasoningSummary` stores the text on every assistant
+  message that had some. The admin chat and the conversation trace viewer
+  show it in a collapsed panel. **Forks:** a fork `LlmProvider` doesn't have
+  to yield the new chunk, and a fork consumer of `chatStream` or `streamChat`
+  that switches on `type` can ignore it.
+
+- **Stop sequences, top P, verbosity, parallel tool calls and service tier
+  (t-911, t-913).** New `LlmOptions` fields `stopSequences`, `topP`,
+  `verbosity`, `parallelToolCalls`, `serviceTier` (types and their lists
+  `VERBOSITIES`, `SERVICE_TIERS`, `MAX_STOP_SEQUENCES` in `types.ts`), each
+  sent only to models that take it and dropped elsewhere. `AiAgent` gains the
+  same five columns (migration `20261026130000_agent_model_params`), in the
+  agent registry, the create / update / export / backup schemas
+  (`modelParamFields`) and the agent form; `serviceTier` is org-owned on a
+  platform agent, the rest platform-owned. An `llm_call` step takes them as
+  config. `modelParamOptions()` (new `lib/orchestration/llm/model-params.ts`)
+  turns stored values into options. `LlmUsage.serviceTier` reports a flex or
+  priority call, which `calculateCost` prices at 0.5× / 2× and `logCost`
+  stamps on the row's `metadata.serviceTier`. **Forks:** an `AiAgent` fixture
+  typed against Prisma needs the five fields, and the platform-agent banner
+  now lists the service tier among the org's settings.
+- **Prompt caching on Claude, and cache-priced cost rows (t-909).** Every
+  Anthropic request now carries a `cache_control` breakpoint on the agent's
+  composed system prompt (with the tools ahead of it), and one on the last
+  turn when the request has earlier turns. No
+  configuration and no top-level automatic caching, which some gateways
+  refuse. New `LlmUsage` (`lib/orchestration/llm/types.ts`), now the type of
+  `LlmResponse.usage`, the stream's `done` chunk and `ProviderError.usage`,
+  adds `cacheReadTokens` / `cacheWriteTokens`; OpenAI's
+  `prompt_tokens_details.cached_tokens` is read too. `calculateCost` takes an
+  optional fourth argument with those counts and prices them from the new
+  `ModelInfo.cacheReadCostPerMillion` / `cacheWriteCostPerMillion` (read from
+  OpenRouter), else Anthropic's 0.1× / 1.25×, else the full input rate.
+  `LogCostParams` takes the same counts, and `AiCostLog` gains nullable
+  `cacheReadTokens` / `cacheWriteTokens` columns (migration
+  `20261026120000_cost_log_cache_tokens`). The structured-completion
+  helper's `tokenUsage` gains optional `cacheRead` / `cacheWrite`.
+- **`xhigh` and `max` reasoning effort (t-906).** `ReasoningEffort`
+  (`lib/orchestration/llm/types.ts`) gains `'xhigh' | 'max'`, accepted on
+  agents, every LLM step's `reasoningEffort`, the agent export bundle and the
+  backup format, and offered as Extra high / Max in the admin select. The full
+  list is the new exported `REASONING_EFFORTS` (`types.ts`).
+  Adaptive-thinking Claude models get them as `output_config.effort`;
+  budget-taking Claude models get a 32768 / 65536 thinking budget, clamped as
+  before; OpenAI-compatible reasoning models get `high`
+  (`openAiReasoningEffort()`). Older bundles import unchanged. **Forks:** a
+  `switch` over `ReasoningEffort` needs the two new cases.
+- **Routes can declare credential path segments (t-933, #971).** New scaffold
+  `lib/app/credential-paths.ts` (`appCredentialPaths`, ships empty) lists route
+  patterns such as `'/m/[joinRef]'`; the declared segments are collapsed to
+  `[param]` whatever their length by `collapseDynamicSegments()`, so a short
+  share or room code no longer reaches the access log, guard log lines, client
+  error reports, Sentry or page-view analytics. Core declares its own in the
+  exported `CREDENTIAL_PATHS` (better-auth's
+  `/api/auth/reset-password/[token]`), so that token is now collapsed
+  whatever its length; nothing else changes while the fork's list is empty.
+  `credentialPathProblem()` says why a pattern would be skipped. The
+  20-character shape rule stays as the backstop.
+- **`sendEmail` takes message headers (t-935, #854).** New optional
+  `headers` on `SendEmailOptions` (`lib/email/send.ts`) is passed to Resend
+  unchanged, so a fork can send the one-click unsubscribe headers
+  (`List-Unsubscribe`, `List-Unsubscribe-Post`) bulk senders need. Only the
+  header names are logged. No change to sends that omit it.
+- **A fork's org-tier admin routes (§111, t-927).** New scaffold
+  `lib/app/admin-tier-routes.ts` (`APP_ORG_TIER_ADMIN_ROUTES`, ships empty)
+  lists the fork's admin API routes and wrappers that declare `tier: 'org'`, so
+  the roster test passes without the fork editing core's
+  `ORG_TIER_ADMIN_ROUTES`. Held to core's checks; nothing reads it at runtime.
+  The roster test now reads every module under `app/`, not only route files,
+  so a tier-baking wrapper under `app/` is seen — **a fork with an unlisted one
+  will now fail that test** until it is listed here. See
+  `.context/auth/authorization.md` ("Admin tiers").
+- **A fork's landing page for org admins (§111, t-928).** New scaffold
+  `lib/app/admin-landing.ts` (`appOrgAdminLandingRoute`, ships `null`) names
+  where `/admin` sends an org OWNER/ADMIN. Used only if it is an org-tier page;
+  otherwise `/admin` logs an error and keeps `/admin/orchestration`, and the
+  roster test fails.
+- **A fork can keep core's orchestration platform-only (§111, t-929).**
+  `closeCoreOrgTierSection('orchestration')` from `lib/auth/admin-tier.ts`,
+  called in `initAppOrgTierAdminPages()`, closes the section's pages, nav items
+  and admin API routes to org admins on that install. They read one narrowed
+  answer: `orgTierAdminPages()` for pages and nav, `closedCoreOrgTierSections()`
+  for the guard. Members and Support access stay open. With no landing named,
+  `/admin` sends an org admin to Members. Behaviour-neutral when unused; rolled
+  back with the rest of the init on a throw. `AdminSidebar` now takes a
+  required `orgTierPages` prop. See `.context/auth/authorization.md`
+  ("Admin tiers").
+
+- **Stale-writer manifest for erasure (§122, t-887).** `lib/privacy/stale-writers.ts`
+  lists every file that writes a column erasure scrubs in place, with how it
+  knows its copy is stale. `tests/unit/lib/privacy/stale-writers.test.ts` parses
+  the tree and fails on an unlisted writer, so **a fork file that writes one of
+  those columns fails the build until it declares itself** with the new
+  `registerStaleWriter()` (`lib/privacy/erasure-hooks.ts`), called from
+  `initAppErasureHooks()` in `lib/app/erasure.ts`. Nothing changes at runtime.
+  See `.context/privacy/data-erasure.md`.
+- **Thinking blocks across a tool loop (t-897, t-908).** New type
+  `LlmReasoningBlock` on `@/lib/orchestration/llm`, and an optional `reasoning`
+  field on `LlmResponse`, `LlmMessage` and the `done` `StreamChunk`. The
+  Anthropic provider returns a turn's `thinking` / `redacted_thinking` blocks
+  there and replays an assistant message's blocks unchanged; the chat and
+  `agent_call` tool loops carry them between requests. Optional, so a fork's
+  `LlmProvider` that ignores the field is unaffected; a fork with its own
+  tool loop over Claude should copy `reasoning` from the response onto the
+  assistant message it appends. See `.context/orchestration/llm-providers.md`.
+- **`runStructuredCompletion` takes a `reasoningEffort` (t-940, #981).**
+  Optional, forwarded on both attempts; no core caller sets it. A thinking
+  model's reasoning counts against `maxTokens`, so a caller setting it should
+  raise `maxTokens` and `timeoutMs` from their plain-extraction defaults; the
+  option's doc comment in `lib/orchestration/llm/structured-completion.ts` says
+  why.
+- **`presentSessionEntry()` for routes that enter an org outside the guards
+  (t-941, #1068).** New on `lib/auth/support-principal.ts`, with
+  `refuseReadOnlySupportWrite()` (the guards' own refusal, now shared) and
+  `READ_ONLY_SUPPORT_MESSAGE`. After `enterSessionOrg()`, it refuses and logs a
+  write under a READ_ONLY support grant with a 403 and returns the session with the
+  default user role inside a support session, as the guards do. **A fork route
+  that calls `enterSessionOrg()` itself should adopt it**, and run its work in
+  `runAsOrg()` so the audit log stamps the grant: since 0.15.0 such a
+  route sees a support actor as a platform `ADMIN`, and a READ_ONLY grant does
+  not stop its writes. See `.context/tenancy/support-access.md` ("Entering an
+  org outside the guards").
+- **A leaf fork's own `lib/app/` modules (t-942, #847).** New scaffold
+  `lib/app/own-modules.ts` (`appOwnModules`, ships empty) lists a fork's own
+  modules under `lib/app/`. VERSIONING.md's seam check, CUSTOMIZATION.md §4's
+  table check and the `SEAM_DEFAULTS` row check skip them, so a leaf fork no
+  longer carries a row per module in those three Sunrise files. An entry that
+  is not on disk, or that still has a row in any of the three (as every Sunrise
+  seam does), fails the seam-coverage tests; delete a module's old rows when
+  you list it. Unlike other seams it needs no `SEAM_DEFAULTS` pin: its row
+  checks the entries instead. A fork others build on should not declare. See CUSTOMIZATION.md §4.
+
+- **Provider seams can say "could not ask" instead of "nothing" (t-819).**
+  `resolveEligibleProviders` takes an optional `{ onFailure: 'throw' }`.
+  Under it, a fork resolver that throws, a registrar that failed, or an
+  unreadable org policy throws the new `ProviderSeamUnavailableError` instead
+  of answering "nothing eligible". The new `classifyProvidersByCredential`
+  (`lib/orchestration/llm/provider-credentials.ts`) returns the rows
+  `filterProvidersWithCredential` would keep, plus, separately, each row the
+  credential resolver failed for, with its error. Both are for a caller that
+  records its answer rather than acting on it. The defaults are unchanged:
+  every call-time path still fails closed.
+
+- **The agent form shows who picks a platform agent's provider and model,
+  and can hand them back (t-818).** `GET /agents/:id`'s `platformAgent` gains
+  `picksOwnBinding`, which is true on an agent whose definition picks its own
+  binding (the clean-up assistant in core). It also gains
+  `bindingFollowsPlatform`, which is true while the platform owns that binding
+  (see Changed). On such an agent, the Model tab says whether the platform or
+  the org decides its provider and model. Once the org owns them, "Let the
+  platform choose" sends `PATCH { bindingOwner: 'platform' }` and takes the
+  row the PATCH returns. That row is on the platform's pick, or stays where
+  it was until the next maintenance pass if the platform can't pick right
+  then. The control is disabled while the form has unsaved changes.
+
+### Changed
+
+- **Claude `inputTokens` now counts cached input (t-909).** Anthropic reports
+  cache reads and writes apart from `input_tokens`; the provider now adds
+  them back in, so `LlmUsage.inputTokens` (and `AiCostLog.inputTokens`) is the
+  whole input on every provider, as it already was for OpenAI. A fork
+  computing cost from `inputTokens` itself should pass the usage as
+  `calculateCost`'s fourth argument, or it prices cache hits at the full
+  rate. Anthropic's `system` is now sent as one text block per system
+  message, which a fork's test asserting the old joined string will notice.
+- **Erasure reaches the rest of what a run keeps (t-882).** Besides a run's
+  input, trace, output and error, erasure now redacts its `supervisorReport`,
+  its running-step `turns`, its cached step-dispatch `result` and its
+  lease-event `metadata`, under the run's row lock; a run naming the person
+  only in those rows is found too. The engine's writes of the report and the
+  turns, and `recordDispatch`, now leave out anyone erased since the run
+  started.
+  `SCRUBBED_COLUMNS` (`lib/privacy/stale-writers.ts`, new in this release:
+  see Added) lists the four too, so **a fork file that writes `AiWorkflowRunningStep`, `AiWorkflowStepDispatch`,
+  `AiWorkflowExecutionLeaseEvent` or `supervisorReport` fails
+  `stale-writers.test.ts` until it declares itself** with
+  `registerStaleWriter()`. See `.context/privacy/data-erasure.md`.
+
+- **Erasure hooks are told the subject's email and whether it is verified
+  (t-944).** `ErasureExternalContext` and `ErasureTxContext`
+  (`lib/privacy/erasure-hooks.ts`) gain required `email` and `emailVerified`,
+  read from the user row. These are the same fields the export collector gets,
+  so a fork table keyed by address can share one match between export and
+  erasure, and delete by address only for a verified account. Hooks only read
+  the context, so hook code is unaffected, but **a fork test that builds a
+  context by hand stops compiling** until it adds the two fields. An install
+  with a `cleanupExternal` hook makes one extra user-row read per erasure. See
+  `.context/privacy/data-erasure.md` ("What the FK cascade can't do").
+- **The app export collector is told whether the subject's email is verified
+  (t-934, #972).** `exportUserData()` now passes `emailVerified` to
+  `collectAppSubjectData()` alongside `userId` and `email`, so a fork table
+  keyed by address can hand rows over only to an account that proved the
+  address. The scaffold `lib/app/data-export.ts` is unchanged: to read the
+  flag, add `emailVerified: boolean` to your own `AppSubjectQuery`. A
+  collector that spreads its whole argument into a query will now see the
+  extra field. See `.context/privacy/data-export.md` ("Extending It").
+- **The workflow builder's save, publish and discard are versioned, and
+  `If-Match` is required (§122, t-900).** `GET /workflows/:id` returns
+  `definitionVersion` (the draft or published snapshot the builder edits, and
+  which version is published). `PATCH /workflows/:id` with `draftDefinition`
+  (including `null`), `POST /workflows/:id/publish` and `POST
+  /workflows/:id/discard-draft` must send it back as `If-Match`: `428
+  PRECONDITION_REQUIRED` without, `412 STALE_RECORD` once the workflow moved
+  on, an erasure included, nothing written. **API clients must read before
+  they save, publish or discard.** A `PATCH` of other fields alone, a
+  rollback and a create are unchanged. The builder shows the reload prompt
+  with a **Copy my changes** option (`StaleSaveNotice` gains
+  `onCopyChanges`). An address typed into a freshly loaded builder is now
+  saved even if its owner was once erased; an erased approver id is still
+  stripped. A new workflow copied from a stored one (a custom template,
+  Duplicate, save-as-template) sends `copiedFrom: { workflowId,
+  definitionVersion }` on `POST /workflows` and is refused with 412 when that
+  source moved on; `GET /workflows/templates` gives each of the org's own
+  templates its `copySource`. A `PATCH` that sends a draft writes its
+  other fields in the same update, after the check, and one that clears the
+  draft is now audited as `workflow.draft.discard`. `AiWorkflowWithVersion` gains `definitionVersion`;
+  `lib/orchestration/config-versions.ts` gains the workflow's version and
+  lock. Backup seals now cover workflow definitions' addresses too, so a
+  sealed import strips only people erased since its `exportedAt` from them,
+  and a bundle sealed by an earlier build of this release no longer
+  verifies (every erasure counts, as for an unsealed bundle); no released
+  bundle was ever sealed. The stale-writer manifest's `pending` anchor,
+  `PendingStaleWriter` and `StaleWriterTask`, added earlier in this release,
+  are gone again: §122 has converted every writer. See `.context/privacy/data-erasure.md` ("The workflow
+  builder").
+
+- **Saves of the escalation list, a webhook subscription and a schedule are
+  versioned, and `If-Match` is required (§122, t-899).** `GET /settings`
+  returns `escalationVersion`; webhook subscriptions and schedules carry
+  `version` in their lists and single reads (a field, not an `ETag`). `PATCH
+  /settings` with `escalationConfig`, `PATCH /webhooks/:id` and `PATCH
+  /workflows/:id/schedules/:scheduleId` must send it back as `If-Match`:
+  without it they answer `428 PRECONDITION_REQUIRED`, and when the record
+  changed since it was read, an erasure included, `412 STALE_RECORD` with
+  nothing written. **API clients must read before they save.** A settings
+  PATCH that does not write `escalationConfig` is unchanged. These routes no
+  longer refuse an address ever erased: one typed into a freshly loaded form,
+  or a create, is saved. New `StaleRecordError`, `PreconditionRequiredError`
+  and their codes in `lib/api/errors.ts`; the mechanism, for forks, is
+  `lib/api/record-version.ts`. `refuseErasedSubjects` is removed from
+  `lib/privacy/erased-subjects.ts`: use the versioned save, or
+  `findErasedSubjects`. See `.context/privacy/data-erasure.md` ("Saves of a
+  record that moved on").
+
+- **A backup this install sealed keeps contacts re-added after an erasure
+  (§122, t-902).** Exports now stamp `exportedAt` before reading and carry
+  `exportSeal`: an HMAC keyed by `BETTER_AUTH_SECRET` over `exportedAt`, the
+  exporting org, and the subscriptions' and escalation list's addresses
+  (`lib/orchestration/backup/export-seal.ts`). Imported into the same org with
+  the seal intact, the email subscriptions and escalation list are stripped
+  only of people erased since `exportedAt`, so an address an admin re-added
+  after an older erasure survives a restore, with a warning counting such
+  addresses. Unsealed bundles (every one exported before this), another
+  install's or org's, and edited ones still strip anyone ever erased; a seal
+  that does not verify is reported. Workflow definitions joined the seal in
+  t-900.
+  Rotating `BETTER_AUTH_SECRET` unseals earlier bundles, and environments
+  sharing one share seals. See `.context/privacy/data-erasure.md`
+  ("Backup import").
+
+- **Actions on a run read and write it under its row lock (§122, t-901).**
+  Approve, reject and retry-step now take the run's row lock before reading
+  its trace (`withRunRowLocked()`, `lib/orchestration/engine/run-row-lock.ts`),
+  so a copy read before an erasure cannot write the person back. A scheduled
+  run now blanks anyone erased since the tick read its schedule rather than
+  anyone ever erased; the schedule routes still refuse an erased address until
+  t-899, so nothing reaches a template that way yet. An approve, reject or
+  retry-step that waits past the lock's bound answers 409 ("the run is busy;
+  nothing was changed") rather than 500. See `.context/privacy/data-erasure.md` ("Actions on a run").
+
+- **Deliveries and email sends leave out people erased since their copy was
+  taken (§122, t-886).** Every webhook and event-hook delivery attempt, first
+  or retry, and the escalation email now hold erasure's subject locks across
+  the send and check for erasures **since** their copy was taken — the oldest
+  of the subscriptions', hook row's or settings' read, the delivery row's
+  creation, and the start of the run its payload names
+  (`sendHoldingSubjects()`, `lib/privacy/stale-sends.ts`).
+  A delivery to an erased address, or about an erased person's activity, is
+  stopped as erasure stops one (`stoppedByErasure`, never retried); one naming
+  them only as an admin acting is sent without who acted. The
+  `send_notification` step's check moves from every erasure ever to erasures
+  since its run started, so **an address re-entered after an older erasure is
+  emailed again** — except one resolved from an earlier step's output, whose
+  source erasure never scrubs, which still counts every erasure. `findErasedSubjects()` takes a `since` option for a fork's
+  own sender of a copy. A delivery naming someone holds a database connection
+  while it waits for an erasure's locks (up to 30 s), and an email for its send
+  (15 s); a webhook or hook post goes after the decision commits. A check that
+  cannot run is retried without counting against the delivery's attempts, for
+  the row's first hour. See
+  `.context/privacy/data-erasure.md`.
+
+- **A platform agent's `defaultBinding` is handed a shared provider catalogue
+  (t-816).** `PlatformAgentDefinition.defaultBinding` is now called as
+  `(db, catalogue)`. The new `PlatformAgentCatalogue`
+  (`createPlatformAgentCatalogue()` in
+  `lib/orchestration/agents/platform-agents.ts`) holds the active provider and
+  model rows, each read once on first use. The `platformAgents` maintenance
+  job shares one catalogue across every org it visits in a run, so a pass over
+  N orgs reads those tables once, not N times. A drifted org's reconcile also
+  reuses the picks its drift check got, rather than asking for them again. A
+  one-argument `defaultBinding` still type-checks and works.
+  **Forks:** if you implement one, read rows from `catalogue`, and use the
+  seams' "could not ask" forms (see Added).
+
+- **Version restore leaves a platform-owned provider and model alone
+  (t-821).** While the platform owns a platform agent's binding
+  (`bindingOwner: 'platform'`), `POST /agents/:id/versions/:versionId/restore`
+  no longer brings back the snapshot's provider, model or provider
+  configuration, and doesn't check that provider against the org's approved
+  providers. The version's fallbacks are still restored, minus the current
+  primary, and still checked. Before, restoring any org setting, such as the
+  budget, also froze the agent on an older pick and made the binding the
+  org's. If that pick's provider had since been revoked, the whole restore was
+  refused. Once the org owns the binding, a restore brings all of them back as
+  before. The Versions tab's confirm dialog says which fields come back in
+  each case. On such an agent a restore that races a reconcile or a hand-back
+  now returns 409 rather than undoing it.
+
+- **An agent's fallbacks never include its own primary (t-954).**
+  `resolveAgentProviderAndModel` drops the resolved primary's slug, and any
+  repeat, from an agent's explicit `fallbackProviders`, keeping the rest in
+  order. So a fork's eligibility rule (`registerProviderEligibility`) is no
+  longer asked about the primary as one of its own fallbacks under `source:
+  'explicit'`. `getProviderWithFallbacks` also tries each slug once. The
+  state arose when the reconcile moved a platform-picked primary onto a listed
+  fallback (t-798), or when an inherited primary was a listed one. A list that
+  named only the primary is now an empty explicit list, not the system fill.
+
+### Removed
+
+- **`refuseErasedSubjects`** (`lib/privacy/erased-subjects.ts`, added in
+  0.15.0). A save that must not write an erased person back now uses a
+  versioned save (`lib/api/record-version.ts`); a fork's own check uses
+  `findErasedSubjects`, which takes a `since` option. See the §122 entries
+  under Changed.
+
+### Fixed
+
+- **A wrongly typed subject-source declaration is dropped, not thrown
+  (t-787).** `registerAppSubjectSources()` called `.trim()` on whatever it
+  was given, so a non-string `model` or `description`, or a `null` source or
+  exclusion, threw out of `initAppSubjectSources()`. The tier was rolled back
+  and `exportUserData()` refused every request for the life of the process.
+  Such a row is now dropped with a `subject-sources: declaration rejected`
+  log, like any other malformed row, and the coverage guard names the model.
+  An exclusion is now stored as exactly `{ model, reason }` with the reason
+  trimmed, so extra fields a fork passed no longer reach the bundle's
+  `meta.excluded`, and `getAppExcludedSubjectSources()` returns copies. Both
+  registries are now built on `createDeclarationRegistry()`
+  (`lib/privacy/declaration-registry.ts`); their exports are unchanged. In
+  both, a contribution that is not an object, has a non-string `tier`, or has
+  a `sources` / `excluded` that is not an array is now rejected with a log
+  rather than throwing; a non-string `tier` had also let a second tier claim a
+  model another tier already owned. A source's `description` is stored
+  trimmed, so `meta.app` shows what was checked. The `App*SourceContribution`
+  and `AppExcluded*Source` types are now aliases of the shared
+  `DeclarationContribution` and `DeclaredExclusion`, with the same shape.
+
+- **The clean-up agent stays put while a fork resolver is down (t-819).**
+  Since t-798, a fork's eligibility or credential resolver that threw during
+  a maintenance pass moved the clean-up agent to inherit and wrote a version
+  row. The next pass moved it back and wrote another. `pickCleanupBinding`
+  now leaves the binding where it is, and the job asks again next pass. This
+  happens when the eligibility resolver fails, or when the credential
+  resolver fails for a provider whose model would have won. A credential
+  failure for any other provider can't change the pick, so the pick goes
+  ahead. The pick also asks the eligibility rule before the credential
+  resolver now, so the resolver is only asked about providers the org may
+  use. **Forks:** a credential resolver that throws for a provider it doesn't
+  serve keeps the clean-up agent off that provider for as long as it would
+  have won, with a warning every pass saying so. Answer with no key for such
+  a provider instead.
+
+- **A run's supervisor verdict history is kept (t-925, t-951).** Two
+  overlapping retroactive reviews of one run both stay in
+  `supervisorReport.previousVerdicts[]`, and an in-workflow supervisor step
+  that runs again on a retried run archives the verdict it replaces instead of
+  dropping the history. `POST …/executions/:id/review` now answers **409**,
+  writing nothing, when the run was retried during its model call.
+
+- **A tool call with invalid arguments names the field on a dev server
+  (t-946, #1058).** `CapabilityValidationError`
+  (`lib/orchestration/capabilities/base-capability.ts`) is now recognised by
+  `instanceof` across module graphs, so a capability loaded from a different
+  graph under `next dev` returns `invalid_args` with the field at fault, not a
+  generic execution failure. Production was unaffected.
+
+- **Agent-opened turns work on Claude agents (t-937).** An `openingTurn` now
+  reaches Anthropic as the request's last turn: a user turn headed as an
+  instruction from the application, not the person's words. Before, it was
+  folded into the system prompt, so a new conversation sent no messages (a
+  `400`), a history ending on a reply was read as a prefill, and on a thinking
+  agent a history ending on a tool result was rejected. A tool call left
+  unanswered at the end of history, without its thinking blocks, is sent to a
+  thinking request as a text note of the call and its result. New optional `turnInstruction` on
+  `LlmMessage`, which a custom provider may honour; OpenAI-compatible providers
+  are unchanged. The stored transcript is unchanged.
+- **The owner-classification test sees a fork's user columns named for their
+  role (§115, #1069, #1067).** A `String` column named `…UserId`
+  (`respondentUserId`) now counts as a user link, so its model must be
+  classified and may name it as its owner. Before, the test skipped such a model
+  and refused a classification of it. For a user id named any other way, put a
+  `/// owner-classification: user-id` doc line above the field. A comment
+  mentioning `@relation` no longer hides a column. **A fork with an unclassified
+  `…UserId` model will now fail that test** until it classifies the model in
+  `lib/app/owner-classification.ts`. See `.context/auth/authorization.md`.
+- **Pairwise verdicts refuse unfinished runs (t-938, #923).** `POST
+  /experiments/:id/verdicts` now answers `400` unless both variants' runs have
+  completed, naming each unfinished run and its status in `details.runs`.
+  Before, it judged queued, running, failed or cancelled runs and overwrote the
+  stored verdict with a comparison of partial results.
+- **`RouteErrorBoundary` shows "Session Expired" only when the session is gone
+  (t-939, #1066).** With `checkSession`, the sign-in card now needs a null
+  session or a `401` from the lookup. An auth outage or a rejected lookup keeps
+  the normal card and its retry, and is logged. A later error that finds a
+  valid session clears the card. See `.context/ui/components.md`.
+
+### Security
+
+- **dompurify 3.4.17 clears three alerts** (#1083, in t-952):
+  GHSA-cg2g-xh64-v4q7 (critical, a `SAFE_FOR_TEMPLATES` bypass in shadow-root
+  content), GHSA-mrv2-3pqr-j5jr (high, `IN_PLACE` hooks leaving event
+  handlers armed) and GHSA-c6gr-qvv4-5v3f (low, under
+  `PARSER_MEDIA_TYPE: application/xhtml+xml`). Sunrise's own call, the Learn
+  page's Mermaid diagrams, uses the SVG profile and none of those options;
+  Mermaid shares the same copy.
+- **fast-uri 3.1.9 clears four alerts** (#1107): GHSA-wjr9-j795-jxcr and
+  GHSA-w74x-v6f9-j3xg (medium, host confusion and scheme spoofing) and
+  GHSA-333x-w4r6-6crp and GHSA-xhq7-xmqj-769h (low). It comes in through
+  `ajv`, lockfile only.
+
+## [0.15.0] — 2026-10-21
+
+> **Alpha release.** Twenty-first tagged Sunrise release. **MINOR bump**. It
+> completes the multi-tenancy phase: the external plane (§109), per-org quotas
+> (§110), the org-admin console (§111), within-org owner isolation (§115) and
+> vendor support access (§121). It also carries an erasure programme (account
+> deletion that is recorded first and finished in the background, and an
+> erased person kept out of deliveries, configs and runs), split input and
+> output prices on Model Matrix rows, URL secrets kept out of logs, traces,
+> audit rows and analytics, and Next 16.4. Measured against `v0.14.0`: 62 PRs
+> merged, no direct commits, 53 issues closed; the suite is 1,373 files and
+> 29,100 tests.
+>
+> **`TENANCY_MODE=single` stays the default.** Entries that apply only at
+> `multi` say so. None of the five features has been checked against a
+> deployed `multi` install: §109's check was waived by an owner ruling, §110
+> and §115 leave it to a fork's first `multi` install, and §111 and §121
+> record none. Their behaviour is proved by their tests and the tenancy smoke
+> only.
+>
+> ## What a fork has to do
+>
+> **Seventeen migrations, then `npm run db:seed`.** Eight take locks that
+> scale with table size, so apply them off-peak on a large install. Four are
+> on the two delivery tables, `ai_webhook_delivery` and
+> `ai_event_hook_delivery`: `delivery_destination` re-creates their parent
+> foreign keys, which scans both to validate; `delivery_destination_index`
+> builds two indexes on `ai_webhook_delivery` and `delivery_payload_index` a
+> GIN index on each table, all without `CONCURRENTLY`; and
+> `delivery_stopped_by_erasure` backfills both with a `LIKE` scan. The other
+> four index tables that grow with use, also without `CONCURRENTLY`:
+> `ai_cost_log_org_created_at_index` on `ai_cost_log`;
+> `audit_log_support_grant` on `ai_admin_audit_log`, kept for ever by default,
+> where it also validates a new foreign key by scanning; and
+> `user_pending_erasure` and `user_pending_erasure_index` on `user`, blocking
+> sign-ups and profile updates while each builds. All seventeen, in order: `20261008120000_delivery_destination`,
+> `20261011120000_delivery_destination_index`,
+> `20261013120000_ai_cost_log_org_created_at_index`,
+> `20261013120000_delivery_payload_index`,
+> `20261014120000_provider_model_split_prices`,
+> `20261014130000_provider_model_price_pair`,
+> `20261015120000_ai_agent_binding_owner`,
+> `20261015150000_delivery_stopped_by_erasure`,
+> `20261015160000_delivery_payload_gin_no_fastupdate`,
+> `20261016120000_org_support_grant`,
+> `20261017120000_audit_log_support_grant`,
+> `20261017130000_webhook_delivery_send_generation`,
+> `20261017140000_user_signup_record`,
+> `20261017150000_webhook_subscription_outlives_creator`,
+> `20261017160000_erasure_receipt_email_hash_index`,
+> `20261019120000_user_pending_erasure` and
+> `20261019230000_user_pending_erasure_index`. The seed's new
+> `022-delivery-destinations` unit fills each delivery's `destination` from its
+> current subscription or hook, where that still exists. The seed also
+> rewrites the fourteen document-cleanup capabilities' `functionDefinition`,
+> gives split prices to the seeded hosted chat models an admin has not
+> customised, updates the model auditor's capability definitions, and
+> publishes a new version of the provider-model audit workflow.
+>
+> **Single-tenant installs that invited people into another org:** run
+> `npm run db:tenancy:install-floor` once (it refuses at `multi`).
+>
+> **At `TENANCY_MODE=multi`:**
+>
+> - **Org admins now run their org's sections of the admin console** under
+>   Sunrise's default policy, and can invite people into their org. A fork's
+>   own routes and pages stay platform-only until it declares them
+>   `tier: 'org'` or lists them through `lib/app/admin-tier.ts`. **If your
+>   fork replaced `canAdminister`, gate it on `scope.tier`:** a policy that
+>   admits on `viewer.orgRole` alone now admits org admins to every admin
+>   surface, the layout included.
+> - **A customer org's configs may name only env vars starting
+>   `ORG_<ORG ID>_`.** A binding that names any other env var stops working;
+>   move its value and update the binding.
+> - **Storage.** Agent uploads land under `orgs/{orgId}/` and are private by
+>   default. On S3 set `S3_OBJECTS_PRIVATE_BY_DEFAULT=true` or
+>   `S3_USE_ACL=true`; on Vercel Blob such a binding is refused until it sets
+>   `public: true`.
+> - **Outbound fetches made for a customer org** (knowledge URL import,
+>   webhooks, `external_call`, `call_external_api`) refuse a host that resolves
+>   to a private, loopback or link-local address.
+> - **A memberless user with no signup record is no longer healed into the
+>   install org** at sign-in; a platform admin adds them. `activeOrgForSession()` can return a `null`
+>   org.
+> - **Backup** export and import leave the shared part out unless `shared=true`
+>   and the caller is in the install org.
+> - **`globalMonthlyBudgetUsd`** is again one ceiling across every org, where it
+>   had been acting as a per-org cap.
+>
+> **Your type-check and `validate` will flag:** `RouteErrorBoundary`'s
+> `reset` prop, now `retry`; the newly required `orgTierPages` prop on
+> `<AdminHeader>` and `viewerTier` on `AdminSidebar`; and hand-built router
+> mocks (`npm run check:router-mocks`), to be rebuilt with
+> `createMockRouter()`. **They will not flag a missing `<AdminTierGate>`**,
+> which is new: a fork that keeps its own `app/admin/layout.tsx` must add
+> `<AdminTierGate viewerTier orgTierPages>` as Sunrise's layout does.
+>
+> **Changes a build will not catch:**
+>
+> - **The owner layer (§115).** For a guarded caller the policy narrows to
+>   one user (under the default policy, anyone but a platform admin or an
+>   `admin` API key), in every mode: a list, count, aggregate or returning
+>   write of memories, conversations, messages, workflow runs, evaluations or
+>   datasets without an owner filter throws `OwnerReadRefusedError` (a 404),
+>   and an unfiltered `findFirst` is silently narrowed to the caller's own
+>   rows. Confine the query with the visibility helpers or
+>   `session.subjectFilter`, or wrap a deliberate cross-owner read in
+>   `runAcrossOwners(reason, fn)`.
+> - **Account deletion.** A route that deletes an account should call
+>   `requestUserErasure()`. Both `DELETE` user routes may now answer
+>   `202 { pending: true }` or `409`. Erasure hooks, `cleanupExternal`
+>   included, may run more than once, in another process: make them
+>   idempotent.
+> - **Spend caps** now hold every paid AI call, not only chat, so an install
+>   with a global cap will see workflows, evaluations and ingestion stop at it.
+>   Chat's `budget_exceeded` is now the agent's own cap only, beside new
+>   `org_budget_exceeded` and `global_budget_exceeded`.
+> - **Seams.** An `initApp*` registration seam that returns a promise is
+>   refused as if it had thrown. An erasure hook registered from `initApp()`
+>   now actually runs.
+> - **Behaviour.**
+>   - A webhook `send_notification` step now POSTs to its `webhookUrl`, whose
+>     host must be in `ORCHESTRATION_ALLOWED_HOSTS`.
+>   - A required text field holding only spaces is now a `400`.
+>   - A unique violation other than the user email answers `400
+>     VALIDATION_ERROR`, not `EMAIL_TAKEN`.
+>   - Protected and auth routes match on whole path segments.
+>   - An experiment variant with `agentVersionId` is refused.
+>   - An `admin` API key stops working while its owner is not a platform
+>     admin.
+>   - Delivery `subscription` / `hook` and `AiWebhookSubscription.createdBy`
+>     can be `null`.
+>   - `getStorageClient()` returns a guarded wrapper, and `orgs/` is a
+>     reserved key root in every mode.
+> - **Costs.** Embeddings on Google, Mistral and Cohere models are costed
+>   instead of recorded at $0, and a Model Matrix row with split prices
+>   records chat turns at its input and output rates.
+> - **Logs and analytics.** The logger reduces every outbound URL it writes to
+>   origin and collapsed path, and Plausible now loads `script.manual.js`.
+> - **Overlays animate** now that `tw-animate-css` is installed.
+> - **CI** test jobs now time out (30 minutes per `test-full` shard, 60 for
+>   `test-changed`). If yours pass slower than that, raise
+>   `CI_TEST_TIMEOUT_MINUTES`.
+>
+> **Dependencies.** Next 16.4.2, vitest 5.0.5, vite 8.3.5, Prisma 7.10.1,
+> mermaid 12.2.0 and the rest of October's minor and patch bumps; `undici` 7
+> is now a direct dependency, and `@sentry/nextjs` 11.6 brings `@sentry/cloudflare` with it.
+> **Next 16.4's `next dev` keeps its agent rules in `AGENTS.md`**, no longer in
+> `CLAUDE.md`. Sunrise now commits `AGENTS.md` and ends `CLAUDE.md` with an
+> `@AGENTS.md` import in place of the old block. If your `CLAUDE.md` still has
+> that block, take Sunrise's ending and commit the `AGENTS.md` your `next dev`
+> writes. The `prisma` → `mysql2` override from 0.14.0 is gone: Prisma pins a
+> patched `mysql2` itself, so a fork that copied the override can drop it.
+> Prisma 7.10.1 also fixes the `deepmerge-ts` alert that 0.12.0 said only
+> Prisma 8 would fix.
+>
+> **Dependency alerts accepted for this release:**
+>
+> - `postcss-selector-parser` (moderate), under `@tailwindcss/typography`.
+>   The fix is in a new major version the plugin does not yet accept, and the
+>   plugin parses only the app's own CSS, at build time.
+> - `sprintf-js` (moderate), under `mammoth` → `argparse`. No patched
+>   release exists, and only mammoth's command-line tool uses argparse, which
+>   Sunrise never runs.
+> - `braces` / `micromatch` / `fast-glob` (high), under
+>   `@next/eslint-plugin-next`. Lint-only, with no fixed release in the
+>   plugin's range.
+
+### Added
+
+- **Account deletion is recorded before it starts, and finished if the
+  request is not** (t-842). `requestUserErasure()` in
+  `lib/privacy/erasure-requests.ts` records the deletion on the `User` row and
+  disables the account in one transaction (sessions deleted, `AiApiKey`s
+  revoked, sign-in refused), then runs `eraseUser()`. If the erasure fails or
+  the request is killed, the new `pendingErasures` maintenance job
+  (`processPendingErasures()`) finishes it. `User` gains five columns
+  (`erasureRequestedAt`, `erasureRequestedBy`, `erasureReason`,
+  `erasureAttempts`, `erasureNextAttemptAt`; migrations
+  `20261019120000_user_pending_erasure` and
+  `20261019230000_user_pending_erasure_index`). An API key whose owner is
+  being deleted is refused. `exportUserData()` leaves out
+  `erasureRequestedBy`, `erasureAttempts` and `erasureNextAttemptAt`, and
+  `eraseUser()` clears the person's id from `erasureRequestedBy` on others'
+  pending erasures. Also exported: `erasureBackoffMs()`,
+  `ERASURE_LEASE_MS`, `ERASURE_MAX_BACKOFF_MS`, `ERASURES_PER_RUN`, and
+  `refuseIfErasurePending()` from `lib/auth/config.ts`. Both `DELETE` user
+  routes now answer `409` when another attempt already holds the deletion, and
+  the tick's `backgroundTasks` list gains `pendingErasures`. See
+  `.context/privacy/data-erasure.md` → "Pending erasures". **Forks:** a route
+  of yours that deletes an account should call `requestUserErasure()` rather
+  than `eraseUser()`. Your erasure hooks may now run again in a later
+  attempt, so make them idempotent.
+
+- **An account deletion answers within a request budget, and `202 pending`
+  when the erasure needs longer** (t-845). `eraseUser()` takes an optional
+  `deadline`: it stops at the next safe point once that passes and throws the
+  new `ErasureDeferredError` (exported from `lib/privacy/erase-user.ts` and
+  `lib/privacy/erasure-deadline.ts`); without one it behaves as before.
+  `requestUserErasure()` erases within `ERASURE_REQUEST_BUDGET_MS` (8 s,
+  overridable with the `ERASURE_REQUEST_BUDGET_MS` env var) and otherwise
+  returns `{ status: 'pending', requestedAt }`, leaving the maintenance tick to
+  finish it; the retrier has no deadline and runs each attempt to the end.
+  Only a timeout after the deadline is a deferral (`isTimeoutError()`
+  decides); any other error is a failure. A deferral does not count toward
+  `erasureAttempts`. `boundLockWaits()` takes an optional `{ statementsToo }`
+  that caps `statement_timeout` as well. Both `DELETE` user routes answer
+  `202` with `{ pending: true, requestedAt }` in that case. `GET /api/v1/users`
+  and `UserListItem` gain `erasureRequestedAt` (optional on the type).
+  `waitForSubjectLocks()` takes `{ maxWaitMs }`,
+  `preRedactSubjectFromDeliveries()` a statement runner and
+  `preRedactSubjectFromRuns()` a deadline, all optional. See
+  `.context/privacy/data-erasure.md` → "Pending erasures". **Forks:** a client
+  of the delete routes should treat `202` as success. Your `cleanupExternal`
+  hooks may run more than once, in another process, so make them idempotent.
+
+- **`lib/api/server-load.ts`: `requireServerData()` and `loadServerData()`,
+  for reading internal API routes from a server component** (t-861, #518).
+  `requireServerData()` returns a page's main data or throws a
+  `ServerLoadError` to the route's error boundary; with `{ notFound: true }` a
+  404, or a 400 whose validation error names only the `id`, renders the
+  not-found page, and no other failure does.
+  `loadServerData()` never throws and returns a typed failure, for a panel the
+  page can live without; render `<LoadFailedNotice>` from
+  `components/admin/load-failed-notice.tsx` in its place. Its
+  `{ expected: [403] }` option returns a status the caller handles itself
+  without logging it. `requireAllServerData()` reads every page of a list route
+  (or throws), for options a form must offer in full. All three log every
+  other failure, and let Next's own control-flow errors through. See `.context/api/examples.md` → "Loading a page's data".
+  **Forks:** use these in your own admin pages rather than a try/catch that
+  returns `[]`.
+
+- **`lib/app/erasure.ts` → `initAppErasureHooks()`, a seam for erasure cleanup
+  hooks** (t-854, #691). `getErasureCleanupHooks()` runs it once before its
+  first read, through `createAppInitGate`, so a throw rolls its hooks back and
+  is logged. The registry is now held on `globalThis` too. Before, it was a
+  plain module `Map`, and `instrumentation.ts` loads in a different module graph
+  from the route handlers that call `eraseUser()`: a hook registered from
+  `initApp()`, as `.context/privacy/data-erasure.md` said to, was never run,
+  and nothing was logged. **Forks:** a hook registered from `initApp()` now
+  runs with no change on your side; moving it into `initAppErasureHooks()` is
+  the documented place and adds the rollback.
+- **`GET /api/v1/admin/orchestration/maintenance/tick`, for Vercel Cron**
+  (t-844). Vercel Cron only sends a `GET` with `Authorization: Bearer
+  $CRON_SECRET`; set `CRON_SECRET` to an admin API key and it drives the tick
+  with no proxy. The `GET` accepts an admin API key only and refuses a browser
+  session with `403`, so a cross-site link cannot make a signed-in admin fire a
+  tick. `HEAD` answers `405` rather than running the `GET`. `POST` is
+  unchanged. See `.context/deployment/platforms/vercel.md`.
+
+- **A user whose signup's membership write failed is healed into the org
+  that invited them** (t-838). `User` gains `signupOrgId` and `signupOrgRole`
+  (enum `OrgRole`, both nullable, no FK): the membership the signup decided,
+  written by `userCreateBeforeHook` in the same INSERT as the user and cleared
+  in the transaction that writes the membership (new
+  `writeNewUserMemberships()` in `lib/tenancy/membership.ts`). The sign-in
+  self-heal (`activeOrgForSession`) heals from it in either mode: an invitee
+  lands in the inviting org, an uninvited signup in the install org. At
+  `TENANCY_MODE=multi` a user with no record (created by hand, or left with
+  no org by `eraseOrg` or a removal) is still refused until a platform admin
+  adds them. Migration `20261017140000_user_signup_record`. Both fields are
+  better-auth `additionalFields` with `input: false` and `returned: false`, so
+  a sign-up or update body carrying either is a 400. Any other membership
+  write pays a surviving record first and clears it (`healSignupRecord()`,
+  called by `addMember`, `createOrg` and `syncInstallMembershipRole`), so the
+  invitation is neither lost nor healed back after a removal;
+  `db:tenancy:install-floor` heals a surviving record the same way.
+  **Forks:** a fork that creates users without better-auth's hooks writes no
+  record, and its users heal as before; one that writes `OrgMembership` rows
+  directly should call `healSignupRecord()` first.
+- **`npm run db:tenancy:install-floor`** (t-835) gives every user without an
+  install-org membership one, by the platform-role rule. #872's floor is
+  written at signup only, so a user invited into another org before it
+  shipped still loses everything when that org is suspended. **Single-tenant
+  installs that had such invitations should run it once.** It writes nothing
+  on a second run and refuses at `TENANCY_MODE=multi`. New
+  `backfillInstallMemberships()` in `lib/tenancy/membership.ts`.
+- **Every admin audit row made in a support session names the grant and the
+  org** (§121 t-825). `AiAdminAuditLog` gains `supportGrantId` (FK to
+  `OrgSupportGrant`, `onDelete: SetNull`) and `supportOrgId` (no FK, so an
+  erased org's support rows stay marked in the vendor's log). Migration
+  `20261017120000_audit_log_support_grant`. `logAdminAction()` fills both from
+  the tenant context, so no caller changes; `AdminAuditEntry` gains an optional
+  `support` for a caller acting on a session from outside one (the switch
+  route's `support.enter`). `GET /api/v1/admin/orchestration/audit-log` rows
+  gain `supportOrgId` and `supportGrant` (with its org), and the route takes
+  `support=only|none` and `supportGrantId`; the Audit Log page marks and
+  filters support rows. New `GET /api/v1/orgs/[id]/support-grants/activity`
+  (`listSupportActivity()` in `lib/tenancy/support-grants.ts`) lists the rows
+  made under the org's own grants, and the Support access page shows them.
+  **Forks:** an audit row written straight to `prisma.aiAdminAuditLog`
+  rather than through `logAdminAction()` is not stamped.
+- **A platform admin enters a customer org under its open support grant**
+  (§121 t-824). At `multi`, `enterSessionOrg` admits a platform admin who is
+  not a member to an org whose grant `verifiedSupportGrant()` (new, in
+  `lib/tenancy/entry.ts`) finds: open, its org active, not the install org,
+  and its granter still an OWNER of the org. It is re-read on every request,
+  for the resolver header and `activeOrgId` alike; API keys never take it.
+  The entry is a new source, `'support'` (on `OrgEntry` and
+  `TenantContextSource`), with role `ADMIN` and a new `support` field
+  (`SupportEntry`: `grantId`, `level`, `expiresAt`) on the entry and the
+  tenant context. **The support principal presents as an org ADMIN who is not
+  a platform admin:** the guards and `sessionPrincipal` replace the platform
+  role with the default user role on the principal and on the handler's
+  session (new `lib/auth/support-principal.ts`), so a fork policy or handler
+  that reads `isPlatformAdmin` answers false. A `READ_ONLY` grant refuses
+  every write in both guards before the handler runs. `POST
+  /api/v1/orgs/switch` accepts an org with an open grant for a platform admin,
+  writes a `support.enter` audit row, and its response gains `support`
+  (`null` for a member's switch). New `requestSupportSession()` in
+  `lib/auth/admin-page-viewer.ts` feeds a banner across the admin layout, with
+  an ended state once the grant ends. The Organisations page offers **Enter as
+  support**, and `GET /api/v1/admin/orgs` lists a grant only while its granter
+  is still an OWNER. `DELETE /api/v1/users/me` refuses inside a support
+  session, and so does `orgForMint()`: no credential (embed token, invite
+  token, MCP key, API key) is minted under a grant. The maintenance bypass
+  asks about the platform admin's own role inside a support session.
+  **Forks:** a handler that must know it is serving support reads
+  `getTenantContext()?.source === 'support'`; the principal deliberately does
+  not say.
+- **An org's OWNER grants and revokes vendor support access** (§121 t-823). New
+  model `OrgSupportGrant` with enum `SupportGrantLevel` (`ADMIN`, the default,
+  or `READ_ONLY`), a system model beside `OrgMembership`: a reason, an expiry
+  (24 hours by default, 7 days at most) and who granted and revoked it. New
+  routes `GET`/`POST /api/v1/orgs/[id]/support-grants` and
+  `DELETE /api/v1/orgs/[id]/support-grants/[grantId]`, with the rules in the
+  new `lib/tenancy/support-grants.ts`: only an OWNER of the org, acting in it,
+  may grant (platform standing never counts); a new grant replaces the open
+  one; refused at `single`, for the install org and for a suspended org. New
+  org-tier page `/admin/support-access` (nav at `multi` only; `CORE_ADMIN_SECTIONS`
+  gains `support-access`). `GET /api/v1/admin/orgs` rows gain `supportGrant`.
+  Both privacy manifests list the model. Entry under a grant is t-824's, above.
+  **Forks:** run the migration; a fork page may not sit under
+  `/admin/support-access`.
+- **A fork lists its own admin pages as org-tier** (t-817): the new
+  `lib/app/admin-tier.ts` seam (`initAppOrgTierAdminPages()`, ships empty)
+  calls `registerOrgTierAdminPage(pattern)` from `lib/auth/admin-tier.ts`, and
+  `orgTierAdminPages()` in the new `lib/auth/org-tier-admin-pages.ts` returns
+  core's `ORG_TIER_ADMIN_PAGES` plus the fork's, so an org admin may open a fork
+  page without an edit to a core file. The fork's init runs on the server
+  only; the admin layout hands the list to `<AdminTierGate>` and
+  `<AdminHeader>`, which take a new required `orgTierPages` prop. A throw
+  opens none of the fork's pages. The registrar refuses a pattern the matcher
+  cannot read, a dynamic first segment, and any pattern inside one of core's
+  sections (new `CORE_ADMIN_SECTIONS`), so a fork's list cannot reach a core
+  page. `adminPageTier()`'s `pages` argument is now required rather than
+  defaulting to `ORG_TIER_ADMIN_PAGES`, which silently left the fork's pages
+  out. The roster test now also fails when a listed `[x]` pattern names an
+  unlisted literal page beside it, and when the fork's init threw.
+  `/admin/orchestration/executions/live`, a redirect to the executions page,
+  is now listed as org-tier for that reason. **Forks:**
+  `tests/unit/lib/app/defaults.test.ts` has a new row for the seam — pin your
+  pages there when you fill it.
+- **`AiWebhookDelivery.stoppedByErasure` and `AiEventHookDelivery.stoppedByErasure`
+  record that an erasure stopped the row** (t-809; migration
+  `20261015150000_delivery_stopped_by_erasure`, which backfills rows already
+  stopped). A manual retry and a DLQ replay now refuse on this column instead
+  of on the `"(not retried: subject erased)"` wording at the end of
+  `lastError`, so a later `lastError` write can no longer clear the stop, and a
+  receiver's error text that ends in the same words no longer looks stopped.
+  The migration marks existing rows by that wording once, so a row from before
+  it whose text merely ended in those words is marked too.
+  The wording stays on `lastError` for people to read. `isStoppedByErasure()`
+  is gone from `lib/orchestration/webhooks/not-retried.ts`. **Forks:** a job
+  or route of yours that retries or replays a delivery should refuse a row with
+  `stoppedByErasure: true`, and one that writes `lastError` no longer needs to
+  keep the suffix.
+- **A fork pairs its own capability seeds with their classes** (#646): the new
+  `lib/app/capability-seed-pairs.ts` seam (`APP_CAPABILITY_PAIRS`, ships
+  empty) lists which class goes with which slug, and is spread into
+  `capability-class-seed-parity`'s `PAIRS`, so a fork's capability seeds are
+  held to their classes without editing a Sunrise test. That test now runs
+  every seed against a strict recording mock client instead of reading seed source, so it checks every capability a seed writes,
+  however the seed is written. **Forks:** a capability seed that the old
+  source reader could not see (a hoisted const, a definition taken from the
+  class) now fails the test until you pair it here. A seed must also run
+  under the mock: one that calls a client method it does not model, uses the
+  app's own client, or writes a capability through a nested write fails it,
+  unless you list it in `APP_UNCHECKED_SEEDS` (same file, ships `{}`) with the
+  reason it writes no capability.
+- **`AiAgent.bindingOwner` records who decides a platform agent's provider
+  and model** (t-798; migration `20261015120000_ai_agent_binding_owner`). It
+  applies only to a platform agent whose definition picks its binding
+  (`defaultBinding`, with no starting provider or model of its own); every
+  other agent keeps `null`. It is `'platform'` while the agent follows the
+  platform's pick, `'org'` once an admin sets either field, or `null` until
+  classified. Agents from before this change are classified on their next
+  reconcile, partly from their version history. `PATCH
+  /api/v1/admin/orchestration/agents/:id` sets `'org'` when it changes
+  provider or model, and so does version restore. The PATCH body also accepts
+  `bindingOwner`: `'platform'` hands the binding back and reconciles the org at
+  once, `'org'` takes it, and an unchanged or `null` echo is ignored. Forks: a
+  route of yours that writes such an agent's provider or model should call
+  `bindingOwnerAfterWrite` (`lib/orchestration/agents/binding-owner.ts`, with
+  `picksOwnBinding` from `platform-agent-guard.ts`), or the platform will keep
+  moving a binding your admin chose. The column is not agent config: the field
+  registry lists it as a non-config scalar, so the agent form, agent export
+  and backup bundles, and version snapshots leave it out. The org data export,
+  which takes whole rows, includes it.
+- **An org's OWNER/ADMIN can invite people into their org** (§111 t-813).
+  New `POST /api/v1/orgs/[id]/invitations`, with the same admission as the
+  members routes. It writes an invitation into the URL's org as a platform
+  `USER`, and has no platform `role` or `orgId` in its body. New
+  `checkInvitationInto()` in `lib/tenancy/lifecycle.ts` holds the rules: an
+  `OWNER` invitation needs owner standing, and the install org and a suspended
+  org are refused. A pending invitation into another org is refused, not
+  re-targeted. Unlike the platform route, it never returns the invitation
+  link: the invitee gets it by email only. `OrgLifecycleErrorCode` gains `ORG_NOT_ACTIVE`. A new org-tier
+  **Members** page (`/admin/members`, nav shown at `multi` only) lists, invites,
+  re-roles and removes the entered org's members. At `multi` the admin header
+  names the org being acted in. `POST /api/v1/users/invite` is unchanged and
+  stays the platform's. **Forks:** a `switch` over `OrgLifecycleErrorCode`
+  meets the new code. See [Org endpoints](./.context/api/org-endpoints.md#invite-someone-into-the-org).
+- **Admin tiers: a surface can declare it is the org's** (§111 t-810). New
+  `tier` option on `withAdminAuth()` (`{ tier: 'org' }`), passed to the policy
+  as `scope.tier`. New `lib/auth/admin-tier.ts`: `AdminTier`, the page roster
+  `ORG_TIER_ADMIN_PAGES`, the route roster `ORG_TIER_ADMIN_ROUTES`, and
+  `adminPageTier()`. New optional `NavItem.tier`. The default policy's
+  `canAdminister` now admits an org OWNER/ADMIN of the entered org to a
+  surface that declares `tier: 'org'`, as a session and at `multi` only.
+  Undeclared surfaces stay platform-only, fork surfaces included. Which core
+  surfaces declare it is t-811's entry under Changed. **Forks:** a `canAdminister` you replaced
+  receives `scope.tier`. Ignoring it keeps org admins out (the safe failure),
+  and a policy that admits on `viewer.orgRole` alone admits them everywhere,
+  so gate on the tier. `AdminSidebar` now requires a `viewerTier` prop.
+  `proxy.ts` now sets an `x-sunrise-pathname` request header. See
+  [Authorization → Admin tiers](./.context/auth/authorization.md#admin-tiers).
+- **A fork classifies its own models for the owner layer** (§115 t-807): the
+  new `lib/app/owner-classification.ts` seam (`initAppOwnerClassification()`,
+  ships empty) and its primitive `registerAppOwnerClassification()` in
+  `lib/db/owner-classification.ts`. A fork marks a model in `app.prisma` or a
+  `framework-*.prisma` file `personal` (optionally `enforced`, so the owner
+  layer checks it) or `not-personal` with a reason, using core's row shape and
+  without editing `OWNER_CLASSIFICATION`. `ownerClassificationOf()`,
+  `personalModels()` and `enforcedModels()` now return core's rows plus the
+  fork's; new `allOwnerClassifications()` / `appOwnerClassifications()` read
+  them. A fork cannot reclassify a core model, and a fork row may not carry
+  `alsoVisible` or `ownerless` (both are core's per-model rules). With nothing registered the
+  readers return exactly core's list. **Forks:** the classification test now
+  audits your schema files too, so an unclassified model linked to a user or to
+  a personal model fails it until you classify it in the seam. See
+  [Authorization → The subject context and the owner classification](./.context/auth/authorization.md#the-subject-context-and-the-owner-classification-115).
+
+- **The owner chokepoint** (§115 t-801): `lib/db/owner-extension.ts`
+  (`withOwnerChecks()`), a second `$extends` layer over the tenancy client.
+  For a caller the policy narrowed to their own rows, a list, count or
+  aggregate of an enforced personal model must carry a `where` that confines
+  it to rows the caller may read, a `findUnique` is checked on the row it
+  returns, an unconfined `findFirst` is narrowed to the caller's own rows, a
+  write that returns its row (`update`, `upsert`, `delete`,
+  `updateManyAndReturn`) must be confined, and an `include` of one from any
+  root must be confined too. A
+  refusal throws the new `OwnerReadRefusedError`, which `handleAPIError`
+  answers as a 404. A classification entry's `enforced: true` (and
+  `enforcedModels()`) says which models it checks: `AiUserMemory`,
+  `AiConversation` and `AiMessage` in this release (t-802 adds the second two:
+  a message is checked through its conversation, a live share admits another
+  member's conversation on a `withAdminAuth` request only — the surface a share
+  consents to, where the read is audit-logged — and a checked read may follow the ownership relation
+  without a `where` of its own; t-803 adds `AiWorkflowExecution` and the six
+  evaluation and dataset models, and checks a to-one relation to a model whose
+  owner column decides its row — a run's `dataset` — on the row it returns, as
+  a `findUnique` is). A platform admin, a job, and any install with no narrowed caller
+  get byte-identical queries. `SubjectEntry.readsShared` (absent means `false`)
+  and `OwnerReader.readsShared` carry the surface. See
+  [Authorization → The owner chokepoint](./.context/auth/authorization.md#the-owner-chokepoint).
+
+- **The subject context and the owner classification** (§115 t-800), the two
+  inputs of the within-org owner check. `lib/auth/subject-context.ts`:
+  `withAuth` / `withAdminAuth` now run every handler inside `runAsSubject()`,
+  and `getSubjectReadScope()` tells code below the route whose rows the caller
+  may read (the policy's `subjectScope`, asked lazily and at most once per
+  request). `runAcrossOwners(reason, fn)` marks a deliberate read across owners
+  and logs its reason. `lib/db/owner-classification.ts` (`OWNER_CLASSIFICATION`,
+  `ownerClassificationOf()`, `personalModels()`) says which models are private
+  to one person and how each row's owner is reached, enforced against the core
+  schema by test. The check that reads them is the owner chokepoint, below. See
+  [Authorization → The subject context](./.context/auth/authorization.md#the-subject-context-and-the-owner-classification-115).
+- **`GET /admin/orchestration/hooks/deliveries`** and **`GET
+  /admin/orchestration/webhooks/deliveries`** (§109 t-739). Deliveries across
+  every hook, or every subscription the admin may see, in any status,
+  filterable by `status`, the parent's id and `orphaned=true` — the routes that
+  reach a delivery whose hook or subscription was deleted, now that such
+  deliveries are kept (below). The per-parent lists 404 once the parent is
+  gone, and the dead-letter list shows only `exhausted` rows.
+- **`'webhookDelivery'` joins `UNATTRIBUTED_READ_KINDS`** (§109 t-739), so
+  `session.unattributedReads` and `UnattributedReads` gain a `webhookDelivery`
+  key. A fork that builds that record by hand (in a test fixture, say) must add
+  it; a fork policy's `canRead` `'unattributed'` arm is now also asked about
+  webhook deliveries whose subscription was deleted, and decides who sees them
+  in the dead-letter queue (`lib/orchestration/access/webhook-delivery-access.ts`).
+- **`lib/app/org-export.ts` → `initAppOrgSources()`, and
+  `registerAppOrgSources()` in `lib/privacy/org-source-registry.ts`** (§109
+  t-737). A fork's own `orgId` tables can now go into the org export. Each
+  source carries its own `fetch`, runs as the org after core's sources, and
+  lands under a new `app` key in `exportOrgData()`'s bundle, with a summary in
+  `meta.app`. Fork exclusions are appended to `meta.excluded`. With nothing
+  registered, the bundle is unchanged (no `app` key and no `meta.app`), so
+  `OrgExport.app` and `OrgExportMeta.app` are optional. A fork source reads with `ownedBy(orgId)`, now exported from
+  `lib/privacy/org-sources.ts`, to match core's handling of `NULL`-org rows.
+  If the fork's init
+  throws, or registers a row the registry rejects that leaves its model
+  uncovered, `exportOrgData()` throws
+  `AppOrgDeclarationsUnavailableError` for every org; a `fetch` that does not resolve to an array throws
+  `AppOrgSourceInvalidError`. The org-manifest coverage test unions the
+  registry into its accounted set, so a fork's `orgId` model passes once
+  registered instead of failing. The same test now also fails on any `orgId`
+  model whose `Org` relation has no `onDelete: Cascade` or `SetNull`, a fork's
+  included, because org erasure relies on the cascade.
+
+- **A per-org monthly AI budget cap** (§110 t-788). `Org.settings` gains a
+  `quotas` slice holding `monthlyBudgetUsd`. A platform admin writes it with
+  `PATCH /api/v1/admin/orgs/[id]` `{ settings: { quotas } }` (`null` removes
+  it). At `multi` that write is refused with a 403
+  (`details.reason: shared_settings_install_org_only`) unless it comes from
+  the install org or an unbound admin API key, so an org's admins cannot raise
+  their own cap. Every caps write is recorded in the admin audit log as
+  `org.quotas.update`, with the caps it replaced. The cap holds every paid AI
+  call made in the org, not only chat (see the spend gate under Changed).
+  `checkBudget()` reports it as `orgCapExceeded` / `org: { limit, spent }`,
+  and the agents list's `_budget` carries `orgCapExceeded: true`. A local
+  model is never stopped, so a cap of `0` means "no paid calls". With no
+  `quotas` set, nothing changes. Exported for forks' billing or plan code:
+  `readOrgQuotas()` / `loadOrgQuotas()` / `writeOrgQuotas()` and
+  `ORG_QUOTAS_KEY` from `lib/tenancy/org-settings.ts`, and `orgQuotasSchema` /
+  `OrgQuotas` from `lib/validations/tenancy.ts`. The spend gate caches each
+  org's cap for 30 seconds: code calling `writeOrgQuotas()` directly calls
+  `forgetOrgCap(orgId)` from `lib/orchestration/llm/spend-caps.ts` after it
+  so its own process enforces the new cap at once. Migration
+  `20261013120000_ai_cost_log_org_created_at_index` adds an
+  `(orgId, createdAt)` index on `AiCostLog`. Known limits: the budget lock is
+  per agent, so two agents in one org can each overrun the org cap by up to
+  one turn, and the month-to-date totals are cached for 10 seconds per
+  process, so another process's spend is seen within that window. See
+  [Costs → Per-org monthly budget cap](./.context/admin/orchestration-costs.md#per-org-monthly-budget-cap).
+
+- **A per-org API request cap** (§110 t-789). `Org.settings.quotas` gains
+  `requestsPerMinute` (a whole number, 1–100,000), written exactly as
+  `monthlyBudgetUsd` is and under the same install-org-only rule. At `multi`,
+  `applyRateLimit` counts every request from a caller acting for an org
+  against that org's cap, in a second counter that
+  runs after the matched per-caller rule; both must pass. The org is the one
+  the guard will enter (a fork's tenant resolver's answer, else the session's
+  `activeOrgId`) or the org column of the API or MCP key row, and a user, or a
+  user key's owner, is counted only while an active member of it. The
+  `x-sunrise-org` header is never used to choose it. Embed-widget traffic,
+  `/api/v1/admin/**`, `/api/v1/orgs` and `/api/v1/orgs/switch` are not
+  counted. A user API key on a session-keyed route counts against its org. Nothing changes at `single`, or for an
+  org with no `requestsPerMinute`. Each org's cap is cached for 30 seconds:
+  code calling `writeOrgQuotas()` directly calls `forgetOrgRequestCap(orgId)`
+  from `lib/security/org-request-cap.ts` after it. Known limits: another
+  instance can enforce an old cap for up to 30 seconds, and each instance
+  counts separately, as the section tiers do. `'org'` is deliberately **not**
+  a built-in rate-limit key, so a fork that registered its own `'org'`
+  resolver from the old recipe still boots. See
+  [Rate limiting → Per-org request cap](./.context/security/rate-limiting.md#per-org-request-cap).
+- **`GET /api/v1/admin/orchestration/costs/orgs`** (§110 t-790). Each org's
+  AI spend, call count and tokens for one UTC calendar month (`period=YYYY-MM`,
+  defaulting to the current one; `orgId` narrows it to one org), beside its
+  `quotas.monthlyBudgetUsd` and the share of it spent, plus a `detached` bucket
+  for rows with no org. The usage data a fork's plans and invoices are built
+  from, via `getOrgUsage()` in `lib/orchestration/llm/cost-reports.ts`. At
+  `multi` only the install org or an unbound admin API key may call it (403,
+  `details.reason: shared_settings_install_org_only`, for anyone else), since
+  the answer is every tenant's spend. At `single` it returns one install-org
+  row. The costs page shows it as a per-org table when there is more than one
+  org, and the org detail page shows the org's month-to-date spend against its
+  cap. See
+  [Costs → Per-org usage](./.context/admin/orchestration-costs.md#per-org-usage).
+
+- **Separate input and output prices on Model Matrix rows** (t-774).
+  `AiProviderModel` gains nullable `inputCostPerMillionTokens` and
+  `outputCostPerMillionTokens` (migration
+  `20261014120000_provider_model_split_prices`). On a chat or reasoning row
+  (`hasSplitPricing`) `dbModelToModelInfo` uses the pair when set and falls
+  back to the blended `costPerMillionTokens` otherwise; an embedding row keeps
+  its single rate whatever split it carries, and a row with no rate is
+  `pricingUnknown`. The pricing rules shared by every writer are in
+  `lib/validations/model-pricing.ts`. The blended column stays: an
+  embedding model has one rate, and a row without the split still uses it.
+  Written by the admin create, PATCH and bulk routes, the provider-model form
+  (a new Chat Pricing section), the seed, and the provider-model audit (below).
+  Every writer takes them as a pair: setting exactly one is refused, including
+  a PATCH that would leave the saved row with one, and migration
+  `20261014130000_provider_model_price_pair` adds a CHECK constraint
+  (`ai_provider_model_price_pair`, drift probe A10) so the database refuses it
+  too. A fork writing these columns directly must write both or neither. The
+  discover-models dialog now saves a chat model's prices from the provider's
+  catalogue when it has both. A positive price from the
+  built-in list or OpenRouter still wins over a matrix row for the same
+  provider (t-769), so this prices matrix-only models exactly; it is not a new
+  override for known ones.
+- **The provider-model audit proposes input and output prices** (t-774).
+  `apply_audit_changes` gains both fields in `AUDITABLE_FIELDS`, and
+  `add_provider_models` accepts them on a new model. A price must be backed by
+  a `web_search`, `knowledge_base` or `external_call` source with a reference
+  (the `audit-proposals` schema rejects `training_knowledge` alone), be 0–10,000
+  per 1M tokens, and come as a pair. On approval the pair applies together or
+  not at all, drift-checked and written in one transaction; a new model whose
+  prices are half-set or invalid is created without them, and the result says
+  why. The
+  `provider-model-auditor` agent's instructions and the audit template's
+  prompts and approval screen are updated; the next seed publishes a new
+  version of the system audit workflow.
+- **A shared mode for the erasure locks** (t-841). `lockSubjects()` and
+  `findErasedSubjects()` in `lib/privacy/erased-subjects.ts` take an optional
+  `{ shared: true }`: the lock then excludes an erasure, which takes it
+  exclusively, but not other shared holders. Core's workflow notification step
+  and approval pause use it, so two sends to one address do not queue on each
+  other. Without the option the lock is exclusive, as before. `sendEmail()`
+  (`lib/email/send.ts`) takes an optional `signal` and `idempotencyKey`, passed
+  to Resend.
+- **`CI_TEST_TIMEOUT_MINUTES` — a repo variable capping the CI test jobs**
+  (t-867, #843). `test-full` (each shard) now stops after 30 minutes and
+  `test-changed`, which can run the whole suite unsharded, after 60, instead of
+  GitHub's six hours. A vitest worker can deadlock before any test starts, for
+  example on an import cycle closed through a `vi.mock` async factory, and no
+  vitest timeout catches that. A timed-out job reports `cancelled`, which
+  `ci-status` already fails. **Forks:** if your suite is slow enough to hit
+  these while passing, raise them with
+  `gh variable set CI_TEST_TIMEOUT_MINUTES --body 90`, which sets both jobs.
+  See `.context/architecture/ci.md` Knob 5.
+- **`CI_NEXT_CACHE_MAX_MB` — a repo variable bounding the CI Next.js build
+  cache** (t-868, #856). The Build job's `.next/cache` grew with every build
+  until the lockfile changed. A new step before `npm run build` discards the
+  restored cache when it is over the limit (default 2048MB on disk) and logs
+  the size either way, so the build starts cold and saves a fresh one.
+  **Forks:** a fresh Sunrise cache is 674MB on disk; if yours is already near
+  2048MB, raise the limit with `gh variable set CI_NEXT_CACHE_MAX_MB --body
+  4096`, or every build will start cold. See `.context/architecture/ci.md`
+  Knob 6.
+
+### Changed
+
+- **`npm run check:router-mocks`: `/pre-pr` step 4m is a tested script, and
+  `npm run validate` and CI now run it** (#936, t-863). The old 4m was a Python
+  block inside `pre-pr.md` that matched text. In a fork it reported CLEAN over
+  16 complete router literals and 17 casts: it could not count a shorthand member
+  (`{ push, refresh }`), could not find a literal whose `prefetch` was shorthand,
+  and only grepped for `as unknown as ReturnType<typeof useRouter>`, while every
+  real offender wrote `ReturnType<typeof vi.fn>`. The rules now live in
+  `scripts/ci/router-mocks.ts` (`scanRouterMocks`) and parse with the TypeScript
+  compiler. The cast rule fires when the thing cast is `useRouter`, when the
+  target type names the router (including `AppRouterInstance` and `MockRouter`),
+  and when a cast value is handed to a mocked `useRouter`. Sunrise's own suite
+  is clean. **A fork's `validate` may now fail** where the old check passed:
+  build those routers with `createMockRouter()`. A file that mocks only
+  `next/router` is skipped, and a genuine false positive takes
+  `// router-mocks-ignore: <why>` on the line above, reason required.
+
+- **`RouteErrorBoundary` takes `retry`, not `reset`** (t-861). Next's
+  `reset()` re-renders the segment without re-fetching it, so "Try again"
+  after a failed server-side load failed again the same way. Every Sunrise
+  boundary now passes Next 16.3's `retry()`, which re-fetches first.
+  **Forks:** an `error.tsx` that renders `RouteErrorBoundary` must rename the
+  prop it receives and passes from `reset` to `retry`; the type-check flags
+  each one.
+
+- **`npm run type-check` runs under the same heap cap as `npm run lint`**
+  (t-855, #693). It goes through `scripts/run-capped.mjs`, so `NODE_HEAP_MB`
+  now applies to it. It was left out on a 1.64-1.75 GiB peak, but that was a
+  warm run; cold, base Sunrise peaks at 2.74 GiB and a ~1.9x fork aborted at
+  4.40 GB, taking `validate` down before lint ran. CI is unchanged: the
+  workflow's `NODE_OPTIONS` still wins. The wrapper also no longer hands out
+  more than was asked for under an inherited cap (t-856, #711). **Forks:** if
+  your own scripts call `tsc` directly, they do not get the cap.
+
+- **An `initApp*` registration seam that returns a promise is refused, as if
+  it had thrown** (t-851, #739). `createAppInitGate` used to log and report
+  `'ok'`, so an async `initAppAuthorizationPolicy` that rejected left the
+  install on the default policy instead of safe mode, and an async
+  `initAppSubjectSources` never made `exportUserData()` refuse. The gate now
+  rolls the registry back, settles `'failed'` and runs `onFailure`.
+  **Forks:** an async seam that happened to work is now disabled at its first
+  read, with a log line saying it must be synchronous. Drop the `async` and do
+  the async work elsewhere. `initApp` in `lib/app/bootstrap.ts` is the boot
+  hook and may stay async. See `.context/architecture/fork-init-seams.md`.
+- **The global settings refuse keeping executions for ever while cost logs
+  expire** (t-852, #839). `PATCH /api/v1/admin/orchestration/settings`, its
+  schema and the settings form used to skip the retention pair check when
+  either side was `null`, so `executionRetentionDays: null` with a finite
+  `costLogRetentionDays` was accepted, and the cost breakdown emptied out under
+  executions still on file. They now answer 400 for it, the same rule the org
+  route already applied. Cost logs kept for ever (`null`) still pass against any
+  execution window, and a PATCH that names neither window is not checked, so a
+  pair saved under the old rule does not block unrelated saves. **Forks:** a client that sets one window alone may now be
+  refused against the stored other half; set `costLogRetentionDays: null` too,
+  or give executions a finite window.
+- **The site follows the device's light or dark setting until a visitor picks
+  one** (t-853, #756). The root layout's no-flash script and `ThemeProvider`
+  used to save the device setting to `localStorage` on the first page load, as
+  though the visitor had chosen it, so a device that later switched was never
+  followed. Now only `setTheme` writes the stored theme, and with nothing
+  stored the provider follows `prefers-color-scheme` changes. Both resolve
+  through `lib/theme.ts`. Visitors who already have a stored value keep it, so
+  the change shows for new visitors only.
+- **A copy read before an erasure can no longer write the person back**
+  (t-805). The settings PATCH (escalation list), the workflow draft save,
+  publish and rollback, `createInitialVersion`, webhook subscription create
+  and update, and schedule create and update now answer 400 (a
+  `ValidationError` naming the field) when what they would write names an
+  erased person: an approver id with an erasure receipt, or an address whose
+  receipt says erasure matched it as verified — unless a live, verified
+  account holds that address again. The backup importer and `rollback` (whose
+  source snapshot cannot be edited) strip such recipients instead, with a
+  warning or an `erasedRecipientsRemoved` audit flag. Each writer's
+  transaction runs with `WRITER_TRANSACTION_OPTIONS` (70 s) so one queued
+  behind an erasure is refused rather than timed out, and a new index on
+  `DataErasureReceipt.subjectEmailHash` (migration
+  `20261017160000_erasure_receipt_email_hash_index`) serves the lookup. In a
+  workflow draft or version an erased approver id is stripped rather than
+  refused, since the builder cannot show an id whose account is gone; an
+  erased address is still refused. Erasure and each writer share a
+  transaction-scoped advisory lock per address and user id, so neither can
+  slip between the other's read and write. New `refuseErasedSubjects()`,
+  `findErasedSubjects()`, `lockSubjects()` and `subjectEmailHash()` in
+  `lib/privacy/erased-subjects.ts`, and `definitionRecipients()` in
+  `lib/privacy/config-recipients.ts`. `DataErasureReceipt.metadata` now
+  records `addressVerified`. **Forks:** a writer of your own that stores an
+  address or user id it notifies should call `refuseErasedSubjects()` inside
+  its write transaction.
+- **A webhook subscription outlives the admin who created it** (t-782).
+  `AiWebhookSubscription.createdBy` is now nullable with `onDelete: SetNull`
+  (it was `Cascade`), so erasing an admin no longer stops the integrations they
+  set up. Migration `20261017150000_webhook_subscription_outlives_creator`. A
+  subscription with no creator is an ownerless row: a new kind,
+  `'webhookSubscription'`, joins `UNATTRIBUTED_READ_KINDS` /
+  `UnattributedReads`, and the default policy lets platform admins see, edit,
+  test, switch off and delete it. Every webhook route scopes through the new
+  `webhookSubscriptionVisibilityWhere()` /
+  `webhookSubscriptionAccessBasis()` (`lib/orchestration/access/`), and a
+  delivery's visibility nests its subscription's. The list and detail
+  responses gain `createdBy` (null once erased), and the list marks such a row
+  **Creator erased**. Erasure step 7 now also clears the subject's own email
+  subscription that emails them, verified or not. **Forks:** a policy that answers the
+  ownerless kinds one by one should answer `webhookSubscription`; one that
+  wants an org's admins to inherit a departed colleague's integrations widens
+  it there. Code reading `createdBy` as a string must allow null.
+- **At `TENANCY_MODE=multi`, a user with no org membership is no longer
+  healed into the install org at sign-in** (t-836). The install org is the
+  vendor's own, and a customer org's invitee whose signup failed could land
+  there. `activeOrgForSession()` now returns `{ orgId: null, healed: false }`
+  for a memberless user at `multi` and writes nothing. The guard refuses them,
+  and a platform admin adds them through `POST /api/v1/orgs/[id]/members`.
+  This also covers an uninvited signup whose membership write failed, and a
+  member left with no org by an org erasure. **A fork calling
+  `activeOrgForSession()` must handle a `null` org.** `single` is unchanged.
+  An invited signup whose recorded decision is lost now lands in the org that
+  invited them (plus the install floor at `single`) rather than only in the
+  install org, and `undecidedMembershipsForNewUser()` now answers in both
+  modes and never returns `null`.
+- **`POST /api/v1/users/invite` refuses an `orgRole` for the install org**
+  (t-831, #871). It answers 400 `VALIDATION_ERROR` when `orgRole` is sent
+  without an `orgId`, or with `orgId: 'install'`. An install-org role
+  follows the platform `role`, as the members screen already enforces.
+  `membershipForNewUser` ignores such an `orgRole` on an invitation that is
+  already pending, and a resend drops it. An `orgRole` for any other org is
+  unchanged.
+- **`eraseUser()` redacts a person's delivery payloads before its
+  transaction** (t-806; owner ruling 2026-10-15). Once its callers' checks
+  have passed, it redacts every webhook and event-hook delivery naming the
+  person in committed 5,000-row chunks (`preRedactSubjectFromDeliveries` in
+  `lib/privacy/delivery-payloads.ts`), then runs the transaction, whose own
+  pass writes only rows that still need it. A heavy history used to time the
+  60 s transaction out (around 600,000 rows), and an erasure that times out
+  erases nothing. **What changes for a caller:** if the transaction fails after
+  that step, the person's delivery payloads are already anonymised and their
+  retries stopped while the account still exists; a retried erasure completes
+  the rest. Run your own refusal checks before calling `eraseUser()`, as the
+  core routes do. The delivery payload GIN indexes now carry
+  `fastupdate = off` (migration `20261015160000_delivery_payload_gin_no_fastupdate`,
+  probed by `db:drift-check` as A11 and A12), so the transaction's match does
+  not slow down until a vacuum.
+- **Email delivery sends are bounded at 15 s** (t-808). `DISPATCH_TIMEOUT_MS`
+  in `lib/orchestration/webhooks/not-retried.ts` holds every channel's send
+  timeout, and a test keeps each below the retry claim lease. An email send
+  that times out fails as retriable. **Forks:** a delivery channel you add
+  needs an entry there.
+- **An org admin now runs their own org's sections of the admin console**
+  (§111 t-811). At `multi`, an org OWNER/ADMIN reaches agents, workflows,
+  triggers, knowledge, conversations, evaluations (with datasets and runs),
+  experiments, event subscriptions, MCP keys and approvals. That covers their
+  pages, their nav items, and every API route those pages call, all listed in
+  `ORG_TIER_ADMIN_PAGES` / `ORG_TIER_ADMIN_ROUTES`, plus one execution's
+  detail page, which the approval queue and a workflow run link to. They also
+  read the capability, agent-profile, provider, provider-model,
+  embedding-model, grader and tag lists, but cannot write any of them. Their
+  provider list omits `baseUrl`, `apiKeyEnvVar` and `metadata`, the
+  usage counts on those lists cover their own org only (another tenant's
+  usage is a platform admin's delete check), and a
+  `rateLimitOverride` they set on an MCP key may lower the server's limit but
+  not raise it (`400` above it). Each opened route now declares an
+  `ownership`. New `actsForPlatform()` in `lib/tenancy/context.ts` answers
+  whether the call stack acts for the platform; `canChangeSharedSettings` now
+  delegates to it. The provider test routes (`providers/[id]/test`,
+  `test-model`) refuse an org admin a provider their org is not approved for
+  (`error: 'provider_not_approved'`) and run their probe in that org. New
+  `administersPlatform()` in `lib/auth/admin-viewer.ts` tells a platform admin
+  from an org admin inside an org-tier route. Platform admins, and every
+  install at `single`, see no change. **Forks:** a route of yours that one of
+  these pages calls stays platform-only until you declare it `tier: 'org'`.
+  An org admin reaches the MCP keys page from the MCP landing (t-812). See [Authorization → Admin tiers](./.context/auth/authorization.md#admin-tiers).
+
+- **An org admin now sees their org's half of the mixed admin pages**
+  (§111 t-812). The orchestration dashboard, costs, analytics, the
+  executions list and the MCP landing join `ORG_TIER_ADMIN_PAGES`, and their
+  nav items are `tier: 'org'`. An org OWNER/ADMIN sees their org's figures
+  there and no platform-ops panel: no setup wizard or quarantines, no per-org
+  usage or budget-settings link, no live-engine cards, lease inspector or
+  force-fail, and only the API Keys card on the MCP landing. The routes behind
+  their half are now org-tier: `costs`, `costs/summary`, `costs/alerts`,
+  `models`, `observability/dashboard-stats` and the five `analytics/*`
+  routes. Two answer an org admin differently: `costs/alerts` returns
+  `globalCap.cap` as `null` (as `spent` already was outside the install org),
+  and `models?refresh=true` returns `403`. `/admin` now sends an org admin to
+  `/admin/orchestration`; the overview stays platform-only. New
+  `adminPageViewerTier()` in `lib/auth/admin-page-viewer.ts` tells a page
+  which viewer it is rendering for; `CostsView`, `ExecutionsListView` and
+  `McpDashboard` take an optional `viewerTier`, and `ExecutionsTable` an
+  optional `engineControls`, each defaulting to the platform's view.
+  **Forks:** a page you add that pairs a platform panel with org data should
+  ask `adminPageViewerTier()` before you list it in the roster.
+
+- **A platform agent's `defaultBinding` is now asked on every maintenance
+  pass, and its answer moves the agent** (t-798). `PlatformAgentDefinition
+  .defaultBinding` used to be asked only when an instance was created, or
+  while its provider and model were empty. Now the `platformAgents` job asks
+  it every 15 minutes for each org whose agent's binding is the platform's,
+  and moves the agent whenever the answer changes; `null` moves it to
+  inherit. A fork that implements one should make it deterministic, with a
+  total order and no locale-dependent comparison, or the agent will move
+  back and forth between passes. It should also be cheap, and should throw
+  when it cannot answer rather than return `null`, which would move the agent
+  to inherit until the next pass. Core's eligibility and credential seams
+  still fail closed to "nothing eligible", so a fork resolver that is down
+  during a pass does move the clean-up agent to inherit for that pass
+  (t-819).
+- **The admin layout and the maintenance bypass ask the policy with the
+  guards' verified org facts** (§111 t-810). Both used to pass `orgId` straight
+  from the session's active org, with no `orgRole`. They now share
+  `sessionPrincipal()` (`lib/auth/session-principal.ts`), which enters the org
+  as `withAdminAuth` does (`enterSessionOrg`, resolver header first) and passes
+  `orgId` and `orgRole` from that entry. Where a guard refuses a session whose
+  entry is refused, these two ask with no org facts instead, so a platform
+  admin can still reach the console to switch org. Under Sunrise's default
+  policy nothing changes for a platform admin. **Forks:** a `canAdminister`
+  that reads `viewer.orgRole` now gets it at the layout and the bypass too, so
+  an org admin your policy admits now reaches the page shells, where before the
+  layout sent them away.
+- **`handleAPIError` answers `VALIDATION_ERROR`, not `EMAIL_TAKEN`, for a
+  unique violation on any constraint but the user email** (t-796). It
+  answered every P2002 with `EMAIL_TAKEN` and "Field already exists", which
+  clients render as "This email address is already registered", for a slug
+  clash too. The status stays `400`; the message is "A record with that value
+  already exists", with no `details`. A duplicate email
+  (`user_email_key`) still answers `400 EMAIL_TAKEN`, now with
+  `details.field: 'email'`.
+- **Four events name the person whose conversation or run they report**
+  (t-792). `chat_budget_exceeded_per_turn` carries `userId` (`null` plus
+  `embedVisitorId` for an embed visitor); `workflow_budget_exceeded` carries
+  the run owner's `userId` (`null` for a system-owned run); the force-fail `workflow.failed` and `execution.force_failed`
+  hooks carry it beside `actorUserId`, the admin. Additive for receivers.
+  Erasure and subject access now find these deliveries after the
+  conversation or run is deleted; rows written before this change still
+  name the person only through it.
+- **`escalationConfigSchema` reads an empty `emailAddresses` list**
+  (t-791); `escalationConfigWriteSchema` still requires one address. Erasing
+  the list's only recipient leaves it empty with the webhook kept, and a value
+  the read schema rejected would vanish from the settings API and form. The
+  settings form now refuses to save escalation as enabled with no address
+  rather than saving `null`, which would have dropped the webhook; untick
+  **Enable escalation notifications** to turn it off. A fork reading
+  `parseEscalationConfig()` may now see `emailAddresses: []`.
+- **`runAcrossOwners` logs once per reason per request, and only when it
+  crossed something** (§115 t-801) — the first read inside it the owner layer
+  would have checked, for a narrowed caller — not on every entry; and core declares its own crossings with it: the subject-data
+  export when an admin exports someone else (`exportUserData`), the org export
+  (`exportOrgData`), and `resumeApprovedExecution`, which runs the execution's
+  owner's workflow rather than reading narrowed to whoever approved it. A
+  `decidedBy: 'policy'` route whose personal reads the owner layer checked is
+  no longer reported as an ownership gap for not reading
+  `session.subjectFilter`, unless it also read a personal model the layer does
+  not check yet.
+- **The org and global monthly budget caps hold every paid AI call, not only
+  chat** (§110 t-788). Only the streaming chat handler checked them, so
+  workflow steps, the orchestrator, evaluations, judges, knowledge ingestion
+  and scheduled or webhook runs kept spending after a cap was reached. The
+  provider manager now runs a spend gate (`assertWithinSpendCaps` in
+  `lib/orchestration/llm/spend-caps.ts`) before every vendor call, beside the
+  eligibility gate. A refused call throws `SpendCapExceededError`, a
+  `ProviderError` with code `org_budget_exceeded` or `global_budget_exceeded`.
+  The codes are request faults (`isRequestFault`): not retried, and no circuit
+  breaker failure. Local providers are never refused, so provider selection
+  passes over a refused paid candidate to a local fallback:
+  `getProviderWithFallbacks` does, and so does chat's mid-stream failover.
+  When no candidate is left, `getProviderWithFallbacks` throws the cap's
+  `SpendCapExceededError` instead of the retriable `all_providers_exhausted`.
+  `spendCapRefusal()` answers without throwing. A chat agent whose primary is
+  local now answers on it after a cap, its own included, is reached. The turn
+  runs inside `withPaidCallHold`, and the gate refuses every paid call that
+  turn makes (a fallback, embeddings, the summarizer, tools), so `budget_exceeded`
+  is now a spend-cap code and a request fault too. An install with a global
+  cap set will see non-chat work stop at that cap where it used to carry on.
+
+- **Chat turns stopped by the org or global budget get their own error
+  codes** (§110 t-788). The streaming handler emitted `budget_exceeded`, with
+  "This agent has reached its monthly budget", for every cap. It now emits
+  `org_budget_exceeded` or `global_budget_exceeded` when one of those caps
+  stopped the turn. `budget_exceeded` now means the agent's own cap only. A
+  client that matched `budget_exceeded` to catch every budget stop must also
+  match the two new codes. The `budget_exceeded` webhook still fires for all
+  three, including a turn the provider gate stops part way, and gains a
+  `cap: 'agent' | 'org' | 'global'` field. The message for each is the error
+  registry's message and action for the code, so the agent's no longer names
+  its limit (it read "…its monthly budget of $10.00").
+
+- **`GET /api/v1/admin/orchestration/costs/alerts` returns `globalCap.spent`
+  only to the install org** (§110 t-788). The global total sums every org's
+  spend, so at `multi` an admin in a customer org gets `spent: null`, with
+  `cap` and `exceeded` as before. `GlobalCapStatus.spent` in
+  `lib/orchestration/llm/cost-reports.ts` is now `number | null`.
+
+- **Backup export and import run in one named org, and the shared part moves
+  only for the install org** (§109 t-738). Both
+  `POST /api/v1/admin/orchestration/backup/export` and `…/import` take
+  `?orgId=` (defaulting to the active org; an unbound admin API key must name
+  one at `multi`; an import naming a suspended org gets 409) and
+  `?shared=true|false`. The shared part is capabilities, knowledge tags and
+  the `global` orchestration settings. It is exported or written only when the
+  caller is in the install org, or is an unbound admin key. A caller in a
+  customer org that asks is refused with 403, `details.reason:
+  shared_settings_install_org_only`. Left unset, `shared` defaults to included
+  at `single`, so single-tenant backups are unchanged, and to left out at
+  `multi`. On import, a skipped shared part is reported in a warning and in a
+  new `ImportResult.sharedSkipped`. The import route no longer declares
+  `writesSharedSettings`, so a customer org can now restore its own agents and
+  workflows; it was refused outright under t-751. A workflow whose slug
+  another org holds is imported under a free slug with a warning, instead of
+  failing the whole import. The renamed row is marked
+  `metadata.importedFromSlug`, so a repeat import updates it rather than
+  adding a copy. The audit entries' `entityId` is now the target org instead
+  of `'full'`. Tag grants also resolve against existing tags.
+  `exportOrchestrationConfig(scope)` and `importOrchestrationConfig(raw,
+  userId, scope)` now take a `BackupScope` from the new `resolveBackupScope()`
+  in `lib/orchestration/backup/scope.ts`. The bundle format is unchanged
+  (`schemaVersion: 3`); a bundle without the shared part carries those fields
+  empty.
+- **A webhook or event-hook delivery records where it was sent, and outlives
+  the subscription or hook that sent it** (§109 t-739). `AiWebhookDelivery` and
+  `AiEventHookDelivery` gain `destination` (the URL's origin only, so it holds
+  no URL secret, or the email address, normalised), `destinationFingerprint` (a
+  keyed HMAC of the full destination; `fingerprintDestination()` in
+  `lib/orchestration/webhooks/destination.ts` checks a URL against it) and
+  `previousDestinations` (the earlier ones, when a retry followed an edited
+  URL). Their parent FK, `subscriptionId` / `hookId`, is now **nullable** with
+  `ON DELETE SET NULL`: deleting a subscription or hook, or erasing the admin
+  who created a subscription, keeps its deliveries. Code that reads
+  `delivery.subscription` or `delivery.hook` must handle null. A retry of such a
+  delivery is refused with `409` on both retry routes (the hook route used to
+  answer `404` for a delivery it could not retry), and a retry the maintenance
+  tick abandons keeps its last real error with `(not retried: …)` appended. The
+  webhook DLQ routes show such a delivery to the admins the authorization
+  policy permits an unattributed read (platform admins by default), and
+  retention prunes it by age as before. A delivery emailed to a person is
+  theirs to see and to have erased: the subject-access export gains a
+  `webhookDeliveries` section (when, which event, the outcome, and their
+  own address — never another inbox a re-pointed row also names), and
+  `eraseUser()` redacts the address on every such delivery to `[erased]` and
+  stops any of them still retrying — both for a verified address only, matched
+  exactly on the normalised form. `GET /webhooks/dlq` no longer returns the
+  subscription's `url` (which can carry a credential), and the
+  `webhook_delivery.delete` audit entry names the delivery's origin rather than
+  the subscription's full URL, and no email address.
+  **Migrations** `20261008120000_delivery_destination` and
+  `20261011120000_delivery_destination_index` (two indexes on
+  `ai_webhook_delivery`, built without `CONCURRENTLY`, so apply off-peak on a
+  large install); then run
+  `npm run db:seed` so the `022-delivery-destinations` unit fills existing rows
+  from their current subscription or hook (the best available value, not a
+  record). Rows whose parent is deleted before it runs stay unrecorded.
+- **At `TENANCY_MODE=multi`, an org's stored files live under `orgs/{orgId}/`,
+  and agent uploads are private by default** (§109 t-736). The
+  `upload_to_storage` capability writes `orgs/{orgId}/{keyPrefix}{uuid}.{ext}`
+  (the org prefix wraps a binding's own `keyPrefix`), through
+  `getStorageClient({ orgId })`, a new optional argument that returns the
+  provider wrapped to refuse any key outside that org on upload, read, delete,
+  prefix delete and signing (`lib/storage/org-scoped.ts`). A binding that sets
+  **neither `public` nor `signedUrlTtlSeconds`** now uploads privately and
+  returns a signed URL valid for 24 hours; set `public: true` to keep a public
+  link. On Vercel Blob, which cannot sign, such a binding is refused with
+  `signed_url_not_supported` until it opts into public; **on S3, set
+  `S3_OBJECTS_PRIVATE_BY_DEFAULT=true`** (bucket blocks public access) or
+  `S3_USE_ACL=true`, or such a binding is refused with
+  `private_objects_not_supported`. A dispatch with no org
+  in its tenant context is refused with `no_org_context`. `orgs/` is now a
+  reserved root: **`getStorageClient()` without `orgId` now refuses any key
+  under `orgs/`** (in any letter case), so an org's files are reachable only
+  through that org's client, and at `single` a binding whose `keyPrefix`
+  starts with it is refused with `invalid_binding`. **`getStorageClient()`
+  therefore returns a guarded wrapper, not the provider instance**: it exposes
+  the `StorageProvider` interface only, so a fork that reached a provider's own
+  extra methods through it must keep its own reference to the provider.
+  **`validateStorageKey()` now rejects `.` and empty path segments** (a
+  trailing `/` on a prefix is fine; a full blob URL is judged by its path):
+  the local provider resolves keys as paths, so `./orgs/b/x` reached another
+  org's directory. Local storage access
+  tokens gain an optional `org` claim: `generateStorageAccessToken()` and
+  `buildStorageAccessUrl()` take `{ orgId }`, refuse an org-owned key signed
+  for any other org (or for none), and the read route answers `403
+  TOKEN_ORG_MISMATCH` when the claim does not match the key, or `403
+  ORG_UNAVAILABLE` once the claimed org is erased or suspended. `StorageProvider.getSignedUrl`
+  gains an optional third `options` argument (`SignedUrlOptions`); a fork's
+  custom provider that ignores it still compiles, but one that mints
+  local-style tokens must forward it, or signing an org key fails. `eraseOrg()`
+  deletes the org's prefix after its transaction commits, best-effort, and
+  reports `storageSwept` (also on `DELETE /api/v1/admin/orgs/[id]`);
+  `sweepErasedOrgStorage(orgId)` re-runs that sweep for an org already erased. **Unchanged at `single`**: no prefix, and
+  the public default stays. Avatars and files uploaded before this stay where
+  they are, and org erasure does not reach the older ones. See
+  `.context/storage/tenancy.md`.
+
+- **Recorded costs change for models only the Model Matrix prices**
+  (t-774). Once a matrix row has split prices, its chat turns are recorded at
+  the input and output rates instead of the blended `(input + output) / 2`
+  for both, so an input-heavy turn (long prompt, short reply) records about
+  half what it did. The seed now carries split prices for its hosted chat
+  rows, so seed-managed rows change on the next seed; rows an admin has edited
+  keep the blended rate until their prices are set. Models in the built-in
+  price list are unaffected.
+
+### Deprecated
+
+- **`EraseUserParams.userEmail`** (t-797). Ignored: the erasure receipt now
+  hashes the address stored on the user row, read inside the erasure
+  transaction, rather than the caller's copy, which a session cached across an
+  email change could hold stale. The parameter is optional and still accepted
+  so existing callers compile; stop passing it. It will be removed at the next
+  MAJOR.
+
+### Fixed
+
+- **A running workflow no longer writes a person erased while it runs back
+  into its run** (t-843). The engine's checkpoint, approval pause and final
+  write each run in a transaction that, after the write, checks for erasure
+  receipts since the run started and takes whoever the run names among them
+  out of `executionTrace`, `inputData`, `outputData` and `errorMessage`, and
+  out of the step outputs later steps read. `eraseUser()` also makes one more
+  pass over recently written runs after it commits. New exports:
+  `findErasedSinceRunStarted()` and `redactSubjectFromRunsSince()` in
+  `lib/privacy/run-recipients.ts`, and `matchErasedSubjects()` in
+  `lib/privacy/erased-subjects.ts` (`findErasedSubjects()` without the locks).
+  Each run write now opens a transaction, about 2 ms more per step on a local
+  Postgres. See `.context/privacy/data-erasure.md` → "And what it writes back".
+- **Operators can set how long failed webhook deliveries are kept** (t-884,
+  #838). `webhookDlqRetentionDays` on `AiOrchestrationSettings` was read by
+  the retention prune but nothing could write it globally, so dead-lettered
+  deliveries were always pruned on the webhook window. `PATCH
+  /api/v1/admin/orchestration/settings` now accepts it (a positive integer up
+  to 365, or `null` to use `webhookRetentionDays`), `GET` and
+  `OrchestrationSettings` return it, the Settings → Retention card has a
+  "Failed webhook retention" field, and backup export / import carry it,
+  held to the same 1–365 bound. Restoring a backup made before this leaves
+  the current value as it is.
+- **The API response helpers no longer invite a `public` `Cache-Control`
+  override** (t-881, #751). The `successResponse()` docblock and
+  `.context/api/headers.md` said a route could replace `private, no-cache`
+  with a `public` directive. That was never safe: `checkConditional()` sends
+  the default on its 304, so the first revalidation reverts it, and the proxy
+  can attach the per-visitor cookie to a first visit's API response, which a
+  shared cache would then replay to other visitors. The docs now say a
+  `public` directive or `s-maxage` is unsupported, and that a route may only
+  tighten the default. No code changed. **Forks:** if one of your routes sets
+  a `public` directive on an API response, remove it, or serve that data from
+  a page or a static asset.
+- **An agent export that includes built-in agents imports again** (t-879,
+  #721). `POST /api/v1/admin/orchestration/agents/export` now leaves out
+  system agents (`isSystem: true`), as the backup export already does. Before,
+  a built-in agent's empty `provider`/`model` made the whole bundle fail
+  import validation. The import would have skipped those agents anyway. A
+  selection of only built-in agents now returns `400`, and a mixed one reports
+  how many it left out in a new `X-Skipped-System-Agents` response header,
+  which the agents table shows. **Forks:** an export
+  file made before this change that contains a built-in agent still fails to
+  import; delete that agent's entry from the file and import again.
+- **Dialogs, menus, popovers, selects and tooltips animate again** (t-875,
+  #682). The `components/ui/` overlays use `animate-in`, `fade-in-0`,
+  `zoom-in-95` and `slide-in-from-*` classes, but the library that defines
+  them was never installed, so every overlay appeared and vanished instantly.
+  `tw-animate-css` is now a dev dependency, imported from `app/globals.css`;
+  no component changed. **Forks:** your overlays will start animating after
+  this merge. If you had worked around the missing animations, or want them
+  off, remove the classes from your copies or override them.
+- **Correction to v0.11.2's coverage note: the widening covers `.js`, `.jsx`,
+  `.cjs` and `.mjs`, not only `.mjs`** (t-870, #698). Item 3 of the v0.11.2
+  notes and its `### Fixed` bullet said `.mjs` files had joined the per-file 80%
+  coverage floor. The scoped runner's `coverageTargets` actually admits every
+  `[cm]?[jt]sx?` file, so a changed `.js`, `.jsx` or `.cjs` file under a path
+  coverage does not exclude is held to the floor too. **Forks:** if you checked
+  only your `.mjs` files after taking v0.11.2, check those as well — a design
+  prototype's `.jsx` is the case that has already failed a fork's unrelated PR.
+  Nothing changed in the runner; the wording was wrong.
+- **An experiment can no longer pin a variant to a saved agent version, which
+  it could not honour** (t-864, #857). The run path loads only the live agent,
+  so pinned variants were scored against the live config and a version A/B
+  named a winner between identical setups. `POST
+  /api/v1/admin/orchestration/experiments` now answers `400` for any variant
+  with `agentVersionId`, and `POST /experiments/:id/run` answers `400` for an
+  experiment already stored with one, before writing any run or session.
+  Unpinned experiments are unchanged; every variant runs the live agent, and
+  the create form and `.context/orchestration/experiments.md` now say so.
+  **Forks:** a client that sent `agentVersionId` must drop it.
+
+- **Admin pages say when their data failed to load, instead of showing an
+  empty list** (t-861, #518). Every admin page that reads through
+  `serverFetch` caught any failure and returned `[]` or `null`, so a 500, a
+  timeout or a wrong base URL showed "No users found" against a full
+  database, and a detail page's 500 showed as a 404. Five pages logged
+  nothing. A page whose main data fails now reaches the admin error boundary,
+  whose "Try again" re-fetches; a detail page 404s only on a real 404; a
+  dashboard or summary panel that fails shows "Couldn't load …" in its place
+  while the rest of the page works. `.env.example` no longer says a local
+  reverse proxy never needs `INTERNAL_API_URL`: a local production build
+  behind one does.
+
+- **Required text fields reject whitespace-only input instead of saving it
+  blank** (t-860, #713). Zod runs a string chain's checks in the order written,
+  and 88 schemas called `.trim()` after `.min()`, `.max()` or `.regex()`. So
+  `"   "` passed `.min(1)` and was stored as `""`. Sign-up's `name`, the
+  contact form, profile and invitation fields, the MCP settings and most
+  orchestration admin forms were affected. Every chain now trims first, and
+  `tests/unit/lib/validations/trim-order.test.ts` fails on any new chain that
+  does not. **Forks:** a request whose required field is only spaces is now a
+  `400` with the field's "required" message. A padded value is measured after
+  trimming, so a value within `.max()` once trimmed now passes. If the guard
+  fails on your own schemas, move `.trim()` to straight after `z.string()`.
+
+- **Approval history shows decisions on scheduled and inbound runs** (t-849,
+  #773). `GET /api/v1/admin/orchestration/approvals/history` read only runs the
+  caller owned, so every decision on a run nobody owns was missing, including
+  the caller's own. It now uses `executionVisibilityWhere`, the executions
+  list's rule: on a default install every admin sees decisions on those runs.
+  A fork whose authorization policy refuses unattributed reads narrows this
+  page too, where before the page ignored the policy. It now scans only runs
+  whose trace holds an approval step, so frequent scheduled runs cannot crowd
+  decisions out of its 1000-run window. The `known-gap` entry leaves
+  `OWNERLESS_SURFACE_EXCEPTIONS`.
+
+- **An evaluation run where no grader scored a single case is now `failed`**
+  (t-847, #921). When the subject ran but no grader returned a score (every
+  grader or judge threw, as with a judge that has no provider, or skipped), no
+  case carried an `errorCode`, so the run ended `completed` with nothing
+  scored, and the cost estimator sampled it as a good run. It now ends
+  `failed` with `summary.note = 'no_scores_recorded'`, plus `casesFailed` and
+  `dominantErrorCode` when some cases also errored. A run where any metric
+  scored at least one case still completes, and `all_cases_failed` is
+  unchanged.
+
+- **The maintenance tick's background tasks keep running after the route
+  responds** (t-844). The route left them as a floating promise, which a
+  serverless host can freeze once the `202` is sent, silently stopping
+  schedules recovery, retries, the reaper and retention. They now run under
+  Next's `after()`, and the route sets `maxDuration = 300` (Vercel's Fluid
+  default and the Hobby ceiling) for the sweep and the chain together. `runMaintenanceTick()` returns the chain as `background`;
+  a fork calling it from its own request handler must pass that to `after()`.
+
+- **`eraseUser()` reaches schedules and runs that name the person** (t-804).
+  A verified address held in a schedule's `inputTemplate` is blanked (the
+  step it feeds then fails loudly, as for an emptied `to`; the schedule stays
+  enabled) and audited as `workflow_schedule.recipient_erased`. Other
+  people's runs — `inputData` and `executionTrace`, including a run paused at
+  an approval, whose approvers and notification target the approval routes
+  read — lose the person's id and address. New
+  `lib/privacy/run-recipients.ts`; runs are redacted in committed pages before
+  the erasure transaction (`preRedactSubjectFromRuns()`), as deliveries are,
+  so a large run table cannot time it out. `dispatchApprovalNotification` no longer
+  logs the target address (`hasChannelTarget` instead).
+- **`eraseUser()` no longer times out behind a backup import that names the
+  person** (t-840). The importer holds the erasure locks for everyone its
+  bundle names for the whole import, up to 130 s (now
+  `IMPORT_TRANSACTION_TIMEOUT_MS` in `lib/orchestration/backup/importer.ts`),
+  and an erasure that waited for one inside its 60 s transaction failed. The
+  erasure transaction now only tries the locks. On a miss it rolls back,
+  `eraseUser()` waits outside it, and it runs again. The last of
+  `SUBJECT_LOCK_TRIES` (3, exported from `lib/privacy/erase-user.ts`) waits
+  inside, as before. New in `lib/privacy/erased-subjects.ts`:
+  `tryLockSubjects()`, `waitForSubjectLocks()`, `SubjectLocksBusyError` and
+  `SUBJECT_LOCK_WAIT_MS` (150 s per lock). `tryLockSubjects()` returns false
+  on a held lock, and a caller must then roll back: the keys it took before
+  that one stay held until the transaction ends. An import holding a row the erasure
+  needs, rather than the person's lock, can still time it out. **Forks:** an
+  erasure queued behind a writer now takes as long as that writer, up to
+  150 s per lock waited for, where before it failed at 60 s. A route that calls
+  `eraseUser()` on a host with a short request limit may want to run it in the
+  background.
+- **`LogoutButton` signs out with a full page load, as the account menu
+  does** (t-829, #707). It used `router.push()` and `router.refresh()`, which
+  keep the Router Cache, so pages rendered for the signed-in user could still
+  show after sign-out. Nothing in Sunrise mounts it. A fork that does gets the
+  same sign-out as `UserButton`.
+- **The user-created seam reports a Google or GitHub invitation acceptance as
+  an invitation** (t-828, #688). `viaInvitation` was `false` on every OAuth
+  signup, so a fork's `lib/app/user-created.ts` hook could not tell an invited
+  colleague from a stranger. It is now `true` on both ways of accepting, as
+  the seam's contract already said. `lib/auth/pending-signup.ts` gains
+  `setInvitationAccepted()` and `wasInvitationAccepted()`, which carry it
+  between the hooks on one request.
+- **On a single-tenant install, a user invited into another org is a member
+  of the install org too** (t-827, #872). Before, they got only that org's
+  membership, so suspending it locked them out of everything. Their
+  install-org role follows the platform role the invitation grants. The new
+  `membershipsForNewUser()` in `lib/tenancy/membership.ts` decides both
+  memberships, and `PendingSignup` gains an optional `installMembership`.
+  At `multi` nothing changes: the install org is the vendor's, and a customer
+  org's admin must not be able to add people to it. Their first session still
+  starts in the invited org. Later sessions follow the existing active-org
+  rule, which prefers the install org. Users invited before this release are
+  not backfilled.
+- **Protected and auth routes match on whole path segments** (t-826, #758).
+  An `appProtectedRoutes` entry, and the core `/dashboard`, `/settings` and
+  `/profile`, now cover the route itself and the paths beneath it, not every
+  path that starts with the same letters. A public `/profiles` or
+  `/settings-guide` no longer redirects signed-out visitors to `/login`, and
+  the same rule applies to the auth-page and invite-only `/signup` redirects.
+  A fork that counted on an entry covering a longer sibling (`/app`
+  protecting `/apply`) lists that sibling itself.
+- **A `send_notification` step on the webhook channel now POSTs to its
+  `webhookUrl` (t-794).** Before, it sent nothing and still reported
+  `sent: true`: it broadcast a `workflow_notification` event that no
+  subscription could select. Existing workflows with a webhook notification
+  step start sending when they take this release. The JSON body is
+  `{ text, workflowId, workflowName, executionId, stepId }`, sent through the
+  guarded outbound fetch, so the URL's host must be in
+  `ORCHESTRATION_ALLOWED_HOSTS` or the step fails. `output` gains `status`
+  (the response status). The `workflow_notification` event is no longer
+  dispatched.
+- **Fourteen orchestration admin routes answer "already exists" only for a
+  collision on their own unique constraint** (t-814): agents, agent
+  capabilities, workflows (create, update, save as template), capabilities,
+  providers, provider models, knowledge tags and agent profiles. Before, any
+  unique violation in their writes was reported as a taken slug. A collision
+  on any other constraint now reaches the shared handler's `400
+  VALIDATION_ERROR`, except a provider model whose provider already has that
+  model id, which says so. Creating or re-slugging an org answers a slug
+  taken in a race past its pre-check with `409 SLUG_TAKEN`, like the
+  pre-check, not `400`.
+- **Restoring an agent version saved on inherit succeeds** (t-820). `POST
+  …/agents/:id/versions/:versionId/restore` refused any snapshot with an empty
+  `provider` or `model` with `400 "Invalid version snapshot data"`. It now
+  restores them, putting the agent back on inherit. The PATCH body still
+  refuses an empty provider or model.
+- **An email-channel webhook delivery that timed out after Resend accepted it
+  is not sent again by the automatic retry** (t-822). Each send carries a
+  Resend idempotency key. `AiWebhookDelivery` gains `sendGeneration`, bumped
+  by a manual retry or DLQ replay so those still send again. The email shows
+  the delivery's `createdAt`, not the time of the attempt.
+
+- **The 14 document-cleanup capabilities now seed the schema their classes
+  accept** (#646): `prisma/seeds/019-cleanup-capabilities.ts` wrote a
+  hand-copied `functionDefinition` that had drifted from every class
+  (different tool and parameter descriptions), and the parity test never saw
+  it. The seed now takes each definition from the class instance, so the next
+  deploy rewrites those rows' `functionDefinition` to the class's. Admin-owned
+  `name`, `description`, `rateLimit` and `isActive` are untouched.
+
+- **The clean-up agent's provider follows what the org can reach** (t-798).
+  At `TENANCY_MODE=multi` a new org's platform agents are created before it
+  has any provider grant, so the clean-up agent started unpinned and ran on
+  the default chat model until a registry change triggered a reconcile; a pin
+  to a provider later revoked was refused on every call. While the agent's
+  provider and model are the platform's (the new `AiAgent.bindingOwner`, see
+  Added), the `platformAgents` maintenance job re-picks them every pass and
+  moves them when the pick changes: a grant, a revocation (back to inherit if
+  nothing qualifies), a provider switched on, a key set, a strong model added.
+  `PUT /api/v1/admin/orgs/[id]/providers` also reconciles at once on a policy
+  change (`tryReconcilePlatformAgents`, which never fails the grant). A
+  provider or model an org admin set is never moved. The pick's ranking now ends on the provider slug, so two providers
+  offering one model no longer trade places between passes.
+- **Code that handles a particular unique violation recognises it again**
+  (t-796). Under Prisma 7's driver adapter a P2002 carries no `meta.target`,
+  so every reader of it missed. An inbound trigger replay answered `500`
+  instead of `200 { deduped: true }` (no second run was created), agent PATCH
+  answered a slug clash with "concurrent change, please retry" (`409`) instead
+  of `400`, a knowledge upload that lost a same-content race failed instead of
+  returning the winner, and a revision-number collision was not retried.
+  Agent PATCH now answers "please retry" only for a version-number race;
+  another unique violation goes to the shared handler's `400`. Agent clone
+  retries a new slug only on a slug collision, and answers its own `409`
+  "Could not generate a unique slug" when every suffix is taken.
+  `isUniqueViolationOn(err, UNIQUE_CONSTRAINTS.<name>)` in
+  `lib/db/unique-violation.ts` reads the collided index name; a test checks
+  each named constraint against the migrations.
+- **An erasure's stop on a delivery is no longer undone** (t-793). An attempt
+  in flight when the erasure commits writes its outcome only to a row still
+  waiting to send, and arms no further retry. The manual retry routes answer
+  `409` for a row an erasure stopped, and a DLQ replay skips it; the erasure
+  marks every delivery about the person's activity, delivered or exhausted
+  ones included, so none of them is sent again. A due retry is claimed before
+  it is sent and the claimed row's payload is the one sent, so a stale timer
+  no longer double-sends a row an admin retried by hand, the in-process timer
+  and the maintenance tick no longer both send one retry, and neither sends a
+  copy read before an erasure redacted it. Both retry routes also answer
+  `409`, not `404`, for a delivery that exists but changed before the retry
+  could reset it.
+- **Erasing a person removes them from the escalation list and from workflow
+  notification and approval steps** (t-791). Their verified address left
+  `escalationConfig.emailAddresses` and `send_notification` steps' `to`, and
+  their id `human_approval` steps' `approverUserIds` (and their address an
+  approval step's `notificationChannel.target`), so escalations and workflows
+  kept emailing, or naming, an erased person. `eraseUser()` now
+  removes them in the workflow draft **and every published version** (erasure
+  is the one writer allowed to change a version's `snapshot`), audited as
+  `settings.escalation_recipient_erased` and `workflow.recipient_erased`. A
+  list they leave empty stays empty: a notification step with no recipient
+  fails when it runs (its error strategy decides what follows, so a `skip`
+  step is skipped) until an admin adds one. Unverified addresses are left
+  alone. See
+  [Data erasure, step 8](./.context/privacy/data-erasure.md#what-eraseuser-does-beyond-the-cascade).
+- **The erasure receipt hashes the stored address** (t-797), not the
+  `userEmail` the caller passed, so it cannot name an address the account no
+  longer held.
+- **Embeddings from Google, Mistral and Cohere models are costed instead of
+  recorded as free** (t-775). `calculateEmbeddingCost()` read only its own
+  rate table, which covers OpenAI and Voyage, so `text-embedding-004`,
+  `mistral-embed` and the Cohere `embed-*-v3.0` models were logged at $0 —
+  knowledge ingestion and the query embedding behind every knowledge search
+  included — although the Model Matrix prices them. A model missing from the
+  table is now priced from the registry; one neither prices is logged with
+  `metadata.pricing = 'unknown'`, as chat turns are. Embedding costs for these
+  models rise from $0 from this release.
+- **Cost estimates no longer call a free model "pricing unknown"** (t-776).
+  `GET /workflows/:id/cost-estimate` and the evaluation estimate set
+  `pricingKnown: false` for any model whose rate was 0, including local models
+  and Model Matrix rows priced at an explicit 0, while runtime records those
+  turns as free and priced. `pricingKnown` is now `false` only for a model the
+  registry lacks or one whose matrix row has no cost.
+- **Bulk agent actions no longer reach deleted agents** (t-795).
+  `POST /api/v1/admin/orchestration/agents/bulk` filtered out system agents
+  but not ones deleted through `DELETE /agents/:id`, so a deleted agent's id
+  in the selection made it active again and gave it a new version. Deleted
+  agents are now excluded from every action, and the response gains
+  `skipped`: the requested ids the action could not reach (system, deleted,
+  or unknown).
+
+- **The global monthly budget cap totals every org's spend again at
+  `multi`** (§110 t-788). `checkBudget()` summed month-to-date spend inside
+  the acting org's scope, where the `org_isolation` policy hides other orgs'
+  rows. So `globalMonthlyBudgetUsd` acted as the same cap applied to each org,
+  and the install had no ceiling on its shared provider keys. The total is now
+  summed in the system scope, detached `NULL`-org rows included, and the
+  agents list and `GET /costs/alerts` read the same figure
+  (`getGlobalCapState()` in `lib/orchestration/llm/cost-tracker.ts`). At
+  `single` nothing changes.
+
+- **S3 and Vercel Blob `deletePrefix` now delete past the first page**
+  (§109 t-736). Both read only the first listing page (1,000 objects on S3),
+  so a prefix holding more kept the rest while reporting success; S3 also
+  reported success when `DeleteObjects` returned per-key `Errors`. S3 now
+  follows the listing to the end, Vercel Blob re-lists until the prefix is
+  empty, and an S3 per-key failure returns `{ success: false }`. `eraseUser()`'s avatar sweep and `eraseOrg()`'s org
+  sweep both go through it.
+- **Erasure reaches what a delivery's event says about a person, and
+  colleagues' subscriptions that email them** (t-783, t-786). A webhook or
+  event-hook delivery whose payload names the erased person — their id as
+  `userId`, `actorUserId` or an approver, or a conversation or workflow run of
+  theirs — is redacted, not deleted: an event about their own activity keeps
+  only which event it was (agent, workflow, ids, costs) and loses its free
+  text and any field a fork added; one about a change they made keeps the
+  change and loses only them; one still retrying about their activity stops
+  — and a retry timer armed before the erasure no longer undoes that: the
+  in-process retry timers for webhook and event-hook deliveries now skip a row
+  that has moved on since they were armed, which also holds the stop §109
+  t-739 applies to a delivery emailed to an erased person. An attempt already
+  in flight when the erasure commits no longer overwrites it either (t-793).
+  Another admin's email subscription to the person's verified address has the
+  address cleared and is deactivated, with a
+  `webhook_subscription.recipient_erased` audit entry that names the
+  subscription, never the address. Subject access returns the same deliveries:
+  `webhookDeliveries` rows gain `about` (which event, and what it said about
+  them — never other people, nor org configuration such as a notification
+  step's `webhookUrl`) beside `sentTo`, and a new `eventHookDeliveries` section
+  carries event-hook deliveries. A migration adds a GIN index on each delivery
+  table's `payload` (not `CONCURRENTLY`; both tables are bounded only once
+  `webhookRetentionDays` is set). A fork
+  whose own events name a person under another key clears it with a
+  `scrubInTransaction` hook; see `.context/privacy/data-erasure.md`.
+
+
+- **Editing a chat model in the provider-model form no longer unprices it**
+  (t-774). The form cleared `costPerMillionTokens` whenever a model without
+  the embedding capability was saved, but that column is also a chat model's
+  blended price, so every edited chat model went to "pricing unknown" and its
+  turns were recorded at $0.
+
+### Security
+
+- **Only a platform admin can change a platform role through
+  `PATCH /api/v1/users/[id]`** (t-837). The route wrote the body's `role`
+  for whoever passed `withAdminAuth`, so a fork whose `canAdminister` admits
+  an org's OWNER/ADMIN let them promote anyone, themselves included, to
+  platform `ADMIN`. Changing `role` now needs the caller to be a platform
+  admin, whatever the policy said, and is a 403 otherwise. A support session
+  counts as not being one. Sending the role the user already has, and
+  editing the other fields, are unchanged. Stock Sunrise admits only
+  platform admins to the route, so nothing changes there.
+- **Only a platform admin can set a platform role through
+  `POST /api/v1/users/invite`** (t-833). The route wrote the body's `role`
+  for whoever passed `withAdminAuth`, so a fork whose `canAdminister` admits
+  an org's OWNER/ADMIN also let them invite someone as a platform `ADMIN`. A
+  `role` other than the default now needs the caller to be a platform admin,
+  whatever the policy said, and is a 403 otherwise; a support session counts
+  as not one. So does re-sending (`?resend=true`) a pending invitation whose
+  role is not the default, since a resend rewrites its role and org. Stock Sunrise admits only platform admins to the route, so
+  nothing changes there. Inviting at the default role is unchanged.
+- **An `admin`-scoped API key stops working when its owner stops being a
+  platform admin** (t-830, #746; owner ruling 2026-10-17). Before, demoting
+  an admin left their admin keys with the whole admin surface, and on any
+  other route they ran with no org scope. `withAdminAuth`, `withAuth` (through
+  `enterApiKeyOrg`, which gains the refusal `admin-key-owner-not-admin`) and
+  the default policy's platform-admin check now also require the owner's
+  current role to be `ADMIN`. Re-promoting the owner restores the keys.
+  Demotion does not revoke them. A fork whose own policy reads `viewer.scopes`
+  for `admin` should add the same owner check.
+- **A URL a customer org chooses can no longer reach the platform's own
+  network** (§111 t-811). With the knowledge URL import and webhook
+  subscriptions open to org admins, `checkSafeProviderUrl` was not enough:
+  it reads the URL's text, so a hostname resolving inside the network
+  (`db`, `169.254.169.254.nip.io`, an attacker's A record) passed, and the
+  imported page could be read back. At `multi`, a fetch made for a
+  non-install org (knowledge URL import, webhook delivery, webhook test, and the allowlisted calls behind `external_call` / `call_external_api`) now
+  connects through `withOutboundDispatcher()` (new
+  `lib/security/safe-dispatcher.ts`). It refuses the connection if the host
+  resolved to any loopback, link-local, private, CGNAT or unique-local
+  address, and connects to the address it checked, so DNS rebinding and
+  redirect hops are covered too. New `checkSafeAddress()` in
+  `lib/security/safe-url.ts` applies the URL rules to a resolved address.
+  `checkSafeProviderUrl` now drops a trailing dot before its denylist (`metadata.google.internal.` was let through), and both checks unwrap the IPv4 address inside a NAT64 (`64:ff9b::/96`) or 6to4 (`2002::/16`) address and refuse `0.0.0.0/8` and site-local `fec0::/10`. A refusal names the host, never the address it resolved to, and for a customer org a refused host and one that does not exist read the same, so a webhook test cannot map the internal DNS; a webhook delivery refused this way is terminal rather than retried. For the allowlisted calls, where no URL check runs first, an IP literal the address rules refuse is refused for a customer org before the fetch (a literal is never looked up). The install org, a system scope and `single` installs connect as before; a call stack with no tenant context at `multi` is pinned. Adds `undici` (7.x, the
+  major Node 24's `fetch` runs on) as a direct dependency.
+
+- **A customer org's configs can no longer read the platform's env vars**
+  (§111 t-811). Opening the agent, workflow and chat routes to org admins let
+  them author the configs that name env vars: `${env:NAME}` templates in
+  `call_external_api`'s `forcedUrl` / `forcedHeaders` and `external_call`'s
+  `url` / `headers`, `auth.secret` / `authSecret`, and the Twilio and WhatsApp
+  `*Env` fields. Naming the session secret or a provider key there, then
+  calling a host they could read, would have handed them the operator's
+  secret. At `multi`, a config acting for a non-install org may now name only
+  env vars starting `ORG_<ORG ID>_` (`orgEnvVarPrefix()` in
+  `lib/orchestration/env-template.ts`). The check runs where the value is
+  read, and before the variable is looked up. A refusal is `invalid_binding`
+  on `call_external_api`, new `env_var_not_available` on `external_call`, and
+  new HTTP error code `auth_secret_not_available`. The install org, a system
+  scope, and `single` installs are unchanged; a call stack with no tenant
+  context at `multi` names no env var at all. The binding-save warning lists a
+  refused name apart from an unset one (`meta.warnings.unavailableEnvVars`,
+  with `envVarPrefix`). **Operators:** a customer org
+  binding that names an unprefixed env var stops working at `multi`. Move its
+  value to `ORG_<ORG ID>_…` and update the binding. See
+  [External calls](./.context/orchestration/external-calls.md).
+
+- **A narrowed caller's read of another member's memory is now refused at the
+  query** (§115 t-801). Inside one org, an org OWNER, ADMIN or MEMBER (anyone
+  but a platform admin or an `admin` API key) could read another member's
+  `AiUserMemory` rows through any library function that forgot to filter by
+  owner; nothing below the route checked. Now the data layer refuses it, in
+  every environment, with a 404. **Upgrading:** fork code that reads
+  `AiUserMemory` for a narrowed caller without filtering on the owner will
+  throw. Confine the query with `session.subjectFilter`, or wrap a deliberate
+  read across owners in `runAcrossOwners(reason, fn)`.
+- **…and of another member's conversation or message** (§115 t-802).
+  `AiConversation` and `AiMessage` are enforced: a narrowed caller (an org
+  OWNER or ADMIN included) reads only their own threads, ones shared with them
+  while the share is live, and ownerless ones where the policy admits it. Core's
+  reads are narrowed to match. **Upgrading:** fork code listing or counting
+  conversations or messages for a narrowed caller without
+  `conversationVisibilityWhere` (or an owner filter) will throw; a message read
+  by `conversationId` alone needs `conversation: …` beside it. **Behaviour
+  change:** for a narrowed caller, the analytics that quote message text
+  (topics, unanswered questions, content gaps, recent negative feedback) now
+  draw only on threads that caller could open; the figures stay
+  deployment-wide. A platform admin sees what they saw before.
+- **…and of another member's workflow runs, evaluations and datasets** (§115
+  t-803). `AiWorkflowExecution`, `AiEvaluationSession`, `AiEvaluationLog`,
+  `AiDataset`, `AiDatasetCase`, `AiEvaluationRun` and `AiEvaluationCaseResult`
+  are enforced: a narrowed caller reads their own, and ownerless runs and
+  datasets where the policy admits it. A named approver still approves, rejects
+  or cancels a run they cannot otherwise see (`acrossOwnersForApproval` in
+  `execution-access.ts`), and every maintenance job now runs across owners, so
+  a tick fired from an admin's session is not narrowed to that admin's rows.
+  **Upgrading:** fork code listing or counting runs for a narrowed caller
+  without `executionVisibilityWhere` (or an owner filter) will throw, as will
+  evaluation logs, dataset cases or case results read by their parent's id
+  alone (name the parent's owner beside it: `session: { userId }`,
+  `dataset: datasetVisibilityWhere(session)`, `run: { userId }`), and an
+  `include` of a case result's `datasetCase` (read the cases separately).
+  **Behaviour change:** a run whose orphaned dataset another admin has since
+  claimed keeps its scores and outputs, but its cases' inputs come back as
+  `datasetCase: null` from `GET /evaluations/runs/:id/cases`, and pairwise
+  verdicts mark those cases `missing_dataset_case`. `executionVisibilityWhere`
+  now takes only `{ user: { id }, unattributedReads }`, as
+  `conversationVisibilityWhere` does (a full session still fits).
+- **The `provider-model-auditor` agent no longer has write tools bound**
+  (t-774). It held `apply_audit_changes`, `add_provider_models` and
+  `deactivate_provider_models`, so the audit's `discover_new_models` turn,
+  whose prompt carries web search results, could change the Model Matrix
+  before the workflow's approval step. The workflow's own write steps run
+  under the workflow and never needed the binding. The reconcile removes the
+  three bindings from existing instances. An admin who chatted with the
+  auditor to apply changes directly now applies them through the audit's
+  approval step or the Model Matrix.
+
+- **The logger reduces every outbound URL it writes, whatever the key**
+  (t-778). `Logger`'s sanitiser now passes each string in a log entry (the
+  message, an error's message and stack, any field) through the new
+  `loggableUrlsInText()` in `lib/logging/redact-path.ts`: an absolute
+  http(s) URL keeps its origin and collapsed path and loses its query,
+  fragment and userinfo. Log lines that carried a full outbound URL on
+  purpose now show the reduced form. `collapseDynamicSegments` also judges a
+  segment containing `:` part by part, so a Telegram-style
+  `bot<id>:<secret>` segment collapses to `[param]`.
+- **Admin trace surfaces show webhook and API URLs reduced** (t-777). The
+  executions list, the execution detail and live routes, `report.md` (each
+  with `inputData` / `outputData`) and the run streams (execute,
+  execute-stream, rerun) apply `withDisplayUrls()` to values under keys
+  ending in `url` or `urls`, and to an `external_call` source's
+  `reference`; `runSupervisorAssessment` does the same before prompting the
+  model, for the supervisor step and the review route. The approver's
+  `GET /orchestration/approvals/:id/status` reduces each step's `input`
+  only: the chat approval cards send the last step's output back to the
+  agent as the workflow's result. The persisted trace keeps working URLs, so
+  `{{steps.<id>.output.url}}` and resume are unchanged.
+- **Webhook subscription audit entries record the URL origin, never the
+  full URL or an email address** (t-785), including the update's `changes`
+  diff; the knowledge fetch-url entry records the reduced `sourceUrl`
+  (t-777). Existing audit rows are not rewritten.
+- **Analytics page views keep only origin, collapsed path and attribution
+  query parameters** (t-780). `url`, `path`, `search` and `referrer` on a
+  page view, the providers' `window.location` fallbacks, GA4's
+  `page_location`/`page_referrer`, PostHog's own `$current_url`-style
+  properties (via `before_send`) and server-side tracking's page context
+  are reduced by `lib/analytics/page-location.ts`; the query keeps only
+  `ATTRIBUTION_QUERY_PARAMS` (`utm_*`, `gclid`, `fbclid`). Plausible now
+  loads `script.manual.js`, so it records page views only through
+  `PlausibleProvider.page()`: a fork relying on Plausible's automatic page
+  views or its script extensions must check its setup.
+- **Prisma 7.10.1 clears the `deepmerge-ts` alert (GHSA-ggr8-5vv4-36mx, high),
+  and mermaid 12.2.0 clears the `katex` one (GHSA-238p-pmpm-9mq7, low)**
+  (t-914). `@prisma/config` 7.10.1 depends on `deepmerge-ts` 8.0.2, so the
+  0.12.0 note that only Prisma 8 would fix it no longer holds; mermaid 12.2.0
+  depends on `katex` ^0.18. Prisma 7.10.1 also pins `mysql2` to 3.24.4, which
+  meets the removal condition of the `prisma` → `mysql2` override added in
+  0.14.0 (t-781), so that override and its `overrideReasons` entry are gone. A
+  fork that merged the entry into its own `overrides` can remove it too.
+
 ## [0.14.0] — 2026-10-08
 
 > **Alpha release.** Twentieth tagged Sunrise release. **MINOR bump**. It
@@ -7949,7 +10146,9 @@ Sunrise safe to fork and to merge upstream releases into.
 
 ---
 
-[Unreleased]: https://github.com/human-centric-engineering/sunrise/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/human-centric-engineering/sunrise/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/human-centric-engineering/sunrise/compare/v0.12.0...v0.12.1

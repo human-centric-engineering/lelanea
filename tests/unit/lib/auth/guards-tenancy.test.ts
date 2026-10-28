@@ -47,6 +47,8 @@ import { headers } from 'next/headers';
 import { auth } from '@/lib/auth/config';
 import { resolveApiKey } from '@/lib/auth/api-keys';
 import { withAuth, withAdminAuth } from '@/lib/auth/guards';
+import { closeCoreOrgTierSection } from '@/lib/auth/admin-tier';
+import { __resetAppOrgTierAdminPagesForTests } from '@/lib/auth/org-tier-admin-pages';
 import {
   DEFAULT_AUTHORIZATION_POLICY,
   registerAuthorizationPolicy,
@@ -89,8 +91,19 @@ function session(role: 'USER' | 'ADMIN' = 'USER', activeOrgId: string | null = n
   };
 }
 
-function apiKey(scopes: string[], orgId: string | null) {
-  return { session: session('USER'), scopes, rateLimitRpm: null, orgId, ownerAccountType: 'HUMAN' };
+/** A key fixture. An admin-scoped key is owned by a platform admin unless told otherwise (#746). */
+function apiKey(
+  scopes: string[],
+  orgId: string | null,
+  ownerRole: 'USER' | 'ADMIN' = scopes.includes('admin') ? 'ADMIN' : 'USER'
+) {
+  return {
+    session: session(ownerRole),
+    scopes,
+    rateLimitRpm: null,
+    orgId,
+    ownerAccountType: 'HUMAN',
+  };
 }
 
 function memberOf(role: string, status: 'ACTIVE' | 'SUSPENDED' = 'ACTIVE') {
@@ -581,5 +594,156 @@ describe('a route that writes shared settings (§107 t-751)', () => {
     expect(res.status).toBe(403);
     expect(body.error.message).toBe('Admin access required');
     expect(ran).toEqual([]);
+  });
+});
+
+describe('a route that declares the org tier (§111 t-810)', () => {
+  // An org admin's rows are narrowed to their own, so a route that admits
+  // them owes an ownership decision: undeclared, the guard reports it (and
+  // refuses under test). Every route t-811 opens declares one; so do these.
+  const ORG_TIER = { tier: 'org', ...NOT_ABOUT_OWNERSHIP } as const;
+
+  /** An admin handler that records the org it ran in, each time it runs. */
+  function orgTierRoute(options: Parameters<typeof withAdminAuth>[1] = ORG_TIER) {
+    const ran: (string | null | undefined)[] = [];
+    const handler = withAdminAuth(() => {
+      ran.push(getTenantContext()?.orgId);
+      return ok();
+    }, options);
+    return { handler, ran };
+  }
+
+  it.each([ORG_OWNER_ROLE, ORG_ADMIN_ROLE])(
+    'at multi admits a %s of the entered org, and runs the handler in that org',
+    async (role) => {
+      mockEnv.TENANCY_MODE = 'multi';
+      vi.mocked(auth.api.getSession).mockResolvedValue(session('USER', OTHER));
+      memberOf(role);
+      const { handler, ran } = orgTierRoute();
+
+      expect((await handler(request())).status).toBe(200);
+      expect(ran).toEqual([OTHER]);
+    }
+  );
+
+  it('control: the same org OWNER is refused a route that does not declare it', async () => {
+    mockEnv.TENANCY_MODE = 'multi';
+    vi.mocked(auth.api.getSession).mockResolvedValue(session('USER', OTHER));
+    memberOf(ORG_OWNER_ROLE);
+    const { handler, ran } = orgTierRoute(NOT_ABOUT_OWNERSHIP);
+
+    expect((await handler(request())).status).toBe(403);
+    expect(ran).toEqual([]);
+  });
+
+  it('refuses a MEMBER, and an org admin who is not a member of the org they name', async () => {
+    mockEnv.TENANCY_MODE = 'multi';
+    vi.mocked(auth.api.getSession).mockResolvedValue(session('USER', OTHER));
+    memberOf(DEFAULT_ORG_ROLE);
+    const member = orgTierRoute();
+    expect((await member.handler(request())).status).toBe(403);
+    expect(member.ran).toEqual([]);
+
+    mockFindUnique.mockResolvedValue(null);
+    const stranger = orgTierRoute();
+    expect((await stranger.handler(request())).status).toBe(403);
+    expect(stranger.ran).toEqual([]);
+  });
+
+  it('refuses an org-bound API key whose owner is the org’s OWNER — at the key floor', async () => {
+    mockEnv.TENANCY_MODE = 'multi';
+    vi.mocked(resolveApiKey).mockResolvedValue(apiKey(['chat'], OTHER));
+    memberOf(ORG_OWNER_ROLE);
+    const { handler, ran } = orgTierRoute();
+
+    const res = await handler(request());
+    const body = (await res.json()) as { error: { message: string } };
+
+    expect(res.status).toBe(403);
+    expect(body.error.message).toBe('Admin scope required');
+    expect(ran).toEqual([]);
+  });
+
+  it('admits nobody new at single: an OWNER of a non-install org is refused', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(session('USER', OTHER));
+    memberOf(ORG_OWNER_ROLE);
+    const { handler, ran } = orgTierRoute();
+
+    expect((await handler(request())).status).toBe(403);
+    expect(ran).toEqual([]);
+  });
+
+  it('still admits a platform admin, at single and at multi', async () => {
+    vi.mocked(auth.api.getSession).mockResolvedValue(session('ADMIN', null));
+    expect((await orgTierRoute().handler(request())).status).toBe(200);
+
+    mockEnv.TENANCY_MODE = 'multi';
+    vi.mocked(auth.api.getSession).mockResolvedValue(session('ADMIN', INSTALL_ORG_ID));
+    memberOf(ORG_OWNER_ROLE);
+    expect((await orgTierRoute().handler(request())).status).toBe(200);
+  });
+
+  it('widens admission only: a shared-settings write on an org-tier route is still refused outside the install org', async () => {
+    mockEnv.TENANCY_MODE = 'multi';
+    vi.mocked(auth.api.getSession).mockResolvedValue(session('USER', OTHER));
+    memberOf(ORG_OWNER_ROLE);
+    const { handler, ran } = orgTierRoute({ ...ORG_TIER, writesSharedSettings: true });
+
+    const res = await handler(request());
+    const body = (await res.json()) as { error: { message: string } };
+
+    expect(res.status).toBe(403);
+    expect(body.error.message).toBe(SHARED_SETTINGS_REFUSAL);
+    expect(ran).toEqual([]);
+  });
+
+  // A fork that keeps core's orchestration platform-only (t-929): the route's
+  // declaration stands, and this install treats it as undeclared.
+  describe('with orchestration closed to org admins (t-929)', () => {
+    const AGENTS = 'http://localhost:3000/api/v1/admin/orchestration/agents';
+    const LEADS = 'http://localhost:3000/api/v1/admin/leads';
+
+    beforeEach(() => {
+      mockEnv.TENANCY_MODE = 'multi';
+      closeCoreOrgTierSection('orchestration');
+    });
+    afterEach(() => {
+      __resetAppOrgTierAdminPagesForTests();
+    });
+
+    it('refuses an org OWNER a declared route in the closed section', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(session('USER', OTHER));
+      memberOf(ORG_OWNER_ROLE);
+      const { handler, ran } = orgTierRoute();
+
+      expect((await handler(new NextRequest(AGENTS))).status).toBe(403);
+      expect(ran).toEqual([]);
+    });
+
+    it('control: the same OWNER is admitted when nothing is closed', async () => {
+      __resetAppOrgTierAdminPagesForTests();
+      vi.mocked(auth.api.getSession).mockResolvedValue(session('USER', OTHER));
+      memberOf(ORG_OWNER_ROLE);
+      const { handler, ran } = orgTierRoute();
+
+      expect((await handler(new NextRequest(AGENTS))).status).toBe(200);
+      expect(ran).toEqual([OTHER]);
+    });
+
+    it('still admits an org OWNER to a declared route outside it — the fork’s own', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(session('USER', OTHER));
+      memberOf(ORG_OWNER_ROLE);
+      const { handler, ran } = orgTierRoute();
+
+      expect((await handler(new NextRequest(LEADS))).status).toBe(200);
+      expect(ran).toEqual([OTHER]);
+    });
+
+    it('leaves a platform admin’s console as it was', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(session('ADMIN', INSTALL_ORG_ID));
+      memberOf(ORG_OWNER_ROLE);
+
+      expect((await orgTierRoute().handler(new NextRequest(AGENTS))).status).toBe(200);
+    });
   });
 });

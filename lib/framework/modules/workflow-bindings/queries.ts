@@ -13,9 +13,15 @@
 import type { ModuleWorkflowBinding } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { NotFoundError } from '@/lib/api/errors';
+import { bindingTemplateVersion } from '@/lib/framework/modules/workflow-bindings/versions';
 
 /** A binding enriched with the bound workflow's display fields (or `null` if gone). */
 export interface ModuleWorkflowBindingView extends ModuleWorkflowBinding {
+  /**
+   * The template's version, for a save of it to send back as `If-Match`
+   * (`bindingTemplateVersion`, Hub t-151).
+   */
+  version: string;
   workflow: {
     id: string;
     name: string;
@@ -62,6 +68,7 @@ export async function listModuleWorkflowBindings(
     const w = byId.get(b.workflowId);
     return {
       ...b,
+      version: bindingTemplateVersion(b.inputTemplate),
       workflow: w
         ? {
             id: w.id,

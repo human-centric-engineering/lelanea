@@ -5,6 +5,13 @@
  * this reads `AiMessage` directly — the same pairing + `provenance.citations` extraction the shipped
  * `evaluations/datasets/capture.ts` uses (pair on `createdAt`, since `AiMessage` has no position),
  * done once over the whole conversation.
+ *
+ * **Owner layer (Sunrise §115).** This read is unconfined: it reads a conversation whoever owns
+ * it, which a caller the policy narrows is refused (`OwnerReadRefusedError`). Safe at every caller
+ * today: the sweep runs it inside `runAcrossOwners`, and the admin triggers
+ * (`/admin/framework/facilitation/evaluations[/supervise]`) are platform-only — a platform admin
+ * is not narrowed. Opening one of those routes with `tier: 'org'` is a reviewed diff
+ * (`ORG_TIER_ADMIN_ROUTES`); it would need the same `runAcrossOwners` around the call.
  */
 
 import type { Citation } from '@/types/orchestration';

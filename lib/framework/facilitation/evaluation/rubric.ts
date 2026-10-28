@@ -17,6 +17,11 @@ import { prisma } from '@/lib/db/client';
 import { logAdminAction } from '@/lib/orchestration/audit/admin-audit-logger';
 import { logger } from '@/lib/logging';
 import { driveJudgeAgent } from '@/lib/orchestration/evaluations/judge-driver';
+import {
+  isSpendCapCode,
+  SpendCapRefusedError,
+  type SpendCapCode,
+} from '@/lib/framework/shared/spend-caps';
 import { loadFrameworkConversation } from '@/lib/framework/facilitation/evaluation/conversation';
 import { listScorableTurns } from '@/lib/framework/facilitation/evaluation/turns';
 import { FRAMEWORK_RUBRIC_JUDGE_SLUG } from '@/lib/framework/facilitation/evaluation/rubric-judge';
@@ -55,8 +60,9 @@ function judgeCitations(
 
 /**
  * Score every turn of a framework conversation with the framework-rubric judge and persist each
- * result to `rubricScore` (upsert per turn). Throws `NotFoundError` (unknown conversation) or
- * `ValidationError` (not a framework surface).
+ * result to `rubricScore` (upsert per turn). Throws `NotFoundError` (unknown conversation),
+ * `ValidationError` (not a framework surface), or `SpendCapRefusedError` once a monthly spend cap
+ * refuses a turn — after auditing the turns it scored, and carrying what they cost.
  */
 export async function rubricScoreConversation(
   args: RubricScoreConversationArgs
@@ -70,6 +76,7 @@ export async function rubricScoreConversation(
   let skippedTurns = 0;
   let totalCostUsd = 0;
   let totalTokensUsed = 0;
+  let capRefusal: SpendCapCode | null = null;
 
   for (const turn of turns) {
     const judged = await driveJudgeAgent({
@@ -82,6 +89,12 @@ export async function rubricScoreConversation(
     totalCostUsd += judged.costUsd;
     totalTokensUsed += judged.tokenUsage.input + judged.tokenUsage.output;
 
+    // A monthly spend cap is reached for every turn after this one too, so stop rather than skip
+    // — after auditing what was written.
+    if (judged.score === null && isSpendCapCode(judged.errorCode)) {
+      capRefusal = judged.errorCode;
+      break;
+    }
     if (judged.score === null) {
       // The judge failed (provider down / malformed response) — skip this turn, don't abort.
       logger.warn('Skipping a turn whose rubric scoring failed', {
@@ -133,9 +146,17 @@ export async function rubricScoreConversation(
       scoredTurns: results.length,
       skippedTurns,
       totalCostUsd,
+      ...(capRefusal ? { stoppedBy: capRefusal } : {}),
     },
     clientIp: clientIp ?? null,
   });
+
+  if (capRefusal) {
+    throw new SpendCapRefusedError(capRefusal, undefined, {
+      costUsd: totalCostUsd,
+      tokensUsed: totalTokensUsed,
+    });
+  }
 
   return {
     conversationId,

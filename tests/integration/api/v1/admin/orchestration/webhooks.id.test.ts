@@ -19,6 +19,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET, PATCH, DELETE } from '@/app/api/v1/admin/orchestration/webhooks/[id]/route';
+import { subscriptionVersion } from '@/lib/orchestration/config-versions';
 import { computeChanges } from '@/lib/orchestration/audit/admin-audit-logger';
 import {
   mockAdminUser,
@@ -45,15 +46,23 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(() => Promise.resolve(new Headers())),
 }));
 
-vi.mock('@/lib/db/client', () => ({
-  prisma: {
+vi.mock('@/lib/db/client', () => {
+  const prisma = {
     aiWebhookSubscription: {
       findFirst: vi.fn(),
+      // The row as the versioned save reads it under its lock (t-899)
+      findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
     },
-  },
-}));
+    // The row lock a versioned save takes (t-899)
+    $queryRaw: vi.fn(async () => []),
+    $transaction: vi.fn(),
+  };
+  prisma.$transaction.mockImplementation((cb: (tx: typeof prisma) => unknown) => cb(prisma));
+  return { prisma };
+});
 
 vi.mock('@/lib/security/ip', () => ({ getClientIP: vi.fn(() => '127.0.0.1') }));
 
@@ -85,6 +94,7 @@ import { prisma } from '@/lib/db/client';
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const WEBHOOK_ID = 'cmjbv4i3x00003wsloputgwu1';
+const ADMIN_ID = 'cmjbv4i3x00003wsloputgwul'; // mockAdminUser's id
 const INVALID_ID = 'not-a-cuid';
 const BASE_URL = `http://localhost:3000/api/v1/admin/orchestration/webhooks/${WEBHOOK_ID}`;
 
@@ -116,11 +126,20 @@ function makeGetRequest(): NextRequest {
   } as unknown as NextRequest;
 }
 
-function makePatchRequest(body: Record<string, unknown> = VALID_PATCH_BODY): NextRequest {
+/** The stored row's version, as the GET returned it to the form (t-899). */
+const LOADED_VERSION = subscriptionVersion(makeWebhookRow() as never);
+
+function makePatchRequest(
+  body: Record<string, unknown> = VALID_PATCH_BODY,
+  ifMatch: string | null = LOADED_VERSION
+): NextRequest {
   const bodyStr = JSON.stringify(body);
   const base = {
     method: 'PATCH',
-    headers: new Headers({ 'Content-Type': 'application/json' }),
+    headers: new Headers({
+      'Content-Type': 'application/json',
+      ...(ifMatch === null ? {} : { 'If-Match': ifMatch }),
+    }),
     json: () => Promise.resolve(body),
     text: () => Promise.resolve(bodyStr),
     url: BASE_URL,
@@ -191,6 +210,20 @@ describe('GET /api/v1/admin/orchestration/webhooks/:id', () => {
       expect(data.data.url).toBe('https://example.com/webhook');
     });
 
+    it('returns the version a save sends back, in the body and not as the ETag (t-899)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWebhookSubscription.findFirst).mockResolvedValue(
+        makeWebhookRow() as never
+      );
+
+      const response = await GET(makeGetRequest(), makeParams(WEBHOOK_ID));
+
+      const data = await parseJson<{ data: { version: string } }>(response);
+      expect(data.data.version).toBe(LOADED_VERSION);
+      // It covers only what a save writes, so it is no ETag for this body.
+      expect(response.headers.get('ETag')).toBeNull();
+    });
+
     it('does not return the secret field', async () => {
       vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
       vi.mocked(prisma.aiWebhookSubscription.findFirst).mockResolvedValue(
@@ -243,6 +276,11 @@ describe('GET /api/v1/admin/orchestration/webhooks/:id', () => {
 describe('PATCH /api/v1/admin/orchestration/webhooks/:id', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([] as never);
+    // Unchanged since the form loaded it, unless a test says otherwise
+    vi.mocked(prisma.aiWebhookSubscription.findUniqueOrThrow).mockResolvedValue(
+      makeWebhookRow() as never
+    );
   });
 
   describe('Authentication & Authorization', () => {
@@ -302,6 +340,149 @@ describe('PATCH /api/v1/admin/orchestration/webhooks/:id', () => {
       );
     });
 
+    it('scopes the lookup to the caller (plus creatorless rows) and the id', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWebhookSubscription.findFirst).mockResolvedValue(
+        makeWebhookRow() as never
+      );
+      vi.mocked(prisma.aiWebhookSubscription.update).mockResolvedValue(makeWebhookRow() as never);
+
+      await PATCH(makePatchRequest({ isActive: false }), makeParams(WEBHOOK_ID));
+
+      expect(vi.mocked(prisma.aiWebhookSubscription.findFirst)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            AND: [{ OR: [{ createdBy: ADMIN_ID }, { createdBy: null }] }, { id: WEBHOOK_ID }],
+          },
+        })
+      );
+    });
+
+    it('returns the new version with the saved row (t-899)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWebhookSubscription.findFirst).mockResolvedValue(
+        makeWebhookRow() as never
+      );
+      const saved = makeWebhookRow({ isActive: false });
+      vi.mocked(prisma.aiWebhookSubscription.update).mockResolvedValue(saved as never);
+
+      const response = await PATCH(makePatchRequest({ isActive: false }), makeParams(WEBHOOK_ID));
+
+      const data = await parseJson<{ data: { version: string } }>(response);
+      expect(data.data.version).toBe(subscriptionVersion(saved as never));
+      expect(data.data.version).not.toBe(LOADED_VERSION);
+    });
+
+    it('locks the row before reading the version it checks (t-899)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWebhookSubscription.findFirst).mockResolvedValue(
+        makeWebhookRow() as never
+      );
+      vi.mocked(prisma.aiWebhookSubscription.update).mockResolvedValue(makeWebhookRow() as never);
+
+      await PATCH(makePatchRequest({ isActive: false }), makeParams(WEBHOOK_ID));
+
+      const lockedAt = vi.mocked(prisma.$queryRaw).mock.invocationCallOrder[0];
+      const readAt = vi.mocked(prisma.aiWebhookSubscription.findUniqueOrThrow).mock
+        .invocationCallOrder[0];
+      expect(lockedAt).toBeLessThan(readAt);
+      const [sql] = vi.mocked(prisma.$queryRaw).mock.calls[0] as unknown as [TemplateStringsArray];
+      expect(sql.join('?')).toMatch(/FROM ai_webhook_subscription WHERE id = \? FOR NO KEY UPDATE/);
+    });
+
+    it('saves an address typed into a freshly loaded form, erased or not (t-899)', async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      const row = makeWebhookRow({ channel: 'email', url: null, emailAddress: 'old@example.com' });
+      vi.mocked(prisma.aiWebhookSubscription.findFirst).mockResolvedValue(row as never);
+      vi.mocked(prisma.aiWebhookSubscription.findUniqueOrThrow).mockResolvedValue(row as never);
+      vi.mocked(prisma.aiWebhookSubscription.update).mockResolvedValue({
+        ...row,
+        emailAddress: 'readded@example.com',
+      } as never);
+
+      const response = await PATCH(
+        makePatchRequest(
+          { emailAddress: 'readded@example.com' },
+          subscriptionVersion(row as never)
+        ),
+        makeParams(WEBHOOK_ID)
+      );
+
+      expect(response.status).toBe(200);
+      expect(vi.mocked(prisma.aiWebhookSubscription.update)).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { emailAddress: 'readded@example.com' } })
+      );
+    });
+  });
+
+  describe('Stale saves (t-899)', () => {
+    beforeEach(() => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(mockAdminUser());
+      vi.mocked(prisma.aiWebhookSubscription.findFirst).mockResolvedValue(
+        makeWebhookRow() as never
+      );
+    });
+
+    it.each([
+      ['no If-Match', null],
+      ['If-Match: *', '*'],
+    ])('refuses a save with %s with 428, writing nothing', async (_label, ifMatch) => {
+      const response = await PATCH(
+        makePatchRequest({ isActive: false }, ifMatch),
+        makeParams(WEBHOOK_ID)
+      );
+
+      expect(response.status).toBe(428);
+      const data = await parseJson<{ error: { code: string } }>(response);
+      expect(data.error.code).toBe('PRECONDITION_REQUIRED');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(vi.mocked(prisma.aiWebhookSubscription.update)).not.toHaveBeenCalled();
+    });
+
+    it('refuses a save loaded before an erasure cleared the address, with 412, writing nothing', async () => {
+      // What erasure leaves (erase-user.ts): no address, switched off.
+      vi.mocked(prisma.aiWebhookSubscription.findUniqueOrThrow).mockResolvedValue(
+        makeWebhookRow({
+          channel: 'email',
+          url: null,
+          emailAddress: null,
+          isActive: false,
+        }) as never
+      );
+
+      const response = await PATCH(makePatchRequest({ isActive: true }), makeParams(WEBHOOK_ID));
+
+      expect(response.status).toBe(412);
+      const data = await parseJson<{ error: { code: string; message: string } }>(response);
+      expect(data.error.code).toBe('STALE_RECORD');
+      expect(data.error.message).toMatch(/changed since you opened it/i);
+      expect(vi.mocked(prisma.aiWebhookSubscription.update)).not.toHaveBeenCalled();
+      expect(vi.mocked(prisma.aiWebhookSubscription.updateMany)).not.toHaveBeenCalled();
+    });
+
+    it('refuses a save loaded before another admin changed the events, with 412', async () => {
+      vi.mocked(prisma.aiWebhookSubscription.findUniqueOrThrow).mockResolvedValue(
+        makeWebhookRow({ events: ['agent.execution.failed'] }) as never
+      );
+
+      const response = await PATCH(makePatchRequest({ isActive: false }), makeParams(WEBHOOK_ID));
+
+      expect(response.status).toBe(412);
+    });
+
+    it('accepts any one of several versions in If-Match', async () => {
+      vi.mocked(prisma.aiWebhookSubscription.update).mockResolvedValue(makeWebhookRow() as never);
+
+      const response = await PATCH(
+        makePatchRequest({ isActive: false }, `"other", ${LOADED_VERSION}`),
+        makeParams(WEBHOOK_ID)
+      );
+
+      expect(response.status).toBe(200);
+    });
+  });
+
+  describe('Audit', () => {
     it('excludes the always-bumping updatedAt/createdAt from the audit diff (#396)', async () => {
       // `updatedAt` bumps on every Prisma `update()`, so the route must filter
       // it (and createdAt) out of the audit diff — otherwise every PATCH records

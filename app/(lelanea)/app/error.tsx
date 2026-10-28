@@ -27,15 +27,15 @@ import { RouteErrorBoundary } from '@/components/errors/route-error-boundary';
 
 export default function ShellError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }): React.ReactElement {
   return (
     <RouteErrorBoundary
       error={error}
-      reset={reset}
+      retry={retry}
       boundaryName="ShellError"
       tag="lelanea-shell"
       title="Something went wrong"

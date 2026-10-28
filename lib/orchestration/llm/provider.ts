@@ -19,6 +19,7 @@ import type {
   LlmMessage,
   LlmOptions,
   LlmResponse,
+  LlmUsage,
   ModelInfo,
   StreamChunk,
   TranscribeAudio,
@@ -222,7 +223,7 @@ export class ProviderError extends Error {
    * Absent for errors raised before the model produced anything (bad schema,
    * auth, connection), and absent when the provider reported no usage.
    */
-  public readonly usage?: { inputTokens: number; outputTokens: number };
+  public readonly usage?: LlmUsage;
 
   constructor(
     message: string,
@@ -231,7 +232,7 @@ export class ProviderError extends Error {
       status?: number;
       retriable?: boolean;
       cause?: unknown;
-      usage?: { inputTokens: number; outputTokens: number };
+      usage?: LlmUsage;
     } = {}
   ) {
     super(message);
@@ -252,6 +253,19 @@ export class ProviderError extends Error {
  * quietly make a refusal retriable again.
  */
 export const PROVIDER_NOT_PERMITTED = 'provider_not_permitted';
+
+/**
+ * The codes a monthly spend-cap refusal carries (§110 t-788): the call-time
+ * gate's `SpendCapExceededError` (`spend-caps.ts`), and the chat handler's own
+ * refusal before a turn starts, which uses the same words for the same cap.
+ * `agent` is the agent's own cap, which the gate enforces only for a chat turn
+ * that holds paid calls for it (`withPaidCallHold`).
+ */
+export const SPEND_CAP_CODES = {
+  agent: 'budget_exceeded',
+  org: 'org_budget_exceeded',
+  global: 'global_budget_exceeded',
+} as const;
 
 /**
  * `ProviderError` codes describing a fault in the REQUEST rather than in the
@@ -282,7 +296,20 @@ export const PROVIDER_NOT_PERMITTED = 'provider_not_permitted';
 // provider is the reroute the gate exists to rule out. It is also not evidence
 // about the provider's health, so it must never reach a circuit breaker — at
 // `multi`, one org's refusal would otherwise open the circuit for every org.
-const REQUEST_FAULT_CODES = new Set(['truncated_no_output', PROVIDER_NOT_PERMITTED]);
+//
+// The spend-cap codes are the same kind of answer (§110 t-788): a cap that has
+// been reached stays reached on a retry, and every other paid provider is held
+// to the same cap. Nor is a reached cap anything to do with the provider's
+// health. A LOCAL provider is exempt from the caps, so it is the one failover
+// that can help; provider selection makes it, by skipping each paid candidate
+// the caps refuse (`getProviderWithFallbacks`, chat's mid-stream failover),
+// rather than this code permitting a failover that would only meet the same
+// refusal at the next paid provider.
+const REQUEST_FAULT_CODES = new Set<string>([
+  'truncated_no_output',
+  PROVIDER_NOT_PERMITTED,
+  ...Object.values(SPEND_CAP_CODES),
+]);
 
 /**
  * Whether `err` is a {@link REQUEST_FAULT_CODES} `ProviderError` — i.e. a
@@ -347,7 +374,7 @@ export function toProviderError(err: unknown, fallbackMessage: string): Provider
 export function toProviderErrorWithUsage(
   err: unknown,
   fallbackMessage: string,
-  usage: { inputTokens: number; outputTokens: number }
+  usage: LlmUsage
 ): ProviderError {
   const base = toProviderError(err, fallbackMessage);
   if (base.usage || (usage.inputTokens <= 0 && usage.outputTokens <= 0)) return base;

@@ -75,7 +75,7 @@ export const DELETE = withAuth<{ id: string }>(
     });
     if (!existing) throw new NotFoundError(`Conversation ${id} not found`);
 
-    await prisma.aiConversation.delete({ where: { id } });
+    await prisma.aiConversation.delete({ where: { id, userId: session.user.id } });
     // LELAÑEA t-128: forget what the app derived from it. Never throws.
     await onConversationsDeleted({ conversationIds: [id], userId: session.user.id });
 

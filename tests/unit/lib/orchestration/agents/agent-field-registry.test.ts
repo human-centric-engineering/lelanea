@@ -131,6 +131,7 @@ const NON_CONFIG_SCALARS = [
   'createdBy',
   'isSystem',
   'systemInstructionsHistory',
+  'bindingOwner', // t-798: who decides a platform agent's provider and model — set by the reconcile and as a side effect of a provider/model write
   'orgId', // tenancy (§107): set by the data layer, never a form field
 ];
 
@@ -222,10 +223,22 @@ describe('agent-field-registry — divergence ledger vs current hand-lists', () 
     const registry = versionedFieldNames();
     // Everything currently versioned stays versioned...
     expect(diff(CURRENT_VERSIONED_FIELDS, registry)).toEqual([]);
-    // ...plus reasoningEffort (user config, never versioned) and the two grant
-    // relations (snapshotted but absent from VERSIONED_FIELDS).
+    // ...plus reasoningEffort (user config, never versioned), the two grant
+    // relations (snapshotted but absent from VERSIONED_FIELDS), and the model
+    // parameters and provider tools added after the ledger was taken (t-911,
+    // t-913, t-912).
     expect(diff(registry, CURRENT_VERSIONED_FIELDS)).toEqual(
-      ['grantedDocumentIds', 'grantedTagIds', 'reasoningEffort'].sort()
+      [
+        'grantedDocumentIds',
+        'grantedTagIds',
+        'parallelToolCalls',
+        'providerTools',
+        'reasoningEffort',
+        'serviceTier',
+        'stopSequences',
+        'topP',
+        'verbosity',
+      ].sort()
     );
   });
 });
@@ -235,6 +248,11 @@ describe('agent-field-registry — parity with the validation schemas', () => {
   //  - kind: set at create, immutable thereafter (create-only)
   //  - widgetConfig: managed via its own endpoint, not the agent PATCH body
   const PATCH_OMITTED = new Set(['kind', 'widgetConfig']);
+  // Fields the PATCH schema has that are not config, so have no descriptor:
+  //  - bindingOwner (t-798): hands a platform agent's provider and model back
+  //    to the platform, or takes them; a non-config column the route handles
+  //    explicitly, which no form, bundle or version carries
+  const PATCH_ONLY_NON_CONFIG = new Set(['bindingOwner']);
 
   it('every versioned scalar field exists on updateAgentObjectSchema (so restore can validate it)', () => {
     const updateKeys = new Set(Object.keys(updateAgentObjectSchema.shape));
@@ -258,7 +276,13 @@ describe('agent-field-registry — parity with the validation schemas', () => {
     // Every PATCH field is registered — catches a schema field with no
     // descriptor (the silent-gap this whole registry exists to prevent).
     for (const key of updateKeys) {
+      if (PATCH_ONLY_NON_CONFIG.has(key)) continue;
       expect(registryNames.has(key)).toBe(true);
+    }
+    // And each exception really is outside the registry, not a stale entry.
+    for (const key of PATCH_ONLY_NON_CONFIG) {
+      expect(updateKeys.has(key)).toBe(true);
+      expect(NON_CONFIG_SCALARS).toContain(key);
     }
   });
 
@@ -310,6 +334,7 @@ describe('ownership on a platform agent (§116 t-724)', () => {
   it('lets an org tune exactly the fields the ruling names — how the agent runs', () => {
     // Ruling on §116, 2026-09-29: provider, model, fallbacks, budget, per-turn
     // cap, rate limit, retention. `providerConfig` rides with the provider.
+    // `serviceTier` (t-911) is OpenAI's cost-or-speed choice, like the budget.
     // A field moving across this line changes what every org may edit on
     // every platform agent, so it is pinned rather than derived.
     expect(platformAgentFieldNames('org').sort()).toEqual(
@@ -322,6 +347,7 @@ describe('ownership on a platform agent (§116 t-724)', () => {
         'providerConfig',
         'rateLimitRpm',
         'retentionDays',
+        'serviceTier',
       ].sort()
     );
   });

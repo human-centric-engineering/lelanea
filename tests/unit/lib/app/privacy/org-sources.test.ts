@@ -1,9 +1,9 @@
 /**
  * Lelañea's org-export sources (t-112): which rows each one reads.
  *
- * `leafOrgSources()` declares all 38 app tables as the org's data. What the
- * defaults test does not see is what each source's `fetch` actually asks the
- * database for, and that is where an org export would go wrong: reading
+ * `LEAF_ORG_SOURCES` (`lib/app/leaf-org-export.ts`) declares all 38 app tables
+ * as the org's data. What the defaults test does not see is what each source's
+ * `fetch` actually asks the database for, and that is where an org export would go wrong: reading
  * another table, or reading another org's rows. So every source is called
  * here against a stub that records its query.
  *
@@ -11,10 +11,10 @@
  * with no org is the install org's, so the install org's export carries it;
  * any other org, and every org at `multi`, matches strictly.
  *
- * FORK NOTE — this reads the real `lib/app/leaf-data-export.ts`, not a mock.
+ * FORK NOTE — this reads the real `lib/app/leaf-org-export.ts`, not a mock.
  * It has to: the seam's own sources are the thing under test, so a mock would
  * assert the mock. It is Lelañea's seam and Lelañea's test; a fork of Lelañea
- * that changes `leafOrgSources()` updates the count of 38 and the model named
+ * that changes `LEAF_ORG_SOURCES` updates the count of 38 and the model named
  * in the single-source cases here.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -44,7 +44,7 @@ vi.mock('@/lib/tenancy/context', async (importOriginal) => ({
   isMultiTenant: () => multi.on,
 }));
 
-const { leafOrgSources } = await import('@/lib/app/leaf-data-export');
+const { LEAF_ORG_SOURCES } = await import('@/lib/app/leaf-org-export');
 
 /** `AppWaitlistEntry` → `appWaitlistEntry`, the delegate Prisma generates. */
 function delegateOf(model: string): string {
@@ -52,7 +52,7 @@ function delegateOf(model: string): string {
 }
 
 async function whereFor(model: string, orgId: string): Promise<unknown> {
-  const source = leafOrgSources().sources.find((s) => s.model === model);
+  const source = LEAF_ORG_SOURCES.find((s) => s.model === model);
   if (!source) throw new Error(`no source for ${model}`);
   calls.clear();
   await source.fetch({ orgId });
@@ -68,7 +68,7 @@ beforeEach(() => {
 
 describe('each source reads its own table', () => {
   it('queries exactly the delegate its model names, once', async () => {
-    const { sources } = leafOrgSources();
+    const sources = LEAF_ORG_SOURCES;
     expect(sources).toHaveLength(39);
     for (const source of sources) {
       calls.clear();
@@ -95,7 +95,7 @@ describe('which rows an org owns', () => {
   });
 
   it('applies the same rule to every source', async () => {
-    for (const { model } of leafOrgSources().sources) {
+    for (const { model } of LEAF_ORG_SOURCES) {
       expect(await whereFor(model, 'org-2')).toEqual({ orgId: 'org-2' });
     }
   });

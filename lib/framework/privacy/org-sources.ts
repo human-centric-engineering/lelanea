@@ -3,11 +3,12 @@
  *
  * Sunrise 0.13.0 made every model carrying `orgId` answerable to the org
  * export: `tests/unit/lib/privacy/org-sources.test.ts` parses the schema and
- * fails naming any such model the manifest does not declare. The 19
- * `framework_*` models became tenant-owned in the same change, so each is
- * declared here — reached through the `lib/app/data-export.ts` bridge's
- * `collectAppOrgSources()`, which core's `getOrgDataSources()` pulls on every
- * read (a fork-first seam; see `lib/privacy/org-sources.ts`).
+ * fails naming any such model no tier declares. The 19 `framework_*` models
+ * became tenant-owned in the same change, so each is declared here and
+ * registered with core's org-source registry by {@link initFrameworkOrgSources},
+ * which the `lib/app/org-export.ts` bridge calls from core's lazy
+ * `initAppOrgSources()` seam (Sunrise 0.15.0, §109 t-737). Registering from
+ * `initFramework()` at boot would be lost the first time the registry resets.
  *
  * **The org export is the org's records, whole.** Everything here is
  * `export` — an offboarding customer is owed its journeys, captured slot
@@ -17,31 +18,27 @@
  * `omit`s a column; a secret column added later must be `omit`ted here, never
  * dropped by switching to `select`.
  *
+ * The rows land under the bundle's `app` key, by `section`, with a summary in
+ * `meta.app` — core's shape for every fork tier, so no core section can ever
+ * collide with a framework one.
+ *
  * This differs from the SUBJECT manifest (`export-sources.ts`) on purpose: a
  * data subject receives their own journeys and only attribution for the maps
  * and policies they authored, whereas the org owns all of it.
  *
- * @see lib/privacy/org-sources.ts — core's manifest and the seam
+ * @see lib/privacy/org-source-registry.ts — core's registry and its rules
  * @see lib/framework/privacy/export-sources.ts — the per-person counterpart
  */
 
 import { prisma } from '@/lib/db/client';
-import type { AppOrgSourceContribution, OrgDataSource } from '@/lib/privacy/org-sources';
-import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
-import { isMultiTenant } from '@/lib/tenancy/context';
+import { ownedBy } from '@/lib/privacy/org-sources';
+import {
+  registerAppOrgSources,
+  type AppExcludedOrgSource,
+  type AppOrgDataSource,
+} from '@/lib/privacy/org-source-registry';
 
-/**
- * Core's `ownedBy()` rule, restated from public exports (core keeps its copy
- * private): at `TENANCY_MODE=single` a `NULL` org is the install org's, so the
- * install org's export also carries any row written before the chokepoint
- * stamped it; at `multi` the match is strict and a `NULL` is nobody's.
- */
-function ownedBy(orgId: string): { orgId: string } | { OR: [{ orgId: string }, { orgId: null }] } {
-  if (orgId === INSTALL_ORG_ID && !isMultiTenant()) return { OR: [{ orgId }, { orgId: null }] };
-  return { orgId };
-}
-
-const SOURCES: OrgDataSource[] = [
+export const FRAMEWORK_ORG_DATA_SOURCES: readonly AppOrgDataSource[] = [
   // ── Journeys and what they captured ──
   {
     model: 'UserJourney',
@@ -216,16 +213,27 @@ const SOURCES: OrgDataSource[] = [
   },
 ];
 
-/** The framework tier's contribution to the org export. */
-export function frameworkOrgSources(): AppOrgSourceContribution {
-  return {
-    sources: SOURCES,
-    excluded: [
-      {
-        model: 'FrameworkNodeEmbedding',
-        reason:
-          'Vector embeddings derived from the facilitation maps the export already carries in full; the vector column is Unsupported in Prisma and holds nothing readable.',
-      },
-    ],
-  };
+/** The framework models deliberately left out of the org export, each with the reason shown. */
+export const FRAMEWORK_ORG_EXCLUDED_SOURCES: readonly AppExcludedOrgSource[] = [
+  {
+    model: 'FrameworkNodeEmbedding',
+    reason:
+      'Vector embeddings derived from the facilitation maps the export already carries in full; the vector column is Unsupported in Prisma and holds nothing readable.',
+  },
+];
+
+/**
+ * Register the framework's org-export declarations with core's registry.
+ *
+ * Synchronous, as core's seam requires. Called only from the
+ * `lib/app/org-export.ts` bridge, inside core's init gate: if the leaf hook
+ * called after it throws, the gate rolls back these registrations too and
+ * `exportOrgData()` refuses every org until the leaf is fixed.
+ */
+export function initFrameworkOrgSources(): void {
+  registerAppOrgSources({
+    tier: 'framework',
+    sources: FRAMEWORK_ORG_DATA_SOURCES,
+    excluded: FRAMEWORK_ORG_EXCLUDED_SOURCES,
+  });
 }

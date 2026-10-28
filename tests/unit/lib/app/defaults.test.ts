@@ -34,18 +34,28 @@
  * - `lib/app/data-export.ts`     → the framework tier's Art. 15 manifest
  * - `lib/app/brand.ts`           → Daybreak's product name and legal entity
  * - `lib/app/platform-agents.ts` → the framework's platform agents (the rubric judge)
+ * - `lib/app/org-export.ts`      → the framework tier's org-export manifest
+ * - `lib/app/owner-classification.ts` → the framework's user-linked models (§115)
+ * - `lib/app/capability-seed-pairs.ts` → the framework boot seed's parity exemption
+ * - `lib/app/erasure.ts`         → the framework's erasure hook and stale writer (§122)
  *
- * Each delegates to a leaf seam (`leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
- * `leaf-data-export.ts`, `leaf-brand.ts`, `leaf-platform-agents.ts`) which carries the no-op contract
- * forward for leaf forks — those rows are here too. See the Daybreak banner in
- * CLAUDE.md.
+ * Each delegates to a reserved-empty leaf seam (`leaf-bootstrap.ts`,
+ * `leaf-admin-nav.ts`, `leaf-data-export.ts`, `leaf-brand.ts`,
+ * `leaf-platform-agents.ts`, `leaf-org-export.ts`, `leaf-owner-classification.ts`,
+ * `leaf-capability-seed-pairs.ts`, `leaf-erasure.ts`) which carries the
+ * no-op contract forward for leaf forks — those rows are here too. See the
+ * Daybreak banner in CLAUDE.md.
  *
  * ---------------------------------------------------------------------------
  * LELAÑEA — the leaf seams this fork has filled, pinned rather than deleted
  * ---------------------------------------------------------------------------
- * `leaf-bootstrap.ts` (the seventeen journey modules, the waitlist's
- * erasure hook, the facilitation turn hook and the agent's consumer-chat exclusion), `leaf-data-export.ts` (the
- * waitlist's Art. 15 declaration and collector), `leaf-admin-nav.ts` (the
+ * `leaf-bootstrap.ts` (the seventeen journey modules, the facilitation turn
+ * hook and the agent's consumer-chat exclusion), `leaf-erasure.ts` (the
+ * waitlist's erasure hook), `leaf-data-export.ts` (the waitlist's Art. 15
+ * declaration and collector), `leaf-org-export.ts` (every table, for the org
+ * export), `leaf-owner-classification.ts` (every user-linked model),
+ * `leaf-capability-seed-pairs.ts` (our seeded capabilities and the seeds the
+ * strict mock cannot run), `leaf-admin-nav.ts` (the
  * "Lelañea" sidebar section), `context-contributors.ts` (her voice block) and
  * `csp.ts` (the YouTube player's origin) assert the FILLED value. `knowledge-access-contributors.ts` is filled too but
  * its row still asserts only that its init returns cleanly — the resolver
@@ -111,6 +121,8 @@ vi.mock('@/lib/db/client', () => ({
     appSlotDefinition: { findMany: vi.fn(async () => []) },
   },
 }));
+
+import { ownModuleProblems, scaffoldsOnDisk, unlistedSeams } from '@/tests/helpers/app-scaffolds';
 import { registerAppRateLimits } from '@/lib/app/rate-limit';
 import { registerAppTenantResolver } from '@/lib/app/tenant-resolver';
 import { hasTenantResolver } from '@/lib/tenancy/resolver';
@@ -153,10 +165,6 @@ import {
   __resetModuleRegistryForTests,
 } from '@/lib/framework/modules/registry';
 import { WAITLIST_ERASURE_HOOK } from '@/lib/app/waitlist/service';
-import {
-  getErasureCleanupHooks,
-  __resetErasureCleanupHooksForTests,
-} from '@/lib/privacy/erasure-hooks';
 import { publicNavItems, footerNavItems, footerLegalItems } from '@/lib/app/public-nav';
 import { protectedNavItems } from '@/lib/app/protected-nav';
 import { appAuthLandingRoute, appAuthLandingLabel } from '@/lib/app/auth-landing';
@@ -168,6 +176,7 @@ import { initAppGuardFloorContributors } from '@/lib/app/guard-floor-contributor
 import { initAppGuardEventContributors } from '@/lib/app/guard-event-contributors';
 import { appAgentFields } from '@/lib/app/agent-fields';
 import { appProtectedRoutes } from '@/lib/app/protected-routes';
+import { appCredentialPaths } from '@/lib/app/credential-paths';
 import { appEnvSchema } from '@/lib/app/env';
 import { footerCopyright } from '@/lib/app/footer';
 import { APP_API_KEY_SCOPES } from '@/lib/app/api-key-scopes';
@@ -185,23 +194,39 @@ import {
   leafOwnerlessSurfaceExceptions,
 } from '@/lib/app/leaf-ci';
 import { occupiedTiers } from '@/lib/app/reserved-tiers';
+import { appOwnModules } from '@/lib/app/own-modules';
+import { APP_CAPABILITY_PAIRS, APP_UNCHECKED_SEEDS } from '@/lib/app/capability-seed-pairs';
+import { LEAF_CAPABILITY_PAIRS, LEAF_UNCHECKED_SEEDS } from '@/lib/app/leaf-capability-seed-pairs';
+import {
+  initLeafOwnerClassification,
+  LEAF_OWNER_CLASSIFICATION,
+} from '@/lib/app/leaf-owner-classification';
 import { initAppUserCreatedHooks } from '@/lib/app/user-created';
 import {
   dispatchUserCreated,
   __resetUserCreatedHooksForTests,
 } from '@/lib/auth/user-created-hooks';
 import { prisma } from '@/lib/db/client';
-import {
-  collectLeafSubjectData,
-  initLeafSubjectSources,
-  leafOrgSources,
-} from '@/lib/app/leaf-data-export';
+import { collectLeafSubjectData, initLeafSubjectSources } from '@/lib/app/leaf-data-export';
+import { initLeafOrgSources } from '@/lib/app/leaf-org-export';
+import { initLeafErasureHooks } from '@/lib/app/leaf-erasure';
 import {
   getAppSubjectSources,
   getAppExcludedSubjectSources,
   __resetAppSubjectSourceRegistryForTests,
 } from '@/lib/privacy/subject-source-registry';
+import {
+  getAppOrgSources,
+  getAppExcludedOrgSources,
+  appOrgDeclarationsFailed,
+  __resetAppOrgSourceRegistryForTests,
+} from '@/lib/privacy/org-source-registry';
 import { getAppJobs, __resetAppJobsForTests } from '@/lib/orchestration/maintenance/app-jobs';
+import {
+  getAppStaleWriters,
+  getErasureCleanupHooks,
+  __resetErasureCleanupHooksForTests,
+} from '@/lib/privacy/erasure-hooks';
 import { getEffectiveRateLimitPolicy, RATE_LIMIT_POLICY } from '@/lib/security/rate-limit-policy';
 import {
   hasProviderEligibilityResolver,
@@ -229,6 +254,20 @@ import {
   __resetAccountSectionRegistryForTests,
 } from '@/lib/account-sections/registry';
 import { initAppAuthorizationPolicy } from '@/lib/app/authorization';
+import { ORG_TIER_ADMIN_PAGES, adminPageTier } from '@/lib/auth/admin-tier';
+import { APP_ORG_TIER_ADMIN_ROUTES } from '@/lib/app/admin-tier-routes';
+import { appOrgAdminLandingRoute } from '@/lib/app/admin-landing';
+import { orgAdminLanding } from '@/lib/auth/admin-landing';
+import {
+  getAppOrgTierAdminPages,
+  orgTierAdminPages,
+  __resetAppOrgTierAdminPagesForTests,
+  closedCoreOrgTierSections,
+} from '@/lib/auth/org-tier-admin-pages';
+import {
+  appOwnerClassifications,
+  __resetAppOwnerClassificationForTests,
+} from '@/lib/db/owner-classification';
 import {
   DEFAULT_AUTHORIZATION_POLICY,
   getAuthorizationPolicy,
@@ -651,17 +690,6 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // framework tier first, then this seam. `initLeafSubjectSources()` is
       // idempotent by model, so it cannot be measured as a delta after that —
       // what is asserted instead is the state it is responsible for producing.
-
-      // The org-export half (Daybreak 0.6.0): every leaf table carries `orgId`
-      // (t-112), so every one is accounted for in the ORG export too, as a
-      // source or as an exclusion with a reason, and nothing else is.
-      const org = leafOrgSources();
-      expect(
-        [
-          ...org.sources.map((entry) => entry.model),
-          ...org.excluded.map((entry) => entry.model),
-        ].sort()
-      ).toEqual(appModels);
       __resetAppSubjectSourceRegistryForTests();
       initLeafSubjectSources();
       const sources = getAppSubjectSources();
@@ -855,6 +883,144 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    seam: 'lib/app/org-export.ts',
+    // PINNED (Daybreak fills this bridge, Sunrise 0.15.0 §109 t-737): it registers the framework
+    // tier's org-export manifest, then delegates to the reserved `leaf-org-export.ts` (row below).
+    // What is pinned is that the registry accounts for EXACTLY the framework's `orgId` models,
+    // derived from the schema on disk for the same reason as the `data-export.ts` row above.
+    risk: 'a stray source would read a table into every install\u2019s org export \u2014 and pre-account for an orgId model nobody decided about, silencing the org-manifest coverage rule for it',
+    assert: () => {
+      const schemaDir = path.join(process.cwd(), 'prisma', 'schema');
+      const frameworkModels = readdirSync(schemaDir)
+        .filter((file) => file.startsWith('framework-') && file.endsWith('.prisma'))
+        .flatMap((file) => [
+          ...readFileSync(path.join(schemaDir, file), 'utf8').matchAll(/^model\s+(\w+)\s*\{/gm),
+        ])
+        .map((match) => match[1])
+        .sort();
+      expect(frameworkModels.length).toBeGreaterThan(5);
+
+      __resetAppOrgSourceRegistryForTests();
+      // The reads trigger the lazy init, so this exercises the REAL file.
+      const accounted = [
+        ...getAppOrgSources().map((entry) => entry.model),
+        ...getAppExcludedOrgSources().map((entry) => entry.model),
+      ].sort();
+      // LELAÑEA — pinned, not deleted (`HB2`): the bridge reaches our filled
+      // `leaf-org-export.ts`, so the registry holds the framework's models AND
+      // every one of ours, and nothing else.
+      const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
+      expect(accounted).toEqual([...frameworkModels, ...appModels].sort());
+      expect(appOrgDeclarationsFailed()).toBe(false);
+    },
+  },
+  {
+    seam: 'lib/app/leaf-org-export.ts',
+    // PINNED, not deleted (`HB2`). Daybreak 0.6.0 (t-112) filled the org export
+    // with every Lelañea table; the 0.9.0 sync (t-174) moved them here from
+    // `leafOrgSources()`. Every leaf table carries `orgId`, so every one is a
+    // source, none is excluded, and nothing else is ours. A table added without
+    // a decision fails here, derived from `app.prisma` on disk.
+    risk: 'a stray source would read a leaf table into every Daybreak leaf\u2019s org export, and a stray declaration would pre-account for an orgId model nobody decided about',
+    assert: () => {
+      const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
+      expect(appModels.length).toBeGreaterThan(30);
+
+      __resetAppOrgSourceRegistryForTests();
+      // The read runs the bridge, framework first, then this seam.
+      const ours = getAppOrgSources().filter((entry) => appModels.includes(entry.model));
+      expect(ours.map((entry) => entry.model).sort()).toEqual(appModels);
+      expect(ours.every((entry) => entry.disposition === 'export')).toBe(true);
+      expect(getAppExcludedOrgSources().filter((entry) => appModels.includes(entry.model))).toEqual(
+        []
+      );
+
+      // Idempotent: a second run adds nothing (the registry drops a repeat).
+      const sourcesBefore = getAppOrgSources();
+      initLeafOrgSources();
+      expect(getAppOrgSources()).toEqual(sourcesBefore);
+      expect(appOrgDeclarationsFailed()).toBe(false);
+    },
+  },
+  {
+    seam: 'lib/app/owner-classification.ts',
+    risk: 'a stray classification would switch the data layer’s owner check on for a model nobody decided was private — refusing reads the product means to allow — or pre-classify a fork model nobody looked at, silencing the coverage guard for it',
+    // PINNED (Daybreak fills this bridge, Sunrise 0.15.0 §115): it classifies the framework's
+    // user-linked models, then delegates to the reserved `leaf-owner-classification.ts` (row
+    // below). What is pinned is the exact set, by model name (the ESLint boundary forbids this
+    // app-shell file importing `@/lib/framework`), and that none is enforced: switching the data
+    // layer's owner check on for a framework model is a reviewed change of its own.
+    assert: () => {
+      __resetAppOwnerClassificationForTests();
+      // The read triggers the lazy init, so this exercises the REAL file.
+      const classified = appOwnerClassifications();
+      // LELAÑEA — pinned, not deleted (`HB2`): the framework's eleven, then
+      // ours from `leaf-owner-classification.ts` (row below), by name.
+      expect(Object.keys(classified).sort()).toEqual(
+        [
+          'FacilitationGraph',
+          'FacilitationGraphVersion',
+          'FacilitationPolicy',
+          'FrameworkJourneyNudge',
+          'JourneyEvent',
+          'ModuleVersion',
+          'ModuleWorkflowBinding',
+          'SlotValue',
+          'StructureChangeProposal',
+          'UserJourney',
+          'UserNodeState',
+          ...Object.keys(LEAF_OWNER_CLASSIFICATION),
+        ].sort()
+      );
+      expect(
+        Object.values(classified).filter((c) => c.kind === 'personal' && c.enforced === true)
+      ).toEqual([]);
+    },
+  },
+  {
+    seam: 'lib/app/leaf-owner-classification.ts',
+    risk: 'a stray classification would switch the data layer’s owner check on for a leaf model nobody decided was private, or pre-classify one nobody looked at, silencing the coverage guard for it',
+    // PINNED, not deleted (`HB2`). The Daybreak 0.9.0 sync (t-174) classified
+    // every Lelañea model that links to a person: eight personal, twelve
+    // authored content whose user column is the admin. None enforced — turning
+    // the data layer's owner check on for one of ours is its own reviewed change.
+    assert: () => {
+      expect(
+        Object.entries(LEAF_OWNER_CLASSIFICATION)
+          .filter(([, c]) => c.kind === 'personal')
+          .map(([model]) => model)
+          .sort()
+      ).toEqual([
+        'AppAcknowledgement',
+        'AppJourneyEntry',
+        'AppMemoryEmbedding',
+        'AppSafetyEvent',
+        'AppTurn',
+        'AppTurnSlotWrite',
+        'AppUserBudget',
+        'AppWaitlistEntry',
+      ]);
+      expect(
+        Object.values(LEAF_OWNER_CLASSIFICATION).filter((c) => c.kind === 'not-personal')
+      ).toHaveLength(12);
+      expect(
+        Object.values(LEAF_OWNER_CLASSIFICATION).filter(
+          (c) => c.kind === 'personal' && c.enforced === true
+        )
+      ).toEqual([]);
+
+      // The read runs the bridge, framework first (row above), then this seam,
+      // and holds exactly what the seam declares; a second run adds nothing.
+      __resetAppOwnerClassificationForTests();
+      const before = appOwnerClassifications();
+      for (const [model, classification] of Object.entries(LEAF_OWNER_CLASSIFICATION)) {
+        expect(before[model]).toEqual(classification);
+      }
+      initLeafOwnerClassification();
+      expect(appOwnerClassifications()).toEqual(before);
+    },
+  },
+  {
     seam: 'lib/app/bootstrap.ts',
     // PINNED (Daybreak fills this bridge): it boots the framework tier and runs
     // the module sync. Both are isolated in try/catch inside the seam, so the
@@ -869,7 +1035,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
-    // PINNED, not deleted (`HB2`). Five things are registered here, each pinned
+    // PINNED, not deleted (`HB2`). Four things are registered here, each pinned
     // by identity or by count as well as by name.
     //
     // §05 t-12: the seventeen journey modules, each a `ModuleDefinition` with
@@ -878,27 +1044,17 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // the admin list and the map without a decision, and a missing one would
     // leave a module the drawer names with no row to point at.
     //
-    // §03 t-7: the waitlist's Art. 17 erasure hook, because `app_waitlist_entry`
-    // is keyed by email and the FK cascade cannot reach the rows of anyone who
-    // joined before signing up. A hook registered TWICE under different names
-    // would run the same delete twice inside the erasure transaction.
+    // The waitlist's erasure hook lived here until the Daybreak 0.9.0 sync
+    // (t-174) moved it to `leaf-erasure.ts`; it is pinned on that row.
     seam: 'lib/app/leaf-bootstrap.ts',
-    risk: 'a stray registration would run one-time work on every boot; a MISSING one would leave an erased user’s email on the waitlist table, or a journey module with no row',
+    risk: 'a stray registration would run one-time work on every boot; a MISSING one would leave a journey module with no row, or the agent\u2019s turns unrecorded',
     assert: async () => {
-      __resetErasureCleanupHooksForTests();
       __resetModuleRegistryForTests();
       await expect(initLeafApp()).resolves.toBeUndefined();
 
       const modules = getRegisteredModules();
       expect(modules).toHaveLength(LELANEA_MODULE_COUNT);
       expect(modules.map((m) => m.slug)).toEqual(getModuleDefinitions().map((d) => d.slug));
-
-      const hooks = getErasureCleanupHooks();
-      expect(hooks.map((hook) => hook.name)).toEqual([WAITLIST_ERASURE_HOOK]);
-      // In-transaction phase, not the best-effort external one: a throw must
-      // roll the erasure back rather than being logged and swallowed.
-      expect(hooks[0]?.scrubInTransaction).toBeTypeOf('function');
-      expect(hooks[0]?.cleanupExternal).toBeUndefined();
 
       // §08 t-54: the facilitation turn hook (divergences Row 18) — the agent's turns
       // claimed by id and recorded. By identity, and not the pass-through the
@@ -1007,6 +1163,11 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(appProtectedRoutes).toEqual(['/app']),
   },
   {
+    seam: 'lib/app/credential-paths.ts',
+    risk: 'a stray pattern would blank a route word out of every install’s logs and analytics',
+    assert: () => expect(appCredentialPaths).toEqual([]),
+  },
+  {
     seam: 'lib/app/env.ts',
     risk: 'a stray key would make an unset env var fail boot on every install',
     // An empty z.object() accepts (and strips) anything → parses {} to {}.
@@ -1069,6 +1230,55 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'app:deleted-conversation-sweep',
       ]);
       expect(jobs.map((job) => job.scope)).toEqual([undefined, undefined]);
+    },
+  },
+  {
+    seam: 'lib/app/erasure.ts',
+    // PINNED (Daybreak fills this bridge, Sunrise 0.16.0 §122): it registers the framework's one
+    // erasure hook (binding templates) and its one stale writer (the module dispatcher), then
+    // delegates to the reserved `leaf-erasure.ts` (row below). Pinned to exactly those, so a stray
+    // second registration still fails.
+    risk: 'a stray hook would run inside every account erasure on every install \u2014 deleting external data, or scrubbing rows, that the install never asked it to touch',
+    assert: () => {
+      __resetErasureCleanupHooksForTests();
+      // getErasureCleanupHooks() triggers the lazy init, so this exercises the REAL seam.
+      // LELAÑEA — pinned, not deleted (`HB2`): the framework's hook, then ours
+      // from `leaf-erasure.ts` (row below).
+      expect(getErasureCleanupHooks().map((hook) => hook.name)).toEqual([
+        'framework:module-workflow-binding-templates',
+        WAITLIST_ERASURE_HOOK,
+      ]);
+      expect(getAppStaleWriters().map((w) => `${w.file}#${w.model}`)).toEqual([
+        'lib/framework/modules/workflow-bindings/dispatch.ts#AiWorkflowExecution',
+      ]);
+    },
+  },
+  {
+    seam: 'lib/app/leaf-erasure.ts',
+    risk: 'a stray hook would run inside every account erasure on every Daybreak leaf, and a stray stale writer would excuse a file the guard should have flagged',
+    // PINNED, not deleted (`HB2`). §03 t-7: the waitlist's Art. 17 erasure
+    // hook, because `app_waitlist_entry` is keyed by email and the FK cascade
+    // cannot reach the rows of anyone who joined before signing up. Registered
+    // from `leaf-bootstrap.ts` until the Daybreak 0.9.0 sync (t-174). A hook
+    // registered TWICE under different names would run the same delete twice
+    // inside the erasure transaction. No stale writer: nothing of ours writes a
+    // column erasure scrubs in place (`stale-writers.test.ts` holds that).
+    assert: () => {
+      // The read runs the bridge, which registers the framework's hook and
+      // writer first (pinned in the row above), then ours.
+      __resetErasureCleanupHooksForTests();
+      const hooks = getErasureCleanupHooks().filter((hook) => !hook.name.startsWith('framework:'));
+      expect(hooks.map((hook) => hook.name)).toEqual([WAITLIST_ERASURE_HOOK]);
+      // In-transaction phase, not the best-effort external one: a throw must
+      // roll the erasure back rather than being logged and swallowed.
+      expect(hooks[0]?.scrubInTransaction).toBeTypeOf('function');
+      expect(hooks[0]?.cleanupExternal).toBeUndefined();
+      expect(getAppStaleWriters().filter((w) => !w.file.startsWith('lib/framework/'))).toEqual([]);
+
+      // Idempotent by name: a second run replaces rather than duplicates.
+      const hooksBefore = getErasureCleanupHooks().map((hook) => hook.name);
+      initLeafErasureHooks();
+      expect(getErasureCleanupHooks().map((hook) => hook.name)).toEqual(hooksBefore);
     },
   },
   {
@@ -1208,6 +1418,35 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    seam: 'lib/app/admin-tier.ts',
+    risk: 'a stray pattern would open that admin page to every org OWNER/ADMIN on every install — the page only, since its API routes declare their own tier, but a page core meant for platform admins alone; a stray closeCoreOrgTierSection() would shut orchestration to every org admin on every install',
+    assert: () => {
+      __resetAppOrgTierAdminPagesForTests();
+      // The read triggers the lazy init, so this exercises the REAL seam.
+      expect(getAppOrgTierAdminPages()).toEqual([]);
+      // …and the roster the layout reads and hands the gate is exactly core's.
+      expect(orgTierAdminPages()).toEqual(ORG_TIER_ADMIN_PAGES);
+      expect(adminPageTier('/admin/users', orgTierAdminPages())).toBeNull();
+      // …and it closes none of core's sections (t-929), so the routes keep
+      // the tier they declare.
+      expect(closedCoreOrgTierSections()).toEqual([]);
+    },
+  },
+  {
+    seam: 'lib/app/admin-tier-routes.ts',
+    risk: "a stray entry would let a route declaring tier 'org' pass the roster test without core's list naming it — it opens nothing by itself, but the opening would no longer show in the diff a reviewer reads",
+    assert: () => expect(APP_ORG_TIER_ADMIN_ROUTES).toEqual([]),
+  },
+  {
+    seam: 'lib/app/admin-landing.ts',
+    risk: 'a stray route would send every org OWNER/ADMIN on every install somewhere other than their orchestration dashboard when they open the console',
+    assert: () => {
+      expect(appOrgAdminLandingRoute).toBeNull();
+      // …and /admin sends an org admin exactly where it did before the seam.
+      expect(orgAdminLanding()).toBe('/admin/orchestration');
+    },
+  },
+  {
     seam: 'lib/app/api-key-scopes.ts',
     risk: 'a stray scope would be mintable on every install \u2014 and a name colliding with a core scope would change what an existing key satisfies',
     assert: () => {
@@ -1239,6 +1478,65 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         '.context/app',
         'components/app',
       ]),
+  },
+  {
+    seam: 'lib/app/own-modules.ts',
+    risk: 'a stray entry would exempt a lib/app/ entry from the version contract, the fork guide and this table on every install, so a real seam could ship with no breaking-change announcement',
+    // Not pinned to []: a leaf fork that declares its modules would otherwise
+    // edit this row, in a Sunrise file, which is the cost #847 removes. What
+    // it asserts still fails on a stray upstream entry, because every seam
+    // Sunrise ships has a row here or in UNASSERTED_SEAMS, and an entry with
+    // a row is refused. Upstream, that leaves no declarable entry at all.
+    assert: () =>
+      expect(
+        ownModuleProblems(appOwnModules, scaffoldsOnDisk(), {
+          SEAM_DEFAULTS: SEAM_DEFAULTS.map((s) => s.seam),
+          UNASSERTED_SEAMS: [...UNASSERTED_SEAMS],
+        }),
+        'lib/app/own-modules.ts declares entries that cannot be honoured (see each message)'
+      ).toEqual([]),
+  },
+  {
+    seam: 'lib/app/capability-seed-pairs.ts',
+    risk: 'a stray pair fails the capability parity test on every install (for a slug no seed writes it is a pair nothing wrote, for a slug core already pairs a duplicate), and a stray unchecked seed switches the parity checks off for that seed',
+    // PINNED (Daybreak fills this bridge, Sunrise #1013): its one entry is the framework boot
+    // seed, which reconciles through the app client (lib/framework/capabilities/seed-parity.ts
+    // says why). Anything else here would switch the parity checks off for another seed.
+    // LELAÑEA — pinned, not deleted (`HB2`): the bridge spreads ours from
+    // `leaf-capability-seed-pairs.ts` (row below) beside the framework's entry.
+    assert: () => {
+      expect(APP_CAPABILITY_PAIRS).toEqual([...LEAF_CAPABILITY_PAIRS]);
+      expect(Object.keys(APP_UNCHECKED_SEEDS)).toEqual([
+        ...Object.keys(LEAF_UNCHECKED_SEEDS),
+        '_framework/000-framework-boot.ts',
+      ]);
+    },
+  },
+  {
+    seam: 'lib/app/leaf-capability-seed-pairs.ts',
+    risk: 'a stray pair fails the capability parity test on every Daybreak leaf, and a stray unchecked seed switches the parity checks off for that seed',
+    // PINNED, not deleted (`HB2`). The Daybreak 0.9.0 sync (t-174) moved our
+    // four seeded capabilities here from a divergence in the parity test, and
+    // named the eight seeds of ours the strict mock cannot run. Each of those
+    // writes no capability; a ninth, or one that does, fails here.
+    assert: () => {
+      expect(LEAF_CAPABILITY_PAIRS.map((pair) => pair.slug)).toEqual([
+        'suggest_resource',
+        'set_register',
+        'search_person_memory',
+        'set_leaning',
+      ]);
+      expect(Object.keys(LEAF_UNCHECKED_SEEDS)).toEqual([
+        'app-lelanea/001-journey-map.ts',
+        'app-lelanea/005-agent-models.ts',
+        'app-lelanea/006-agent-seats.ts',
+        'app-lelanea/007-agent-reachable.ts',
+        'app-lelanea/011-slot-taxonomy.ts',
+        'app-lelanea/013-agent-slot-tools.ts',
+        'app-lelanea/020-knowledge-mirror.ts',
+        'app-lelanea/026-synopsis-seat.ts',
+      ]);
+    },
   },
   {
     seam: 'lib/app/brand.ts',
@@ -1457,6 +1755,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
 afterEach(() => {
   __resetNavRegistryForTests();
   __resetAccountSectionRegistryForTests();
+  __resetAppOrgTierAdminPagesForTests();
   __resetAuthorizationPolicyForTests();
 });
 
@@ -1465,7 +1764,10 @@ describe('lib/app/ seams ship empty', () => {
     await assert();
   });
 
-  it('nothing but this file escapes the suite-wide brand-seam pin', () => {
+  it.each([
+    ['brand', 'brand'],
+    ['emails', 'email-override'],
+  ])('nothing but this file escapes the suite-wide %s-seam pin', (seam, label) => {
     // tests/setup.ts mocks `@/lib/app/brand` to null for EVERY test file, so
     // that no core test can read a fork's brand and fail for a reason the fork
     // cannot fix (#660/#661). That guarantee holds across all ~1095 test files
@@ -1490,7 +1792,9 @@ describe('lib/app/ seams ship empty', () => {
     // instance per round. vitest exposes exactly `unmock` and `doUnmock` for
     // removing a mock, so anchoring on `(?:do)?unmock` is exhaustive over the API
     // rather than over the spellings someone happened to think of.
-    const seamPath = String.raw`['"\`]@/lib/app/brand['"\`]`;
+    // The emails pin (#895) is the same shape and the same hazard, so both
+    // seams share the guard.
+    const seamPath = String.raw`['"\`]@/lib/app/` + seam + String.raw`['"\`]`;
     const unmockRe = new RegExp(String.raw`\bvi\s*\.\s*(?:do)?[Uu]nmock\s*\(\s*` + seamPath);
     const actualRe = new RegExp(String.raw`importActual[\s\S]{0,80}?` + seamPath);
 
@@ -1517,9 +1821,9 @@ describe('lib/app/ seams ship empty', () => {
 
     expect(
       offenders,
-      'These test files escape the brand-seam pin in tests/setup.ts. A fork that ' +
-        'fills lib/app/brand.ts would see its own brand here and fail a core test ' +
-        'it cannot fix — the exact class #660 is about. Re-doMock the null values ' +
+      `These test files escape the ${label}-seam pin in tests/setup.ts. A fork that ` +
+        `fills lib/app/${seam}.ts would see its own values here and fail a core test ` +
+        'it cannot fix — the exact class #660 is about. Re-doMock the pinned values ' +
         'instead of unmocking, and leave importActual to this file.'
     ).toEqual([]);
   });
@@ -1527,14 +1831,15 @@ describe('lib/app/ seams ship empty', () => {
   it('has a row for every seam file in lib/app/', () => {
     // Drift guard: adding a `lib/app/*` seam without adding a row above would
     // leave it silently unprotected. Reads the directory rather than trusting
-    // the table to be complete.
-    const dir = path.join(process.cwd(), 'lib/app');
-    const onDisk = readdirSync(dir)
-      .filter((f) => /\.(ts|mjs)$/.test(f) && !f.endsWith('.d.ts'))
-      .map((f) => `lib/app/${f}`);
+    // the table to be complete, through the classifier the VERSIONING.md guard
+    // uses (#734): a nested `lib/app/<name>/` seam is owed a row keyed
+    // `lib/app/<name>/`, and a file of any extension is owed one too.
+    const onDisk = scaffoldsOnDisk();
 
+    // A leaf fork's own modules (lib/app/own-modules.ts) are not seams and owe
+    // no row (#847).
     const covered = new Set(SEAM_DEFAULTS.map((s) => s.seam));
-    const missing = onDisk.filter((f) => !covered.has(f) && !UNASSERTED_SEAMS.has(f));
+    const missing = unlistedSeams([...covered, ...UNASSERTED_SEAMS]);
     const stale = [...covered].filter((f) => !onDisk.includes(f));
 
     expect(missing, 'lib/app/ seam with no row in SEAM_DEFAULTS').toEqual([]);
