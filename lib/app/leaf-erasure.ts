@@ -41,7 +41,8 @@
  * @see lib/app/erasure.ts · lib/privacy/erasure-hooks.ts · .context/privacy/data-erasure.md
  */
 
-import { registerWaitlistErasureHook } from '@/lib/app/waitlist/service';
+import { registerErasureCleanupHook } from '@/lib/privacy/erasure-hooks';
+import { WAITLIST_ERASURE_HOOK, eraseWaitlistEntriesForUser } from '@/lib/app/waitlist/service';
 
 export function initLeafErasureHooks(): void {
   // GDPR Art. 17. `app_waitlist_entry` is keyed by EMAIL, so the FK cascade
@@ -52,5 +53,14 @@ export function initLeafErasureHooks(): void {
   // on a table nothing points at. See `lib/app/waitlist/service.ts`. Moved here
   // from `leaf-bootstrap.ts` on the Daybreak 0.9.0 sync (t-174), so the hook is
   // registered wherever erasure runs, not only after a server boot.
-  registerWaitlistErasureHook();
+  //
+  // In-transaction, not the best-effort external phase: a throw must roll the
+  // erasure back. Idempotent by name, so a repeated init replaces it. Registered
+  // here rather than in the waitlist service so the service does not import the
+  // erasure registry: that would pull the whole erasure graph into everything
+  // that imports the service (the user-created hook among them).
+  registerErasureCleanupHook({
+    name: WAITLIST_ERASURE_HOOK,
+    scrubInTransaction: eraseWaitlistEntriesForUser,
+  });
 }

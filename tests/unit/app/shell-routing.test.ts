@@ -104,27 +104,13 @@ describe('the shell is behind the edge gate', () => {
     expect(response?.headers.get('location')).toBeNull();
   });
 
-  it('CHARACTERISES a platform defect: a public sibling is locked behind login', async () => {
-    // `/apply` is not `/app`, but `proxy.ts` matches with a bare
-    // `pathname.startsWith(route)` and no path boundary, so it is protected —
-    // as are `/application` and `/appointments`, and, with no fork
-    // configuration at all, `/profiles`, `/settings-guide` and `/dashboards`.
-    //
-    // NOT OURS TO FIX. `proxy.ts` is Sunrise's security middleware and the blob
-    // is identical across all three tiers (`9d0d578e`), so the fix has to land
-    // upstream or every fork keeps it. Filed as
-    // https://github.com/human-centric-engineering/sunrise/issues/758.
-    //
-    // It is fail-CLOSED — the error only ever over-protects, so nothing is
-    // exposed — which is why this is recorded rather than patched here, and why
-    // the shell can ship on top of it.
-    //
-    // Asserted in its CURRENT form on purpose: when Sunrise fixes it this test
-    // starts failing, which is the signal to flip the assertion and drop this
-    // comment. A test written for the behaviour we want would have gone green
-    // on the day of the fix and told us nothing.
-    const target = await redirectTarget('/apply');
-    expect(target?.pathname).toBe('/login');
+  it('leaves a public sibling of /app public', async () => {
+    // `/apply` is not `/app`. Until Sunrise fixed sunrise#758 (in 0.16.0, reached
+    // with the Daybreak 0.9.0 sync, t-174), `proxy.ts` matched with a bare
+    // `startsWith` and locked it behind login. This case characterised that
+    // defect and was flipped when it started failing, as it said it would.
+    const response = await proxy(request('/apply'));
+    expect(response?.headers.get('location') ?? null).toBeNull();
   });
 });
 

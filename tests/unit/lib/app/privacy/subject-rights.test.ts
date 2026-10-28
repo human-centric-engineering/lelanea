@@ -8,7 +8,8 @@
  * erasure short by a table, and neither of those shows up in a test that
  * knows about only one. Only Prisma and the object store are stubs;
  * `exportUserData()` and `eraseUser()` reach `lib/app/leaf-data-export.ts`
- * and the hook `initLeafApp()` registers for real.
+ * and the hook `lib/app/leaf-erasure.ts` registers for real, through core's
+ * lazy erasure init — no boot step.
  *
  * The two tables are erased by different mechanisms, and the assertions say
  * which: the waitlist row by the hook (matched by email, because it may
@@ -55,18 +56,28 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
         delegate.count.mockReset().mockResolvedValue(0);
       }
     };
+    const rawQuery = vi.fn().mockResolvedValue([]);
+    const rawExecute = vi.fn().mockResolvedValue(0);
     const userFindUnique = vi.fn();
     const userDelete = vi.fn();
     const receiptCreate = vi.fn();
     const base = {
       get(_target: object, property: string | symbol): unknown {
         if (typeof property !== 'string') return undefined;
+        // Since Sunrise 0.16.0 core's export reads deliveries naming the
+        // subject, and its erasure bounds its lock waits, both in raw SQL.
+        // Neither touches our tables; inert here, as an empty table would be.
+        if (property === '$queryRaw') return rawQuery;
+        if (property === '$executeRaw') return rawExecute;
         if (property === 'user')
           // `findUniqueOrThrow`: core's erasure reads the address and its
           // verification to scope the contact-form delete (Sunrise 0.14.0).
           return {
             findUnique: userFindUnique,
             findUniqueOrThrow: userFindUnique,
+            // Since Sunrise 0.16.0 erasure clears this person from other
+            // people's pending erasures they requested as an admin.
+            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
             delete: userDelete,
           };
         if (property === 'dataErasureReceipt')
@@ -100,7 +111,6 @@ vi.mock('@/lib/storage/upload', () => ({
 
 import { exportUserData } from '@/lib/privacy/export-user';
 import { eraseUser } from '@/lib/privacy/erase-user';
-import { initLeafApp } from '@/lib/app/leaf-bootstrap';
 import { __resetErasureCleanupHooksForTests } from '@/lib/privacy/erasure-hooks';
 import { __resetAppSubjectSourceRegistryForTests } from '@/lib/privacy/subject-source-registry';
 
@@ -208,8 +218,6 @@ describe('Art. 15 — the bundle for one person carries both of our tables', () 
 
 describe('Art. 17 — erasure removes both, and the person', () => {
   it('deletes the waitlist row by hook, the user by delete, and leaves the cascade to the FK', async () => {
-    await initLeafApp();
-
     await eraseUser({
       userId: ADA.id,
       userEmail: ADA.email,

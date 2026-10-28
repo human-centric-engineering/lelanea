@@ -38,6 +38,29 @@ const RAW_SQL = /[\w$)\]]\.\$(queryRaw|executeRaw)(Unsafe|Typed)?\s*[(`<]|\bPris
  * cannot hand a narrowed caller another member's rows. Sorted by file.
  */
 const MANIFEST: ReadonlyArray<{ file: string; table: string; why: string }> = [
+  // LELAÑEA DIVERGENCE (.context/app/divergences.md row 19, sunrise#799): our
+  // raw reads of core's enforced conversation tables. This guard names a fork
+  // file and offers it no seam, so the rows live here.
+  {
+    file: 'lib/app/agent/metering.ts',
+    table: 'ai_conversation',
+    why: 'An aggregate over ai_cost_log behind the admin meter: ai_conversation is joined only to read the seat (contextType/contextId) of a cost row with none of its own, and no conversation column or row is returned.',
+  },
+  {
+    file: 'lib/app/memory/delete-conversation.ts',
+    table: 'ai_conversation',
+    why: 'The deleted-conversation sweep, run per org from the maintenance tick where no person is narrowed. It returns only ids of conversations that no longer exist (the join finds no row), never a conversation.',
+  },
+  {
+    file: 'lib/app/memory/memory-index.ts',
+    table: 'ai_conversation',
+    why: 'Every read a person\'s request reaches is keyed on the subject: c."userId" = the subject\'s id (readIndexableMessage, the index insert, searchMemory). The backfill reads across members, but only from the maintenance tick, where no person is narrowed, and hands ids to the indexer, not to a caller.',
+  },
+  {
+    file: 'lib/app/memory/memory-index.ts',
+    table: 'ai_message',
+    why: 'Joined to ai_conversation under the same subject key (c."userId" and, in search, e."userId" both the subject\'s id), so a message comes back only when it is the subject\'s own; the backfill is the tick-only exception above.',
+  },
   {
     file: 'lib/orchestration/chat/conversation-semantic-search.ts',
     table: 'ai_conversation',
