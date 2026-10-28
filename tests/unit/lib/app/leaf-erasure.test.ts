@@ -5,6 +5,11 @@
  * (`eraseWaitlistEntriesForUser`), and that erasure reaches it end to end in
  * `waitlist/privacy.test.ts`. This pins the registration itself: the right
  * function, in the phase whose failure rolls the erasure back, once.
+ *
+ * FORK NOTE — this reads `lib/app/leaf-erasure.ts` for real, not through a
+ * mock. It has to: the registration is the thing under test. It is Lelañea's
+ * seam and Lelañea's test; a fork of Lelañea that changes what the seam
+ * registers rewrites these cases around its own hooks.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 
