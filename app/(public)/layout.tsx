@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { SiteHeader } from '@/components/app/site/site-header';
 import { SiteFooter } from '@/components/app/site/site-footer';
+import { PrismGround } from '@/components/app/ui/prism-ground';
 import { MaintenanceWrapper } from '@/components/maintenance-wrapper';
 import { BRAND } from '@/lib/brand';
 
@@ -45,6 +46,11 @@ export const metadata: Metadata = {
  * `SiteFooter` itself. `lib/app/public-nav.ts` and `lib/app/footer.ts` are
  * consequently left at their defaults, and their `defaults.test.ts` rows still
  * pin them there.
+ *
+ * The prism (t-177, same row): the frame mounts `PrismGround` and its wrapper
+ * drops `bg-background`, because in the prism that token is glass and the page
+ * is lit from behind it — an opaque frame here would hide the light on every
+ * public page.
  */
 export default function PublicLayout({
   children,
@@ -53,7 +59,8 @@ export default function PublicLayout({
 }>) {
   return (
     <MaintenanceWrapper>
-      <div className="bg-background flex min-h-screen flex-col">
+      <div className="flex min-h-screen flex-col">
+        <PrismGround variant="site" />
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />

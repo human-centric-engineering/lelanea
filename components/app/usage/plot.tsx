@@ -135,7 +135,7 @@ export function MonthPlot({
           className="pointer-events-none absolute right-0 left-0 z-[2] border-t border-dashed border-[var(--color-border)]"
           style={{ bottom: `${average.percent}%` }}
         >
-          <span className="bg-background text-muted-foreground absolute top-[-17px] right-0 rounded-[5px] px-[5px] text-[10.5px] tabular-nums">
+          <span className="text-muted-foreground absolute top-[-17px] right-0 rounded-[5px] bg-[var(--color-sheet)] px-[5px] text-[10.5px] tabular-nums">
             {average.label}
           </span>
         </div>

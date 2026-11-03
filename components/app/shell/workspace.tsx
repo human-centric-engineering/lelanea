@@ -69,12 +69,16 @@ import { cn } from '@/lib/utils';
  *
  * It reads `--tone` from `Panes`, so it is a constant rather than a function of
  * the route: the cascade does the per-route part.
+ *
+ * The wash fades to `transparent`, not to `--color-background`: in the prism
+ * that token is glass, and a glass gradient over the class's glass ground
+ * stacked the two into a head more opaque than every other pane (t-177).
  */
 const TONE_WASH: React.CSSProperties = {
   backgroundImage:
     'linear-gradient(to bottom, ' +
-    'color-mix(in srgb, var(--tone, transparent) 8%, var(--color-background)) 0, ' +
-    'var(--color-background) 76px)',
+    'color-mix(in srgb, var(--tone, transparent) 8%, transparent) 0, ' +
+    'transparent 76px)',
 };
 
 export function Workspace({ children }: { children: React.ReactNode }) {

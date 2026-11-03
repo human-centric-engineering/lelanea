@@ -233,9 +233,12 @@ describe('ShellNav — slim mode', () => {
     const item = screen.getByRole('link', { name: /Life situations/ });
     expect(item.getAttribute('title')).toBeNull();
 
-    // The bubble is the link's own sibling, `aria-hidden`, and present in the
-    // DOM from the start so it has something to fade from.
-    const bubble = item.nextElementSibling;
+    // The bubble is portaled to `<body>` — the nav is glass, and its backdrop
+    // filter would otherwise be the containing block of a `fixed` bubble — is
+    // `aria-hidden`, and is present from the start so it has something to fade
+    // from.
+    const bubble = screen.queryByText('Life situations — What you are living through');
+    expect(bubble?.parentElement).toBe(document.body);
     expect(bubble?.textContent).toBe('Life situations — What you are living through');
     expect(bubble?.getAttribute('aria-hidden')).toBe('true');
     expect(bubble?.className).toContain('invisible');
@@ -248,7 +251,7 @@ describe('ShellNav — slim mode', () => {
     renderAt('/app');
     const item = screen.getByRole('link', { name: /Life situations/ });
     expect(item.getAttribute('title')).toBeNull();
-    expect(item.nextElementSibling?.textContent).not.toContain('What you are living through');
+    expect(screen.queryByText('Life situations — What you are living through')).toBeNull();
   });
 
   it("uses the design's own collapse pair, pointing where the menu is going", async () => {
@@ -293,10 +296,10 @@ describe('ShellNav — slim mode', () => {
     // noise beside a menu that already says what it is.
     renderAt('/app');
     const control = () => screen.getByRole('button', { name: /the menu/ });
-    expect(control().nextElementSibling).toBeNull();
+    expect(screen.queryByText('Expand the menu')).toBeNull();
 
     await userEvent.click(control());
-    expect(control().nextElementSibling?.textContent).toBe('Expand the menu');
+    expect(screen.queryByText('Expand the menu')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('keeps the account footer reachable at 64px, still named by the person', async () => {

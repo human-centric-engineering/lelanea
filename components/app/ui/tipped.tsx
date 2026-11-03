@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
 
@@ -30,10 +31,13 @@ export interface TipTrigger {
  * all, which is why the pseudo-element is enough there and not here.
  *
  * So the bubble is `position: fixed` and measured from the trigger's own box on
- * the way in. Fixed escapes an ancestor's overflow without a portal — the one
- * thing that would break it is an ancestor establishing a containing block (a
- * `transform`, `filter` or `contain`), and the only transform on this path is
- * the ≤900px nav drawer's slide, at a width where nothing is ever slim.
+ * the way in, and it is PORTALED to `<body>`. Fixed alone escapes an ancestor's
+ * overflow, but not an ancestor that establishes a containing block (a
+ * `transform`, `filter`, `backdrop-filter` or `contain`) — and since the prism
+ * (t-177) every `.bg-card` is glass with a backdrop filter, which includes the
+ * shell's nav and rail. Inside them, viewport coordinates would be resolved
+ * against the nav's box and the bubble would land wherever the shell is offset
+ * from the viewport origin (the admin maintenance notice above it, say).
  *
  * ## It is always mounted, and that is what buys the fade
  *
@@ -169,27 +173,33 @@ export function Tipped({
         },
         onBlur: hide,
       })}
-      <span
-        aria-hidden="true"
-        style={
-          at
-            ? { top: at.top, left: at.left, right: at.right }
-            : // Parked off-screen until it has been measured, so it can never
-              // paint at its static position inside the nav's flow.
-              { top: -9999, left: -9999 }
-        }
-        className={cn(
-          'pointer-events-none fixed z-[80] -translate-y-1/2 rounded-[9px] px-[11px] py-1.5',
-          'border border-[var(--color-border)] bg-[var(--color-popover)]',
-          'text-[12.5px] leading-normal font-normal tracking-normal whitespace-nowrap normal-case',
-          'text-[var(--color-foreground)] shadow-[var(--shadow-rest)]',
-          'transition-[opacity,visibility] duration-[160ms] ease-[var(--ease-brand)]',
-          'motion-reduce:transition-none',
-          shown ? 'visible opacity-100' : 'invisible opacity-0'
+      {/* Portaled once the trigger has attached, which is also after mount,
+          so there is always a `document` to portal into. */}
+      {node &&
+        createPortal(
+          <span
+            aria-hidden="true"
+            style={
+              at
+                ? { top: at.top, left: at.left, right: at.right }
+                : // Parked off-screen until it has been measured, so it can never
+                  // paint at its static position inside the nav's flow.
+                  { top: -9999, left: -9999 }
+            }
+            className={cn(
+              'pointer-events-none fixed z-[80] -translate-y-1/2 rounded-[9px] px-[11px] py-1.5',
+              'border border-[var(--color-border)] bg-[var(--color-popover)]',
+              'text-[12.5px] leading-normal font-normal tracking-normal whitespace-nowrap normal-case',
+              'text-[var(--color-foreground)] shadow-[var(--shadow-rest)]',
+              'transition-[opacity,visibility] duration-[160ms] ease-[var(--ease-brand)]',
+              'motion-reduce:transition-none',
+              shown ? 'visible opacity-100' : 'invisible opacity-0'
+            )}
+          >
+            {label}
+          </span>,
+          document.body
         )}
-      >
-        {label}
-      </span>
     </>
   );
 }

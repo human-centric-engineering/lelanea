@@ -1,0 +1,182 @@
+/* The prism ground: one fixed layer of light behind a consumer page.
+ *
+ * Geometry is the prism prototype's (`.context/app/planning/design/prism/`,
+ * `.prism` in both files); every colour is a token from `app/brand-theme.css`,
+ * so the ground follows the theme with nothing here knowing which one it is.
+ *
+ * `z-index: -1` rather than the prototype's 0 under a `z-index: 1` page: a
+ * fixed element at -1 paints below every in-flow box of the page and above the
+ * canvas, which `<body>` paints with `--color-ground` — so the page frame needs
+ * no z-index of its own, and no layout has to change to sit in front of it. It
+ * relies on no ancestor forming a stacking context, which is why the ground is
+ * mounted at the top of each frame rather than inside a section.
+ */
+.ground {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.wash {
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(60% 50% at 22% 18%, var(--glow-1), transparent 70%),
+    radial-gradient(55% 60% at 85% 30%, var(--glow-2), transparent 72%),
+    radial-gradient(70% 55% at 55% 95%, var(--glow-3), transparent 70%);
+}
+
+/* Where the light bends: a soft shadow across the page.
+ *
+ * `--r`, `--y`, `--x`, `--h`, `--b`, `--t` and `--delay` are per-layer
+ * geometry, set inline by the component, so each carries a fallback here: they
+ * are not tokens and nothing in `app/brand-theme.css` declares them. */
+.fold {
+  position: absolute;
+  width: 140vmax;
+  height: 38vmax;
+  left: 50%;
+  top: 50%;
+  background: radial-gradient(50% 50% at 50% 50%, var(--fold), transparent 70%);
+  filter: blur(30px);
+  translate: -50% -50%;
+  rotate: var(--r, 0deg);
+  margin-top: var(--y, 0px);
+}
+
+/* A ray: a bright core with a warm fringe above and a cool one below, faded
+ * out at both ends. */
+.ray {
+  position: absolute;
+  width: 170vmax;
+  height: var(--h, 120px);
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  rotate: var(--r, 0deg);
+  margin-top: var(--y, 0px);
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--ray-warm) 34%,
+    var(--ray-core) 50%,
+    var(--ray-cool) 66%,
+    transparent 100%
+  );
+  /* A mask is alpha, not colour: `black` is opaque mask, `transparent` none. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 4%,
+    black 34%,
+    black 62%,
+    transparent 96%
+  );
+  mask-image: linear-gradient(to right, transparent 4%, black 34%, black 62%, transparent 96%);
+  filter: blur(var(--b, 6px));
+  opacity: var(--ray-opacity);
+  mix-blend-mode: var(--ray-blend);
+  animation: drift var(--t, 46s) ease-in-out infinite alternate;
+}
+
+/* THE VEIL IS KEYED TO THE READING COLUMN, not to the viewport, and that is a
+ * deviation from the prototype, measured. The prototype's veil is full from 20%
+ * to 80% of the viewport and gone at its edges, while the site's column is
+ * 1180px with 5vw gutters — so on every screen between a phone and about
+ * 1400px, the first and last words of a line sit where the veil has thinned to
+ * nothing. Measured there, on the bare ground, links fell to 4.21:1 in light
+ * and muted text to 1.82:1 in dark. So the veil is full across the column and
+ * fades in the 120px outside it: on a screen narrower than the column it covers
+ * everything (the prototype's own rule below 760px, extended to wherever the
+ * column fills the screen), and on a wide screen the light stays luminous at
+ * the edges exactly as the prototype draws it. */
+.veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    transparent max(0px, calc(50% - 710px)),
+    var(--veil) max(0px, calc(50% - 590px)),
+    var(--veil) min(100%, calc(50% + 590px)),
+    transparent min(100%, calc(50% + 710px))
+  );
+}
+
+/* In the shell the panes carry the text, so the veil thins and the light comes
+ * through the frame around them. The prototype's band, at a quarter. */
+.ground[data-prism='app'] .veil {
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    var(--veil) 20%,
+    var(--veil) 80%,
+    transparent 100%
+  );
+  opacity: 0.25;
+}
+
+@media (max-width: 760px) {
+  .ground[data-prism='app'] .veil {
+    background: var(--veil);
+  }
+}
+
+/* A glint: a soft point with a fine cross through it. Transparent in dark
+ * (`--spark`, and why, in `app/brand-theme.css`). */
+.spark {
+  position: absolute;
+  left: var(--x, 50%);
+  top: var(--y, 50%);
+  width: 220px;
+  height: 220px;
+  translate: -50% -50%;
+  background:
+    radial-gradient(circle, var(--spark) 0 3px, transparent 26px),
+    linear-gradient(to right, transparent 10%, var(--spark) 50%, transparent 90%) center / 100%
+      1.5px no-repeat,
+    linear-gradient(to bottom, transparent 22%, var(--spark) 50%, transparent 78%) center / 1.5px
+      100% no-repeat;
+  rotate: 18deg;
+  filter: blur(0.6px);
+  mix-blend-mode: var(--ray-blend);
+  animation: glint 9s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes drift {
+  from {
+    rotate: var(--r, 0deg);
+  }
+  to {
+    rotate: calc(var(--r, 0deg) + 3deg);
+  }
+}
+
+@keyframes glint {
+  0%,
+  100% {
+    opacity: 0.55;
+    scale: 0.85;
+  }
+  50% {
+    opacity: 1;
+    scale: 1.05;
+  }
+}
+
+/* Still under reduced motion: the rays hold their angle and the sparks their
+ * resting glint. The light itself stays — it is the page's colour, not motion. */
+@media (prefers-reduced-motion: reduce) {
+  .ray,
+  .spark {
+    animation: none;
+  }
+
+  /* Without the animation a spark falls back to opacity 1 and scale 1 — the
+   * glint's peak, not its rest. */
+  .spark {
+    opacity: 0.55;
+    scale: 0.85;
+  }
+}

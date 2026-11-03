@@ -86,13 +86,13 @@ describe('the baked lotus', () => {
   });
 
   it('refuses to bake the apple icon without the ground it sits on', () => {
-    const without = stylesheet.replaceAll(/--color-background:[^;]+;/g, '');
-    expect(() => lotusAssets(without)).toThrow(/--color-background missing/);
+    const without = stylesheet.replaceAll(/--color-ground:[^;]+;/g, '');
+    expect(() => lotusAssets(without)).toThrow(/--color-ground missing/);
   });
 
   it('reads the light value of each token, which comes first in the file', () => {
     const tokens = lightTokens(stylesheet);
-    expect(tokens.get('--color-lotus-petal-outer')).toBe('#17718a');
+    expect(tokens.get('--color-lotus-petal-outer')).toBe('#55609a');
     expect(tokens.get('--color-lotus-pad')).toMatch(/^#[0-9a-f]{6}$/);
   });
 

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { AuthoredBlocks, CATEGORY_LABEL } from '@/components/app/content/authored-document';
+import { PrismGround } from '@/components/app/ui/prism-ground';
 import { BeginView } from '@/components/app/views/begin-view';
 import { MaintenanceWrapperWithAdminNotice } from '@/components/maintenance-wrapper';
 import { getGateStatus, toGateStatusJson } from '@/lib/app/gateway/acknowledgements';
@@ -84,6 +85,7 @@ export default async function BeginPage() {
 
   return (
     <MaintenanceWrapperWithAdminNotice>
+      <PrismGround variant="site" />
       {/*
         Plain utilities, and none of `document-page.module.css`. That module is
         the public document pages' editorial system — `.page` is a 1180px

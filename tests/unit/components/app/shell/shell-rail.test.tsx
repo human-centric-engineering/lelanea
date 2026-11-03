@@ -127,7 +127,9 @@ describe('ShellRail', () => {
     const map = screen.getByRole('button', { name: /Your map/ });
     expect(map.getAttribute('title')).toBeNull();
 
-    const bubble = map.nextElementSibling;
+    // Portaled to `<body>`: the rail is glass, and its backdrop filter would
+    // otherwise be the containing block of the `fixed` bubble.
+    const bubble = screen.queryByText('Your map — the sixteen modules');
     expect(bubble?.textContent).toBe('Your map — the sixteen modules');
     expect(bubble?.getAttribute('aria-hidden')).toBe('true');
   });
