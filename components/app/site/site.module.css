@@ -40,6 +40,14 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
+/* In the prism's light the ground above is itself glass, so 88% of it is
+   barely more than half a bar, and headings scrolling under it read through.
+   The prism prototype makes the light bar the solid sheet; dark keeps the
+   frosted mix, which is dense enough at its 74% (t-177). */
+:global(html:not(.dark)) .nav {
+  background: var(--color-sheet);
+}
+
 .wordmark {
   display: flex;
   align-items: center;
