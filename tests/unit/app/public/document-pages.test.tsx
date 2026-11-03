@@ -213,6 +213,39 @@ describe('/lelanea', () => {
     }
   });
 
+  it('prints no subtitle line for a document that has none', async () => {
+    // Seeded, the subtitle is the paragraph straight after the `h1` — proved
+    // first, so the absence below is not a pass on a document that never had one.
+    const seeded = render(await LelaneaPage());
+    expect(screen.getByRole('heading', { level: 1 }).nextElementSibling?.tagName).toBe('P');
+    seeded.unmount();
+
+    store.editRow('the_heart_behind_lelanea', { subtitle: null });
+    render(await LelaneaPage());
+
+    expect(screen.getByRole('heading', { level: 1 }).nextElementSibling?.tagName).not.toBe('P');
+  });
+
+  it('sets no coda apart when the lineage has only one section', async () => {
+    // The coda is the LAST of two or more sections, taken by position. With
+    // one section there is nothing to set apart, and that section is a field.
+    const seeded = render(await LelaneaPage());
+    expect(seeded.container.querySelector('[class*="coda"]')).not.toBeNull();
+    seeded.unmount();
+
+    store.editBlocks('the_lineage_of_lelanea', (blocks) => {
+      const second = blocks.findIndex(
+        (block, index) =>
+          block.type === 'heading' && blocks.slice(0, index).some((b) => b.type === 'heading')
+      );
+      return second === -1 ? blocks : blocks.slice(0, second);
+    });
+    const { container } = render(await LelaneaPage());
+
+    expect(container.querySelector('[class*="coda"]')).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: 'The Lineage of Lelañea' })).toBeTruthy();
+  });
+
   // The stand-in shown while there is no portrait is pinned in
   // `creator-portrait-pending.test.tsx`, which sets the constant to null
   // itself: since t-171 the real one carries a photograph.
