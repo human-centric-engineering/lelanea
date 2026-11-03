@@ -121,8 +121,17 @@ export function Panes({ children }: { children: React.ReactNode }) {
          * `empty:hidden` keeps the ordinary case honest: on `/app` the page
          * renders nothing, and an empty overlay would sit over the conversation
          * swallowing every click.
+         *
+         * A SOLID SHEET, because it rides over the conversation: in the prism
+         * `--color-background` is glass, and the onboarding questions painted on
+         * it let the thread show through between their lines (t-177). The token
+         * is re-scoped as well as painted, as `[role='dialog']` is in
+         * `app/brand-theme.css`, so whatever the page paints `bg-background`
+         * inside it is solid too.
          */
-        <div className="absolute inset-0 z-10 overflow-y-auto empty:hidden">{children}</div>
+        <div className="absolute inset-0 z-10 overflow-y-auto bg-[var(--color-sheet)] [--color-background:var(--color-sheet)] empty:hidden">
+          {children}
+        </div>
       )}
 
       {/*
