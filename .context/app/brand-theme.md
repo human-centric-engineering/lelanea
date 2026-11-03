@@ -83,9 +83,9 @@ from `@theme` at build time, and `@theme` lives in Sunrise's `globals.css`.
 ## Where the values come from
 
 **The prism prototype is the authority** (t-177, 3 Nov 2026):
-[`planning/design/prism/index.html`](./planning/design/prism/index.html) — the
+[`.context/app/planning/design/prism/index.html`](./planning/design/prism/index.html) — the
 site over its real compiled CSS, whose "PRISM over the real site" block carries
-the values — and [`planning/design/prism/app.html`](./planning/design/prism/app.html),
+the values — and [`.context/app/planning/design/prism/app.html`](./planning/design/prism/app.html),
 the shell, whose token block is the same set. Both are byte-identical to the
 published artifact the owner approved.
 
@@ -104,7 +104,7 @@ over compiled CSS, and none of them is copied into the code: t-178 and t-179
 make those changes in the modules they belong to.
 
 Three things neither prism file carries still come from the design kit
-(`Lelanea_Design_System/colors_and_type.css`, §6.4 and §6.5): the radius scale
+(`.context/app/planning/design/Lelanea_Design_System/colors_and_type.css`, §6.4 and §6.5): the radius scale
 (8/12/20/28/999), `--shadow-bloom` (retinted from the orange to the rose-bronze
 accent ink) and `--ease-quick`.
 
