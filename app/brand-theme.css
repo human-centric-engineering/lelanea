@@ -49,21 +49,27 @@
  *    Tailwind arbitrary value: `text-[var(--color-heading)]`.
  *
  * SOURCES
- *   Values are the approved prototype's token block
- *   (`.context/app/planning/design/lelanea.html`, `:root` and
- *   `:root[data-theme='dark']`), which §6.1 makes the authority on how the
- *   product looks. Four tokens the prototype does not carry — the radius scale,
- *   `--shadow-bloom` and `--ease-quick` — come from the design kit
- *   (`.context/app/planning/design/Lelanea_Design_System/colors_and_type.css`),
- *   which §6.4 and §6.5 specify. Where the kit and the prototype disagree
- *   (`--shadow-rest`, `--shadow-lift`), the prototype wins, per §6.1.
+ *   Values are the prism prototype's (t-177): the "PRISM over the real site"
+ *   block of `.context/app/planning/design/prism/index.html` and the token
+ *   block of `prism/app.html`. Since 3 Nov 2026 those two files are the
+ *   authority on how the product looks, in place of
+ *   `.context/app/planning/design/lelanea.html` (§6.1). The prism supersedes
+ *   that prototype's PALETTE — every colour, the flat ground, the shadows —
+ *   and leaves the rest of it standing: type, radii, spacing, motion, and the
+ *   layout of every page. See `.context/app/brand-theme.md`.
  *
- *   The secondary-text values are decision D4/D5, already carried by the
- *   prototype: `#5A5F62` light and `#A8AEB1` dark. `#6F7376` — the kit's
- *   original, which fails 4.5:1 in all four pairings — survives only as the
- *   base of the border and divider alphas, where contrast carries no meaning.
+ *   The radius scale, `--shadow-bloom` and `--ease-quick` are carried by
+ *   neither prism file and still come from the design kit
+ *   (`.context/app/planning/design/Lelanea_Design_System/colors_and_type.css`,
+ *   §6.4 and §6.5); `--shadow-bloom` is retinted from the old orange to the
+ *   prism's rose-bronze accent ink.
  *
- * See `.context/ui/surface-theming.md` for the full mechanism.
+ *   The prism's ground is LIT and its grounds are GLASS, so no contrast below is
+ *   measured against one colour. Every ratio quoted is the WORST over the lit
+ *   ground's layers at their peaks (each glow, the fold, each edge of a ray,
+ *   the spark, the veil on and off), with the glass token composited over it.
+ *   The method is `.context/app/brand-theme.md` § "Contrast over the light", and
+ *   `tests/unit/app/brand-theme.test.ts` reproduces it from this file.
  */
 
 /* ============================================================ consumer: light
@@ -83,257 +89,217 @@
   --font-serif: var(--font-brand-display), Georgia, 'Times New Roman', serif;
   --font-quote: var(--font-brand-quote), Georgia, serif;
 
-  /* ---- Grounds and ink ------------------------------------------------- */
-  --color-background: #f3f0ec;
-  --color-foreground: #282c2e;
-  --color-heading: #11181a;
-  --color-card: #ebe6df;
-  --color-card-foreground: #282c2e;
-  --color-muted: #eee9e2;
-  --color-muted-foreground: #5a5f62;
-  --color-popover: #f7f5f1;
-  --color-popover-foreground: #282c2e;
+  /* ---- The light the page sits in ---------------------------------------
+   * Painted by `components/app/ui/prism-ground.tsx`: an opaque ground, three
+   * washes of glow, two soft folds where the light bends, rays with a warm and
+   * a cool fringe either side of a bright core, two sparks, and the veil — a
+   * calm band where words run. `--color-ground` is also the page colour under
+   * all of it, and the opaque colour for anything that cannot be glass (the
+   * email, the social card, the apple icon).
+   */
+  --color-ground: #f1e6da;
+  --glow-1: rgba(255, 236, 214, 0.95);
+  --glow-2: rgba(232, 214, 226, 0.75);
+  --glow-3: rgba(214, 222, 236, 0.7);
+  --fold: rgba(150, 120, 100, 0.13);
+  --ray-core: rgba(255, 255, 255, 0.95);
+  --ray-warm: rgba(255, 168, 120, 0.42);
+  --ray-cool: rgba(130, 176, 255, 0.4);
+  --ray-blend: normal;
+  --ray-opacity: 0.6;
+  --spark: rgba(255, 255, 255, 0.9);
+  --veil: rgba(246, 240, 234, 0.72);
+
+  /* Text straight on the ground carries a faint halo of it, so words stay
+   * clear of a bright streak. Kept light: a strong one merges into a slab
+   * behind a long block of text. None in dark (dark block). */
+  --ground-halo: 0 0 10px color-mix(in srgb, var(--color-ground) 55%, transparent);
+
+  /* What a glass surface does to the light behind it. Theme-invariant. */
+  --glass: blur(18px) saturate(150%);
+
+  /* ---- Grounds and ink -------------------------------------------------
+   * The three grounds a surface paints are GLASS — translucent, so the light
+   * reads through — and the popover is the one opaque ground. `--color-sheet`
+   * is the solid ground for anything that rides OVER other surfaces (dialogs,
+   * drawers, a stacked card), where glass would show the content beneath.
+   */
+  --color-background: rgba(250, 246, 241, 0.66);
+  --color-foreground: #3a3236;
+  --color-heading: #1f1a1c;
+  --color-card: rgba(255, 253, 250, 0.72);
+  --color-card-foreground: #3a3236;
+  --color-muted: rgba(250, 246, 241, 0.58);
+  /* D4/D5's role, at the prism's value: 5.79:1 at its tightest over the light
+   * (on a muted ground), 5.92 on the bare ground inside the veil. */
+  --color-muted-foreground: #5c5357;
+  --color-popover: #fbf7f3;
+  --color-popover-foreground: #3a3236;
+  --color-sheet: #f7f1eb;
+
+  /* Where you read, the grounds are nearly solid: the workspace and the
+   * conversation (t-179 applies these to the shell's panes). */
+  --read-background: rgba(248, 243, 237, 0.9);
+  --read-card: rgba(255, 252, 248, 0.95);
+  --read-muted: rgba(245, 239, 232, 0.9);
+  /* Inside the app the panes carry the text, so the frame around them can be
+   * thinner and let more light through (t-179). */
+  --app-background: rgba(250, 246, 241, 0.36);
+  --app-card: rgba(255, 253, 250, 0.52);
+  --app-muted: rgba(250, 246, 241, 0.26);
 
   /* ---- Lines ------------------------------------------------------------
-   * Hairline 1px at 24% in light (§6.4). `--color-card-border` is transparent
-   * here on purpose: cards carry no border in light mode, only in dark.
+   * The hairline is the prism's plum-grey. A card's edge is a white rim in
+   * light, the lit edge of a pane of glass, and a warm one in dark.
    */
-  --color-border: rgba(111, 115, 118, 0.24);
-  --color-divider: rgba(111, 115, 118, 0.16);
-  --color-card-border: rgba(111, 115, 118, 0);
+  --color-border: rgba(92, 74, 82, 0.2);
+  --color-divider: rgba(92, 74, 82, 0.12);
+  --color-card-border: rgba(255, 255, 255, 0.7);
 
   /* THE CONTROL BOUNDARY IS NOT THE HAIRLINE, and this is the whole reason it
    * has its own token. `--color-border` above separates things — cards from
-   * ground, a row from the next — and §6.4's 24% hairline is exactly right for
-   * that. `--color-input` IDENTIFIES a control: it is the edge of <Input>,
-   * <Textarea>, <SelectTrigger>, <Checkbox> and the outline <Button>. WCAG
+   * ground, a row from the next. `--color-input` IDENTIFIES a control: it is
+   * the edge of <Input>, <Textarea>, <SelectTrigger>, <Checkbox> and the
+   * outline <Button>, and the off-track FILL of shadcn's <Switch>
+   * (`components/ui/switch.tsx`), live in the cookie-consent modal. WCAG
    * 1.4.11 asks 3:1 of the second and nothing of the first, so only this one
-   * moves and the design's hairline character survives everywhere it was
-   * decorative.
+   * moves and the hairline character survives everywhere it was decorative.
    *
-   * The base changed too, and the reason is an ALPHA CEILING rather than an
-   * impossibility: the kit's silver `#6F7376` does clear 3:1 — but only from
-   * 0.85 up (3.02 at its tightest there, 3.85 opaque). At 0.85 an alpha has
-   * stopped being a hairline and is just a muddier way of writing a solid
-   * colour, so the base here is the heading ink, which reaches the same band at
-   * 0.50: 3.31 / 3.24 / 3.24 / 3.33 against background, card, muted and
-   * popover. 0.48 lands at 3.07, too close to survive a ground moving a step.
+   * The base is the heading ink, as before the prism: 0.52 clears 3:1 over
+   * every ground the light can make — 3.29 at its tightest, on a muted ground
+   * under a ray's bright core. 0.50 lands at 3.12, too close to survive a ground
+   * moving a step.
    *
-   * IT IS ALSO A FILL, and that is not a detail — shadcn's <Switch> paints its
-   * OFF-TRACK with `bg-input` (`components/ui/switch.tsx`), and <Switch> is
-   * live on this surface today in the cookie-consent modal. So this token moving
-   * changes a switch, measured both ways:
-   *
-   *   before  off-track #D3D2D0 over the page ground — 1.33:1 against it
-   *           (invisible as a control), 3.41:1 against the orange on-track
-   *   after   off-track #828483 over the page ground — 3.31:1 against it, and
-   *           3.24:1 at its tightest (over a card, where it composites to
-   *           #7E7F7D). It is now a control you can see. 1.37:1 against the
-   *           on-track
-   *
-   * Taken deliberately. The off-track is what 1.4.11 governs and it now passes;
-   * the off-versus-on delta is governed by 1.4.1, which asks that colour not be
-   * the SOLE carrier of state — and the thumb slides, so it never was. What is
-   * left is grey-off against orange-on, which is the ordinary switch idiom, in
-   * place of a near-white track nobody could see. No single value could have
-   * both: 3:1 against an oyster ground caps lightness at 0.258, and 3:1 against
-   * the primary fill needs 0.561 or more. The ranges do not meet.
-   *
-   * The prototype gives `.input` the same `var(--color-border)` as everything
-   * else, so this is a deliberate deviation from it, measured — one of four,
-   * beside dark `--color-popover`, `--color-destructive` and `--color-ring`. */
-  --color-input: rgba(17, 24, 26, 0.5);
+   * The prototype gives `.input` the same hairline as everything else, so this
+   * is a deliberate deviation from it, measured — one of the tokens the prism
+   * does not carry, with `--color-ring`, the destructive, selected and info
+   * groups and the hover steps, all derived below and measured the same way. */
+  --color-input: rgba(31, 26, 28, 0.52);
 
-  /* The focus ring is a state indicator, so 1.4.11's 3:1 applies to it too —
-   * and a focus ring nobody can see is worse than a resting border nobody can
-   * see. The ceremonial orange measured 2.90 on the card ground and 2.98 on
-   * muted, so it does not hold the job. This is the SECONDARY INK, which is
-   * where §6.2 puts active states ("teal and aqua carry navigation, active
-   * states") and what the prototype's own `.input:focus` uses
-   * (`border-color: var(--color-secondary)`). 4.91 / 4.49 / 4.62 / 5.12 across
-   * the four grounds. Declared as a hex rather than `var(--color-secondary-ink)`
-   * so the test measures the value that ships rather than a reference it would
-   * have to resolve. Keep the two in step.
+  /* The focus ring is a state indicator, so 1.4.11's 3:1 applies to it too.
+   * It is the SECONDARY INK, which is where the prism puts navigation and
+   * active states. 5.47:1 at its tightest over the light. Declared as a hex
+   * rather than `var(--color-secondary-ink)` so the test measures the value
+   * that ships rather than a reference it would have to resolve. Keep the two
+   * in step.
    *
-   * WHAT THIS DOES NOT FIX, and cannot: a ring drawn flush against a FILLED
-   * button. `components/ui/button.tsx` uses `ring-1` with no `ring-offset`, so
-   * the ring's inner edge abuts the fill. Its outer edge still meets the page
-   * ground at 4.91:1, which is what you actually perceive on the orange and
-   * terracotta fills — but `secondary` IS this teal, so a focused secondary
-   * button merely grows by a pixel in its own colour. No ring colour repairs
-   * that: clearing 3:1 on an oyster ground caps lightness at 0.258, clearing it
-   * on a fill at 0.154 demands 0.561 or more, and the two ranges are disjoint.
-   * It is a missing MECHANISM (an offset), not a wrong value, so it belongs to
-   * the component and not to this file. Latent today — nothing on this surface
-   * renders `<Button variant="secondary">` — and t-2 builds our own Button,
-   * which is where the offset should land. */
-  --color-ring: #17718a;
+   * A ring drawn flush against a FILLED button would vanish on `secondary`,
+   * which is this iris; `components/app/ui/button.tsx` draws an offset outline
+   * instead, so the indicator clears the ground and not the fill (t-2). */
+  --color-ring: #4a5590;
 
   /* ---- Actions ----------------------------------------------------------
-   * Burnt orange is the ceremonial accent: the lotus centre and the primary
-   * action, and very little else (§6.2). `--color-accent-ink` is the orange
-   * LINE colour and is deliberately NOT shadcn's `--color-accent`, which is a
-   * hover SURFACE — that role is filled by the pill wash below.
+   * Rose-bronze is the ceremonial accent: the lotus heart and the primary
+   * action, and very little else. `--color-accent-ink` is its LINE colour and
+   * is deliberately NOT shadcn's `--color-accent`, which is a hover SURFACE —
+   * that role is filled by the pill wash below. Iris carries navigation.
    */
-  --color-accent-ink: #c96f43;
-  --color-primary: #a85732;
-  /* THE HOVER OF A FILL IS A STEP OF THAT FILL, and it HOLDS ACROSS BOTH MODES
-   * — which is a correction to what this token said before t-2, made for the
-   * same reason t-18 separated the destructive fill from the destructive ink.
-   *
-   * The dark block used to lift this to §6.5's `#B5633B`. But `#B5633B` is
-   * §6.2's PRESSED step of the CEREMONIAL orange `#C96F43`, and the fill is
-   * `--color-primary` — a darker step of that same orange, chosen precisely
-   * because `#C96F43` cannot carry oyster text. Applying the ceremonial
-   * colour's pressed step to the fill made hover LIGHTER than rest, and the
-   * label fell from 4.54:1 to **3.84:1**. A hover state that drops a filled
-   * button below AA is the defect the token exists to prevent.
-   *
-   * So all three filled fills now dim by the same 2.75 points of lightness in
-   * both modes, and every hover measures ABOVE its resting value: primary
-   * 4.54 → 5.09, secondary 4.91 → 5.65, destructive 4.68 → 5.15. §6.5's
-   * "lightens by about 6% in dark" governs SURFACES — the pill wash and the
-   * accent below, which do exactly that. A ceremonial fill carrying a label is
-   * not one of those, and the two rules were being read as one. */
-  --color-primary-hover: #9c5130;
-  --color-primary-foreground: #f3f0ec;
-  --color-secondary: #17718a;
-  --color-secondary-hover: #15677e;
-  --color-secondary-foreground: #f3f0ec;
-  --color-secondary-ink: #17718a;
-  --color-secondary-wash: rgba(23, 113, 138, 0.11);
-  --color-user-bubble: #17718a;
+  --color-accent-ink: #b46e4e;
+  --color-primary: #8f5446;
+  /* THE HOVER OF A FILL IS A STEP OF THAT FILL, DARKER — never lighter, which
+   * once took a label to 3.84:1 (t-2). The prism moves the fills between
+   * themes, so each theme carries its own step, and every hover measures above
+   * its resting value: primary 5.66 → 6.50 light and 4.85 → 5.44 dark,
+   * secondary 5.66 → 6.21 and 5.17 → 5.67. */
+  --color-primary-hover: #834c3f;
+  --color-primary-foreground: #fff8f2;
+  --color-secondary: #55609a;
+  --color-secondary-hover: #505a91;
+  --color-secondary-foreground: #fff8f2;
+  --color-secondary-ink: #4a5590;
+  --color-secondary-wash: rgba(85, 96, 154, 0.12);
+  --color-user-bubble: #55609a;
 
   /* shadcn's `accent` is a hover surface — the pill wash plays that part. */
-  --color-accent: rgba(111, 115, 118, 0.07);
-  --color-accent-foreground: #282c2e;
+  --color-accent: rgba(92, 74, 82, 0.06);
+  --color-accent-foreground: #3a3236;
 
-  /* shadcn's `destructive` is the danger terracotta, and it HOLDS ACROSS BOTH
-   * MODES — §6.2 says the functional colours do, exactly as `--color-primary`
-   * does above. It is deliberately not wired to `--color-status-red`, which
-   * looks like the same colour: the status hues are badge tints that lighten in
-   * dark mode for use behind `-bg`/`-ink` pairs, and taking that lighter value
-   * as a BUTTON FILL put oyster text on it at 2.99:1.
+  /* shadcn's `destructive` is the danger fill, and it HOLDS ACROSS BOTH MODES.
+   * It is deliberately not wired to `--color-status-red`, which looks like the
+   * same colour: the status hues are badge tints that lighten in dark mode for
+   * use behind `-bg`/`-ink` pairs, and taking that lighter value as a BUTTON
+   * FILL is what once put oyster text on it at 2.99:1.
    *
-   * NOR is it §6.2's `#B75D52` itself, which measured 3.93:1 under oyster —
-   * below the design's own filled-button baseline. This is that terracotta
-   * darkened by five points of lightness (H 6.5°, S 41.2%, L 52% → 47%), giving
-   * 4.68:1, and it is the SAME MOVE the orange already makes one block up:
-   * `--color-accent-ink` keeps §6.2's named `#C96F43` while `--color-primary`
-   * is the darker step that carries a fill. The named terracotta is not lost —
-   * it is still `--color-status-red` and its `-ink`, which is where §6.2's
-   * danger hue is actually read as a colour rather than sat on. */
-  --color-destructive: #a95146;
-  --color-destructive-hover: #9f4c42;
-  --color-destructive-foreground: #f3f0ec;
+   * NOR is it the prism's status red `#B0605A` itself, which carries its label
+   * at 4.28:1. This is that red darkened three points of lightness — the move
+   * `--color-primary` makes on the accent — at 4.76:1 under either theme's
+   * label. The named red is not lost: it is still `--color-status-red`. */
+  --color-destructive: #aa5751;
+  --color-destructive-hover: #a1524c;
+  --color-destructive-foreground: #fff8f2;
   /* THE FILL IS NOT THE INK. `--color-destructive` is a shadcn token with two
-   * jobs — `bg-destructive` under oyster, and `text-destructive` on a page
-   * ground — and darkening it for the first made the second worse in dark mode
-   * (2.86:1 → 2.44:1 on the `bg-destructive/10` wash every form error uses).
-   * One token cannot do both: the fill must be dark enough to carry oyster,
-   * the ink light enough to be read on charcoal. See the `.text-destructive`
-   * rule after the dark block, which sends the ink role to
+   * jobs — `bg-destructive` under a pale label, and `text-destructive` on a
+   * page ground — and no one value does both: the fill must be dark enough to
+   * carry the label, the ink light enough to read on the dark ground. See the
+   * `.text-destructive` rule after the dark block, which sends the ink role to
    * `--color-status-red-ink`.
    *
-   * AND 4.68:1 IS THE RESTING FILL ONLY. `button.tsx` writes its hover as
-   * `hover:bg-destructive/90` — an alpha over whatever is behind — so on a
-   * light ground the hover fill composites to #B06157 and the label drops to
-   * 3.92:1, which is the gap this token was moved to close. `<Badge>`'s
-   * `/80` is 3.26:1.
-   *
-   * NOT closed by darkening this further, deliberately. The 90% composite only
-   * reaches 4.5:1 at a lightness of 0.42 — #97493F — which would put the
-   * RESTING fill at 5.53:1 and land ten points below §6.2's terracotta, a
-   * palette shift visible on every surface to buy a state that lasts as long
-   * as a pointer hovers. The badge's `/80` would still fail at 3.70.
-   *
-   * CLOSED IN t-2 BY `--color-destructive-hover` INSTEAD. The mechanism was a
-   * hover TOKEN all along — the accent already had one and shadcn's alpha-hover
-   * bypassed it. `components/app/ui/button.tsx` names the token on every filled
-   * variant, so no fill is ever composited against an unknown ground and the
-   * hover measures 5.15:1 rather than 3.92:1. `bg-primary/90` had the identical
-   * shape at 3.83:1 and is fixed by the same line.
-   *
-   * `<Badge variant="destructive">` still writes `/80` and still measures
-   * 3.26:1. That is shadcn's Badge, not ours, and no consumer surface renders
-   * it today — t-2 did not build a Badge, so fixing it here would be a token
-   * with no caller. It belongs to whichever task first puts a destructive badge
-   * on a consumer page. */
+   * `components/app/ui/button.tsx` names `--color-destructive-hover` on its
+   * filled variant rather than shadcn's `hover:bg-destructive/90`, so no fill is
+   * ever composited against an unknown ground. `<Badge variant="destructive">`
+   * still writes `/80`; that is shadcn's Badge, and no consumer surface renders
+   * it today. */
 
   /* ---- Status and tone -------------------------------------------------- */
-  --color-status-green: #457b6a;
-  --color-status-green-bg: rgba(69, 123, 106, 0.13);
-  --color-status-green-ink: #35604f;
-  --color-status-yellow: #c9a65d;
-  --color-status-yellow-bg: rgba(201, 166, 93, 0.24);
-  --color-status-yellow-ink: #7e6224;
-  --color-status-red: #b75d52;
-  --color-status-red-bg: rgba(183, 93, 82, 0.13);
-  --color-status-red-ink: #94433a;
-  --color-status-purple: #806c7b;
-  --color-status-purple-bg: rgba(128, 108, 123, 0.17);
-  --color-status-purple-ink: #63515f;
-  /* §6.2 names a fifth functional hue — info steel slate blue `#497AA8` — that
-   * the palette had no row for, because nothing consumed it until `Banner`'s
-   * `info` tone. It joins as a `-bg`/`-ink` trio like the four above rather
-   * than as a one-off, so the fifth tone is not a special case in the
-   * component. Measured: the base clears 3:1 as a dot and a border on all four
-   * grounds (3.65 tightest), and the ink clears 4.5:1 ON THE WASH — 5.27 at its
-   * tightest — not on the bare ground. That distinction is the one t-18's third
-   * review round caught: `Banner` paints its text on `-bg`, and a light ink
-   * measured against the ground behind that wash reads better than it looks. */
+  --color-status-green: #4f7d6c;
+  --color-status-green-bg: rgba(79, 125, 108, 0.14);
+  --color-status-green-ink: #375e50;
+  --color-status-yellow: #c29a55;
+  --color-status-yellow-bg: rgba(194, 154, 85, 0.22);
+  --color-status-yellow-ink: #775a22;
+  --color-status-red: #b0605a;
+  --color-status-red-bg: rgba(176, 96, 90, 0.14);
+  --color-status-red-ink: #904640;
+  --color-status-purple: #86708a;
+  --color-status-purple-bg: rgba(134, 112, 138, 0.17);
+  --color-status-purple-ink: #644f68;
+  /* The fifth functional hue, info steel slate blue, which `Banner`'s `info`
+   * tone reads and the prism does not carry. Unchanged by the prism, and
+   * re-measured over the light: the ink clears 4.5:1 ON ITS WASH (5.12 at its
+   * tightest) and the base clears 3:1 as a dot or an edge (3.54). */
   --color-status-blue: #497aa8;
   --color-status-blue-bg: rgba(73, 122, 168, 0.14);
   --color-status-blue-ink: #33567a;
 
   /* ---- Selection --------------------------------------------------------
-   * §6.2's heather amethyst `#806C7B` marks a selected chip. As a FILL under
-   * oyster it measures 4.25:1 — short of AA, and short for the same reason the
-   * terracotta was: §6.2 names a hue to be read, and a fill has to carry a
-   * label sitting on it. So it takes the move t-18 established and the orange
-   * made before that — identical hue and saturation, three points of lightness
-   * darker (L 46.3% → 43.3%), giving 4.73:1. The named amethyst is not lost:
-   * it is `--color-status-purple` above, which is where §6.2's colour is read
-   * rather than sat on. Holds across both modes, as every functional colour
-   * does.
-   *
-   * A token of its own rather than reusing `--color-status-purple`, because
-   * that one lightens in dark mode for badge use — the exact trap that put
-   * oyster on the status red at 2.99:1 before t-18. */
-  --color-selected: #786573;
-  --color-selected-hover: #705f6c;
-  --color-selected-foreground: #f3f0ec;
+   * A selected chip is the prism's heather `#86708A` — but as a FILL under the
+   * pale label that is 4.25:1. So it takes the same move as the destructive
+   * fill: identical hue and saturation, three points darker, 4.72:1. The named
+   * heather is `--color-status-purple` above, where it is read rather than sat
+   * on. Holds across both modes, as every functional fill does, and is a token
+   * of its own because the status hues LIGHTEN in dark for badge use. */
+  --color-selected: #7e6982;
+  --color-selected-hover: #76637a;
+  --color-selected-foreground: #fff8f2;
 
   /* ---- Washes and scrim ------------------------------------------------- */
-  --color-pill: rgba(111, 115, 118, 0.07);
-  --color-pill-hover: rgba(111, 115, 118, 0.13);
-  --color-scrim: rgba(17, 24, 26, 0.42);
+  --color-pill: rgba(92, 74, 82, 0.06);
+  --color-pill-hover: rgba(92, 74, 82, 0.11);
+  --color-scrim: rgba(31, 26, 28, 0.36);
 
   /* ---- The cinema: the video lightbox, dark in both themes -------------- */
-  /* The prototype's `.videocard` frame and `#lightbox` are near-black with
-     light text whatever the theme, as a cinema is, so these are declared once
-     and shared (f-resources t-119). `-fade` is the still's bottom gradient,
-     `-veil` the play disc over it, `-scrim` the lightbox ground and the
-     length chip. */
-  --color-cinema: #11181a;
-  --color-cinema-ink: #f3f0ec;
-  --color-cinema-scrim: rgba(8, 11, 12, 0.78);
-  --color-cinema-veil: rgba(17, 24, 26, 0.62);
-  --color-cinema-fade: rgba(17, 24, 26, 0.42);
-  --color-cinema-line: rgba(243, 240, 236, 0.3);
-  --color-cinema-hover: rgba(243, 240, 236, 0.12);
+  /* The `.videocard` frame and `#lightbox` are near-black with light text
+     whatever the theme, as a cinema is, so these are declared once and shared
+     (f-resources t-119). In the prism the dark is dusk, a warm umber, where it
+     was deep water. `-fade` is the still's bottom gradient, `-veil` the play
+     disc over it, `-scrim` the lightbox ground and the length chip. */
+  --color-cinema: #1e1614;
+  --color-cinema-ink: #fbf5ee;
+  --color-cinema-scrim: rgba(14, 10, 9, 0.78);
+  --color-cinema-veil: rgba(30, 22, 20, 0.62);
+  --color-cinema-fade: rgba(30, 22, 20, 0.42);
+  --color-cinema-line: rgba(251, 245, 238, 0.3);
+  --color-cinema-hover: rgba(251, 245, 238, 0.12);
 
   /* ---- The one data hue, stepped for this ground ------------------------ */
-  --color-bar: #0b80a0;
-  --color-bar-idle: rgba(11, 128, 160, 0.16);
+  --color-bar: #5866a8;
+  --color-bar-idle: rgba(88, 102, 168, 0.16);
 
-  /* ---- The lotus (§6.9; redrawn in t-134) ---------------------------------
-   * The signature mark's own palette: teal petals over lily pads and sage
-   * ripples, around a crown of orange stamens. §6.2 names the deep teal, the
-   * mid teal, the light aqua and the sage; the outer edge teal, the vein, the
-   * stamens' oranges and glint, the halation and the pads are named nowhere
-   * but the lotus model (`components/app/ui/lotus-model.ts`). The fan's mid
-   * and inner edge colours and its core's deep stop went with the fan.
+  /* ---- The lotus (§6.9; redrawn in t-134, retinted in t-177) ---------------
+   * The signature mark's own palette: in the prism, iris petals around a
+   * rose-gold heart, on dusk where the pads were deep water. The values are the
+   * prism's; the roles are named nowhere but the lotus model
+   * (`components/app/ui/lotus-model.ts`).
    *
    * Change any of these and run `npm run lotus:assets`: the still marks are
    * baked from them, and a test fails until they are re-baked.
@@ -341,33 +307,31 @@
    * WHY TOKENS AND NOT LITERALS IN THE MODEL. The lotus files are the only
    * consumers, so a literal would have worked and a grep guard in the
    * component tests would have had to make an exception for exactly the file
-   * the guard exists for. Naming them here is what lets that
-   * guard be absolute, and it is where the rest of the design's literals live.
+   * the guard exists for. Naming them here is what lets that guard be absolute.
    *
    * THEY HOLD ACROSS BOTH MODES, and deliberately so: the lotus is a mark, not
-   * a surface. It is the same bloom on oyster and on charcoal, exactly as the
-   * wordmark is. Nothing below is restated in the dark block.
+   * a surface, and the still marks are baked ONCE, which is safe only because
+   * the tokens do not move with the theme. The prism prototype restates the
+   * ripple and the vein in dark; that is not taken here, and is recorded in
+   * `.context/app/brand-theme.md` as a deviation.
    *
-   * NOT WIRED TO `--color-secondary` and `--color-status-green`, though the
-   * outer petal and the near ripple are byte-identical to them today. Those two
-   * are UI roles and can be re-tuned for contrast — `--color-ring` moved onto
-   * the teal in t-18, and a future contrast pass could move the teal itself.
-   * The bloom must not follow it. Same colour, different reason to exist.
+   * NOT WIRED TO `--color-secondary`, though the outer petal is byte-identical
+   * to it today. That is a UI role and can be re-tuned for contrast; the bloom
+   * must not follow it. Same colour, different reason to exist.
    */
-  --color-lotus-petal-outer: #17718a;
-  --color-lotus-petal-outer-edge: #0e5064;
-  --color-lotus-petal-mid: #3e96ae;
-  --color-lotus-petal-inner: #7cc0d6;
-  --color-lotus-vein: #a8d6e5;
-  --color-lotus-core-light: #f0a078;
-  --color-lotus-core: #c96f43;
-  --color-lotus-glint: #f5b896;
-  --color-lotus-ripple: #457b6a;
-  --color-lotus-ripple-far: #6fa88f;
-  /* The lily pads behind the bloom (t-134): the outer edge teal deepened. */
-  --color-lotus-pad: #042935;
-  --color-lotus-pad-edge: #0e5265;
-  --color-lotus-halation: rgba(124, 192, 214, 0.2);
+  --color-lotus-petal-outer: #55609a;
+  --color-lotus-petal-outer-edge: #3d4789;
+  --color-lotus-petal-mid: #7f86be;
+  --color-lotus-petal-inner: #b4bce4;
+  --color-lotus-vein: #9aa2d6;
+  --color-lotus-core-light: #f2c6a6;
+  --color-lotus-core: #b86e4c;
+  --color-lotus-glint: #f6d2b6;
+  --color-lotus-ripple: #7f86be;
+  --color-lotus-ripple-far: #a9a2c8;
+  --color-lotus-pad: #1e1614;
+  --color-lotus-pad-edge: #3b3045;
+  --color-lotus-halation: rgba(242, 198, 166, 0.22);
 
   /* ---- Radii (§6.4) -----------------------------------------------------
    * These restate Tailwind's own scale, so `rounded-md` / `rounded-lg` /
@@ -387,12 +351,13 @@
   --radius-3xl: 28px;
   --radius-pill: 999px;
 
-  /* ---- Elevation (§6.4) -------------------------------------------------
-   * Two layers only, plus the lotus centre's orange bloom. No inner shadows.
+  /* ---- Elevation --------------------------------------------------------
+   * Two layers only, plus the lotus heart's rose-bronze bloom. No inner
+   * shadows. The prism's are warm in light and opaque black in dark.
    */
-  --shadow-rest: 0 1px 2px rgba(17, 24, 26, 0.04), 0 8px 24px rgba(17, 24, 26, 0.06);
-  --shadow-lift: 0 2px 6px rgba(17, 24, 26, 0.06), 0 24px 60px rgba(17, 24, 26, 0.16);
-  --shadow-bloom: 0 0 64px rgba(201, 111, 67, 0.25);
+  --shadow-rest: 0 1px 2px rgba(80, 56, 52, 0.05), 0 10px 30px rgba(120, 90, 80, 0.1);
+  --shadow-lift: 0 2px 6px rgba(80, 56, 52, 0.07), 0 28px 70px rgba(100, 72, 66, 0.2);
+  --shadow-bloom: 0 0 64px rgba(180, 110, 78, 0.25);
 
   /* ---- Motion (§6.5) ---------------------------------------------------- */
   --ease-brand: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -420,121 +385,190 @@
 /* ============================================================= consumer: dark
  * `.dark` sits on `<html>` beside `data-surface`, so this is a COMPOUND
  * selector (note 2 above). Only tokens that actually change are restated.
+ * The prism's dark is amber smoke: an umber ground lit warm.
  */
 [data-surface='consumer'].dark {
   color-scheme: dark;
 
+  /* ---- The light ---------------------------------------------------------
+   * In dark the rays SCREEN onto the ground rather than painting over it.
+   *
+   * THE SPARKS STAND DOWN IN DARK, and this is a deviation from the prototype
+   * (`rgba(255, 228, 196, 0.65)`), measured. A spark screened onto the umber
+   * makes a near-white point, and where one sits behind words no ink this
+   * palette carries survives it: muted text measured 1.01:1 over the veil,
+   * still 3.15:1 had the spark been drawn beneath it, and 3.31:1 on a muted
+   * ground, and dimming the spark does not close it —
+   * at a tenth of its strength it still measured 4.40. The sparks sit at the
+   * viewport's edges, which on every screen narrower than about 1400px is
+   * where a line of text begins. So the dark spark is transparent rather than
+   * dim. In light a spark is white on a pale ground and only ever RAISES dark
+   * text's contrast, so it stays.
+   */
+  --color-ground: #2c2421;
+  --glow-1: rgba(176, 112, 74, 0.55);
+  --glow-2: rgba(122, 92, 84, 0.55);
+  --glow-3: rgba(96, 84, 92, 0.5);
+  --fold: rgba(10, 6, 5, 0.3);
+  --ray-core: rgba(255, 226, 190, 0.7);
+  --ray-warm: rgba(222, 140, 86, 0.45);
+  --ray-cool: rgba(150, 140, 190, 0.3);
+  --ray-blend: screen;
+  --ray-opacity: 0.4;
+  --spark: rgba(255, 228, 196, 0);
+  --veil: rgba(40, 32, 29, 0.66);
+  /* In dark the veil already calms the light behind words, and a dark halo
+   * would read as a smudge. */
+  --ground-halo: none;
+
   /* ---- Grounds and ink -------------------------------------------------- */
-  --color-background: #282c2e;
-  --color-foreground: #e3dad1;
-  --color-heading: #f3f0ec;
-  --color-card: #3a3f42;
-  --color-card-foreground: #e3dad1;
-  --color-muted: #323638;
-  --color-muted-foreground: #a8aeb1;
-  /* One step darker than the prototype's #3F4446, which measured 4.40:1
-   * against `--color-muted-foreground` — the only ground of the four that
-   * missed D5's 4.5:1. At #3D4245 it is 4.53:1 and still reads lighter than
-   * the card, so the popover keeps its lift. Popovers are where secondary text
-   * lives most: `<FieldHelp>` renders its whole body as muted text on this
-   * ground, and CLAUDE.md mandates one on every non-trivial form field. */
-  --color-popover: #3d4245;
-  --color-popover-foreground: #e3dad1;
+  --color-background: rgba(40, 32, 29, 0.74);
+  --color-foreground: #eadbcd;
+  --color-heading: #fbf3ea;
+  --color-card: rgba(58, 47, 42, 0.78);
+  --color-card-foreground: #eadbcd;
+  --color-muted: rgba(46, 37, 33, 0.7);
+  /* 4.62:1 at its tightest over the light (on a card, under a ray's core with
+   * the veil off), 4.67 on the bare ground inside the veil. */
+  --color-muted-foreground: #c2ad9b;
+  --color-popover: #3a302c;
+  --color-popover-foreground: #eadbcd;
+  --color-sheet: #302724;
 
-  /* Hairline drops to 14%, and cards gain a border at 8% so they separate from
-   * the near-black ground (§6.4). */
-  --color-border: rgba(227, 218, 209, 0.14);
-  --color-divider: rgba(227, 218, 209, 0.08);
-  --color-card-border: rgba(227, 218, 209, 0.08);
+  --read-background: rgba(44, 36, 32, 0.92);
+  --read-card: rgba(56, 46, 41, 0.95);
+  --read-muted: rgba(40, 33, 29, 0.92);
+  --app-background: rgba(40, 32, 29, 0.58);
+  --app-card: rgba(60, 49, 44, 0.66);
+  --app-muted: rgba(44, 35, 31, 0.48);
 
-  /* The control boundary again, on the warm stone rather than the ink — see the
-   * light block for why it is not the hairline, and for the switch it also
-   * fills. 0.52 composites to 3.89 / 3.35 / 3.60 / 3.24 against background,
-   * card, muted and popover; 0.50 clears 3:1 too but only by 0.11 on the
-   * popover ground, and the popover is where <FieldHelp> puts a control most
-   * often. The two themes are two points apart because the grounds are: dark's
-   * four span a narrower range under a lighter mark. */
-  --color-input: rgba(227, 218, 209, 0.52);
+  --color-border: rgba(242, 214, 190, 0.16);
+  --color-divider: rgba(242, 214, 190, 0.09);
+  --color-card-border: rgba(255, 224, 196, 0.11);
 
-  /* Brand aqua — the dark half of the secondary ink, which is what carries the
-   * focus ring (light block, which also records the filled-button case this
-   * cannot reach). 6.96 / 5.26 / 6.03 / 5.02 across the four grounds.
-   * `--color-secondary-ink` below holds the same value; keep them in step. */
-  --color-ring: #7cc0d6;
+  /* The control boundary again, on the warm ink rather than the heading — see
+   * the light block for why it is not the hairline. 0.52 clears 3:1 over every
+   * ground the dark light makes, 3.24 at its tightest (a card). */
+  --color-input: rgba(234, 219, 205, 0.52);
+
+  /* The dark secondary ink, which is what carries the focus ring. 5.69:1 at its
+   * tightest. `--color-secondary-ink` below holds the same value. */
+  --color-ring: #b9c2ee;
 
   /* ---- Actions ----------------------------------------------------------
-   * Only what CHANGES appears here. The orange itself, the teal fill and both
-   * their foregrounds hold across the two modes (§6.2) and are already declared
-   * in the light block above, which matches in dark mode too.
-   *
-   * What moves: the primary's hover step INVERTS — it dims in light and lifts in
-   * dark, never brightening on press (§6.5) — and the teal INK lightens to aqua
-   * so it still reads on charcoal.
+   * The prism moves the fills in dark — the bronze warms towards copper, the
+   * iris lifts a step — so each carries its own darker hover here. The
+   * destructive and selected fills hold across both modes and are not restated.
    */
-  /* `--color-primary-hover` USED TO BE RESTATED HERE as §6.5's `#B5633B`, and
-   * its absence now is the change, not an omission. That value is the pressed
-   * step of the ceremonial `#C96F43`, not of the fill; applied to the fill it
-   * made hover lighter than rest and dropped the label to 3.84:1. The light
-   * block's dim holds in both modes — see the comment at the token itself. */
-  --color-secondary-ink: #7cc0d6;
-  --color-secondary-wash: rgba(124, 192, 214, 0.13);
+  --color-accent-ink: #e39a62;
+  --color-primary: #a6582f;
+  --color-primary-hover: #9a522c;
+  --color-primary-foreground: #fff6ee;
+  --color-secondary: #5a65a0;
+  --color-secondary-hover: #555f97;
+  --color-secondary-foreground: #fff6ee;
+  --color-secondary-ink: #b9c2ee;
+  --color-secondary-wash: rgba(185, 194, 238, 0.13);
+  --color-user-bubble: #5a65a0;
 
-  --color-accent: rgba(227, 218, 209, 0.06);
-  --color-accent-foreground: #e3dad1;
+  --color-accent: rgba(242, 214, 190, 0.06);
+  --color-accent-foreground: #eadbcd;
 
   /* ---- Status and tone -------------------------------------------------- */
-  --color-status-green: #5c9683;
-  --color-status-green-bg: rgba(92, 150, 131, 0.18);
-  --color-status-green-ink: #9cc8b6;
-  --color-status-yellow: #d6b673;
-  --color-status-yellow-bg: rgba(214, 182, 115, 0.16);
-  --color-status-yellow-ink: #e3ca95;
-  --color-status-red: #c97468;
-  --color-status-red-bg: rgba(201, 116, 104, 0.17);
-  --color-status-red-ink: #e0a197;
-  --color-status-purple: #9c8595;
-  --color-status-purple-bg: rgba(156, 133, 149, 0.2);
-  --color-status-purple-ink: #c8b4c3;
+  --color-status-green: #6a9c88;
+  --color-status-green-bg: rgba(106, 156, 136, 0.18);
+  --color-status-green-ink: #a6cdbc;
+  --color-status-yellow: #d9b470;
+  --color-status-yellow-bg: rgba(217, 180, 112, 0.16);
+  --color-status-yellow-ink: #e8cc94;
+  --color-status-red: #cf7a6a;
+  --color-status-red-bg: rgba(207, 122, 106, 0.18);
+  --color-status-red-ink: #e8a598;
+  --color-status-purple: #a48a9e;
+  --color-status-purple-bg: rgba(164, 138, 158, 0.2);
+  --color-status-purple-ink: #d0bacb;
+  /* Unchanged by the prism; 4.69:1 on its wash at the tightest, 3.47 as a base. */
   --color-status-blue: #6f9dc6;
   --color-status-blue-bg: rgba(111, 157, 198, 0.18);
-  /* Two steps lighter than the value the bare-ground arithmetic suggested:
-     `#A3C2DC` measures 5.61 on the dark muted ground and 4.31 on the same
-     ground once the wash is over it. 4.76 at its tightest. */
   --color-status-blue-ink: #b0cbe1;
 
   /* ---- Washes and scrim ------------------------------------------------- */
-  --color-pill: rgba(227, 218, 209, 0.06);
-  --color-pill-hover: rgba(227, 218, 209, 0.12);
-  --color-scrim: rgba(8, 11, 12, 0.62);
+  --color-pill: rgba(242, 214, 190, 0.06);
+  --color-pill-hover: rgba(242, 214, 190, 0.12);
+  --color-scrim: rgba(10, 6, 5, 0.62);
 
-  /* ---- Data hue, restepped for the charcoal ground ---------------------- */
-  --color-bar: #289fc0;
-  --color-bar-idle: rgba(40, 159, 192, 0.18);
+  /* ---- Data hue: amber on the umber ground ------------------------------ */
+  --color-bar: #e39a62;
+  --color-bar-idle: rgba(227, 154, 98, 0.18);
 
   /* ---- Elevation: opaque black, since the warm shadow disappears here ---- */
-  --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.28), 0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.32), 0 24px 60px rgba(0, 0, 0, 0.48);
+  --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.32);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.34), 0 28px 70px rgba(0, 0, 0, 0.52);
+}
+
+/* ======================================================= the page and the glass
+ * Three rules that are not tokens, and why each one cannot be.
+ *
+ * THE PAGE IS THE GROUND. `globals.css` paints `<body>` with
+ * `--color-background`, which in the prism is glass — and glass over nothing
+ * is the browser's white. The ground is opaque, so it goes on `<body>` instead,
+ * from where it propagates to the canvas, and the prism ground
+ * (`components/app/ui/prism-ground.tsx`) paints above it at `z-index: -1`.
+ */
+[data-surface='consumer'] body {
+  background-color: var(--color-ground);
+}
+
+/* ANYTHING THAT RIDES OVER OTHER CONTENT IS A SOLID SHEET, never glass. A
+ * dialog's own ground is `bg-background` (`components/ui/dialog.tsx`,
+ * `alert-dialog.tsx` — Sunrise's), and glass there would show the page through
+ * the dialog. Re-pointing the three glass tokens inside it keeps every class
+ * it uses and makes them opaque: a token re-scope, not a new utility, which is
+ * note 4's rule. Keyed on the ARIA role, which every Radix dialog carries and
+ * which says exactly what the rule is about. */
+[data-surface='consumer'] [role='dialog'],
+[data-surface='consumer'] [role='alertdialog'] {
+  --color-background: var(--color-sheet);
+  --color-card: var(--color-popover);
+  --color-muted: var(--color-sheet);
+}
+
+/* A CARD IS GLASS: it blurs the light behind it, so a bright streak reads as a
+ * glow through it rather than as a line under the words. The blur is not a
+ * colour, so it cannot ride on `--color-card`; it rides on the class that
+ * paints that colour, which is the only way to reach every card — ours and
+ * shadcn's — without editing them. Only cards: a backdrop filter also makes an
+ * element the containing block for its fixed descendants, and `bg-background`
+ * is the ground of whole page frames. */
+[data-surface='consumer'] .bg-card {
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+}
+
+/* TEXT STRAIGHT ON THE GROUND carries the ground halo — on the public site,
+ * which is where text sits on the light. The shell's text sits on panes. The
+ * site is recognised by its ground (`data-prism='site'`) rather than by a
+ * marker on the layout, so the rule needs nothing from `app/(public)/layout.tsx`. */
+[data-surface='consumer'] body:has([data-prism='site']) main :is(p, h1, h2, h3, li, dt, dd) {
+  text-shadow: var(--ground-halo);
 }
 
 /* ================================================== the destructive ink role
- * ONE OVERRIDE OF AN EXISTING UTILITY, and the only one in this file — so it
- * needs its reasons.
+ * ONE OVERRIDE OF AN EXISTING UTILITY'S COLOUR, so it needs its reasons.
  *
  * `--color-destructive` carries two roles that pull in opposite directions.
- * `bg-destructive` is a FILL that must be dark enough to hold oyster text
- * (4.68:1 at `#A95146`); `text-destructive` is INK that must be light enough to
- * be read on charcoal. Twenty consumer-surface components use the second —
+ * `bg-destructive` is a FILL that must be dark enough to hold its pale label
+ * (4.76:1 at `#AA5751`); `text-destructive` is INK that must be light enough to
+ * be read on the dark ground. Twenty consumer-surface components use the second —
  * every form's error banner (`bg-destructive/10 text-destructive`), the avatar
- * upload's error line, the delete-account confirmation — and at the fill value
- * it measured 2.44:1 on that wash in dark mode. There is no value that serves
- * both roles, for the same reason a ring cannot clear both a ground and a fill.
+ * upload's error line, the delete-account confirmation. There is no value that
+ * serves both roles, for the same reason a ring cannot clear both a ground and
+ * a fill.
  *
  * The palette already carries the mode-aware answer: `--color-status-red-ink`
- * is `#94433A` light and `#E0A197` dark, precisely because a status colour is
- * READ rather than sat on. Pointing the text role at it gives 5.92 / 5.42 /
- * 5.57 / 6.18 in light and 6.52 / 4.93 / 5.65 / 4.71 in dark, against the four
- * grounds — every one of the eight clear of AA, where six of the eight failed
- * before this file existed at all.
+ * is `#904640` light and `#E8A598` dark, precisely because a status colour is
+ * READ rather than sat on. Pointed at it, the text role measures 5.22:1 at its
+ * tightest in light and 4.86:1 in dark, over the light.
  *
  * WHY A RULE AND NOT A TOKEN: `text-destructive` is generated from
  * `--color-destructive`, so the only way to separate the two roles without
