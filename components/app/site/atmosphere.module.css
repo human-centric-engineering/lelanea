@@ -231,7 +231,9 @@
  * rings spreading slowly from beneath it, and the way in. It follows the page
  * theme like the bands above it (t-178, the prism) — a pale pool in light, a
  * deepening of the umber in dark — rather than going dark in both as the deep
- * teal water did; edged at the top with the bands' etched line. The ground is
+ * teal water did. It draws no top edge of its own: it opens straight off the
+ * last band above it, whose etched line is the division, and a second line
+ * here doubled the seam (t-178). The ground is
  * tokens (`--closing-*`, `app/brand-theme.css`), so the theme moves it.
  */
 .closing {
@@ -245,8 +247,6 @@
   overflow: hidden;
   background:
     radial-gradient(48% 42% at 50% 46%, var(--closing-glow), transparent 75%), var(--closing-base);
-  border-top: 1px solid var(--band-line);
-  box-shadow: 0 -1px 0 var(--band-edge);
 }
 
 .pondRings {

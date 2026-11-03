@@ -18,9 +18,12 @@
      centres as a block while its contents do not. */
   display: grid;
   grid-template-columns: 1fr;
-  gap: clamp(32px, 5vw, 72px);
+  /* Named, because the dusk sky below is measured from both. */
+  --hero-top: clamp(44px, 6vw, 76px);
+  --hero-gap: clamp(32px, 5vw, 72px);
+  gap: var(--hero-gap);
   align-items: start;
-  padding-top: clamp(44px, 6vw, 76px);
+  padding-top: var(--hero-top);
   text-align: center;
 }
 
@@ -96,29 +99,61 @@
  * In light mode the top of the page is a dusk sky (t-178, the prism): light
  * needs dark behind it, so the flower opens on a full-width band of twilight
  * lavender, deep enough for its light to show and light enough to sit with the
- * pale page beneath. The page's light streaks are drawn into it, drifting
- * slowly; still for anyone who asks for less motion. It begins at the bar's
- * lower edge — the hero's top padding above the column — which is why the bar
- * is a solid sheet in light (`site.module.css`), and it ends on the bands' own
- * etched line. Dark mode has no sky: the whole page is dusk already.
+ * pale page beneath. It begins at the bar's lower edge — the hero's top padding
+ * above the column — which is why the bar is a solid sheet in light
+ * (`site.module.css`), and it ends halfway down the hero's gap on the bands'
+ * own etched line. Both measures are the hero's own (`--hero-top`,
+ * `--hero-gap`), so the sky follows them. Dark mode has no sky: the whole page
+ * is dusk already.
  *
  * Isolated, so the sky at `z-index: -1` stays beneath the halo, the water and
  * the flower inside this column rather than dropping under the page.
  */
+.sky {
+  display: none;
+}
+
 :global(html:not(.dark)) .bloom {
   isolation: isolate;
 }
 
-:global(html:not(.dark)) .bloom::after {
-  content: '';
+:global(html:not(.dark)) .sky {
+  display: block;
   position: absolute;
   z-index: -1;
-  top: calc(-1 * clamp(44px, 6vw, 76px));
-  bottom: -36px;
+  top: calc(-1 * var(--hero-top));
+  bottom: calc(-0.5 * var(--hero-gap));
   left: 50%;
   width: 100vw;
   translate: -50% 0;
+  overflow: hidden;
   pointer-events: none;
+  background:
+    radial-gradient(30% 34% at 50% 74%, var(--sky-glow-warm), transparent 70%),
+    radial-gradient(55% 60% at 50% 55%, var(--sky-glow-cool), transparent 75%),
+    linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-low) 100%);
+  border-bottom: 1px solid var(--band-line);
+  box-shadow: 0 1px 0 var(--band-edge);
+}
+
+/*
+ * The page's light streaks, drawn into the sky and drifting slowly; still for
+ * anyone who asks for less motion. Each drifting set is a layer wider than the
+ * sky, moved by `transform`, so the compositor slides it rather than the page
+ * repainting the whole sky every frame. Two layers, because the streaks drift
+ * in opposite directions.
+ */
+:global(html:not(.dark)) .sky::before,
+:global(html:not(.dark)) .sky::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+:global(html:not(.dark)) .sky::before {
+  width: 160%;
   background:
     linear-gradient(
       118deg,
@@ -129,59 +164,54 @@
       transparent 45%
     ),
     linear-gradient(
-      152deg,
-      transparent 52%,
-      color-mix(in srgb, var(--sky-streak-warm) 80%, transparent) 59%,
-      color-mix(in srgb, var(--sky-streak) 80%, transparent) 61%,
-      color-mix(in srgb, var(--sky-streak-cool) 83%, transparent) 63%,
-      transparent 70%
-    ),
-    linear-gradient(
       68deg,
       transparent 8%,
       color-mix(in srgb, var(--sky-streak) 45%, transparent) 16%,
       color-mix(in srgb, var(--sky-streak-cool) 50%, transparent) 19%,
       transparent 27%
-    ),
-    radial-gradient(30% 34% at 50% 74%, var(--sky-glow-warm), transparent 70%),
-    radial-gradient(55% 60% at 50% 55%, var(--sky-glow-cool), transparent 75%),
-    linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-low) 100%);
-  background-size:
-    160% 100%,
-    170% 100%,
-    150% 100%,
-    100% 100%,
-    100% 100%,
-    100% 100%;
-  border-bottom: 1px solid var(--band-line);
-  box-shadow: 0 1px 0 var(--band-edge);
+    );
+}
+
+:global(html:not(.dark)) .sky::after {
+  width: 170%;
+  translate: -41% 0;
+  background: linear-gradient(
+    152deg,
+    transparent 52%,
+    color-mix(in srgb, var(--sky-streak-warm) 80%, transparent) 59%,
+    color-mix(in srgb, var(--sky-streak) 80%, transparent) 61%,
+    color-mix(in srgb, var(--sky-streak-cool) 83%, transparent) 63%,
+    transparent 70%
+  );
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  :global(html:not(.dark)) .bloom::after {
-    animation: sky-light 48s ease-in-out infinite alternate;
+  :global(html:not(.dark)) .sky::before {
+    animation: sky-drift-west 48s ease-in-out infinite alternate;
+  }
+
+  :global(html:not(.dark)) .sky::after {
+    animation: sky-drift-east 48s ease-in-out infinite alternate;
   }
 }
 
-@keyframes sky-light {
+@keyframes sky-drift-west {
   from {
-    background-position:
-      0% 0,
-      100% 0,
-      20% 0,
-      0 0,
-      0 0,
-      0 0;
+    translate: 0 0;
   }
 
   to {
-    background-position:
-      60% 0,
-      40% 0,
-      80% 0,
-      0 0,
-      0 0,
-      0 0;
+    translate: -22.5% 0;
+  }
+}
+
+@keyframes sky-drift-east {
+  from {
+    translate: -41% 0;
+  }
+
+  to {
+    translate: -16.5% 0;
   }
 }
 
@@ -301,15 +331,6 @@
   }
 }
 
-/* The hero's pool fades out into the side margins and may reach past the
-   window's edge on a narrower screen. The whole page is clipped at the WINDOW
-   (a full-width wrapper), not at the hero, so the fade is never cut short and
-   the page never scrolls sideways for it. `clip`, not `hidden`: it creates no
-   scroll container, so the sticky elements below keep working. */
-.homeClip {
-  overflow-x: clip;
-}
-
 /* The bloom's column stacks the flower and, beneath it, who made this. */
 .bloom {
   flex-direction: column;
@@ -408,7 +429,8 @@
 
 /* The journey carries her flower-of-life drawing, faint, to the right of the
    path on a desktop. Multiplied, so its white ground vanishes into the band
-   (which the band's isolation keeps it blending with, not the page beneath);
+   (`bands.module.css`, whose isolation keeps it blending with the band, not
+   the page beneath);
    gone in dark mode, where a multiply would paint it black, and gone below
    the desktop width, where the path needs the whole column. */
 .journey {
@@ -801,98 +823,4 @@
   .chapterBody p {
     font-size: 18.5px;
   }
-}
-
-/* ================================================================== bands
- * Three sections run full width in a band of colour, cool to warm down the
- * page (t-178, the prism): "what this is" in iris, the journey in blush, her
- * channels in apricot. Each band is a wash of its ink over a light frosting of
- * the sheet, so the prism's light still reads through it, edged top and bottom
- * by a fine line like etched glass. A band needs no rule: its edge divides it.
- *
- * The band is drawn BEHIND the section, as a `100vw` pseudo-element centred on
- * it, and the content keeps the page's measure. The site's `<main>` clips the
- * page sideways (`app/brand-theme.css`), so the band never makes it scroll.
- * Each wash is written out per band and per theme, not carried in a custom
- * property: the stylesheets' token guard holds every `var()` to a token the
- * theme declares.
- */
-.tintCool,
-.tintBlush,
-.tintWarm {
-  position: relative;
-  isolation: isolate;
-  border-top: 0;
-}
-
-.tintCool::before,
-.tintBlush::before,
-.tintWarm::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 100vw;
-  translate: -50% 0;
-  pointer-events: none;
-  border-block: 1px solid var(--band-line);
-  box-shadow:
-    0 -1px 0 var(--band-edge),
-    0 1px 0 var(--band-edge);
-}
-
-.tintCool::before {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--color-secondary-ink) 9%, transparent),
-      color-mix(in srgb, var(--color-secondary-ink) 9%, transparent)
-    ),
-    color-mix(in srgb, var(--color-sheet) 52%, transparent);
-}
-
-.tintBlush::before {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--color-status-purple) 10%, transparent),
-      color-mix(in srgb, var(--color-status-purple) 10%, transparent)
-    ),
-    color-mix(in srgb, var(--color-sheet) 64%, transparent);
-}
-
-.tintWarm::before {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--color-accent-ink) 10%, transparent),
-      color-mix(in srgb, var(--color-accent-ink) 10%, transparent)
-    ),
-    color-mix(in srgb, var(--color-sheet) 52%, transparent);
-}
-
-:global(html.dark) .tintCool::before {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--color-secondary-ink) 8%, transparent),
-      color-mix(in srgb, var(--color-secondary-ink) 8%, transparent)
-    ),
-    color-mix(in srgb, var(--color-sheet) 58%, transparent);
-}
-
-:global(html.dark) .tintBlush::before {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--color-status-purple) 12%, transparent),
-      color-mix(in srgb, var(--color-status-purple) 12%, transparent)
-    ),
-    color-mix(in srgb, var(--color-sheet) 68%, transparent);
-}
-
-:global(html.dark) .tintWarm::before {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--color-accent-ink) 9%, transparent),
-      color-mix(in srgb, var(--color-accent-ink) 9%, transparent)
-    ),
-    color-mix(in srgb, var(--color-sheet) 58%, transparent);
 }

@@ -155,6 +155,9 @@
    * Each band's own wash is mixed from an ink in its module. */
   --band-line: rgba(255, 255, 255, 0.5);
   --band-edge: rgba(85, 96, 154, 0.1);
+  /* The blush band's ink: the prism's heather, held as a band token of its
+   * own so retuning the status purple for its badges never recolours a band. */
+  --band-blush-ink: #86708a;
   /* The home page's closing band follows the theme: a soft pool of light
    * behind the flower over a pale base, not deep water. */
   --closing-base: rgba(226, 220, 238, 0.5);
@@ -468,6 +471,7 @@
 
   --band-line: rgba(255, 232, 210, 0.16);
   --band-edge: rgba(0, 0, 0, 0.4);
+  --band-blush-ink: #a48a9e;
   --closing-base: rgba(16, 11, 9, 0.42);
   --closing-glow: rgba(120, 112, 178, 0.16);
 

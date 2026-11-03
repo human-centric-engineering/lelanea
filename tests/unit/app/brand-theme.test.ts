@@ -456,7 +456,13 @@ describe('app/brand-theme.css', () => {
     // The bands' etched line and the closing pool change between the themes —
     // a white line on the pale page, a warm one on the umber — so each needs a
     // light value AND a dark one, or the light theme's would paint in dark.
-    const BOTH_THEMES = ['--band-line', '--band-edge', '--closing-base', '--closing-glow'];
+    const BOTH_THEMES = [
+      '--band-line',
+      '--band-edge',
+      '--band-blush-ink',
+      '--closing-base',
+      '--closing-glow',
+    ];
     // The dusk sky exists in light only (`home.module.css` keys it to
     // `html:not(.dark)`), so its tokens are declared once.
     const LIGHT_ONLY = [

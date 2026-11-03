@@ -1,0 +1,103 @@
+/*
+ * The public pages' bands (t-178, the prism): a section run full width in a
+ * band of colour — iris, blush or apricot, cool to warm down the page. Shared
+ * by the home page, `/lelanea` and `/data`, so a band reads the same wherever
+ * it is drawn. A section takes `band` and one wash: `cool`, `blush` or `warm`.
+ *
+ * Each band is a wash of its ink over a light frosting of the sheet, so the
+ * prism's light still reads through it, edged top and bottom by a fine line
+ * like etched glass. A band needs no rule: its edge divides it.
+ *
+ * The band is drawn BEHIND the section, as a `100vw` pseudo-element centred on
+ * it — no wrapper, so the markup and the outline are unchanged, and the content
+ * keeps the page's measure. The site's `<main>` clips the page sideways
+ * (`app/brand-theme.css`), so the band never makes it scroll. Isolated, so the
+ * band at `z-index: -1` stays beneath the section's own content, and anything
+ * multiplied inside it (the journey's drawing) blends with the band.
+ *
+ * Each wash is written out per band and per theme, not carried in a local
+ * custom property: `tokens-only.test.ts` holds every `var()` under
+ * `components/app/` to a token the theme declares.
+ */
+.band {
+  position: relative;
+  isolation: isolate;
+  border-top: 0;
+}
+
+.band::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  translate: -50% 0;
+  pointer-events: none;
+  border-block: 1px solid var(--band-line);
+  box-shadow:
+    0 -1px 0 var(--band-edge),
+    0 1px 0 var(--band-edge);
+}
+
+/* Two bands that meet share one edge: the band above draws it, so the join is
+   one fine line rather than two lines and their hairlines stacked. */
+.band + .band::before {
+  border-top: 0;
+  box-shadow: 0 1px 0 var(--band-edge);
+}
+
+.cool::before {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--color-secondary-ink) 9%, transparent),
+      color-mix(in srgb, var(--color-secondary-ink) 9%, transparent)
+    ),
+    color-mix(in srgb, var(--color-sheet) 52%, transparent);
+}
+
+.blush::before {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--band-blush-ink) 10%, transparent),
+      color-mix(in srgb, var(--band-blush-ink) 10%, transparent)
+    ),
+    color-mix(in srgb, var(--color-sheet) 64%, transparent);
+}
+
+.warm::before {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--color-accent-ink) 10%, transparent),
+      color-mix(in srgb, var(--color-accent-ink) 10%, transparent)
+    ),
+    color-mix(in srgb, var(--color-sheet) 52%, transparent);
+}
+
+:global(html.dark) .cool::before {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--color-secondary-ink) 8%, transparent),
+      color-mix(in srgb, var(--color-secondary-ink) 8%, transparent)
+    ),
+    color-mix(in srgb, var(--color-sheet) 58%, transparent);
+}
+
+:global(html.dark) .blush::before {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--band-blush-ink) 12%, transparent),
+      color-mix(in srgb, var(--band-blush-ink) 12%, transparent)
+    ),
+    color-mix(in srgb, var(--color-sheet) 68%, transparent);
+}
+
+:global(html.dark) .warm::before {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--color-accent-ink) 9%, transparent),
+      color-mix(in srgb, var(--color-accent-ink) 9%, transparent)
+    ),
+    color-mix(in srgb, var(--color-sheet) 58%, transparent);
+}

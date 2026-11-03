@@ -11,6 +11,7 @@ import type { FoundationalDocumentDetail } from '@/lib/app/content/document-view
 import { requireDocument } from '@/lib/app/content/sections';
 import { CREATOR_PORTRAIT, LIGHT_THROUGH_WATER } from '@/lib/site/config';
 import styles from '@/app/(public)/document-page.module.css';
+import bandStyles from '@/components/app/site/bands.module.css';
 
 export const metadata: Metadata = {
   // `absolute` opts out of the group template `%s - Lelañea`, which would
@@ -145,7 +146,7 @@ export default async function LelaneaPage() {
         />
       </section>
 
-      <section className={`${styles.section} ${styles.tintCool}`}>
+      <section className={`${styles.section} ${bandStyles.band} ${bandStyles.cool}`}>
         <div className={styles.creator}>
           {/* Her portrait, her name and where to find her, held beside the
               biography on a desktop and gathered into one row above it once
@@ -201,7 +202,7 @@ export default async function LelaneaPage() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.tintWarm}`}>
+      <section className={`${styles.section} ${bandStyles.band} ${bandStyles.warm}`}>
         <h2
           id="lineage"
           className="brand-display mb-7 scroll-mt-[104px] text-[clamp(32px,3.6vw,44px)]"

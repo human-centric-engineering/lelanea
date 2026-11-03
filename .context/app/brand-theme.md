@@ -164,7 +164,7 @@ and a `fixed` bubble inside them would be placed against their box.
 
 Anything that rides over other content paints `--color-sheet` directly when it
 is not a `role="dialog"`: the entry bloom's cover, the nav drawer below 900px,
-the usage plot's average chip and the mission ripple's dark-mode stage.
+the usage plot's average chip and the halos round the mission ripple's marks.
 
 ### Where the prism's values are not taken
 

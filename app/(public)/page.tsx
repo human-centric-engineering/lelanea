@@ -14,6 +14,7 @@ import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
 import { CREATOR_PORTRAIT, FLOWER_OF_LIFE, REFLECTION } from '@/lib/site/config';
 import styles from '@/app/(public)/home.module.css';
+import bandStyles from '@/components/app/site/bands.module.css';
 
 /**
  * Read at request time, not built into the page (t-86). Her words are in the
@@ -130,7 +131,7 @@ export default async function HomePage() {
     .toSorted((a, b) => a.order - b.order);
 
   return (
-    <div className={styles.homeClip}>
+    <>
       <div className="mx-auto max-w-[1180px] px-[clamp(20px,5vw,72px)]">
         <section className={styles.hero}>
           <div>
@@ -146,6 +147,8 @@ export default async function HomePage() {
           </div>
 
           <div className={styles.bloom}>
+            {/* The dusk sky the flower opens on, in light mode (t-178). */}
+            <div className={styles.sky} aria-hidden="true" />
             {/* Decorative: the page's name is its `h1` just below, so
               announcing the flower would only repeat it. It unfolds on every
               load, as the app's entry bloom does (owner, t-132). */}
@@ -206,7 +209,7 @@ export default async function HomePage() {
           </Eyebrow>
         </section>
 
-        <section className={`${styles.section} ${styles.tintCool}`}>
+        <section className={`${styles.section} ${bandStyles.band} ${bandStyles.cool}`}>
           {/* An `h2`, not a `p`, so the section is in the page's outline; each
             chapter's title is an `h3` beneath it. */}
           <Eyebrow as="h2">what this is</Eyebrow>
@@ -260,7 +263,9 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className={`${styles.section} ${styles.tintBlush} ${styles.journey}`}>
+        <section
+          className={`${styles.section} ${bandStyles.band} ${bandStyles.blush} ${styles.journey}`}
+        >
           <Eyebrow as="p">the journey</Eyebrow>
           <h2 className="brand-display my-[14px] mb-[26px] max-w-[20ch] text-[clamp(32px,3.4vw,40px)]">
             {/* The journey's own subtitle, read rather than retyped (t-86). */}
@@ -297,12 +302,12 @@ export default async function HomePage() {
           </dl>
         </section>
 
-        <ChannelsSection className={`${styles.section} ${styles.tintWarm}`} />
+        <ChannelsSection className={`${styles.section} ${bandStyles.band} ${bandStyles.warm}`} />
       </div>
 
       {/* Outside the page's measure: the pond runs edge to edge, straight
         into the footer (owner, t-171). */}
       <ClosingBand />
-    </div>
+    </>
   );
 }

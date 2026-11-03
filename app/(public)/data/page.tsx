@@ -12,6 +12,7 @@ import {
 } from '@/lib/app/content/sections';
 import { CRISIS_ANCHOR } from '@/lib/site/config';
 import styles from '@/app/(public)/document-page.module.css';
+import bandStyles from '@/components/app/site/bands.module.css';
 
 export const metadata: Metadata = {
   title: 'Your data',
@@ -239,7 +240,7 @@ export default async function DataPage() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.tintCool}`}>
+      <section className={`${styles.section} ${bandStyles.band} ${bandStyles.cool}`}>
         <Eyebrow as="h2">what it is, what it is not</Eyebrow>
 
         <div className={`${styles.split} mt-8`}>
@@ -332,7 +333,7 @@ export default async function DataPage() {
         </section>
       </section>
 
-      <section className={`${styles.section} ${styles.tintWarm}`}>
+      <section className={`${styles.section} ${bandStyles.band} ${bandStyles.warm}`}>
         <div className={styles.split}>
           <div>
             <Eyebrow as="p">coaching and therapy</Eyebrow>

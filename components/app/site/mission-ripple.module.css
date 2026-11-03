@@ -46,8 +46,12 @@
 
 /*
  * The water keeps its texture but takes its colour from the light behind it
- * (t-178, the prism): a luminosity blend, faint, over the lit ground. And it
- * feathers out — clear well before the panel's edge towards the text, and at
+ * (t-178, the prism): drained to grey and laid faintly over the lit ground, so
+ * the light's own hue shows through it. A grey filter, not a luminosity blend:
+ * the sticky, size-contained stage is its own stacking context, which blends as
+ * an isolated group, and with no ground of its own a blend there had nothing
+ * behind it to take colour from — the picture kept its teal. And it feathers
+ * out — clear well before the panel's edge towards the text, and at
  * its top and bottom — rather than ending in an overlay of solid page colour,
  * which in the prism would be a slab across the light.
  *
@@ -58,8 +62,14 @@
 .water {
   object-fit: cover;
   object-position: 60% 20%;
-  mix-blend-mode: luminosity;
+  filter: grayscale(1);
   opacity: 0.22;
+  /* Prefixed as well: Chromium before 120 reads only `-webkit-mask-*`, and
+     without it the panel ends in a hard edge against the text. */
+  -webkit-mask-image:
+    linear-gradient(to right, black 20%, transparent 85%),
+    linear-gradient(to bottom, transparent, black 18%, black 78%, transparent);
+  -webkit-mask-composite: source-in;
   mask-image:
     linear-gradient(to right, black 20%, transparent 85%),
     linear-gradient(to bottom, transparent, black 18%, black 78%, transparent);
@@ -70,6 +80,8 @@
    downward into it instead of across. */
 @media (max-width: 1100px) {
   .water {
+    -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
+    -webkit-mask-composite: source-over;
     mask-image: linear-gradient(to bottom, black 55%, transparent);
     mask-composite: add;
   }
@@ -217,14 +229,14 @@
   text-align: center;
   container-type: inline-size;
   /* Glass (t-178, the prism): the popover's ground, thinning towards the rim,
-     over a blur of the light and the rings behind it. */
+     over the light and the rings behind it. Unblurred: the circle's width is
+     scroll-animated (`gather`), and a backdrop blur would be recomputed on
+     every frame of the scroll, so the ground is denser instead. */
   background: radial-gradient(
     circle at 50% 40%,
-    color-mix(in srgb, var(--color-popover) 88%, transparent) 55%,
-    color-mix(in srgb, var(--color-popover) 55%, transparent)
+    color-mix(in srgb, var(--color-popover) 94%, transparent) 55%,
+    color-mix(in srgb, var(--color-popover) 72%, transparent)
   );
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
   box-shadow:
     0 0 0 1px var(--color-card-border),
     var(--shadow-rest);
