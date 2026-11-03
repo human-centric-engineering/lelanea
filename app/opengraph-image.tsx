@@ -30,12 +30,12 @@ export const contentType = 'image/png';
  * deliberate call rather than something to slip into this task. The card is
  * correct in palette, mark and words meanwhile.
  *
- * Everything else is the brand: the oyster ground, the ink, and the lotus.
+ * Everything else is the brand: the prism's ground, the ink, and the lotus.
  *
  * ## The three colours are the light-mode token VALUES, copied by hand
  *
  * Satori resolves no CSS variables — there is no stylesheet in this renderer —
- * so `var(--color-background)` would render as nothing. The literals below are
+ * so `var(--color-ground)` would render as nothing. The literals below are
  * therefore the only place in the app where a brand colour is written out, and
  * they are exported so a test can compare them against
  * `app/brand-theme.css` rather than trusting a comment. The first version of
@@ -45,15 +45,17 @@ export const contentType = 'image/png';
  */
 
 /**
- * `:root` values from `app/brand-theme.css`, light mode. Pinned by
+ * Light-mode values from `app/brand-theme.css` — the ground is `--color-ground`,
+ * the opaque colour under the light, because the page's `--color-background`
+ * is glass in the prism and a card has no light behind it. Pinned by
  * `tests/unit/app/opengraph-image.test.tsx`, which parses the stylesheet — so
  * a palette change fails there rather than shipping a card that no longer
  * matches the site.
  */
 export const OG_COLORS = {
-  background: '#f3f0ec',
-  heading: '#11181a',
-  mutedForeground: '#5a5f62',
+  background: '#f1e6da',
+  heading: '#1f1a1c',
+  mutedForeground: '#5c5357',
 } as const;
 export default async function OpengraphImage() {
   const lotus = await readFile(join(process.cwd(), 'public', 'lotus-mark.svg'));

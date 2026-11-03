@@ -54,7 +54,7 @@ describe('app/opengraph-image', () => {
     }
 
     it.each([
-      ['background', 'color-background'],
+      ['background', 'color-ground'],
       ['heading', 'color-heading'],
       ['mutedForeground', 'color-muted-foreground'],
     ])('uses the real --%s token value', (key, token) => {
@@ -76,8 +76,8 @@ describe('app/opengraph-image', () => {
     it('reads real values from the stylesheet, so the comparison is not vacuous', () => {
       // If `lightToken` silently returned '' the cases above would compare two
       // empty strings and pass.
-      expect(lightToken('color-background')).toMatch(/^#[0-9a-f]{3,8}$/);
-      expect(lightToken('color-heading')).not.toBe(lightToken('color-background'));
+      expect(lightToken('color-ground')).toMatch(/^#[0-9a-f]{3,8}$/);
+      expect(lightToken('color-heading')).not.toBe(lightToken('color-ground'));
     });
   });
 

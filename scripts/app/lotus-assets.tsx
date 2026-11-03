@@ -115,8 +115,10 @@ export function lotusAssets(stylesheet: string): LotusAssets {
   // Measured, not the baked constant: the script writes both in one run.
   const measured = measureLotusFrames();
   const frames = measured.still;
-  const background = lightTokens(stylesheet).get('--color-background');
-  if (!background) throw new Error('lotus assets: --color-background missing');
+  // The ground, not `--color-background`: that is glass in the prism, and the
+  // apple icon is an opaque tile with no light behind it.
+  const background = lightTokens(stylesheet).get('--color-ground');
+  if (!background) throw new Error('lotus assets: --color-ground missing');
 
   const og = ogLotusSize(measured);
   const email = emailLotusSize(measured);

@@ -18,7 +18,7 @@ import { BRAND } from '@/lib/brand';
 /**
  * Lelañea's email chrome — the frame every leaf-owned auth email renders inside.
  *
- * The lotus, the wordmark, the oyster ground and the legal line, so a message
+ * The lotus, the wordmark, the ground and the legal line, so a message
  * from Lelañea looks like one wherever it lands. Templates put their own words
  * in `children`; this file owns nothing but the surround, which is what keeps
  * two templates from drifting into two brands.
@@ -26,12 +26,16 @@ import { BRAND } from '@/lib/brand';
  * ## The colours are the brand tokens, written out
  *
  * Email has no `var()`, so the values from `app/brand-theme.css` are copied
- * here by name — `--color-background`, `--color-popover`, `--color-heading`,
+ * here by name — `--color-ground`, `--color-popover`, `--color-heading`,
  * `--color-foreground`, `--color-muted-foreground`, `--color-primary`,
  * `--color-primary-foreground`, `--color-divider` — and the dark set beside
  * them for the clients that honour `prefers-color-scheme`. A change to the
  * theme is a change here too; the test pins the light values to the CSS so
  * the two cannot drift apart unnoticed.
+ *
+ * The ground is `--color-ground`, not `--color-background`: in the prism the
+ * page's background token is glass over a lit ground, and an email has no light
+ * behind it, so it takes the opaque ground the light sits on.
  *
  * ## Dark mode, honestly
  *
@@ -57,23 +61,23 @@ import { BRAND } from '@/lib/brand';
 
 /** Light values, from `app/brand-theme.css`. Pinned by the test. */
 export const EMAIL_PALETTE = {
-  background: '#f3f0ec',
-  card: '#f7f5f1',
-  heading: '#11181a',
-  foreground: '#282c2e',
-  muted: '#5a5f62',
-  primary: '#a85732',
-  primaryForeground: '#f3f0ec',
-  divider: 'rgba(111, 115, 118, 0.16)',
+  background: '#f1e6da',
+  card: '#fbf7f3',
+  heading: '#1f1a1c',
+  foreground: '#3a3236',
+  muted: '#5c5357',
+  primary: '#8f5446',
+  primaryForeground: '#fff8f2',
+  divider: 'rgba(92, 74, 82, 0.12)',
 } as const;
 
 /** Dark values, from the same file's `.dark` block. Pinned by the test too. */
 export const EMAIL_PALETTE_DARK = {
-  background: '#282c2e',
-  card: '#3d4245',
-  heading: '#f3f0ec',
-  foreground: '#e3dad1',
-  muted: '#a8aeb1',
+  background: '#2c2421',
+  card: '#3a302c',
+  heading: '#fbf3ea',
+  foreground: '#eadbcd',
+  muted: '#c2ad9b',
 } as const;
 
 const FONT_SANS =

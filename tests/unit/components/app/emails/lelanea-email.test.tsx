@@ -56,7 +56,7 @@ function darkToken(name: string): string {
 
 describe('LelaneaEmail — the palette is the theme', () => {
   it.each([
-    ['background', 'background'],
+    ['background', 'ground'],
     ['card', 'popover'],
     ['heading', 'heading'],
     ['foreground', 'foreground'],
@@ -69,7 +69,7 @@ describe('LelaneaEmail — the palette is the theme', () => {
   });
 
   it.each([
-    ['background', 'background'],
+    ['background', 'ground'],
     ['card', 'popover'],
     ['heading', 'heading'],
     ['foreground', 'foreground'],
