@@ -547,9 +547,10 @@
 
 /* TEXT STRAIGHT ON THE GROUND carries the ground halo — on the public site,
  * which is where text sits on the light. The shell's text sits on panes. The
- * site is recognised by its ground (`data-prism='site'`) rather than by a
- * marker on the layout, so the rule needs nothing from `app/(public)/layout.tsx`. */
-[data-surface='consumer'] body:has([data-prism='site']) main :is(p, h1, h2, h3, li, dt, dd) {
+ * site is recognised by its ground (`data-prism='site'`), which each site
+ * frame mounts as a sibling just before its `<main>` — a sibling combinator,
+ * not a `:has()` on `<body>` that every DOM mutation would re-evaluate. */
+[data-surface='consumer'] [data-prism='site'] ~ main :is(p, h1, h2, h3, li, dt, dd) {
   text-shadow: var(--ground-halo);
 }
 

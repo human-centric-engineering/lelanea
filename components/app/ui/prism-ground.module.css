@@ -172,4 +172,11 @@
   .spark {
     animation: none;
   }
+
+  /* Without the animation a spark falls back to opacity 1 and scale 1 — the
+   * glint's peak, not its rest. */
+  .spark {
+    opacity: 0.55;
+    scale: 0.85;
+  }
 }

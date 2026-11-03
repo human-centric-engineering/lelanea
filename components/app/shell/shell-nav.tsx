@@ -314,6 +314,10 @@ export function ShellNav({ user }: ShellNavProps) {
           // out of the tab order rather than merely off-screen.
           width === 'small' && [
             'fixed top-0 bottom-0 left-0 z-[60] w-[min(320px,88vw)] px-2.5',
+            // A panel over the panes is a solid sheet, never glass — the
+            // prism's rule for anything that rides over other content. It
+            // replaces `bg-card`, so the glass blur does not apply either.
+            'bg-[var(--color-sheet)]',
             'border-[var(--color-border)] shadow-[var(--shadow-lift)]',
             'transition-[transform,visibility] duration-300 ease-[var(--ease-brand)]',
             'motion-reduce:transition-none',

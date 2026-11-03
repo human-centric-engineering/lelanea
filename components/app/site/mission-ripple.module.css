@@ -282,7 +282,9 @@
  * coloured panel. In dark mode the water is the same picture laid faintly over
  * the page's own charcoal, so it blends into the ground the text sits on with
  * only a hint of the pond's teal (owner, t-171); the marks on it turn light,
- * and the life is a disc of that same ground, a shade deeper, with a quiet rim. */
+ * and the life is a disc of that same ground, a shade deeper, with a quiet rim.
+ * The ground here is `--color-sheet`, not `--color-background`: in the prism
+ * the latter is glass, and these mixes and halos exist to be opaque (t-177). */
 :global(html.dark) .water {
   opacity: 0.14;
 }
@@ -290,14 +292,14 @@
 :global(html.dark) .stage {
   /* The stage's own ground, with the water laid over it part transparent — no
      overlay layer, no z-index, nothing for the compositor to separate. */
-  background: color-mix(in srgb, var(--color-lotus-pad) 14%, var(--color-background));
+  background: color-mix(in srgb, var(--color-lotus-pad) 14%, var(--color-sheet));
 }
 
 :global(html.dark) .caption,
 :global(html.dark) .word,
 :global(html.dark) .foot {
   color: var(--color-cinema-ink);
-  text-shadow: 0 0 12px var(--color-background);
+  text-shadow: 0 0 12px var(--color-sheet);
 }
 
 :global(html.dark) .ring {
@@ -305,14 +307,14 @@
 }
 
 :global(html.dark) .word::after {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-background) 80%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-sheet) 80%, transparent);
 }
 
 :global(html.dark) .centre {
   background: radial-gradient(
     circle at 50% 40%,
-    color-mix(in srgb, var(--color-lotus-pad) 30%, var(--color-background)) 55%,
-    color-mix(in srgb, var(--color-lotus-pad) 18%, var(--color-background))
+    color-mix(in srgb, var(--color-lotus-pad) 30%, var(--color-sheet)) 55%,
+    color-mix(in srgb, var(--color-lotus-pad) 18%, var(--color-sheet))
   );
   box-shadow:
     var(--shadow-bloom),

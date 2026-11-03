@@ -34,8 +34,13 @@ function renderTipped(label: string | null = 'Your map — the sixteen modules')
   );
 }
 
-/** The bubble is the trigger's next sibling, by construction. */
-const bubble = () => screen.getByRole('button').nextElementSibling;
+/**
+ * The bubble is portaled to `<body>` (a glass ancestor's backdrop filter would
+ * otherwise become its containing block), so it is found by its text rather
+ * than as the trigger's sibling. `queryByText`, not a role query: it is
+ * `aria-hidden`, which is exactly what the role queries skip.
+ */
+const bubble = () => screen.queryByText('Your map — the sixteen modules');
 
 describe('Tipped', () => {
   it('is in the DOM before anything hovers it, invisible and parked off-screen', () => {
@@ -119,7 +124,7 @@ describe('Tipped', () => {
     );
     await userEvent.hover(screen.getByRole('button'));
 
-    const el = bubble() as HTMLElement;
+    const el = screen.getByText('Your journey — Where you have been');
     expect(el.style.left).not.toBe('');
     expect(el.style.right).toBe('');
   });

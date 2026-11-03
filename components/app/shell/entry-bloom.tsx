@@ -152,7 +152,9 @@ export function EntryBloom() {
       // whatever lies under the cover, so it is consumed here (see above).
       onClick={() => setPhase('leaving')}
       className={cn(
-        'bg-background fixed inset-0 z-[100] flex items-center justify-center',
+        // The sheet, not `bg-background`: in the prism that token is glass, and
+        // a cover that shows the shell through it covers nothing (t-177).
+        'fixed inset-0 z-[100] flex items-center justify-center bg-[var(--color-sheet)]',
         // Solid to the pointer while opaque, so a click cannot land on a nav
         // item the reader cannot see; released for the fade, so the shell is
         // live as it appears.

@@ -149,8 +149,17 @@ here.
   cards: a backdrop filter makes an element the containing block for its fixed
   descendants, and `bg-background` is the ground of whole frames.
 
-The halo is keyed to the site's ground (`body:has([data-prism='site']) main …`),
-so the shell's text, which sits on panes, carries none.
+The halo is keyed to the site's ground (`[data-prism='site'] ~ main …`, the
+ground being mounted just before each site frame's `<main>`), so the shell's
+text, which sits on panes, carries none.
+
+The bubble in `components/app/ui/tipped.tsx` is portaled to `<body>` for the
+same containing-block reason: the shell's nav and rail are `bg-card`, so glass,
+and a `fixed` bubble inside them would be placed against their box.
+
+Anything that rides over other content paints `--color-sheet` directly when it
+is not a `role="dialog"`: the entry bloom's cover, the nav drawer below 900px,
+the usage plot's average chip and the mission ripple's dark-mode stage.
 
 ### Where the prism's values are not taken
 
