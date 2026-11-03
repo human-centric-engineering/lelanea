@@ -206,7 +206,7 @@ export default async function HomePage() {
           </Eyebrow>
         </section>
 
-        <section className={`${styles.section} ${styles.tintTeal}`}>
+        <section className={`${styles.section} ${styles.tintCool}`}>
           {/* An `h2`, not a `p`, so the section is in the page's outline; each
             chapter's title is an `h3` beneath it. */}
           <Eyebrow as="h2">what this is</Eyebrow>
@@ -260,7 +260,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className={`${styles.section} ${styles.rule} ${styles.journey}`}>
+        <section className={`${styles.section} ${styles.tintBlush} ${styles.journey}`}>
           <Eyebrow as="p">the journey</Eyebrow>
           <h2 className="brand-display my-[14px] mb-[26px] max-w-[20ch] text-[clamp(32px,3.4vw,40px)]">
             {/* The journey's own subtitle, read rather than retyped (t-86). */}

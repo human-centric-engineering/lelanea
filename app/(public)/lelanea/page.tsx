@@ -145,7 +145,7 @@ export default async function LelaneaPage() {
         />
       </section>
 
-      <section className={`${styles.section} ${styles.tintTeal}`}>
+      <section className={`${styles.section} ${styles.tintCool}`}>
         <div className={styles.creator}>
           {/* Her portrait, her name and where to find her, held beside the
               biography on a desktop and gathered into one row above it once

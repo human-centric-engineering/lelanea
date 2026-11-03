@@ -239,7 +239,7 @@ export default async function DataPage() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.tintTeal}`}>
+      <section className={`${styles.section} ${styles.tintCool}`}>
         <Eyebrow as="h2">what it is, what it is not</Eyebrow>
 
         <div className={`${styles.split} mt-8`}>

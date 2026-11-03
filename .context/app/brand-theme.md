@@ -136,7 +136,7 @@ Lighting them means mounting the ground in two more Sunrise files; that is a
 call for whoever brings those pages into the prism, not something to slip in
 here.
 
-### Three rules in the stylesheet that are not tokens
+### Four rules in the stylesheet that are not tokens
 
 - **The page is the ground.** `[data-surface='consumer'] body` paints
   `--color-ground`, because `globals.css` paints `<body>` with
@@ -148,6 +148,11 @@ here.
 - **A card is glass.** `.bg-card` takes `backdrop-filter: var(--glass)`. Only
   cards: a backdrop filter makes an element the containing block for its fixed
   descendants, and `bg-background` is the ground of whole frames.
+- **A site page never scrolls sideways.** The site's `<main>` is
+  `overflow-x: clip` (t-178). The bands and the dusk sky run the width of the
+  window from inside the page's measure, drawn `100vw` wide, and where a
+  scrollbar takes up room `100vw` is wider than the page. `clip`, not `hidden`,
+  so no scroll container is made and the sticky elements keep working.
 
 The halo is keyed to the site's ground (`[data-prism='site'] ~ main …`, the
 ground being mounted just before each site frame's `<main>`), so the shell's

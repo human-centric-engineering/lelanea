@@ -148,6 +148,30 @@
   --app-card: rgba(255, 253, 250, 0.52);
   --app-muted: rgba(250, 246, 241, 0.26);
 
+  /* ---- The public pages' bands (t-178) -----------------------------------
+   * A band is a wash of its colour over a light frosting of the sheet, so the
+   * prism still reads through it, edged top and bottom like etched glass: a
+   * light line, and outside it a faint hairline (iris here, dark in dark).
+   * Each band's own wash is mixed from an ink in its module. */
+  --band-line: rgba(255, 255, 255, 0.5);
+  --band-edge: rgba(85, 96, 154, 0.1);
+  /* The home page's closing band follows the theme: a soft pool of light
+   * behind the flower over a pale base, not deep water. */
+  --closing-base: rgba(226, 220, 238, 0.5);
+  --closing-glow: rgba(255, 238, 220, 0.55);
+  /* The dusk sky at the top of the home page, in LIGHT only, so these are
+   * never restated in dark: a twilight lavender deep enough for the flower's
+   * light to show, a warm and a cool glow in it, and the page's light streaks
+   * drawn into it with their warm and cool fringes. */
+  --sky-top: rgba(110, 99, 144, 0.84);
+  --sky-mid: rgba(124, 113, 157, 0.84);
+  --sky-low: rgba(136, 124, 166, 0.84);
+  --sky-glow-warm: rgba(236, 162, 108, 0.16);
+  --sky-glow-cool: rgba(140, 132, 196, 0.22);
+  --sky-streak: rgba(255, 255, 255, 0.2);
+  --sky-streak-warm: rgba(255, 214, 190, 0.1);
+  --sky-streak-cool: rgba(196, 214, 255, 0.12);
+
   /* ---- Lines ------------------------------------------------------------
    * The hairline is the prism's plum-grey. A card's edge is a white rim in
    * light, the lit edge of a pane of glass, and a warm one in dark.
@@ -442,6 +466,11 @@
   --app-card: rgba(60, 49, 44, 0.66);
   --app-muted: rgba(44, 35, 31, 0.48);
 
+  --band-line: rgba(255, 232, 210, 0.16);
+  --band-edge: rgba(0, 0, 0, 0.4);
+  --closing-base: rgba(16, 11, 9, 0.42);
+  --closing-glow: rgba(120, 112, 178, 0.16);
+
   --color-border: rgba(242, 214, 190, 0.16);
   --color-divider: rgba(242, 214, 190, 0.09);
   --color-card-border: rgba(255, 224, 196, 0.11);
@@ -507,7 +536,7 @@
 }
 
 /* ======================================================= the page and the glass
- * Three rules that are not tokens, and why each one cannot be.
+ * Four rules that are not tokens, and why each one cannot be.
  *
  * THE PAGE IS THE GROUND. `globals.css` paints `<body>` with
  * `--color-background`, which in the prism is glass — and glass over nothing
@@ -552,6 +581,15 @@
  * not a `:has()` on `<body>` that every DOM mutation would re-evaluate. */
 [data-surface='consumer'] [data-prism='site'] ~ main :is(p, h1, h2, h3, li, dt, dd) {
   text-shadow: var(--ground-halo);
+}
+
+/* A SITE PAGE NEVER SCROLLS SIDEWAYS. A band and the dusk sky run the width of
+ * the window from inside the page's measure, drawn `100vw` wide (t-178); where
+ * the scrollbar takes up room, `100vw` is wider than the page by its width.
+ * `clip`, not `hidden`: it makes no scroll container, so the sticky elements
+ * inside keep working. Same sibling key as the halo above. */
+[data-surface='consumer'] [data-prism='site'] ~ main {
+  overflow-x: clip;
 }
 
 /* ================================================== the destructive ink role
