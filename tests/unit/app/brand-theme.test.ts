@@ -452,6 +452,53 @@ describe('app/brand-theme.css', () => {
     });
   });
 
+  describe("the public pages' bands, sky and closing pool (t-178)", () => {
+    // The bands' etched line and the closing pool change between the themes —
+    // a white line on the pale page, a warm one on the umber — so each needs a
+    // light value AND a dark one, or the light theme's would paint in dark.
+    const BOTH_THEMES = [
+      '--band-line',
+      '--band-edge',
+      '--band-blush-ink',
+      '--closing-base',
+      '--closing-glow',
+    ];
+    // The dusk sky exists in light only (`home.module.css` keys it to
+    // `html:not(.dark)`), so its tokens are declared once.
+    const LIGHT_ONLY = [
+      '--sky-top',
+      '--sky-mid',
+      '--sky-low',
+      '--sky-glow-warm',
+      '--sky-glow-cool',
+      '--sky-streak',
+      '--sky-streak-warm',
+      '--sky-streak-cool',
+    ];
+
+    it.each(BOTH_THEMES)('declares %s in light and moves it in dark', (name) => {
+      expect(lightTokens.has(name)).toBe(true);
+      expect(darkTokens.has(name)).toBe(true);
+      expect(token(darkTokens, name)).not.toBe(token(lightTokens, name));
+    });
+
+    it.each(LIGHT_ONLY)('declares %s in light only, where the sky is drawn', (name) => {
+      expect(lightTokens.has(name)).toBe(true);
+      expect(darkTokens.has(name)).toBe(false);
+    });
+
+    it('keeps the sky deep enough for the light to show, and translucent', () => {
+      // The sky is the dark the flower's light needs; a top that drifted pale
+      // would put a light flower on a light page. And it is not opaque, so the
+      // page's own streaks still read faintly through it.
+      for (const name of ['--sky-top', '--sky-mid', '--sky-low']) {
+        const { alpha } = rgbaParts(token(lightTokens, name));
+        expect(alpha).toBeGreaterThan(0.5);
+        expect(alpha).toBeLessThan(1);
+      }
+    });
+  });
+
   describe('the page, the sheets and the glass', () => {
     it('paints the page with the opaque ground', () => {
       // `globals.css` paints <body> with `--color-background`, which is glass in

@@ -44,12 +44,47 @@
   }
 }
 
+/*
+ * The water keeps its texture but takes its colour from the light behind it
+ * (t-178, the prism): drained to grey and laid faintly over the lit ground, so
+ * the light's own hue shows through it. A grey filter, not a luminosity blend:
+ * the sticky, size-contained stage is its own stacking context, which blends as
+ * an isolated group, and with no ground of its own a blend there had nothing
+ * behind it to take colour from — the picture kept its teal. And it feathers
+ * out — clear well before the panel's edge towards the text, and at
+ * its top and bottom — rather than ending in an overlay of solid page colour,
+ * which in the prism would be a slab across the light.
+ *
+ * The mask is on the picture ALONE. A mask on the companion that holds the
+ * captions and rings showed each animating layer inside it as a dark box on a
+ * real GPU (owner, t-171); the picture has nothing inside it to animate.
+ */
 .water {
   object-fit: cover;
   object-position: 60% 20%;
-  /* A touch of the oyster ground through the picture, so the water reads as
-     light as the page it sits on rather than a shade darker (owner, t-171). */
-  opacity: 0.78;
+  filter: grayscale(1);
+  opacity: 0.22;
+  /* Prefixed as well: Chromium before 120 reads only `-webkit-mask-*`, and
+     without it the panel ends in a hard edge against the text. */
+  -webkit-mask-image:
+    linear-gradient(to right, black 20%, transparent 85%),
+    linear-gradient(to bottom, transparent, black 18%, black 78%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, black 20%, transparent 85%),
+    linear-gradient(to bottom, transparent, black 18%, black 78%, transparent);
+  mask-composite: intersect;
+}
+
+/* Below the desktop width the panel is a band above the text, so it feathers
+   downward into it instead of across. */
+@media (max-width: 1100px) {
+  .water {
+    -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent);
+    -webkit-mask-composite: source-over;
+    mask-image: linear-gradient(to bottom, black 55%, transparent);
+    mask-composite: add;
+  }
 }
 
 .ripple {
@@ -193,14 +228,18 @@
   border-radius: 50%;
   text-align: center;
   container-type: inline-size;
+  /* Glass (t-178, the prism): the popover's ground, thinning towards the rim,
+     over the light and the rings behind it. Unblurred: the circle's width is
+     scroll-animated (`gather`), and a backdrop blur would be recomputed on
+     every frame of the scroll, so the ground is denser instead. */
   background: radial-gradient(
     circle at 50% 40%,
-    var(--color-cinema-ink) 55%,
-    color-mix(in srgb, var(--color-cinema-ink) 70%, transparent)
+    color-mix(in srgb, var(--color-popover) 94%, transparent) 55%,
+    color-mix(in srgb, var(--color-popover) 72%, transparent)
   );
   box-shadow:
-    var(--shadow-bloom),
-    0 0 0 6px color-mix(in srgb, var(--color-cinema-ink) 30%, transparent);
+    0 0 0 1px var(--color-card-border),
+    var(--shadow-rest);
 }
 
 /* The words scale with the circle, so a large life reads as large. */
@@ -278,21 +317,13 @@
 }
 
 /* ============================================================ dark mode
- * On a charcoal page the pale water glared, and a teal dusk stood out as a
- * coloured panel. In dark mode the water is the same picture laid faintly over
- * the page's own charcoal, so it blends into the ground the text sits on with
- * only a hint of the pond's teal (owner, t-171); the marks on it turn light,
- * and the life is a disc of that same ground, a shade deeper, with a quiet rim.
- * The ground here is `--color-sheet`, not `--color-background`: in the prism
- * the latter is glass, and these mixes and halos exist to be opaque (t-177). */
+ * On the umber the water is fainter still, and the marks on it turn light. The
+ * stage has no ground of its own in either theme (t-178): the light behind it
+ * is the picture's colour. The halos are `--color-sheet`, not
+ * `--color-background`: in the prism the latter is glass, and a halo exists to
+ * be opaque (t-177). */
 :global(html.dark) .water {
-  opacity: 0.14;
-}
-
-:global(html.dark) .stage {
-  /* The stage's own ground, with the water laid over it part transparent — no
-     overlay layer, no z-index, nothing for the compositor to separate. */
-  background: color-mix(in srgb, var(--color-lotus-pad) 14%, var(--color-sheet));
+  opacity: 0.1;
 }
 
 :global(html.dark) .caption,
@@ -308,17 +339,6 @@
 
 :global(html.dark) .word::after {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-sheet) 80%, transparent);
-}
-
-:global(html.dark) .centre {
-  background: radial-gradient(
-    circle at 50% 40%,
-    color-mix(in srgb, var(--color-lotus-pad) 30%, var(--color-sheet)) 55%,
-    color-mix(in srgb, var(--color-lotus-pad) 18%, var(--color-sheet))
-  );
-  box-shadow:
-    var(--shadow-bloom),
-    0 0 0 1px color-mix(in srgb, var(--color-lotus-core) 35%, transparent);
 }
 
 :global(html.dark) .centre span {

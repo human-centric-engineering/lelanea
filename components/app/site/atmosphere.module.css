@@ -227,11 +227,14 @@
 /* ------------------------------------------------------------- closing */
 
 /*
- * The home page's closing band: a pond at dusk in the lotus's own deep teals,
- * the bloom opening at its centre, rings spreading slowly from beneath it.
- * Dark in both themes, as the cinema is — on the oyster it is the page's one
- * deep moment, and on charcoal it still reads as water rather than as more
- * of the ground.
+ * The home page's closing band: the bloom opening on a soft pool of light,
+ * rings spreading slowly from beneath it, and the way in. It follows the page
+ * theme like the bands above it (t-178, the prism) — a pale pool in light, a
+ * deepening of the umber in dark — rather than going dark in both as the deep
+ * teal water did. It draws no top edge of its own: it opens straight off the
+ * last band above it, whose etched line is the division, and a second line
+ * here doubled the seam (t-178). The ground is
+ * tokens (`--closing-*`, `app/brand-theme.css`), so the theme moves it.
  */
 .closing {
   position: relative;
@@ -243,13 +246,7 @@
   min-height: clamp(300px, 30vw, 380px);
   overflow: hidden;
   background:
-    radial-gradient(
-      60% 55% at 50% 40%,
-      color-mix(in srgb, var(--color-lotus-petal-outer-edge) 85%, transparent),
-      transparent 75%
-    ),
-    radial-gradient(40% 30% at 50% 36%, var(--color-lotus-halation), transparent 80%),
-    linear-gradient(to bottom, var(--color-lotus-pad-edge), var(--color-lotus-pad) 70%);
+    radial-gradient(48% 42% at 50% 46%, var(--closing-glow), transparent 75%), var(--closing-base);
 }
 
 .pondRings {
@@ -321,11 +318,11 @@
 
 .closingBloom {
   width: min(280px, 64vw);
-  /* The lotus centre's warm bloom, carried into the water around it. */
-  filter: drop-shadow(0 0 48px color-mix(in srgb, var(--color-lotus-core) 30%, transparent));
 }
 
+/* Muted ink, not the cinema's cream: the band is the page's own ground now,
+   pale in light, and cream on it would not read. */
 .closingEyebrow {
   margin: 0;
-  color: var(--color-cinema-ink);
+  color: var(--color-muted-foreground);
 }

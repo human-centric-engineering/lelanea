@@ -643,30 +643,11 @@
 }
 
 /*
- * The right edge dissolves into the page — drawn as an overlay in the page's
- * own ground, NOT as a `mask-image`. On a real GPU every animating layer inside
- * a masked element (the captions, the rings, the foot) was composited as its
- * own rectangle without the mask's backdrop, and each showed as a dark box
- * while the page loaded (owner, t-171). An overlay has no such failure.
+ * The right edge dissolves into the page by the water picture's own mask
+ * (`mission-ripple.module.css`, t-178), not by an overlay painted in the page's
+ * ground: in the prism that ground is glass over the light, and an overlay of it
+ * read as a pale slab across the panel.
  */
-.companion::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  /* Begins a third of the way across and eases in, so the water thins out
-     gradually rather than stopping short of the text (owner, t-171). */
-  background: linear-gradient(
-    to right,
-    transparent 30%,
-    color-mix(in srgb, var(--color-background) 18%, transparent) 50%,
-    color-mix(in srgb, var(--color-background) 50%, transparent) 70%,
-    color-mix(in srgb, var(--color-background) 85%, transparent) 88%,
-    var(--color-background)
-  );
-  pointer-events: none;
-}
-
 .companion img {
   object-fit: cover;
   object-position: 60% 20%;
@@ -700,10 +681,6 @@
     aspect-ratio: 16 / 9;
     max-height: 62vh;
     width: 100%;
-  }
-
-  .companion::after {
-    background: linear-gradient(to bottom, transparent 66%, var(--color-background));
   }
 
   .readingText {
@@ -847,31 +824,4 @@
     columns: 2;
     column-gap: 48px;
   }
-}
-
-/* ================================================================== tints
- * A page in sections gives alternate sections a whisper of colour, edge to
- * edge (owner, t-171): a breath of the teal, then of the lotus's warmth. The
- * section's content keeps the page's measure; only the ground runs full
- * width, by a spread shadow clipped to the section's own height — no wrapper,
- * so the markup and the outline are unchanged.
- *
- * A tinted section needs no dividing rule: the change of ground is the
- * division.
- */
-.tintTeal,
-.tintWarm {
-  border-top: 0;
-  clip-path: inset(0 -100vmax);
-}
-
-.tintTeal {
-  background: color-mix(in srgb, var(--color-secondary-ink) 6%, var(--color-background));
-  box-shadow: 0 0 0 100vmax
-    color-mix(in srgb, var(--color-secondary-ink) 6%, var(--color-background));
-}
-
-.tintWarm {
-  background: color-mix(in srgb, var(--color-lotus-core) 6%, var(--color-background));
-  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--color-lotus-core) 6%, var(--color-background));
 }

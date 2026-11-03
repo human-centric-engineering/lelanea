@@ -14,9 +14,10 @@ import styles from '@/components/app/site/atmosphere.module.css';
  * to the same form — without a sentence of persuasion: the page above has
  * said what this is, in her words, and the band only offers the door.
  *
- * The ground is the lotus's own deep water — its pad and edge teals — rather
- * than the light-through-water picture `/mission` carries: the one place on
- * the site that goes dark, so the bloom is the brightest thing in it.
+ * The ground follows the page theme, as the bands above it do (t-178, the
+ * prism): a soft pool of light behind the bloom, pale in light and a deepening
+ * of the umber in dark. It was deep teal water, dark in both themes; in the
+ * prism the light is the page's, and a dark slab at its foot would shut it out.
  */
 export function ClosingBand() {
   return (
