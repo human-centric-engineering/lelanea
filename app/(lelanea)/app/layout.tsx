@@ -8,6 +8,7 @@ import { ShellNav } from '@/components/app/shell/shell-nav';
 import { ShellRail } from '@/components/app/shell/shell-rail';
 import { ShellTopbar } from '@/components/app/shell/shell-topbar';
 import { ShellLayoutProvider } from '@/components/app/shell/use-shell-layout';
+import { PrismGround } from '@/components/app/ui/prism-ground';
 import { MaintenanceWrapperWithAdminNotice } from '@/components/maintenance-wrapper';
 import { gateRedirectFor } from '@/lib/app/gateway/gate';
 import { ensureJourneyStarted } from '@/lib/app/journey/start';
@@ -144,7 +145,9 @@ export default async function ShellLayout({ children }: { children: React.ReactN
       <ShellLayoutProvider conversationSeat={conversationSeat}>
         <div
           className={cn(
-            'bg-background relative flex h-dvh overflow-hidden',
+            // No ground of its own: the prism ground behind it is the page
+            // (t-177), and the panes are the glass over it.
+            'relative flex h-dvh overflow-hidden',
             // Below 900px the frame stacks: the nav has left the flow to become
             // a drawer, so what remains is the pane column above the rail's
             // footer. It was `flex-wrap` on a row, which let the full-width rail
@@ -155,6 +158,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
             'max-[900px]:flex-col'
           )}
         >
+          <PrismGround variant="app" />
           <ShellNav
             user={{
               // A user can exist without a name — an OAuth provider that
