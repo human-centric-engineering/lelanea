@@ -138,12 +138,14 @@
   --color-sheet: #f7f1eb;
 
   /* Where you read, the grounds are nearly solid: the workspace and the
-   * conversation (t-179 applies these to the shell's panes). */
+   * conversation. Applied to the shell's panes by the rules after the dark
+   * block (t-179). */
   --read-background: rgba(248, 243, 237, 0.9);
   --read-card: rgba(255, 252, 248, 0.95);
   --read-muted: rgba(245, 239, 232, 0.9);
-  /* Inside the app the panes carry the text, so the frame around them can be
-   * thinner and let more light through (t-179). */
+  /* Inside the app the panes carry the text, so the frame around them — the
+   * nav, the topbar, the rail — can be thinner and let more light through
+   * (t-179). */
   --app-background: rgba(250, 246, 241, 0.36);
   --app-card: rgba(255, 253, 250, 0.52);
   --app-muted: rgba(250, 246, 241, 0.26);
@@ -465,9 +467,17 @@
   --read-background: rgba(44, 36, 32, 0.92);
   --read-card: rgba(56, 46, 41, 0.95);
   --read-muted: rgba(40, 33, 29, 0.92);
-  --app-background: rgba(40, 32, 29, 0.58);
-  --app-card: rgba(60, 49, 44, 0.66);
-  --app-muted: rgba(44, 35, 31, 0.48);
+  /* THE SHELL'S FRAME IS THICKER IN DARK THAN THE PROTOTYPE'S, measured. At
+   * its 0.58 / 0.66 / 0.48 a screened ray core shows through the nav, the
+   * topbar and the rail strongly enough to take muted text to 4.13, 3.88 and
+   * 3.49:1, and links on the muted ground to 4.30. These are the least alphas
+   * that clear 4.6 for all three inks (muted 4.66, 4.67, 4.64), the margin
+   * `--color-input` keeps so a ground moving a step does not cross the line.
+   * The card thickens most because its umber is the lightest of the three. In
+   * light the prototype's values clear (4.73 at the tightest) and stand (t-179). */
+  --app-background: rgba(40, 32, 29, 0.66);
+  --app-card: rgba(60, 49, 44, 0.81);
+  --app-muted: rgba(44, 35, 31, 0.68);
 
   --band-line: rgba(255, 232, 210, 0.16);
   --band-edge: rgba(0, 0, 0, 0.4);
@@ -564,6 +574,37 @@
   --color-background: var(--color-sheet);
   --color-card: var(--color-popover);
   --color-muted: var(--color-sheet);
+}
+
+/* THE SHELL IS GLASS IN THREE TIERS (t-179), as `prism/app.html` draws it.
+ *
+ * 1. The FRAME — the nav, the topbar, the rail — is thin, so the light comes
+ *    through it: the panes do the job the veil does on the site, and the veil
+ *    is at a quarter inside the shell (`prism-ground.module.css`).
+ * 2. WHERE YOU READ — the conversation and the workspace — is nearly solid.
+ * 3. Anything that RIDES OVER the panes is a solid sheet: the dialog rule
+ *    above (every drawer is `role="dialog"`), the small-width nav drawer and
+ *    the page layer over the conversation, which paint the sheet themselves.
+ *
+ * Re-scopes of the three glass tokens, not new utilities (note 4), so every
+ * `bg-background`, `bg-card` and `bg-muted` inside keeps its class and takes
+ * its tier's value. The frame is keyed on the shell's ground, which
+ * `app/(lelanea)/app/layout.tsx` mounts as the first child of the frame — the
+ * same sibling key the site's halo uses below. The reading panes are keyed on
+ * the `data-pane` each already carries. A pane sits inside the frame, and a
+ * token declared on an element beats the one it would inherit, so rule order
+ * does not decide between the tiers; the dialog's own declaration wins over
+ * both for the same reason. */
+[data-surface='consumer'] [data-prism='app'] ~ * {
+  --color-background: var(--app-background);
+  --color-card: var(--app-card);
+  --color-muted: var(--app-muted);
+}
+
+[data-surface='consumer'] :is([data-pane='chat'], [data-pane='ws']) {
+  --color-background: var(--read-background);
+  --color-card: var(--read-card);
+  --color-muted: var(--read-muted);
 }
 
 /* A CARD IS GLASS: it blurs the light behind it, so a bright streak reads as a

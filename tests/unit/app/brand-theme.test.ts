@@ -37,6 +37,22 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  contrastRatio,
+  customProperties,
+  flattenOver,
+  INKS,
+  litGrounds as litGroundsOf,
+  paintedAs as paintedAsOf,
+  parseRules,
+  rgbaParts,
+  type Rule,
+  stripCssComments,
+  token,
+  worstContrast,
+  worstContrastOn,
+} from '@/tests/helpers/app/prism-light';
+
 const SOURCE = readFileSync(path.join(process.cwd(), 'app', 'brand-theme.css'), 'utf8');
 
 /**
@@ -44,23 +60,10 @@ const SOURCE = readFileSync(path.join(process.cwd(), 'app', 'brand-theme.css'), 
  * own header documents the `@layer` ban and quotes `.dark` selectors, so every
  * assertion below would read its own documentation as code.
  */
-const CSS = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '');
+const CSS = stripCssComments(SOURCE);
 
 const LIGHT_SCOPE = "[data-surface='consumer']";
 const DARK_SCOPE = "[data-surface='consumer'].dark";
-
-interface Rule {
-  selector: string;
-  body: string;
-}
-
-/** The file is flat — no nesting, no at-rules — so a rule is `selector { … }`. */
-function parseRules(css: string): Rule[] {
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
-    selector: match[1].trim(),
-    body: match[2],
-  }));
-}
 
 /**
  * The compound selectors of a selector list: split on the TOP-LEVEL commas
@@ -85,15 +88,6 @@ function compounds(selector: string): string[] {
   return out.filter((compound) => compound.length > 0);
 }
 
-/** The custom properties a rule body declares, in source order. */
-function customProperties(body: string): Map<string, string> {
-  const declared = new Map<string, string>();
-  for (const match of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
-    declared.set(match[1], match[2].trim().replace(/\s+/g, ' '));
-  }
-  return declared;
-}
-
 const RULES = parseRules(CSS);
 
 function ruleFor(selector: string): Rule {
@@ -108,81 +102,8 @@ const darkTokens = customProperties(ruleFor(DARK_SCOPE).body);
 const darkResolved = new Map([...lightTokens, ...darkTokens]);
 
 // ---------------------------------------------------------------- contrast
-
-function channelToLinear(channel: number): number {
-  const proportion = channel / 255;
-  return proportion <= 0.03928 ? proportion / 12.92 : Math.pow((proportion + 0.055) / 1.055, 2.4);
-}
-
-/** WCAG 2.1 relative luminance. Opaque hex only — every value tested is one. */
-function relativeLuminance(hex: string): number {
-  const value = hex.trim().replace('#', '');
-  if (!/^[0-9a-f]{6}$/i.test(value)) {
-    throw new Error(`expected an opaque 6-digit hex colour, got \`${hex}\``);
-  }
-  const [red, green, blue] = [0, 2, 4].map((offset) =>
-    channelToLinear(Number.parseInt(value.slice(offset, offset + 2), 16))
-  );
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-function contrastRatio(foreground: string, background: string): number {
-  const a = relativeLuminance(foreground);
-  const b = relativeLuminance(background);
-  const [lighter, darker] = a > b ? [a, b] : [b, a];
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function rgbaParts(value: string): { channels: number[]; alpha: number } {
-  const trimmed = value.trim();
-  if (trimmed.startsWith('#')) {
-    const hex = trimmed.replace('#', '');
-    return {
-      channels: [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16)),
-      alpha: 1,
-    };
-  }
-  const parts = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/);
-  if (!parts) throw new Error(`cannot composite \`${value}\` — not a hex or rgb()/rgba()`);
-  return {
-    channels: [1, 2, 3].map((index) => Number.parseInt(parts[index], 10)),
-    alpha: parts[4] === undefined ? 1 : Number.parseFloat(parts[4]),
-  };
-}
-
-function toHex(channels: number[]): string {
-  return `#${channels.map((channel) => Math.round(channel).toString(16).padStart(2, '0')).join('')}`;
-}
-
-/**
- * Composites a colour over an opaque ground and returns the hex it PAINTS AS.
- *
- * `blend` is the layer's `mix-blend-mode` and `opacity` its element opacity,
- * because that is how the prism's rays reach the page: in dark they SCREEN onto
- * the ground at `--ray-opacity`. A hairline or a glass ground is the plain case,
- * `normal` at full opacity. An opaque colour at full opacity is returned
- * untouched, so a caller does not have to know which kind it has.
- */
-function flattenOver(
-  value: string,
-  ground: string,
-  { blend = 'normal', opacity = 1 }: { blend?: string; opacity?: number } = {}
-): string {
-  const { channels, alpha } = rgbaParts(value);
-  if (alpha === 1 && opacity === 1 && blend === 'normal') return value.trim();
-  const under = rgbaParts(ground).channels;
-  const painted =
-    blend === 'screen'
-      ? channels.map((channel, index) => 255 - ((255 - channel) * (255 - under[index])) / 255)
-      : channels;
-  const weight = alpha * opacity;
-  return toHex(painted.map((channel, index) => weight * channel + (1 - weight) * under[index]));
-}
-
-/** A token's contrast against the ground it is painted on, alpha resolved. */
-function contrastOn(value: string, ground: string): number {
-  return contrastRatio(flattenOver(value, ground), ground);
-}
+// The model itself is `tests/helpers/app/prism-light.ts`; these bind it to a
+// theme of this file.
 
 /**
  * The ground a Tailwind `bg-<token>/<n>` wash actually paints — the token at
@@ -201,73 +122,13 @@ function scopeFor(theme: Theme): Map<string, string> {
   return theme === 'light' ? lightTokens : darkResolved;
 }
 
-/** Reads a token's value from the stylesheet, so the test measures what ships. */
-function token(scope: Map<string, string>, name: string): string {
-  const value = scope.get(name);
-  if (value === undefined) throw new Error(`brand-theme.css declares no \`${name}\``);
-  return value;
+/** `veil` is the veil's opacity at each state: 0 off, 1 the site's. */
+function litGrounds(theme: Theme, veil: readonly number[]): string[] {
+  return litGroundsOf(scopeFor(theme), veil);
 }
 
-// --------------------------------------------------------------- the light
-
-/**
- * Every colour the lit ground can paint at one point, as the stylesheet
- * describes it, in the order `components/app/ui/prism-ground.tsx` stacks the
- * layers: the ground, one glow, the fold, one edge of a ray, the veil, a spark.
- *
- * EACH LAYER AT ITS PEAK and every combination of them, which over-states the
- * light — the three glows never peak at one point, and a ray's own blur softens
- * its core — so a ratio that clears here clears on the page. One glow at a time
- * rather than all three stacked, because the three peak at opposite corners and
- * their stack is a colour the page never paints.
- *
- * `veil` says which veil states to include. Text straight on the ground is only
- * ever inside the veil — the ground keys it to the reading column — so that
- * case passes `[true]`; a glass surface can sit anywhere, so it takes both.
- */
-function litGrounds(theme: Theme, veil: readonly boolean[]): string[] {
-  const scope = scopeFor(theme);
-  const blend = token(scope, '--ray-blend');
-  const opacity = Number.parseFloat(token(scope, '--ray-opacity'));
-  const out: string[] = [];
-  for (const glow of [null, '--glow-1', '--glow-2', '--glow-3']) {
-    for (const fold of [false, true]) {
-      for (const ray of [null, '--ray-core', '--ray-warm', '--ray-cool']) {
-        for (const spark of [false, true]) {
-          for (const veiled of veil) {
-            let colour = token(scope, '--color-ground');
-            if (glow) colour = flattenOver(token(scope, glow), colour);
-            if (fold) colour = flattenOver(token(scope, '--fold'), colour);
-            if (ray) colour = flattenOver(token(scope, ray), colour, { blend, opacity });
-            if (veiled) colour = flattenOver(token(scope, '--veil'), colour);
-            if (spark) colour = flattenOver(token(scope, '--spark'), colour, { blend });
-            out.push(colour);
-          }
-        }
-      }
-    }
-  }
-  return out;
-}
-
-/**
- * Every colour a ground token can paint as. An opaque token (the popover, a
- * sheet) is itself; a glass one is composited over every lit ground.
- */
-function paintedAs(theme: Theme, ground: string): string[] {
-  const value = token(scopeFor(theme), ground);
-  if (rgbaParts(value).alpha === 1) return [value];
-  return litGrounds(theme, [false, true]).map((lit) => flattenOver(value, lit));
-}
-
-/** The tightest ratio of `ink` over every colour in `grounds`. */
-function worstContrast(ink: string, grounds: readonly string[]): number {
-  return Math.min(...grounds.map((ground) => contrastRatio(ink, ground)));
-}
-
-/** As `worstContrast`, for a non-text mark that may itself be an alpha. */
-function worstContrastOn(value: string, grounds: readonly string[]): number {
-  return Math.min(...grounds.map((ground) => contrastOn(value, ground)));
+function paintedAs(theme: Theme, ground: string, veil?: readonly number[]): string[] {
+  return paintedAsOf(scopeFor(theme), ground, veil);
 }
 
 /**
@@ -286,6 +147,42 @@ const GROUNDS = [
   '--read-muted',
 ];
 
+/**
+ * The shell's own grounds (t-179): the frame (`--app-*`) and the reading panes
+ * (`--read-*`), measured over the shell's light rather than the site's — the
+ * veil off, and at the quarter strength the shell's ground gives it. The read
+ * grounds are in `GROUNDS` as well, because a site page could reach for them.
+ */
+const SHELL_GROUNDS = [
+  '--app-background',
+  '--app-card',
+  '--app-muted',
+  '--read-background',
+  '--read-card',
+  '--read-muted',
+];
+
+/**
+ * The shell veil's opacity, read from the module that sets it, so thinning it
+ * further is measured here rather than assumed.
+ */
+const SHELL_VEIL_OPACITY = (() => {
+  const groundCss = stripCssComments(
+    readFileSync(
+      path.join(process.cwd(), 'components', 'app', 'ui', 'prism-ground.module.css'),
+      'utf8'
+    )
+  );
+  const rule = parseRules(groundCss).find(
+    (candidate) => candidate.selector === ".ground[data-prism='app'] .veil"
+  );
+  const opacity = rule?.body.match(/opacity:\s*([\d.]+)/)?.[1];
+  if (opacity === undefined) throw new Error('prism-ground.module.css sets no shell veil opacity');
+  return Number.parseFloat(opacity);
+})();
+
+const SHELL_VEIL = [0, SHELL_VEIL_OPACITY];
+
 /** `[theme, ground]` for every combination, for `it.each`. */
 const GROUND_PAIRINGS = GROUNDS.flatMap((ground) => [
   ['light', ground] as const,
@@ -293,9 +190,6 @@ const GROUND_PAIRINGS = GROUNDS.flatMap((ground) => [
 ]);
 
 const THEMES = ['light', 'dark'] as const;
-
-/** The three inks the done-when names: body text, secondary text, links. */
-const INKS = ['--color-foreground', '--color-muted-foreground', '--color-secondary-ink'];
 
 // -------------------------------------------------------------------- tests
 
@@ -532,6 +426,37 @@ describe('app/brand-theme.css', () => {
       expect(ruleFor(`${LIGHT_SCOPE} .bg-card`).body).toMatch(/backdrop-filter:\s*var\(--glass\)/);
     });
 
+    it("thins the shell's frame and keeps its reading panes nearly solid (t-179)", () => {
+      // The three tiers `prism/app.html` draws. Each re-scope points the three
+      // glass tokens at its tier, so every `bg-background`, `bg-card` and
+      // `bg-muted` inside takes the tier's value without a class changing.
+      const tiers = [
+        [`${LIGHT_SCOPE} [data-prism='app'] ~ *`, 'app'],
+        [`${LIGHT_SCOPE} :is([data-pane='chat'], [data-pane='ws'])`, 'read'],
+      ] as const;
+      for (const [selector, tier] of tiers) {
+        const declared = customProperties(ruleFor(selector).body);
+        expect(Object.fromEntries(declared)).toEqual({
+          '--color-background': `var(--${tier}-background)`,
+          '--color-card': `var(--${tier}-card)`,
+          '--color-muted': `var(--${tier}-muted)`,
+        });
+      }
+    });
+
+    it('lets more light through the frame than through the reading panes', () => {
+      // The ordering the tiers exist for. If the frame were ever as thick as
+      // where you read, the shell would be an opaque slab again.
+      for (const theme of THEMES) {
+        for (const role of ['background', 'card', 'muted']) {
+          const frame = rgbaParts(token(scopeFor(theme), `--app-${role}`)).alpha;
+          const read = rgbaParts(token(scopeFor(theme), `--read-${role}`)).alpha;
+          expect(frame, `${theme} ${role}`).toBeLessThan(read);
+          expect(read, `${theme} ${role}`).toBeLessThan(1);
+        }
+      }
+    });
+
     it('puts the halo on site text only', () => {
       // Keyed on the site's ground, so the shell's panes carry no halo.
       const halo = RULES.find((rule) => rule.body.includes('var(--ground-halo)'));
@@ -558,21 +483,47 @@ describe('app/brand-theme.css', () => {
       (ink, theme) => {
         const ratio = worstContrast(
           token(scopeFor(theme as Theme), ink),
-          litGrounds(theme as Theme, [true])
+          litGrounds(theme as Theme, [1])
         );
         expect(ratio).toBeGreaterThanOrEqual(4.5);
       }
     );
+
+    // The shell (t-179): the frame and the reading panes, over the shell's
+    // light — the veil off, and at the quarter strength the shell gives it.
+    it.each(
+      SHELL_GROUNDS.flatMap((ground) =>
+        THEMES.flatMap((theme) => INKS.map((ink) => [ink, theme, ground]))
+      )
+    )('%s in %s on %s in the shell', (ink, theme, ground) => {
+      const ratio = worstContrast(
+        token(scopeFor(theme as Theme), ink),
+        paintedAs(theme as Theme, ground, SHELL_VEIL)
+      );
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it("would fail on the prototype's dark frame", () => {
+      // The negative control for the frame's measured deviation: at the
+      // prototype's dark alphas, muted text in the nav falls below AA.
+      const prototype = new Map(darkResolved);
+      prototype.set('--app-muted', 'rgba(44, 35, 31, 0.48)');
+      const ratio = worstContrast(
+        token(prototype, '--color-muted-foreground'),
+        paintedAsOf(prototype, '--app-muted', SHELL_VEIL)
+      );
+      expect(ratio).toBeLessThan(4.5);
+    });
 
     it('would fail on the bare ground outside the veil', () => {
       // The negative control, and the reason the ground keys its veil to the
       // reading column: without it, links at a line's edge fall below AA in
       // light, and muted text far below it in dark.
       expect(
-        worstContrast(token(lightTokens, '--color-secondary-ink'), litGrounds('light', [false]))
+        worstContrast(token(lightTokens, '--color-secondary-ink'), litGrounds('light', [0]))
       ).toBeLessThan(4.5);
       expect(
-        worstContrast(token(darkResolved, '--color-muted-foreground'), litGrounds('dark', [false]))
+        worstContrast(token(darkResolved, '--color-muted-foreground'), litGrounds('dark', [0]))
       ).toBeLessThan(4.5);
     });
 
@@ -581,7 +532,7 @@ describe('app/brand-theme.css', () => {
       // ground. If `litGrounds` ever returned only the ground, every case above
       // would be measuring the flat page the prism replaced.
       for (const theme of THEMES) {
-        const grounds = new Set(litGrounds(theme, [false, true]));
+        const grounds = new Set(litGrounds(theme, [0, 1]));
         expect(grounds.size).toBeGreaterThan(20);
         expect(grounds.has(token(scopeFor(theme), '--color-ground'))).toBe(true);
       }

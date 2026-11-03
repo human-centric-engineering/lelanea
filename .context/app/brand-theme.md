@@ -241,13 +241,42 @@ links (`--color-secondary-ink`):
 The tightest is dark secondary text on a card, 4.62, under a ray's core over the
 warm glow with the veil off.
 
+### The shell (t-179)
+
+The shell is glass in three tiers, as `prism/app.html` draws it, and each is a
+re-scope of the three glass tokens in `app/brand-theme.css`:
+
+- **The frame** — the nav, the topbar, the rail — takes `--app-*`, thin, so
+  the light comes through it. Keyed on the siblings of the shell's
+  `<PrismGround variant="app">`.
+- **Where you read** — the conversation and the workspace — takes `--read-*`,
+  nearly solid. Keyed on their `data-pane`.
+- **Anything riding over the panes** is a solid sheet: every drawer is
+  `role="dialog"`, and the small-width nav drawer and the page layer over the
+  conversation paint `--color-sheet` themselves.
+
+Inside the shell the veil is at a quarter, so these are measured with the veil
+off and at that strength (read from `prism-ground.module.css`):
+
+| Ground              | Light body | Light muted | Light link | Dark body | Dark muted | Dark link |
+| ------------------- | ---------: | ----------: | ---------: | --------: | ---------: | --------: |
+| `--app-background`  |       8.78 |        5.24 |       4.96 |      7.41 |       4.66 |      5.74 |
+| `--app-card`        |       9.78 |        5.84 |       5.52 |      7.43 |       4.67 |      5.75 |
+| `--app-muted`       |       8.38 |        5.01 |       4.73 |      7.38 |       4.64 |      5.72 |
+| `--read-background` |      10.84 |        6.47 |       6.12 |     10.18 |       6.40 |      7.89 |
+| `--read-card`       |      11.86 |        7.08 |       6.69 |      9.17 |       5.76 |      7.10 |
+| `--read-muted`      |      10.50 |        6.27 |       5.93 |     10.64 |       6.68 |      8.24 |
+
+**The dark frame is a measured deviation from the prototype.** At its
+`0.58 / 0.66 / 0.48` a screened ray core shows through strongly enough to take
+muted text to 4.13, 3.88 and 3.49:1, and links on the muted ground to 4.30. The
+shipped alphas (`0.66 / 0.81 / 0.68`) are the least that clear 4.6 for all
+three inks — the margin `--color-input` keeps. The light frame is the
+prototype's, and clears.
+
 **What the method does not cover:** the halo (it only helps, and is not
-measured); the `--app-*` frame grounds, which ship as the prototype's values for
-t-179 and **fail in dark** as drawn — muted text measured 4.15 on
-`--app-background`, 3.90 on `--app-card` and 3.49 on `--app-muted`, with the
-shell's quarter-strength veil — so t-179 must measure before it applies them;
-and the tint picker's tints (t-180), each of which has to clear this table
-before it is offered.
+measured), and the tint picker's tints (t-180), which are measured by their
+own test over this same model (`tests/helpers/app/prism-light.ts`).
 
 ## The three contrast rulings (t-18)
 
