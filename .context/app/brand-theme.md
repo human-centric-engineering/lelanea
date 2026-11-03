@@ -82,44 +82,167 @@ from `@theme` at build time, and `@theme` lives in Sunrise's `globals.css`.
 
 ## Where the values come from
 
-The approved prototype's token block
-(`.context/app/planning/design/lelanea.html`) is the source, because §6.1 of the
-product description makes the prototype the authority on how the product looks.
+**The prism prototype is the authority** (t-177, 3 Nov 2026):
+[`planning/design/prism/index.html`](./planning/design/prism/index.html) — the
+site over its real compiled CSS, whose "PRISM over the real site" block carries
+the values — and [`planning/design/prism/app.html`](./planning/design/prism/app.html),
+the shell, whose token block is the same set. Both are byte-identical to the
+published artifact the owner approved.
 
-Four things it does not carry come from the design kit
-(`.context/app/planning/design/Lelanea_Design_System/colors_and_type.css`),
-which §6.4 and §6.5
-specify: the radius scale (8/12/20/28/999), `--shadow-bloom`, and `--ease-quick`.
-Where the two disagree — `--shadow-rest` and `--shadow-lift` have different
-values in each — **the prototype wins**.
+**What the prism supersedes in `lelanea.html`:** the palette. Every colour, the
+flat oyster ground (now a lit ground under glass), the shadows, and the lotus's
+teals (now iris around a rose-gold heart). Teal and aqua no longer carry
+navigation; iris does. The ceremonial accent is rose-bronze, not burnt orange,
+and dark mode is amber smoke on an umber ground, not charcoal.
 
-Four values deviate from the prototype, every one of them for a measured
-contrast reason and every one recorded at the site:
+**What it leaves standing:** everything else §6.1 made `lelanea.html` the
+authority on — type and its four registers, the radius scale, spacing, motion,
+and the layout and content of every page. `lelanea.html` stays in the repo as
+that authority. The prism's own overrides of the site's layout (the
+`[class*='…']` rules in `index.html`) are a demo device for showing the light
+over compiled CSS, and none of them is copied into the code: t-178 and t-179
+make those changes in the modules they belong to.
 
-- **Dark `--color-popover` is `#3D4245`, one step darker than the prototype's
-  `#3F4446`.** At the prototype's value, secondary text measured 4.40:1 — the
-  only one of the four grounds that missed D5's bar. Popovers are where
-  secondary text lives most: `<FieldHelp>` renders its whole body as muted text
-  on that ground, and CLAUDE.md mandates one on every non-trivial form field.
-- **`--color-destructive` is `#A95146` and holds across both modes.** It does
-  not lighten in dark, because §6.2 says the functional colours hold — the
-  prototype's `--color-status-red` lightens only because it is a badge tint used
-  behind a `-bg`/`-ink` pair, and that lighter value taken as a button fill put
-  oyster text on it at 2.99:1. And it is not §6.2's `#B75D52` either, which
-  measured 3.93:1 under oyster; see the ruling below.
-- **`--color-input` is `rgba(17, 24, 26, 0.50)` light and
-  `rgba(227, 218, 209, 0.52)` dark**, where the prototype gives `.input` the
-  same hairline as everything else. See the ruling below.
-- **`--color-ring` is the secondary ink** — `#17718A` light, `#7CC0D6` dark —
-  not the ceremonial orange. See the ruling below.
-- **`--color-selected` is `#786573`, not §6.2's heather amethyst `#806C7B`**,
-  which carries a label at 4.25:1. Same move as the terracotta and the orange;
-  the named amethyst survives as `--color-status-purple`. See t-2's rulings.
-- **`--color-primary-hover` does not lighten in dark mode**, where §6.5's text
-  reads as though it should. See t-2's rulings — the value §6.5 names is the
-  pressed step of the ceremonial orange, not of the fill.
+Three things neither prism file carries still come from the design kit
+(`Lelanea_Design_System/colors_and_type.css`, §6.4 and §6.5): the radius scale
+(8/12/20/28/999), `--shadow-bloom` (retinted from the orange to the rose-bronze
+accent ink) and `--ease-quick`.
+
+### The token families the prism adds
+
+| Family                                                    | Is                                                                                                 |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `--color-ground`                                          | The opaque page colour under the light. Also what an email, the social card and the apple icon use |
+| `--glow-1..3`, `--fold`                                   | The three washes and the soft folds                                                                |
+| `--ray-core`, `-warm`, `-cool`, `--ray-blend`, `-opacity` | A ray's bright core and its two fringes; `screen` in dark                                          |
+| `--spark`, `--veil`                                       | The glints, and the calm band where words run                                                      |
+| `--ground-halo`, `--glass`                                | The faint halo on text straight on the ground (light only); a card's blur                          |
+| `--color-sheet`                                           | The solid ground for anything that rides over other content                                        |
+| `--read-*`                                                | The nearly solid grounds where you read in the shell (t-179)                                       |
+| `--app-*`                                                 | The thinner frame grounds around the shell's panes (t-179)                                         |
+
+The ground is painted by `components/app/ui/prism-ground.tsx`, mounted once per
+consumer frame — `app/(public)/layout.tsx` ([row 6](./divergences.md)) and the
+gate page as `site`, the shell's layout as `app` — and never under `/admin`.
+`<body>` carries `--color-ground`, so the canvas is the ground and the light
+paints over it at `z-index: -1`, behind every frame without the frame needing a
+z-index. The frames that mount it drop their own `bg-background`, which is glass
+now.
+
+**Not yet lit:** the `(auth)` and `(protected)` pages — sign-in, `/profile`,
+`/settings` — sit behind Sunrise's layouts, whose wrappers paint
+`bg-background`. They get the prism's palette over the flat ground and no light.
+Lighting them means mounting the ground in two more Sunrise files; that is a
+call for whoever brings those pages into the prism, not something to slip in
+here.
+
+### Three rules in the stylesheet that are not tokens
+
+- **The page is the ground.** `[data-surface='consumer'] body` paints
+  `--color-ground`, because `globals.css` paints `<body>` with
+  `--color-background`, which is glass — and glass over nothing is white.
+- **A dialog is a sheet.** Inside `[role='dialog']` and `[role='alertdialog']`
+  the three glass tokens point at opaque ones, so a dialog's `bg-background`
+  never shows the page through it. The prototype's rule that anything riding
+  over the panes is a solid sheet, reached by role rather than by class.
+- **A card is glass.** `.bg-card` takes `backdrop-filter: var(--glass)`. Only
+  cards: a backdrop filter makes an element the containing block for its fixed
+  descendants, and `bg-background` is the ground of whole frames.
+
+The halo is keyed to the site's ground (`body:has([data-prism='site']) main …`),
+so the shell's text, which sits on panes, carries none.
+
+### Where the prism's values are not taken
+
+Every one measured, and recorded at its site in the stylesheet or the module:
+
+- **The dark sparks are transparent**, not `rgba(255, 228, 196, 0.65)`. A spark
+  screened onto the umber is a near-white point; where one sat behind words,
+  muted text measured 1.01:1 with the spark drawn over the veil, as the
+  prototype draws it, and still 3.15:1 had it been drawn beneath the veil, and no dimmer spark closes it (a
+  tenth of its strength still measured 4.40). The sparks sit at 5% and 94% of
+  the viewport, which below about 1400px is exactly where a line of text
+  begins. In light a spark only raises dark text's contrast, so it stays.
+- **The site veil is keyed to the reading column**, not to the viewport's 20–80%
+  band. With the prototype's band, the first and last words of a line sit
+  outside the veil on every screen between a phone and about 1400px, where links
+  measured 4.21:1 in light and muted text 1.82:1 in dark. The veil is now full
+  across the 1180px column and fades in the 120px outside it, so on a wide
+  screen the light is still luminous at the edges, as drawn. The shell keeps the
+  prototype's band at a quarter strength, because its panes carry the text.
+- **The lotus does not move in dark.** The prototype restates the ripple and the
+  vein for dark mode; the still marks are baked once
+  ([below](#the-lotus)), which is safe only because the lotus tokens are
+  mode-invariant. The cinema ink is not restated in dark either: a cinema is
+  dark in both themes.
+- **Tokens the prism does not carry are derived and measured**, each recorded
+  at its token: `--color-input` (`rgba(31, 26, 28, 0.52)` / `rgba(234, 219, 205,
+0.52)`, 3.29 and 3.24 at their tightest), `--color-ring` (the secondary ink,
+  5.47 and 5.69), `--color-secondary-hover` per theme, `--color-destructive`
+  (`#AA5751`, the status red three points darker, 4.76 under its label) and its
+  hover, `--color-selected` (`#7E6982`, the heather three points darker, 4.72),
+  the info blue (unchanged, re-measured), and the cinema's scrims and lines
+  retinted from deep water to dusk.
+- **The fills move between themes**, as the prism draws them, so the hover rule
+  is now "each theme's hover is darker than that theme's fill" rather than "the
+  hover holds across both". The destructive and selected fills still hold.
+
+## Contrast over the light
+
+The prism has no single ground colour. The page is lit, its grounds are glass,
+and the colour behind a word depends on where on the screen it is. So every
+contrast ratio in this palette is a **worst case over the lit ground**:
+
+1. Build every colour the ground can paint at one point, from the tokens, in the
+   order `prism-ground.tsx` stacks them: `--color-ground`, then at most one glow,
+   the fold or not, at most one edge of a ray (core, warm or cool, at
+   `--ray-opacity`, screened in dark), the veil or not, a spark or not. Each
+   layer is at its **peak**. That over-states the light — the three glows never
+   peak at one point, and a ray's own blur softens its core — so a ratio that
+   clears here clears on the page.
+2. For a glass ground, composite the token over each of those colours. An
+   opaque ground (the popover) is itself.
+3. Take the **lowest** ratio of the ink over all of them.
+
+Text straight on the ground is measured **inside the veil only**, because the
+ground keys the veil to the reading column; glass surfaces are measured with
+the veil on and off, because a card can sit anywhere.
+
+`tests/unit/app/brand-theme.test.ts` reproduces this from the stylesheet, so a
+token edited to something that fails is caught there. Measured worst cases, body
+text (`--color-foreground`), secondary text (`--color-muted-foreground`) and
+links (`--color-secondary-ink`):
+
+| Ground                   | Light body | Light muted | Light link | Dark body | Dark muted | Dark link |
+| ------------------------ | ---------: | ----------: | ---------: | --------: | ---------: | --------: |
+| Bare ground, in the veil |       9.91 |        5.92 |       5.60 |      7.44 |       4.67 |      5.76 |
+| `--color-background`     |      10.03 |        5.99 |       5.66 |      8.37 |       5.26 |      6.48 |
+| `--color-card`           |      10.75 |        6.42 |       6.07 |      7.35 |       4.62 |      5.69 |
+| `--color-muted`          |       9.70 |        5.79 |       5.47 |      7.46 |       4.69 |      5.78 |
+| `--color-popover`        |      11.66 |        6.96 |       6.58 |      9.46 |       5.95 |      7.33 |
+| `--read-background`      |      10.84 |        6.47 |       6.12 |     10.20 |       6.40 |      7.90 |
+| `--read-card`            |      11.88 |        7.09 |       6.71 |      9.20 |       5.78 |      7.12 |
+| `--read-muted`           |      10.51 |        6.27 |       5.93 |     10.62 |       6.67 |      8.23 |
+
+The tightest is dark secondary text on a card, 4.62, under a ray's core over the
+warm glow with the veil off.
+
+**What the method does not cover:** the halo (it only helps, and is not
+measured); the `--app-*` frame grounds, which ship as the prototype's values for
+t-179 and **fail in dark** as drawn — muted text measured 4.15 on
+`--app-background`, 3.90 on `--app-card` and 3.49 on `--app-muted`, with the
+shell's quarter-strength veil — so t-179 must measure before it applies them;
+and the tint picker's tints (t-180), each of which has to clear this table
+before it is offered.
 
 ## The three contrast rulings (t-18)
+
+> These rulings were made on the teal palette, and the values and ratios quoted
+> in this section and the next are that palette's. The mechanisms all carry
+> into the prism — a control boundary that is not the hairline, a ring on the
+> secondary ink, a destructive fill darker than its named hue, an ink role
+> separate from the fill, hover tokens — and the prism's own values and
+> measurements are [above](#contrast-over-the-light).
 
 t-1 shipped two measured gaps rather than patching them quietly, because closing
 either looked like a palette decision rather than a build one. The owner made
@@ -295,19 +418,18 @@ exact trap that put oyster on the status red at 2.99:1 before t-18.
 
 ### The lotus has its own thirteen values
 
-`--color-lotus-*` names the three petal teals and the outer edge teal, the
-vein, the stamens' two oranges and their glint, two ripple steps, the
-halation, and (t-134) the lily pad and its edge. §6.2 names four of them; the rest are named
-nowhere but the lotus model.
+`--color-lotus-*` names the three petal colours and the outer edge, the vein,
+the heart's two stops and its glint, two ripple steps, the halation, and
+(t-134) the lily pad and its edge — iris and rose-gold since the prism (t-177),
+teal and orange before it. Their roles are named nowhere but the lotus model.
 
 They exist so the no-colour-literal guard over `components/app/ui/` can be
 **absolute**. The alternative was exempting the lotus — the one part of that
 directory that would most have needed the guard — and an exemption is a hole
 that widens.
 
-**They are deliberately not wired to `--color-secondary` and
-`--color-status-green`**, though the outer petal and the near ripple are
-byte-identical to them today. Those are UI roles that can be re-tuned for
+**They are deliberately not wired to `--color-secondary`**, though the outer
+petal is byte-identical to it today. Those are UI roles that can be re-tuned for
 contrast: t-18 moved `--color-ring` onto the teal, and a later pass could move
 the teal itself. The bloom must not follow it. Same colour, different reason to
 exist — and they hold across both modes, because a mark is not a surface.
@@ -317,7 +439,8 @@ exist — and they hold across both modes, because a mark is not a surface.
 The owner's choice from t-131's prototypes (3 Oct 2026, "T5"; decision on
 f-identity): a water lily drawn from a 3D model — four sepals and four whorls
 of slender pointed petals, opening from a pointed bud around a crown of orange
-stamens, on lily pads and sage ripples — in the mark's teals. It supersedes
+stamens, on lily pads and sage ripples — in the mark's teals, retinted in the
+prism (t-177) to iris around a rose-gold heart, on dusk. It supersedes
 §6.9's flat three-tier fan.
 
 | Piece     | File                                | Does                                                                                       |
@@ -357,6 +480,9 @@ apple icon.
 until you do.
 
 ## The destructive token has two roles, and only one rule separates them
+
+> The ratios in this section are the teal palette's; the prism's are in the
+> stylesheet at the rule and measured by the test. The mechanism is unchanged.
 
 `--color-destructive` is a shadcn token doing two opposite jobs. `bg-destructive`
 is a **fill** that must be dark enough to hold oyster text; `text-destructive` is
