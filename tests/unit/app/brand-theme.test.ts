@@ -43,6 +43,7 @@ import {
   flattenOver,
   INKS,
   litGrounds as litGroundsOf,
+  MARKS,
   paintedAs as paintedAsOf,
   parseRules,
   rgbaParts,
@@ -468,6 +469,22 @@ describe('app/brand-theme.css', () => {
       );
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
+
+    // And the shell's controls: destructive text at AA, and the boundary and
+    // the ring at 1.4.11's 3:1, on the same glass and the same light.
+    it.each(SHELL_GROUNDS.flatMap((ground) => THEMES.map((theme) => [theme, ground])))(
+      '%s: destructive text, the control boundary and the focus ring on %s in the shell',
+      (theme, ground) => {
+        const scope = scopeFor(theme as Theme);
+        const grounds = paintedAs(theme as Theme, ground, SHELL_VEIL);
+        expect(
+          worstContrast(token(scope, '--color-status-red-ink'), grounds)
+        ).toBeGreaterThanOrEqual(4.5);
+        for (const mark of MARKS) {
+          expect(worstContrastOn(token(scope, mark), grounds)).toBeGreaterThanOrEqual(3);
+        }
+      }
+    );
 
     it("would fail on the prototype's dark frame", () => {
       // The negative control for the frame's measured deviation: at the

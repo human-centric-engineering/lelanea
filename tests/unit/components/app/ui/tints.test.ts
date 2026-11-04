@@ -4,8 +4,9 @@
  *
  * A tint is a candidate set of token values, and the picker offers it to
  * Lelañea as a choice for the brand. So each one is held to what the palette
- * itself is held to: body text, secondary text and links clear 4.5:1 over the
- * light it makes, measured the way `tests/unit/app/brand-theme.test.ts`
+ * itself is held to: body text, secondary text, links and destructive text
+ * clear 4.5:1 over the light it makes, and the control boundary and the focus
+ * ring clear 3:1, measured the way `tests/unit/app/brand-theme.test.ts`
  * measures the palette (`tests/helpers/app/prism-light.ts`). A tint that does
  * not clear is not offered.
  *
@@ -24,6 +25,7 @@ import {
   customProperties,
   INKS,
   litGrounds,
+  MARKS,
   paintedAs,
   paletteScopes,
   parseRules,
@@ -33,6 +35,7 @@ import {
   stripCssComments,
   token,
   worstContrast,
+  worstContrastOn,
 } from '@/tests/helpers/app/prism-light';
 
 const RULES = parseRules(
@@ -121,6 +124,22 @@ describe('the tint picker’s tints', () => {
       const scope = tinted(theme, id);
       const grounds = SHELL_GROUNDS.flatMap((ground) => paintedAs(scope, ground, SHELL_VEIL));
       expect(worstContrast(token(scope, ink), grounds)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // The palette's controls too: destructive text at AA, and the boundary and
+    // the ring at 1.4.11's 3:1, wherever the tint's light reaches them.
+    it.each(OFFERED)('%s %s: destructive text and the controls on every glass', (theme, id) => {
+      const scope = tinted(theme, id);
+      const grounds = [
+        ...SITE_GROUNDS.flatMap((ground) => paintedAs(scope, ground, SITE_VEIL)),
+        ...SHELL_GROUNDS.flatMap((ground) => paintedAs(scope, ground, SHELL_VEIL)),
+      ];
+      expect(worstContrast(token(scope, '--color-status-red-ink'), grounds)).toBeGreaterThanOrEqual(
+        4.5
+      );
+      for (const mark of MARKS) {
+        expect(worstContrastOn(token(scope, mark), grounds)).toBeGreaterThanOrEqual(3);
+      }
     });
 
     it('would refuse a tint whose light is too bright behind dark-mode text', () => {

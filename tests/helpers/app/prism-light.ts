@@ -213,6 +213,12 @@ export function worstContrastOn(value: string, grounds: readonly string[]): numb
 export const INKS = ['--color-foreground', '--color-muted-foreground', '--color-secondary-ink'];
 
 /**
+ * The non-text marks WCAG 1.4.11 holds to 3:1: the control boundary
+ * (`--color-input`) and the focus ring (`--color-ring`).
+ */
+export const MARKS = ['--color-input', '--color-ring'];
+
+/**
  * The shell's own grounds (t-179): the frame (`--app-*`) and the reading panes
  * (`--read-*`), measured over the shell's light with `SHELL_VEIL`.
  */

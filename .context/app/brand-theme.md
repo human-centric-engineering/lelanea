@@ -285,7 +285,10 @@ every consumer page offering other tints of the prism, in both themes. A tint
 moves only the ground, the glows and the fold (`components/app/ui/tints.css`),
 and each one is measured over this same model by
 `tests/unit/components/app/ui/tints.test.ts`, so none is offered that fails
-4.5:1. The flag is off by default and production never sets it. t-181 writes
+4.5:1 for text or 3:1 for a control's boundary and focus ring. Four light tints
+(Pearl, Blush, Lilac, Honey) have their folds thinned for it: at the
+prototype's weight, destructive text on the shell's `--app-muted` fell to
+4.30–4.48. The flag is off by default and production never sets it. t-181 writes
 her choice into this file as the defaults and deletes the picker; the list of
 what goes is in `components/app/ui/tint-picker.tsx`.
 

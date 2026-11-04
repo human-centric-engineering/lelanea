@@ -16,7 +16,7 @@
  * be written somewhere before one of them becomes the token.
  * `tests/unit/components/app/ui/tints.test.ts` measures every block here over
  * the light, the same way the palette is measured, and fails on one that does
- * not clear 4.5:1.
+ * not clear 4.5:1 for text or 3:1 for a control's boundary and focus ring.
  *
  * SELECTORS. Both attributes sit on `<html>` beside `data-surface` and `.dark`,
  * so each is a compound selector (brand-theme.css note 2). A light block says
@@ -26,13 +26,15 @@
 
 /* ---------------------------------------------------------------- light */
 
-/* Pearl, Blush and Opal are the prototype's own. */
+/* Pearl, Blush and Opal are the prototype's own, except that Pearl's and
+ * Blush's folds (and Lilac's and Honey's) are thinned to the least that keeps
+ * destructive text at 4.5:1 on the shell's thinnest glass, `--app-muted`. */
 [data-surface='consumer'][data-tint='pearl']:not(.dark) {
   --color-ground: #e6e7ec;
   --glow-1: rgba(246, 247, 252, 0.95);
   --glow-2: rgba(214, 218, 232, 0.8);
   --glow-3: rgba(236, 226, 220, 0.6);
-  --fold: rgba(110, 116, 136, 0.15);
+  --fold: rgba(110, 116, 136, 0.12);
 }
 
 [data-surface='consumer'][data-tint='blush']:not(.dark) {
@@ -40,7 +42,7 @@
   --glow-1: rgba(250, 236, 240, 0.95);
   --glow-2: rgba(226, 206, 222, 0.8);
   --glow-3: rgba(220, 220, 240, 0.6);
-  --fold: rgba(140, 104, 124, 0.13);
+  --fold: rgba(140, 104, 124, 0.07);
 }
 
 [data-surface='consumer'][data-tint='opal']:not(.dark) {
@@ -66,7 +68,7 @@
   --glow-1: rgba(248, 244, 252, 0.95);
   --glow-2: rgba(218, 208, 236, 0.8);
   --glow-3: rgba(236, 222, 226, 0.6);
-  --fold: rgba(112, 100, 140, 0.14);
+  --fold: rgba(112, 100, 140, 0.07);
 }
 
 /* Sea glass: a cool green-grey, the old water remembered faintly. */
@@ -84,7 +86,7 @@
   --glow-1: rgba(255, 238, 208, 0.95);
   --glow-2: rgba(240, 214, 182, 0.72);
   --glow-3: rgba(226, 222, 236, 0.6);
-  --fold: rgba(150, 114, 70, 0.13);
+  --fold: rgba(150, 114, 70, 0.12);
 }
 
 /* ----------------------------------------------------------------- dark */
