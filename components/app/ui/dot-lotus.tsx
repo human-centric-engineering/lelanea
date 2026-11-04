@@ -152,13 +152,19 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       scene.reset();
       loop.replay();
     };
-    replayRef.current = replay;
+    // A click replays only a flower that is playing: one still waiting to be
+    // seen has nothing to replay.
+    replayRef.current = () => {
+      if (started) replay();
+    };
 
     const watching = typeof IntersectionObserver !== 'undefined';
     // Whether any of its light is on screen: the flower's box widened by how
     // far the light reaches above and below it, so the loop does not freeze
     // while drifting light is still in view.
-    const reach = Math.round(PAD * (host.getBoundingClientRect().width / FRAME.box[2]));
+    // At the flower's widest, not its width now: the margin is fixed when the
+    // observer is made, and too wide only runs the loop a little longer.
+    const reach = Math.round(PAD * (lotusFrameSize(size, FRAME).width / FRAME.box[2]));
     const inReach = watching
       ? new IntersectionObserver(
           (entries) => {
@@ -178,8 +184,12 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
         ? new IntersectionObserver(
             (entries) => {
               const entry = entries[entries.length - 1];
-              if (!entry.isIntersecting) started = false;
-              else if (!started && entry.intersectionRatio >= 0.5) {
+              if (!entry.isIntersecting) {
+                // Out of sight, back to nothing, so a return unfolds from the
+                // start rather than showing the last open frame first.
+                started = false;
+                replay();
+              } else if (!started && entry.intersectionRatio >= 0.5) {
                 started = true;
                 replay();
               }
@@ -236,7 +246,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       replayRef.current = () => undefined;
       delete host.dataset.lit;
     };
-  }, [reduced, startInView]);
+  }, [reduced, startInView, size]);
 
   const { width, height } = lotusFrameSize(size, FRAME);
   const hostStyle: CSSProperties & Record<'--dl-max', string> = { '--dl-max': `${size}px` };

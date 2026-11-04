@@ -355,6 +355,25 @@ describe('DotLotus', () => {
     });
   });
 
+  it('folds back to nothing once it has left the screen, not leaving its last open frame', () => {
+    stubCanvas();
+    render(<DotLotus startInView />);
+    intersect(0.6);
+    const paints = clearRect.mock.calls.length;
+    intersect(0);
+    // The replay paints its first moment at once — before any light arrives.
+    expect(clearRect.mock.calls.length).toBe(paints + 1);
+  });
+
+  it('ignores a click on a flower still waiting to be seen', () => {
+    stubCanvas();
+    render(<DotLotus startInView />);
+    intersect(0.3);
+    const paints = clearRect.mock.calls.length;
+    fireEvent.click(host());
+    expect(clearRect.mock.calls.length).toBe(paints);
+  });
+
   it('plays the unfolding again on a click', () => {
     stubCanvas();
     render(<DotLotus />);

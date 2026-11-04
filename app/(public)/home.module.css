@@ -108,8 +108,8 @@
  * `--hero-gap`), so the sky follows them. Dark mode has no sky: the whole page
  * is dusk already.
  *
- * Isolated, so the sky at `z-index: -1` stays beneath the halo, the water and
- * the flower inside this column rather than dropping under the page.
+ * Isolated, so the sky at `z-index: -1` stays beneath the halo and the
+ * flower's canvas inside this column rather than dropping under the page.
  */
 .sky {
   display: none;

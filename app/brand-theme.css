@@ -590,8 +590,17 @@
   /* ---- Elevation: opaque black, since the warm shadow disappears here ---- */
   --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.32);
   --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.34), 0 28px 70px rgba(0, 0, 0, 0.52);
+}
 
-  /* ---- The lotus in light (t-182): added together as glow on the umber -- */
+/* ======================================================= the lotus in light
+ * The dotted flower on the umber (t-182): its light added together as glow.
+ * Its own rule rather than lines in the dark block, because the home hero's
+ * flower takes the same palette in LIGHT mode: it opens on the dusk sky
+ * (t-178), and glow needs dark behind it. `data-dot-ground='sky'` marks that
+ * band; in dark mode there is no sky and this applies from <html> as usual.
+ */
+[data-surface='consumer'].dark,
+[data-surface='consumer']:not(.dark) [data-dot-ground='sky'] {
   --dot-1: #8e98d6;
   --dot-2: #aeb5ea;
   --dot-3: #d8dcf7;
@@ -616,35 +625,16 @@
   --dot-glow: rgba(236, 162, 108, 0.24);
 }
 
-/* ======================================================= the lotus on the sky
- * The home hero's flower opens on the dusk sky in light mode (t-178), and
- * glow needs dark behind it, so there it is drawn as it is in dark mode — with
- * its petals paler, nearly white, so they still read as light on a sky lighter
- * than the umber, a brighter halo and a warmer glow, and no pool of its own:
- * the sky is the pool. `data-dot-ground='sky'` marks the band; in dark mode
- * there is no sky and the dark tokens above apply unchanged.
- */
+/* On the sky, which is lighter than the umber, the petals are paler, nearly
+ * white, so they still read as light; the halo is brighter and the glow
+ * warmer; and there is no pool of its own — the sky is the pool. Only what
+ * differs from the rule above is restated. */
 [data-surface='consumer']:not(.dark) [data-dot-ground='sky'] {
   --dot-1: #d2d6f6;
   --dot-2: #e4e6fa;
   --dot-3: #f6f6fe;
-  --dot-core-1: #ffd2ac;
-  --dot-core-2: #eba06a;
-  --dot-core-3: #c8784a;
   --dot-water: #e6e0f4;
-  --dot-star: #ffe8cc;
-  --dot-shine: rgba(255, 232, 204, 0.55);
-  --dot-shine-base: 0.12;
-  --dot-shine-size: 2.2;
-  --dot-sheen: 0.14;
-  --dot-fringe-a: rgba(222, 112, 136, 0.9);
-  --dot-fringe-b: rgba(64, 164, 214, 0.9);
-  --dot-shadow: rgba(0, 0, 0, 0);
   --dot-pool: rgba(0, 0, 0, 0);
-  --dot-pond: 0.32;
-  --dot-pond-size: 1.9;
-  --dot-scale: 1;
-  --dot-blend: lighter;
   --dot-halo: 0.5;
   --dot-glow: rgba(250, 196, 150, 0.32);
 }
