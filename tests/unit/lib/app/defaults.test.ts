@@ -1173,9 +1173,14 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // FILLED BY THIS LEAF. Upstream this row asserts `{}`. Lelañea declares one
     // key, the temporary tint picker's flag (f-prism t-180), which is optional
     // and parses an unset environment to `false`, so the risk this row guards —
-    // an unset var failing boot — still cannot happen. t-181 deletes the key
-    // and restores `{}` here.
-    assert: () => expect(appEnvSchema.parse({})).toEqual({ LELANEA_TINT_PICKER: false }),
+    // an unset var failing boot — still cannot happen; nor can a malformed one,
+    // which parses to `false` too. t-181 deletes the key and restores `{}` here.
+    assert: () => {
+      expect(appEnvSchema.parse({})).toEqual({ LELANEA_TINT_PICKER: false });
+      expect(appEnvSchema.parse({ LELANEA_TINT_PICKER: '1' })).toEqual({
+        LELANEA_TINT_PICKER: false,
+      });
+    },
   },
   {
     seam: 'lib/app/eslint.config.mjs',

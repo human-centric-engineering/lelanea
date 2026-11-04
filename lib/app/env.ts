@@ -45,9 +45,11 @@ import { z } from 'zod';
 export const appEnvSchema = z.object({
   // TEMPORARY (f-prism t-180): shows the tint picker so Lelañea can choose her
   // light. Off unless set to "true", so production never carries it; a preview
-  // sets it for her. t-181 deletes it with the picker.
+  // sets it for her. Any other value is off rather than a failed boot: a
+  // cosmetic flag must never stop a deployment starting. t-181 deletes it with
+  // the picker.
   LELANEA_TINT_PICKER: z
-    .enum(['true', 'false'])
+    .string()
     .optional()
     .transform((val) => val === 'true')
     .describe(
