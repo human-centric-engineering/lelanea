@@ -11,7 +11,7 @@
   cursor: pointer;
 }
 
-/* The baked flower: the picture where no canvas paints, and still the image
+/* The flat flower: the picture where no canvas paints, and still the image
    once one does, so it is made transparent rather than removed. */
 .image {
   display: block;

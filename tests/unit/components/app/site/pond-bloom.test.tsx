@@ -25,7 +25,7 @@ describe('PondBloom', () => {
     const { getByTestId } = render(<PondBloom />);
     const flower = getByTestId('dot-lotus');
     expect(flower).toHaveAttribute('data-start-in-view', 'true');
-    expect(flower).toHaveAttribute('data-size', '340');
+    expect(flower).toHaveAttribute('data-size', '360');
   });
 
   it('takes the size it is given', () => {

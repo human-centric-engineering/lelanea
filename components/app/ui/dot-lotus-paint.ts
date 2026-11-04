@@ -1,19 +1,19 @@
 import { parseColour, rgbaString, type Rgba } from '@/components/app/ui/lotus-colour';
 import {
   HEART,
-  K,
   POND_Y,
   REST_T,
   TIMELINE,
   beatAt,
   clamp,
-  dotAt,
   dotFlower,
+  easeOut,
   lubdub,
-  petalPosesAt,
   petalTips,
-  type DotSite,
-  type Flower,
+  restingAt,
+  rng,
+  unfurledAt,
+  type Dot,
 } from '@/components/app/ui/dot-lotus-geometry';
 
 /**
@@ -21,10 +21,9 @@ import {
  * moving light around it, and the loop that runs it.
  *
  * A port of the prism prototype's "DOT LOTUS" painter
- * (`.context/app/planning/design/prism/index.html`), with its geometry taken
- * from the lotus model rather than read off an SVG (`dot-lotus-geometry.ts`).
- * Its numbers are the prototype's, in the prototype's units, converted by `K`
- * where they are distances.
+ * (`.context/app/planning/design/prism/index.html`), with its geometry in
+ * `dot-lotus-geometry.ts`. Its numbers are the prototype's, in the prototype's
+ * own units.
  *
  * NO COLOUR IN THIS FILE: every colour is a `--dot-*` token, read from the
  * flower's own element so a band that sets its own palette — the hero's dusk
@@ -252,20 +251,9 @@ export function readDotLook(element: Element, make: MakeCanvas = makeCanvas): Do
 
 // ---- Scene ---------------------------------------------------------------
 
-/** Seeded, so the flower twinkles the same way on every load. */
-export function rng(seed: number): () => number {
-  let s = seed;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /** Where the flower is on the canvas, in CSS pixels, and how far it may reach. */
 export interface DotLayout {
-  /** The canvas position of the flower's origin. */
+  /** The canvas position of the flower's origin, the base of its petals. */
   readonly ox: number;
   readonly oy: number;
   /** CSS pixels per unit. */
@@ -276,16 +264,6 @@ export interface DotLayout {
   readonly spanV: number;
   /** Canvas pixels per CSS pixel. */
   readonly dpr: number;
-}
-
-/** A dot of the flower with its own twinkle. */
-interface Lit extends DotSite {
-  readonly jitter: number;
-  readonly w: number;
-  readonly ph: number;
-  readonly fw: number;
-  readonly fph: number;
-  readonly flare: boolean;
 }
 
 interface Mote {
@@ -307,17 +285,14 @@ interface Mote {
 }
 
 /** How far a loose dot may stream from the heart, in units. */
-const REACH = 118 * K;
-const PETAL_REVEAL = TIMELINE.PETAL;
+export const REACH = 118;
 
-let shared: Flower | null = null;
-/** The flower's geometry, built once: it is the same for every mount. */
-export function sharedFlower(): Flower {
+let shared: Dot[] | null = null;
+/** The flower's dots, built once: they are the same for every mount. */
+export function sharedFlower(): Dot[] {
   shared ??= dotFlower();
   return shared;
 }
-
-const easeOut = (p: number) => 1 - (1 - p) ** 3;
 
 export interface DotScene {
   /** Paint the flower `t` seconds into its timeline. */
@@ -331,25 +306,16 @@ export interface DotScene {
  * the streams, the drift, the pond's rings — so it is one per mount.
  */
 export function dotScene(
-  flower: Flower = sharedFlower(),
+  dots: readonly Dot[] = sharedFlower(),
   { reduced = false }: { reduced?: boolean } = {}
 ): DotScene {
-  const draw = rng(20261101);
-  const lit: Lit[] = flower.dots.map((d) => ({
-    ...d,
-    jitter: d.kind === 'heart' ? 0 : draw() * 0.12,
-    w: (d.kind === 'heart' ? 1 : 0.6) + draw() * (d.kind === 'heart' ? 2 : 1.8),
-    ph: draw() * Math.PI * 2,
-    fw: (d.kind === 'heart' ? 0.08 : 0.05) + draw() * (d.kind === 'heart' ? 0.1 : 0.12),
-    fph: draw() * Math.PI * 2,
-    flare: d.kind === 'edge' ? draw() < 0.35 : d.ring === 0,
-  }));
-  const anchors = lit.filter((d) => d.kind === 'edge');
-  const tips = petalTips(flower).map(([x, y]) => ({
+  const [hx, hy] = HEART;
+  const anchors = dots.filter((d) => d.kind === 'edge').map(restingAt);
+  const tips = petalTips(dots).map(([x, y]) => ({
     x,
     y,
-    // When, within a beat, its wave reaches this tip.
-    at: 0.2 + Math.hypot(x - HEART[0], y - HEART[1]) / (90 * K),
+    // When, within a beat, its wave reaches this tip (its lub).
+    at: 0.14 + Math.hypot(x - hx, y - hy) / 90 + 0.06,
   }));
 
   let R = rng(99);
@@ -378,7 +344,6 @@ export function dotScene(
     const { ox, oy, scale } = layout;
     const dt = Math.min(0.05, Math.max(0, t - lastT));
     lastT = t;
-    const [hx, hy] = HEART;
 
     const put = (
       image: CanvasImageSource | null,
@@ -389,12 +354,12 @@ export function dotScene(
     ) => {
       if (!image || alpha <= 0.01) return;
       ctx.globalAlpha = alpha > 1 ? 1 : alpha;
-      const s = size * K * scale;
+      const s = size * scale;
       ctx.drawImage(image, ox + x * scale - s / 2, oy + y * scale - s / 2, s, s);
     };
     /** A soft oval of `colour`, fading to clear, behind everything. */
     const oval = (cx: number, cy: number, rx: number, ry: number, rgba: Rgba, mid: number[]) => {
-      if (rgba[3] <= 0) return;
+      if (rgba[3] <= 0 || rx <= 0 || ry <= 0) return;
       ctx.save();
       ctx.globalCompositeOperation = 'source-over';
       ctx.translate(ox + cx * scale, oy + cy * scale);
@@ -430,17 +395,10 @@ export function dotScene(
     ctx.globalAlpha = clamp((t + 0.4) / 1.2);
     // Its height held inside the canvas, so it feathers out rather than ending
     // on the canvas's top edge in a straight line.
-    oval(
-      hx,
-      hy - 23 * K,
-      250 * K,
-      Math.max(0, Math.min(136 * K, layout.spanV - 23 * K)),
-      look.pool,
-      [0.45, 1]
-    );
+    oval(hx, -28, 250, Math.min(136, layout.spanV - 23), look.pool, [0.45, 1]);
     // A faint shadow at the water line, so the flower sits on something.
-    ctx.globalAlpha = clamp((t - TIMELINE.WATER_AT) / 0.6);
-    oval(hx, POND_Y - 2 * K, 118 * K, 15 * K, look.shadow, [0.5, 0.45]);
+    ctx.globalAlpha = clamp((t - TIMELINE.HEART_AT) / 1.2);
+    oval(hx, 12, 118, 15, look.shadow, [0.5, 0.45]);
 
     // The glow lives in the heart: it gathers with it and beats with it.
     const glow =
@@ -449,7 +407,7 @@ export function dotScene(
     if (glow > 0 && look.glow[3] > 0) {
       const gx = ox + hx * scale;
       const gy = oy + hy * scale;
-      const gr = 50 * K * scale * (0.9 + 0.1 * breath);
+      const gr = 50 * scale * (0.9 + 0.1 * breath);
       const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
       // A bloom, not a disc: strongest at the very heart, on a long soft fall.
       g.addColorStop(0, rgbaString(look.glow));
@@ -477,7 +435,7 @@ export function dotScene(
           const n = R() < 0.55 ? 2 : 1;
           for (let q = 0; q < n && flows.length < 360; q++) {
             const dir = Math.atan2(tip.y - hy, tip.x - hx) + (R() * 2 - 1) * 0.35;
-            const sp = (12 + R() * 12) * K;
+            const sp = 12 + R() * 12;
             flows.push({
               x: hx + (tip.x - hx) * breath,
               y: hy + (tip.y - hy) * breath,
@@ -498,10 +456,9 @@ export function dotScene(
       while (spawn >= 1 && flows.length < 340) {
         spawn -= 1;
         const source = R() < 0.3 ? null : anchors[Math.floor(R() * anchors.length)];
-        const sx = source ? source.x : hx;
-        const sy = source ? source.y : hy;
+        const [sx, sy] = source ?? HEART;
         const dir = source ? Math.atan2(sy - hy, sx - hx) + (R() * 2 - 1) * 0.5 : R() * Math.PI * 2;
-        const sp = (9 + R() * 16) * K;
+        const sp = 9 + R() * 16;
         flows.push({
           x: sx,
           y: sy,
@@ -547,17 +504,18 @@ export function dotScene(
     for (const age of ages) {
       const pp = age / TIMELINE.POND_LIFE;
       const rx = 58 + pp * 175;
+      const ry = rx / 5.8;
       const pa = Math.sin(Math.PI * pp) * look.pond;
       if (pa <= 0.01) continue;
       const n = Math.round(rx * 0.95);
       for (let k = 0; k < n; k++) {
         const a = (k / n) * Math.PI * 2;
-        const tw = reduced ? 1 : 0.55 + 0.45 * Math.sin(t * (1.3 + (k % 7) * 0.31) + k * 2.4);
+        const tw = 0.55 + 0.45 * Math.sin(t * (1.3 + (k % 7) * 0.31) + k * 2.4);
         const tone = k % 3 === 0 ? 6 : 1 + (k % 2);
         put(
           look.dot[tone],
-          hx + Math.cos(a) * rx * K,
-          POND_Y + (Math.sin(a) * rx * K) / 5.8,
+          hx + Math.cos(a) * rx,
+          POND_Y + Math.sin(a) * ry,
           look.pondSize,
           pa * tw
         );
@@ -570,14 +528,14 @@ export function dotScene(
       driftSpawn += dt * 1.3;
       while (driftSpawn >= 1 && drift.length < 120) {
         driftSpawn -= 1;
-        const from = anchors[Math.floor(R() * anchors.length)];
-        const side = from.x === hx ? (R() < 0.5 ? -1 : 1) : Math.sign(from.x - hx);
+        const [fx, fy] = anchors[Math.floor(R() * anchors.length)];
+        const side = fx === 0 ? (R() < 0.5 ? -1 : 1) : Math.sign(fx);
         const span = side > 0 ? layout.spanR : layout.spanL;
-        const speed = (5 + R() * 7) * K;
+        const speed = 5 + R() * 7;
         const dir = (R() * 2 - 1) * 0.3 - 0.06;
         drift.push({
-          x: from.x,
-          y: from.y,
+          x: fx,
+          y: fy,
           vx: side * Math.cos(dir) * speed,
           vy: Math.sin(dir) * speed,
           born: t,
@@ -598,8 +556,8 @@ export function dotScene(
       if (age > p.life) return false;
       const span = p.span ?? 1;
       p.x += p.vx * dt;
-      p.y += p.vy * dt + Math.sin(t * 0.5 * (p.bob ?? 1) + (p.bph ?? 0)) * dt * 1.6 * K;
-      const edge = clamp((span - Math.abs(p.x - hx)) / (span * 0.18));
+      p.y += p.vy * dt + Math.sin(t * 0.5 * (p.bob ?? 1) + (p.bph ?? 0)) * dt * 1.6;
+      const edge = clamp((span - Math.abs(p.x)) / (span * 0.18));
       const vert = clamp((layout.spanV - Math.abs(p.y - hy)) / (layout.spanV * 0.25));
       const a =
         clamp(age / 1.5) *
@@ -617,10 +575,8 @@ export function dotScene(
     // The light swells as a slow band of sheen sweeps across the petals, low
     // left to high right, then rests off the flower for as long again.
     const sweep = ((t * 34) % 720) - 180;
-    // The petals are moving until the flow begins; after that, at rest.
-    const poses = !reduced && t < TIMELINE.FLOW_AT ? petalPosesAt(t) : null;
     const placed: {
-      d: Lit;
+      d: Dot;
       x: number;
       y: number;
       a: number;
@@ -628,9 +584,8 @@ export function dotScene(
       band: number;
       b: number;
     }[] = [];
-    for (const d of lit) {
-      const delay = d.delay + d.jitter;
-      const p = clamp((t - delay) / (d.kind === 'heart' ? 0.8 : PETAL_REVEAL));
+    for (const d of dots) {
+      const p = clamp((t - d.delay) / (d.kind === 'heart' ? 0.8 : TIMELINE.PETAL));
       if (p <= 0) continue;
       const e = easeOut(p);
       let x: number;
@@ -638,20 +593,20 @@ export function dotScene(
       if (d.kind === 'heart') {
         // The heart swells on each beat.
         const hs = e * (1 + 0.075 * beat.pulse);
-        x = hx + (d.x - hx) * hs;
-        y = hy + (d.y - hy) * hs;
+        x = hx + d.lx * hs;
+        y = hy + d.ly * hs;
       } else {
-        [x, y] = poses ? dotAt(poses, d) : [d.x, d.y];
+        [x, y] = unfurledAt(d, t);
         if (!reduced) {
-          x += Math.sin(t * 1.1 * d.w + d.ph) * 0.35 * K;
-          y += Math.cos(t * 0.9 * d.w + d.ph) * 0.35 * K;
+          x += Math.sin(t * 1.1 * d.w + d.ph) * 0.35;
+          y += Math.cos(t * 0.9 * d.w + d.ph) * 0.35;
         }
       }
       x = hx + (x - hx) * breath;
       y = hy + (y - hy) * breath;
 
       // The beat reaching this dot: it leaves the heart a moment after the
-      // lub-dub and travels out, softening as it goes.
+      // lub-dub and travels out at about 90 units a second, softening as it goes.
       let wave = 0;
       if (beat.on) {
         const dx = x - hx;
@@ -660,15 +615,17 @@ export function dotScene(
         if (d.kind === 'heart') wave = beat.pulse * 0.65;
         else {
           const B = TIMELINE.BEAT;
-          const lt = (((beat.t - 0.14 - dist / (90 * K)) % B) + B) % B;
-          wave = lubdub(lt) * beat.env * (0.45 - 0.2 * clamp(dist / (110 * K)));
-          x += (dx / dist) * 0.8 * K * wave;
-          y += (dy / dist) * 0.8 * K * wave;
+          const lt = (((beat.t - 0.14 - dist / 90) % B) + B) % B;
+          wave = lubdub(lt) * beat.env * (0.45 - 0.2 * clamp(dist / 110));
+          x += (dx / dist) * 0.8 * wave;
+          y += (dy / dist) * 0.8 * wave;
         }
       }
-      const twinkle = reduced ? 1 : 0.62 + 0.38 * Math.sin(t * d.w * 1.4 + d.ph);
-      const flare = d.flare && !reduced ? Math.max(0, Math.sin(t * d.fw + d.fph)) ** 90 : 0;
-      const band = reduced ? 0 : Math.exp(-((((x * 0.8 - y * 0.6) / K - sweep) / 16) ** 2));
+      // Reduced motion is the moment `REST_T` held: its twinkle and any flare
+      // are that moment's, and nothing sweeps.
+      const twinkle = 0.62 + 0.38 * Math.sin(t * d.w * 1.4 + d.ph);
+      const flare = d.flare ? Math.max(0, Math.sin(t * d.fw + d.fph)) ** 90 : 0;
+      const band = reduced ? 0 : Math.exp(-(((x * 0.8 - y * 0.6 - sweep) / 16) ** 2));
       const a = d.base * clamp(p * 2.4) * twinkle * (1 + 0.5 * wave);
       put(
         look.shine,
@@ -684,7 +641,7 @@ export function dotScene(
       // rose edge and a cyan edge either side of each outline dot.
       if (look.fringe + look.iridesce > 0 && d.kind === 'edge') {
         const fa = a * (look.fringe + band * look.iridesce);
-        const fd = 0.95 * (1 + band * 1.2) * K;
+        const fd = 0.95 * (1 + band * 1.2);
         const fs = d.r * 4.6 * look.dotScale * (0.62 + band * 0.3);
         put(look.fringeA, x - 0.8 * fd, y + 0.6 * fd, fs, fa);
         put(look.fringeB, x + 0.8 * fd, y - 0.6 * fd, fs, fa);

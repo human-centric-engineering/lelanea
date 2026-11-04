@@ -156,7 +156,7 @@ export default async function HomePage() {
               that sat beneath it are the flower's own now. On the light
               theme's dusk sky it takes the sky's palette (`data-dot-ground`). */}
             <div className={styles.bloomArt} data-dot-ground="sky">
-              <DotLotus size={440} />
+              <DotLotus size={470} />
             </div>
 
             {/* Who made this (t-171), in the space beneath the bloom: her face,

@@ -129,7 +129,7 @@ describe('DotLotus', () => {
       render(<DotLotus label="Lelañea" />);
       expect(host().dataset.lit).toBe('true');
       const image = screen.getByRole('img', { name: 'Lelañea' });
-      expect(image).toHaveAttribute('src', '/lotus-bloom.svg');
+      expect(image).toHaveAttribute('src', '/dot-lotus.svg');
       // Transparent, not removed: still in the tree, still named.
       expect(image).not.toHaveAttribute('aria-hidden');
     });

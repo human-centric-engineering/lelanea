@@ -191,7 +191,7 @@ describe('dotScene', () => {
     const { ctx, drawn } = recordingContext();
     dotScene(sharedFlower(), { reduced: true }).paint(ctx, look(), LAYOUT, REST_T);
     // Every dot, plus the pond's three still rings.
-    expect(drawn()).toBeGreaterThan(sharedFlower().dots.length);
+    expect(drawn()).toBeGreaterThan(sharedFlower().length);
   });
 
   it('sends a ring across the pond on each beat, and lets go of light', () => {

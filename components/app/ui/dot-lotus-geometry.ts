@@ -1,43 +1,27 @@
 /**
  * The lotus as points of light: where every dot sits, and when.
  *
- * The prism prototype draws its flower in stardust — dots evenly spaced along
- * each petal's outline, a fainter inner echo, a vein, a seed-head heart — and
- * reads the petals from the SVG on its page so it never hand-copies a second
- * flower (`.context/app/planning/design/prism/index.html`, "DOT LOTUS"). The
- * equivalent here is the 3D model in `lotus-model.ts`: every petal dot is a
- * point on a model petal, named by its surface coordinates (`u` along, `v`
- * across), so it is the same flower by construction. It also means the
- * unfolding is the model's own opening — the prototype's flat fan swings each
- * petal up from upright, which a cup seen from above cannot do.
+ * A port of the prism prototype's "DOT LOTUS" geometry
+ * (`.context/app/planning/design/prism/index.html`). The prototype reads its
+ * petals off the flat, front-on lotus SVG on its page — three rings of petals,
+ * each one path rotated about the base — and traces them in stardust: dots
+ * evenly spaced along each outline, a fainter inner echo, a vein, and a
+ * seed-head heart. `PETALS` is that SVG's petals, verbatim, and
+ * `public/dot-lotus.svg` is the SVG itself, so the dots trace the very flower
+ * the image shows.
  *
  * Pure, so it is tested directly: jsdom has no canvas.
  *
- * Units are the draw list's (`lotus-draw.ts`): SVG user units, 100 to a model
- * unit, y down. The prototype's numbers are in ITS units, where the flower is
- * 168 wide; `K` converts them, so every distance and speed it tuned carries
- * over at the same proportion to the flower.
+ * Units are the prototype's SVG user units: the flower's view box is `VIEW`,
+ * y down, its base at the origin.
  *
  * @see components/app/ui/dot-lotus-paint.ts — the painter
  */
 
-import {
-  LOTUS_OPENED_MS,
-  LOTUS_WHORLS,
-  VIEW_DIR,
-  dot,
-  petalPoint,
-  petalPoses,
-  project,
-  type PetalPose,
-} from '@/components/app/ui/lotus-model';
-
 export type Point = readonly [number, number];
 
-const S = 100;
-
-/** Our units per prototype unit: the open bloom is ~222 here, ~168 there. */
-export const K = 1.3;
+/** The SVG's view box: the open flower and its water. */
+export const VIEW = { x: -84, y: -106, width: 168, height: 160 } as const;
 
 // ---- Timeline ------------------------------------------------------------
 
@@ -50,9 +34,9 @@ export const K = 1.3;
 export const TIMELINE = {
   /** How long one petal's dots take to arrive. */
   PETAL: 1.65,
-  /** Between one whorl starting and the next. */
+  /** Between one ring starting and the next. */
   RING_GAP: 0.29,
-  /** Between petals within a whorl. */
+  /** Between petals within a ring. */
   PETAL_GAP: 0.088,
   HEART_AT: 1.7,
   WATER_AT: 2.05,
@@ -84,6 +68,7 @@ export function lubdub(s: number): number {
 }
 
 export const clamp = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+export const easeOut = (p: number): number => 1 - (1 - p) ** 3;
 
 export interface Beat {
   readonly on: boolean;
@@ -111,46 +96,39 @@ export function beatAt(t: number): Beat {
   };
 }
 
-// ---- Spacing -------------------------------------------------------------
-
-export interface Spaced {
-  readonly x: number;
-  readonly y: number;
-  /** Where on the polyline: segment index plus the fraction along it. */
-  readonly at: number;
+/** Seeded, so the flower is laid out and twinkles the same way on every load. */
+export function rng(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-/**
- * Points evenly spaced along a polyline, both ends included. The step is the
- * gap rounded so it divides the length exactly — the last dot lands on the
- * last point rather than wherever the remainder falls.
- */
-export function spaced(points: readonly Point[], gap: number): Spaced[] {
-  if (points.length === 0) return [];
-  const lengths: number[] = [];
-  let total = 0;
-  for (let i = 1; i < points.length; i++) {
-    const l = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-    lengths.push(l);
-    total += l;
-  }
-  if (total === 0) return [{ x: points[0][0], y: points[0][1], at: 0 }];
+// ---- Spacing -------------------------------------------------------------
 
-  const n = Math.max(1, Math.round(total / gap));
-  const step = total / n;
-  const out: Spaced[] = [];
-  let segment = 0;
-  let before = 0;
-  for (let k = 0; k <= n; k++) {
-    const target = k === n ? total : k * step;
-    while (segment < lengths.length - 1 && before + lengths[segment] < target) {
-      before += lengths[segment];
-      segment++;
+/**
+ * Points evenly spaced along a polyline, from its first point, carrying the
+ * remainder round each corner — the prototype's own spacing, so the dots fall
+ * where its dots fall. The last point is included only where a step lands on
+ * it, which on a closed outline is where the first dot already is.
+ */
+export function spaced(points: readonly Point[], gap: number): Point[] {
+  const out: Point[] = [];
+  let carry = 0;
+  for (let i = 1; i < points.length; i++) {
+    const [ax, ay] = points[i - 1];
+    const [bx, by] = points[i];
+    const len = Math.hypot(bx - ax, by - ay);
+    let at = carry;
+    while (at < len) {
+      const t = at / len;
+      out.push([ax + (bx - ax) * t, ay + (by - ay) * t]);
+      at += gap;
     }
-    const f = lengths[segment] === 0 ? 0 : Math.min(1, (target - before) / lengths[segment]);
-    const [ax, ay] = points[segment];
-    const [bx, by] = points[segment + 1];
-    out.push({ x: ax + (bx - ax) * f, y: ay + (by - ay) * f, at: segment + f });
+    carry = at - len;
   }
   return out;
 }
@@ -168,257 +146,261 @@ export function insidePolygon(x: number, y: number, polygon: readonly Point[]): 
 
 // ---- The flower ----------------------------------------------------------
 
-const flat = (p: readonly [number, number, number]): Point => {
-  const s = project(p);
-  return [s.x * S, s.y * S];
+/** A petal of the SVG: its path, drawn upright, and how far it is turned. */
+export interface Petal {
+  readonly d: string;
+  /** Radians, clockwise from upright. */
+  readonly angle: number;
+  /** 0 the outer ring, 2 the inner. */
+  readonly ring: number;
+  /** Its place within its ring, in paint order. */
+  readonly index: number;
+}
+
+const petal = (length: number, ...c: number[]) =>
+  `M0,0 C${c[0]},${-c[1]} ${c[2]},${-c[3]} ${c[4]},${-c[5]} ` +
+  `C${c[4]},${-c[6]} ${c[7]},${-c[8]} 0,${-length} ` +
+  `C${-c[7]},${-c[8]} ${-c[4]},${-c[6]} ${-c[4]},${-c[5]} ` +
+  `C${-c[2]},${-c[3]} ${-c[0]},${-c[1]} 0,0 Z`;
+
+/** Each petal shape of the SVG, by ring: [length, control points…]. */
+const SHAPES = {
+  outerTop: petal(99, 11.3, 11.9, 18.6, 30.7, 18.8, 55.4, 79.2, 9.8, 92.1),
+  outer25: petal(90.4, 10.3, 10.8, 17.0, 28.0, 17.2, 50.6, 72.3, 8.9, 84.0),
+  outer48: petal(77.8, 8.9, 9.3, 14.6, 24.1, 14.8, 43.6, 62.3, 7.7, 72.4),
+  outer68: petal(70.7, 8.1, 8.5, 13.3, 21.9, 13.4, 39.6, 56.5, 7.0, 65.7),
+  mid13: petal(77, 9.5, 9.2, 15.6, 23.9, 15.8, 43.1, 61.6, 8.2, 71.7),
+  mid37: petal(66.8, 8.2, 8.0, 13.6, 20.7, 13.7, 37.4, 53.4, 7.1, 62.1),
+  mid60: petal(58.4, 7.2, 7.0, 11.9, 18.1, 12.0, 32.7, 46.7, 6.2, 54.3),
+  innerTop: petal(59.4, 8.2, 7.1, 13.5, 18.4, 13.7, 33.3, 47.5, 7.1, 55.2),
+  inner24: petal(54.6, 7.5, 6.5, 12.4, 16.9, 12.5, 30.6, 43.6, 6.5, 50.7),
+  inner48: petal(46.7, 6.4, 5.6, 10.6, 14.5, 10.7, 26.1, 37.4, 5.6, 43.4),
 };
 
-/**
- * The heart: the middle of the stamen crown, where the seed head sits. The
- * crown rises from the petal bases, so this is above the water, not on it.
- */
-export const HEART: Point = flat([0, 0.2, 0]);
+const DEG = Math.PI / 180;
 
+/** The SVG's petals in its paint order: outer ring, then middle, then inner. */
+export const PETALS: readonly Petal[] = (
+  [
+    [SHAPES.outerTop, 0, 0],
+    [SHAPES.outer25, 25, 0],
+    [SHAPES.outer25, -25, 0],
+    [SHAPES.outer48, 48, 0],
+    [SHAPES.outer48, -48, 0],
+    [SHAPES.outer68, 68, 0],
+    [SHAPES.outer68, -68, 0],
+    [SHAPES.mid13, 13, 1],
+    [SHAPES.mid13, -13, 1],
+    [SHAPES.mid37, 37, 1],
+    [SHAPES.mid37, -37, 1],
+    [SHAPES.mid60, 60, 1],
+    [SHAPES.mid60, -60, 1],
+    [SHAPES.innerTop, 0, 2],
+    [SHAPES.inner24, 24, 2],
+    [SHAPES.inner24, -24, 2],
+    [SHAPES.inner48, 48, 2],
+    [SHAPES.inner48, -48, 2],
+  ] as const
+).map(([d, degrees, ring], i, all) => ({
+  d,
+  angle: degrees * DEG,
+  ring,
+  index: all.slice(0, i).filter((p) => p[2] === ring).length,
+}));
+
+/** The heart's centre: the seed head sits a little above the petal bases. */
+export const HEART: Point = [0, -5];
 /** Where the pond's rings are centred: the water line beneath the flower. */
-export const POND_Y = 4;
-
+export const POND_Y = 14;
 /** A dot inside this radius of the heart is behind the seed head. */
-const HEART_COVER = 15.5 * K;
+const HEART_COVER = 15.5;
 
 /** The seed head: rings of `count` dots at `radius`, centre outward. */
 export const HEART_RINGS: readonly (readonly [radius: number, count: number])[] = [
   [0, 1],
-  [3.2 * K, 7],
-  [6.4 * K, 13],
-  [9.6 * K, 19],
-  [12.8 * K, 25],
+  [3.2, 7],
+  [6.4, 13],
+  [9.6, 19],
+  [12.8, 25],
 ];
+
+const bezier = (a: number, b: number, c: number, d: number, t: number) => {
+  const u = 1 - t;
+  return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
+};
+
+/** A petal's outline as a dense polyline, 40 samples to each cubic segment. */
+export function outline(d: string): Point[] {
+  const n = (d.match(/-?\d*\.?\d+/g) ?? []).map(Number);
+  const out: Point[] = [];
+  let x = n[0];
+  let y = n[1];
+  for (let i = 2; i + 5 < n.length; i += 6) {
+    for (let k = 1; k <= 40; k++) {
+      const t = k / 40;
+      out.push([
+        bezier(x, n[i], n[i + 2], n[i + 4], t),
+        bezier(y, n[i + 1], n[i + 3], n[i + 5], t),
+      ]);
+    }
+    x = n[i + 4];
+    y = n[i + 5];
+  }
+  return out;
+}
+
+const turn = ([x, y]: Point, angle: number): Point => {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return [x * c - y * s, x * s + y * c];
+};
 
 export type DotKind = 'edge' | 'echo' | 'vein' | 'heart';
 
-/** A dot's place and look, independent of time and of any random draw. */
-export interface DotSite {
+/** A dot of the flower: where it sits, how it looks, when it arrives. */
+export interface Dot {
   readonly kind: DotKind;
-  /** The petal it sits on, an index into `petalPoses()`; -1 for the heart. */
+  /** The petal it sits on, an index into `PETALS`; -1 for the heart. */
   readonly petal: number;
-  /** On the petal: along (0 base → 1 tip) and across (−1 → 1). */
-  readonly u: number;
-  readonly v: number;
-  /** Where it sits in the open flower. */
-  readonly x: number;
-  readonly y: number;
-  /** Which `--dot-*` tone: 0–2 petal, outer to inner; 3–5 heart; 6 water. */
+  /**
+   * Where it sits on its petal drawn upright (for the heart, from the heart's
+   * centre). The petal turns to `angle` as it opens.
+   */
+  readonly lx: number;
+  readonly ly: number;
+  readonly angle: number;
+  /** Which `--dot-*` tone: 0–2 petal, outer ring to inner; 3–5 heart. */
   readonly tone: number;
-  /** Radius, in prototype units (the sprite is sized from it). */
+  /** Radius, in units (the sprite is sized from it). */
   readonly r: number;
   /** Resting brightness. */
   readonly base: number;
   /** When it starts to arrive, in seconds. */
   readonly delay: number;
+  /** Where it starts from, off its place, as it arrives. */
+  readonly jx: number;
+  readonly jy: number;
+  /** Its twinkle's rate and phase, and its flare's. */
+  readonly w: number;
+  readonly ph: number;
+  readonly fw: number;
+  readonly fph: number;
+  /** Whether it ever flares into a star. */
+  readonly flare: boolean;
   /** For the heart's rings: which ring, from the centre. */
   readonly ring?: number;
 }
 
-/** The heart's rings as dots, relative to the heart. */
-export function heartDots(): DotSite[] {
-  const out: DotSite[] = [];
-  HEART_RINGS.forEach(([radius, count], k) => {
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + k * 0.4;
-      out.push({
-        kind: 'heart',
-        petal: -1,
-        u: 0,
-        v: 0,
-        x: HEART[0] + Math.cos(a) * radius,
-        y: HEART[1] + Math.sin(a) * radius,
-        tone: k < 2 ? 3 : k < 4 ? 4 : 5,
-        r: k === HEART_RINGS.length - 1 ? 0.75 : 0.62,
-        base: 1,
-        delay: TIMELINE.HEART_AT + k * 0.08,
-        ring: k,
-      });
-    }
-  });
-  return out;
-}
-
-/** Samples along a petal's length when tracing it. */
-const DENSE = 32;
-
-interface Sample {
-  readonly u: number;
-  readonly v: number;
-  readonly p: Point;
-}
-
-type Path = readonly (readonly [u: number, v: number])[];
-
-/** A path over the petal's surface, projected. */
-function trace(pose: PetalPose, path: Path): Sample[] {
-  return path.map(([u, v]) => ({ u, v, p: flat(petalPoint(pose, u, v)) }));
+/** Where a dot sits in the open flower. */
+export function restingAt(d: Dot): Point {
+  if (d.kind === 'heart') return [HEART[0] + d.lx, HEART[1] + d.ly];
+  return turn([d.lx, d.ly], d.angle);
 }
 
 /**
- * Evenly spaced along a traced path, each dot then set on the petal's surface
- * at its (u, v) — so where it rests is exactly where the moving model brings
- * it, and nothing jumps when the opening ends.
+ * The dotted flower, open. Painter's order is kept the way the SVG paints it:
+ * a dot is dropped where a petal painted after it, or the seed head, covers
+ * it, so back petals tuck behind front ones. The random draws are taken in
+ * the prototype's order, from its seed, so every dot lands, twinkles and
+ * flares as the prototype's does.
  */
-function spacedOn(pose: PetalPose, samples: readonly Sample[], gap: number) {
-  return spaced(
-    samples.map((s) => s.p),
-    gap
-  ).map((d) => {
-    const i = Math.min(samples.length - 2, Math.floor(d.at));
-    const f = d.at - i;
-    const a = samples[i];
-    const b = samples[i + 1];
-    const u = a.u + (b.u - a.u) * f;
-    const v = a.v + (b.v - a.v) * f;
-    const [x, y] = flat(petalPoint(pose, u, v));
-    return { x, y, u, v };
-  });
-}
+export function dotFlower(): Dot[] {
+  const R = rng(20261101);
+  const outlines = PETALS.map((p) => outline(p.d));
+  const dots: Dot[] = [];
 
-const steps = (from: number, to: number, v: number): Path =>
-  Array.from({ length: DENSE + 1 }, (_, k) => [from + ((to - from) * k) / DENSE, v] as const);
-const across = (u: number, from: number, to: number): Path =>
-  Array.from(
-    { length: DENSE / 4 + 1 },
-    (_, k) => [u, from + ((to - from) * k * 4) / DENSE] as const
-  );
-
-/**
- * Round a petal: base up the left edge to the tip, back down the right. Each
- * edge is sampled on its own, so a dot is never placed by blending one edge
- * with the other. The loop ends where it began, at the base.
- */
-const OUTLINE: Path = [...steps(0, 1, -1), ...steps(1, 0, 1)];
-/** The inner echo: the outline again, smaller, from the base. */
-const ECHO: Path = [
-  ...steps(0.04, 0.66, -0.62),
-  ...across(0.66, -0.62, 0.62),
-  ...steps(0.66, 0.04, 0.62),
-];
-/** The vein, from just above the base to just short of the tip. */
-const VEIN: Path = steps(0.12, 0.9, 0);
-
-/** How near the tip, along the petal, a dot must be to count as its tip. */
-const TIP_U = 0.95;
-
-export interface Flower {
-  /** Every dot of the open flower, petals in paint order, then the heart. */
-  readonly dots: readonly DotSite[];
-  /** Each petal's outline in the open flower, in paint order. */
-  readonly outlines: readonly (readonly Point[])[];
-  /** The petal index (into `petalPoses()`) painted at each position. */
-  readonly order: readonly number[];
-}
-
-/**
- * The dotted flower, open. Painter's order is kept the way the prototype keeps
- * it: a dot is dropped where a petal painted after it, or the seed head, would
- * cover it, so back petals tuck behind front ones.
- */
-export function dotFlower(): Flower {
-  const poses = petalPoses(LOTUS_OPENED_MS);
-  const whorlOf: number[] = [];
-  const orderInWhorl: number[] = [];
-  LOTUS_WHORLS.forEach((w, wi) => {
-    for (let i = 0; i < w.count; i++) {
-      whorlOf.push(wi);
-      // The model's own front-and-back alternation, so dots arrive in the
-      // same order the petals open.
-      orderInWhorl.push(i % 2 === 0 ? i / 2 : w.count - 1 - (i - 1) / 2);
-    }
-  });
-
-  const order = poses
-    .map((pose, i) => ({ i, depth: dot(petalPoint(pose, 0.5, 0), VIEW_DIR) }))
-    .sort((a, b) => a.depth - b.depth)
-    .map((entry) => entry.i);
-  const outlines = order.map((i) =>
-    trace(poses[i], OUTLINE)
-      .slice(0, -1)
-      .map((s) => s.p)
-  );
-
-  // Each outline's bounding box, so most petals are ruled out with four
-  // comparisons rather than a walk round every edge: built cold, the full
-  // test took ~470ms on the main thread at hydration (code review, t-182).
-  const boxes = outlines.map((outline) => {
-    let x0 = Infinity;
-    let y0 = Infinity;
-    let x1 = -Infinity;
-    let y1 = -Infinity;
-    for (const [x, y] of outline) {
-      x0 = Math.min(x0, x);
-      y0 = Math.min(y0, y);
-      x1 = Math.max(x1, x);
-      y1 = Math.max(y1, y);
-    }
-    return [x0, y0, x1, y1] as const;
-  });
-  const covered = (position: number, x: number, y: number) => {
+  const hidden = (from: number, x: number, y: number) => {
     if (Math.hypot(x - HEART[0], y - HEART[1]) < HEART_COVER) return true;
-    for (let j = position + 1; j < outlines.length; j++) {
-      const [x0, y0, x1, y1] = boxes[j];
-      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-      if (insidePolygon(x, y, outlines[j])) return true;
+    for (let j = from + 1; j < PETALS.length; j++) {
+      const [px, py] = turn([x, y], -PETALS[j].angle);
+      if (insidePolygon(px, py, outlines[j])) return true;
     }
     return false;
   };
 
-  const dots: DotSite[] = [];
-  order.forEach((petal, position) => {
-    const pose = poses[petal];
-    const whorl = whorlOf[petal];
-    // Outer whorls in the deepest tone, the inner ones lighter.
-    const tone = Math.min(2, Math.floor((whorl * 3) / LOTUS_WHORLS.length));
-    const delay = whorl * TIMELINE.RING_GAP + orderInWhorl[petal] * TIMELINE.PETAL_GAP;
-    const add = (kind: DotKind, gap: number, path: Path, r: number, base: number) => {
-      const points = spacedOn(pose, trace(pose, path), gap);
-      // The outline is a closed loop, so its last dot is its first. The echo
-      // and the vein are open: both their ends are real dots.
-      if (kind === 'edge') points.pop();
-      for (const d of points) {
-        if (covered(position, d.x, d.y)) continue;
-        dots.push({ kind, petal, u: d.u, v: d.v, x: d.x, y: d.y, tone, r, base, delay });
-      }
+  PETALS.forEach((p, i) => {
+    const add = ([lx, ly]: Point, kind: DotKind, r: number, base: number) => {
+      const [x, y] = turn([lx, ly], p.angle);
+      if (hidden(i, x, y)) return;
+      dots.push({
+        kind,
+        petal: i,
+        lx,
+        ly,
+        angle: p.angle,
+        tone: p.ring,
+        delay: p.ring * TIMELINE.RING_GAP + p.index * TIMELINE.PETAL_GAP + R() * 0.12,
+        jx: (R() * 2 - 1) * 4,
+        jy: (R() * 2 - 1) * 4,
+        r,
+        base,
+        w: 0.6 + R() * 1.8,
+        ph: R() * Math.PI * 2,
+        fw: 0.05 + R() * 0.12,
+        fph: R() * Math.PI * 2,
+        flare: kind === 'edge' && R() < 0.35,
+      });
     };
-    add('edge', 2.5 * K, OUTLINE, 0.9, 1);
-    add('echo', 4.2 * K, ECHO, 0.6, 0.45);
-    add('vein', 3.6 * K, VEIN, 0.56, 0.55);
+    const line = outlines[i];
+    for (const pt of spaced(line, 2.5)) add(pt, 'edge', 0.9, 1);
+    // The inner echo: the outline drawn again at 62%, from the base.
+    const echo = line.map(([x, y]): Point => [x * 0.62, y * 0.62 - 4]);
+    for (const pt of spaced(echo, 4.2)) add(pt, 'echo', 0.6, 0.45);
+    // The vein, from the base to just short of the tip.
+    const tip = line.reduce((a, q) => (q[1] < a[1] ? q : a), [0, 0] as Point);
+    for (let v = 0.12; v < 0.9; v += 3.6 / Math.abs(tip[1]))
+      add([0, tip[1] * v], 'vein', 0.56, 0.55);
   });
 
-  return { dots: [...dots, ...heartDots()], outlines, order };
+  HEART_RINGS.forEach(([radius, count], k) => {
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + k * 0.4;
+      dots.push({
+        kind: 'heart',
+        petal: -1,
+        lx: Math.cos(a) * radius,
+        ly: Math.sin(a) * radius,
+        angle: 0,
+        tone: k < 2 ? 3 : k < 4 ? 4 : 5,
+        delay: TIMELINE.HEART_AT + k * 0.08,
+        jx: 0,
+        jy: 0,
+        r: k === HEART_RINGS.length - 1 ? 0.75 : 0.62,
+        base: 1,
+        w: 1 + R() * 2,
+        ph: R() * Math.PI * 2,
+        fw: 0.08 + R() * 0.1,
+        fph: R() * Math.PI * 2,
+        flare: k === 0,
+        ring: k,
+      });
+    }
+  });
+
+  return dots;
 }
 
 /**
- * Each petal's tip in the open flower, where the beat lets go of a star — for
- * the petals whose tips are in view. A tip tucked behind a petal in front lets
- * nothing go, rather than its highest visible dot part-way down the petal.
+ * Each petal's tip in the open flower, where the beat lets go of a star: the
+ * highest outline dot of each petal that has any in view.
  */
-export function petalTips(flower: Flower): Point[] {
-  const tips = new Map<number, DotSite>();
-  for (const d of flower.dots) {
-    if (d.kind !== 'edge' || d.u < TIP_U) continue;
+export function petalTips(dots: readonly Dot[]): Point[] {
+  const tips = new Map<number, Dot>();
+  for (const d of dots) {
+    if (d.kind !== 'edge') continue;
     const best = tips.get(d.petal);
-    if (!best || d.u > best.u) tips.set(d.petal, d);
+    if (!best || d.ly < best.ly) tips.set(d.petal, d);
   }
-  return [...tips.values()].map((d) => [d.x, d.y]);
+  return [...tips.values()].map(restingAt);
 }
 
 /**
- * Where a petal dot is `t` seconds in. The petals open as the model opens them,
- * run at the rate that brings them to rest as the flow begins.
+ * Where a petal dot is `t` seconds in, before the flower's breath and beat:
+ * it grows from a quarter size and swings from upright to its petal's angle,
+ * settling from a little off its place, as the SVG bloom unfurls.
  */
-export const UNFURL_RATE = LOTUS_OPENED_MS / (TIMELINE.FLOW_AT * 1000);
-
-export function petalPosesAt(t: number): PetalPose[] {
-  return petalPoses(Math.min(LOTUS_OPENED_MS, t * 1000 * UNFURL_RATE));
-}
-
-export function dotAt(poses: readonly PetalPose[], site: DotSite): Point {
-  return flat(petalPoint(poses[site.petal], site.u, site.v));
+export function unfurledAt(d: Dot, t: number): Point {
+  const e = easeOut(clamp((t - d.delay) / TIMELINE.PETAL));
+  const scale = 0.24 + 0.76 * e;
+  return turn([d.lx * scale + d.jx * (1 - e), d.ly * scale + d.jy * (1 - e)], d.angle * e);
 }

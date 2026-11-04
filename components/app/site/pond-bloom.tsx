@@ -12,6 +12,6 @@ import { DotLotus } from '@/components/app/ui/dot-lotus';
  * rings are the flower's own now, sent out by each heartbeat. `DotLotus`
  * handles reduced motion itself: the open flower, still.
  */
-export function PondBloom({ size = 340 }: { size?: number }) {
+export function PondBloom({ size = 360 }: { size?: number }) {
   return <DotLotus size={size} startInView />;
 }

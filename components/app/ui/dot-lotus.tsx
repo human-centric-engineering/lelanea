@@ -4,16 +4,16 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 
 import { cn } from '@/lib/utils';
 
-import { HEART, K } from '@/components/app/ui/dot-lotus-geometry';
+import { HEART, VIEW } from '@/components/app/ui/dot-lotus-geometry';
 import {
   dotLoop,
   dotTokens,
   dotScene,
   readDotLook,
   sharedFlower,
+  REACH,
   type DotLayout,
 } from '@/components/app/ui/dot-lotus-paint';
-import { lotusFrameSize, lotusFrames } from '@/components/app/ui/lotus-draw';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import styles from '@/components/app/ui/dot-lotus.module.css';
 
@@ -34,10 +34,8 @@ export interface DotLotusProps {
   className?: string;
 }
 
-/** The open bloom alone, which is the box the dots are drawn in. */
-const FRAME = lotusFrames().still.tight;
 /** How far past the flower its light reaches, as the prototype pads its canvas. */
-const PAD = 118 * K * 0.62;
+const PAD = REACH * 0.62;
 
 /**
  * The lotus drawn in points of light (t-182, f-dot-lotus): dots trace each
@@ -46,10 +44,10 @@ const PAD = 118 * K * 0.62;
  * stars let go from the petal tips as the wave reaches them, and loose light
  * drifting off to the edges of the page. A click plays the unfolding again.
  *
- * ## The baked flower stays
+ * ## The flat flower stays
  *
- * Under the canvas is the baked open bloom (`/lotus-bloom.svg`, the same image
- * `LotusMark` shows). It is the picture wherever the canvas never paints — no
+ * Under the canvas is the prototype's flat lotus (`/dot-lotus.svg`), the
+ * flower the dots trace. It is the picture wherever the canvas never paints — no
  * 2D context, no JavaScript — and once the canvas does paint it is made
  * transparent, not removed, so a flower given a `label` keeps its image in the
  * accessibility tree. The canvas itself is `aria-hidden` always.
@@ -73,7 +71,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     const host = hostRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
-    // No 2D context: the baked flower stays the picture.
+    // No 2D context: the flat flower stays the picture.
     if (!host || !canvas || !ctx) return;
 
     // The hook reads the preference in an effect of its own, so on the first
@@ -89,7 +87,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     const measure = () => {
       const box = host.getBoundingClientRect();
       if (!box.width) return;
-      const scale = box.width / FRAME.box[2];
+      const scale = box.width / VIEW.width;
       const pad = PAD * scale;
       const pageWidth = document.documentElement.clientWidth || box.width;
       const height = box.height + pad * 2;
@@ -105,12 +103,12 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       const pixelHeight = Math.round(height * dpr);
       if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
       if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
-      const ox = box.left - FRAME.box[0] * scale;
-      const oy = pad - FRAME.box[1] * scale;
+      const ox = box.left - VIEW.x * scale;
+      const oy = pad - VIEW.y * scale;
       // Light fades out before the nearer of the canvas's top and bottom
       // edges, measured from the heart, which sits below the canvas's middle.
       const heartY = oy + HEART[1] * scale;
-      // Only now is there somewhere to paint, so only now does the baked
+      // Only now is there somewhere to paint, so only now does the flat
       // flower give way: a box with no width yet keeps its picture.
       host.dataset.lit = 'true';
       layout = {
@@ -164,7 +162,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     // while drifting light is still in view.
     // At the flower's widest, not its width now: the margin is fixed when the
     // observer is made, and too wide only runs the loop a little longer.
-    const reach = Math.round(PAD * (lotusFrameSize(size, FRAME).width / FRAME.box[2]));
+    const reach = Math.round(PAD * (size / VIEW.width));
     const inReach = watching
       ? new IntersectionObserver(
           (entries) => {
@@ -248,7 +246,6 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     };
   }, [reduced, startInView, size]);
 
-  const { width, height } = lotusFrameSize(size, FRAME);
   const hostStyle: CSSProperties & Record<'--dl-max', string> = { '--dl-max': `${size}px` };
 
   return (
@@ -264,9 +261,9 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       {/* A plain <img>: a static SVG gains nothing from next/image. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/lotus-bloom.svg"
-        width={Math.round(width)}
-        height={Math.round(height)}
+        src="/dot-lotus.svg"
+        width={size}
+        height={Math.round((size * VIEW.height) / VIEW.width)}
         alt={label ?? ''}
         aria-hidden={label ? undefined : true}
         draggable={false}
