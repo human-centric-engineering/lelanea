@@ -15,6 +15,9 @@
  * them, and what we want to assert is the authored source anyway.
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 export interface Rule {
   selector: string;
   body: string;
@@ -208,3 +211,56 @@ export function worstContrastOn(value: string, grounds: readonly string[]): numb
 
 /** The three inks D5 names: body text, secondary text, links. */
 export const INKS = ['--color-foreground', '--color-muted-foreground', '--color-secondary-ink'];
+
+/**
+ * The shell's own grounds (t-179): the frame (`--app-*`) and the reading panes
+ * (`--read-*`), measured over the shell's light with `SHELL_VEIL`.
+ */
+export const SHELL_GROUNDS = [
+  '--app-background',
+  '--app-card',
+  '--app-muted',
+  '--read-background',
+  '--read-card',
+  '--read-muted',
+];
+
+/**
+ * The shell veil's opacity, read from the module that sets it, so thinning it
+ * further is measured rather than assumed.
+ */
+function shellVeilOpacity(): number {
+  const groundCss = stripCssComments(
+    readFileSync(
+      path.join(process.cwd(), 'components', 'app', 'ui', 'prism-ground.module.css'),
+      'utf8'
+    )
+  );
+  const rule = parseRules(groundCss).find(
+    (candidate) => candidate.selector === ".ground[data-prism='app'] .veil"
+  );
+  const opacity = rule?.body.match(/opacity:\s*([\d.]+)/)?.[1];
+  if (opacity === undefined) throw new Error('prism-ground.module.css sets no shell veil opacity');
+  return Number.parseFloat(opacity);
+}
+
+/** The shell's veil states: off, and at the quarter strength its ground gives it. */
+export const SHELL_VEIL = [0, shellVeilOpacity()] as const;
+
+/**
+ * The palette as each theme resolves it, from `app/brand-theme.css`: the light
+ * block, and in dark the light block with the dark block over it (the light
+ * block also matches in dark — brand-theme.css note 3).
+ */
+export function paletteScopes(): { light: Map<string, string>; dark: Map<string, string> } {
+  const rules = parseRules(
+    stripCssComments(readFileSync(path.join(process.cwd(), 'app', 'brand-theme.css'), 'utf8'))
+  );
+  const block = (selector: string) => {
+    const found = rules.find((rule) => rule.selector === selector);
+    if (!found) throw new Error(`no rule in brand-theme.css with selector \`${selector}\``);
+    return customProperties(found.body);
+  };
+  const light = block("[data-surface='consumer']");
+  return { light, dark: new Map([...light, ...block("[data-surface='consumer'].dark")]) };
+}

@@ -1,0 +1,183 @@
+/* components/app/ui/tints.css
+ *
+ * TEMPORARY — the tints the picker offers (f-prism t-180), deleted by t-181
+ * once Lelañea has chosen. The list of what goes with it is in
+ * `tint-picker.tsx`.
+ *
+ * Each tint is one block of the ground, glow and fold tokens, as the prism
+ * prototype keys them (`prism/app.html`, `:root[data-tint]`). Rays, the veil,
+ * the glass and every ink stay `app/brand-theme.css`'s, so a tint moves the
+ * light and nothing a word is drawn in. The default of each theme has no block:
+ * it IS `brand-theme.css`.
+ *
+ * Literals, deliberately, in a folder whose guard forbids them
+ * (`tests/unit/components/app/ui/tokens-only.test.ts`, which exempts this file
+ * by name): a tint is a candidate set of token VALUES, and the values have to
+ * be written somewhere before one of them becomes the token.
+ * `tests/unit/components/app/ui/tints.test.ts` measures every block here over
+ * the light, the same way the palette is measured, and fails on one that does
+ * not clear 4.5:1.
+ *
+ * SELECTORS. Both attributes sit on `<html>` beside `data-surface` and `.dark`,
+ * so each is a compound selector (brand-theme.css note 2). A light block says
+ * `:not(.dark)`, so a light choice never leaks into dark; each block outranks
+ * the palette's own `[data-surface='consumer'](.dark)` by one attribute.
+ */
+
+/* ---------------------------------------------------------------- light */
+
+/* Pearl, Blush and Opal are the prototype's own. */
+[data-surface='consumer'][data-tint='pearl']:not(.dark) {
+  --color-ground: #e6e7ec;
+  --glow-1: rgba(246, 247, 252, 0.95);
+  --glow-2: rgba(214, 218, 232, 0.8);
+  --glow-3: rgba(236, 226, 220, 0.6);
+  --fold: rgba(110, 116, 136, 0.15);
+}
+
+[data-surface='consumer'][data-tint='blush']:not(.dark) {
+  --color-ground: #ede0e6;
+  --glow-1: rgba(250, 236, 240, 0.95);
+  --glow-2: rgba(226, 206, 222, 0.8);
+  --glow-3: rgba(220, 220, 240, 0.6);
+  --fold: rgba(140, 104, 124, 0.13);
+}
+
+[data-surface='consumer'][data-tint='opal']:not(.dark) {
+  --color-ground: #f2ece6;
+  --glow-1: rgba(255, 250, 244, 0.95);
+  --glow-2: rgba(244, 226, 212, 0.7);
+  --glow-3: rgba(222, 232, 242, 0.7);
+  --fold: rgba(150, 128, 112, 0.1);
+}
+
+/* Linen: unbleached, the warmth of the default with less pink in it. */
+[data-surface='consumer'][data-tint='linen']:not(.dark) {
+  --color-ground: #eee8dd;
+  --glow-1: rgba(252, 248, 238, 0.95);
+  --glow-2: rgba(230, 222, 206, 0.75);
+  --glow-3: rgba(220, 226, 230, 0.6);
+  --fold: rgba(130, 118, 96, 0.12);
+}
+
+/* Lilac: the iris carried into the ground. */
+[data-surface='consumer'][data-tint='lilac']:not(.dark) {
+  --color-ground: #e8e3ee;
+  --glow-1: rgba(248, 244, 252, 0.95);
+  --glow-2: rgba(218, 208, 236, 0.8);
+  --glow-3: rgba(236, 222, 226, 0.6);
+  --fold: rgba(112, 100, 140, 0.14);
+}
+
+/* Sea glass: a cool green-grey, the old water remembered faintly. */
+[data-surface='consumer'][data-tint='seaglass']:not(.dark) {
+  --color-ground: #e1eae6;
+  --glow-1: rgba(244, 250, 247, 0.95);
+  --glow-2: rgba(204, 226, 222, 0.78);
+  --glow-3: rgba(226, 228, 240, 0.6);
+  --fold: rgba(90, 124, 116, 0.13);
+}
+
+/* Honey: the warmest, late afternoon. */
+[data-surface='consumer'][data-tint='honey']:not(.dark) {
+  --color-ground: #f2e4cf;
+  --glow-1: rgba(255, 238, 208, 0.95);
+  --glow-2: rgba(240, 214, 182, 0.72);
+  --glow-3: rgba(226, 222, 236, 0.6);
+  --fold: rgba(150, 114, 70, 0.13);
+}
+
+/* ----------------------------------------------------------------- dark */
+
+/* Plum dusk: the amber cooled towards heather. */
+[data-surface='consumer'].dark[data-tint-dark='plum'] {
+  --color-ground: #2a2229;
+  --glow-1: rgba(150, 96, 120, 0.5);
+  --glow-2: rgba(104, 80, 104, 0.55);
+  --glow-3: rgba(84, 78, 104, 0.5);
+  --fold: rgba(8, 5, 8, 0.3);
+}
+
+/* Slate: blue-grey night, the warm light kept in one corner. */
+[data-surface='consumer'].dark[data-tint-dark='slate'] {
+  --color-ground: #22262c;
+  --glow-1: rgba(96, 112, 140, 0.5);
+  --glow-2: rgba(80, 88, 108, 0.55);
+  --glow-3: rgba(110, 96, 92, 0.45);
+  --fold: rgba(4, 6, 10, 0.3);
+}
+
+/* Ember: the amber taken hotter. */
+[data-surface='consumer'].dark[data-tint-dark='ember'] {
+  --color-ground: #2e201b;
+  --glow-1: rgba(196, 98, 58, 0.55);
+  --glow-2: rgba(132, 76, 60, 0.55);
+  --glow-3: rgba(98, 74, 80, 0.5);
+  --fold: rgba(10, 5, 4, 0.3);
+}
+
+/* Moss: a green-umber, forest at dusk. */
+[data-surface='consumer'].dark[data-tint-dark='moss'] {
+  --color-ground: #232722;
+  --glow-1: rgba(112, 128, 88, 0.5);
+  --glow-2: rgba(88, 98, 80, 0.55);
+  --glow-3: rgba(100, 88, 84, 0.45);
+  --fold: rgba(5, 8, 5, 0.3);
+}
+
+/* Ink: the deepest, an indigo night. */
+[data-surface='consumer'].dark[data-tint-dark='ink'] {
+  --color-ground: #1e1f27;
+  --glow-1: rgba(90, 96, 150, 0.5);
+  --glow-2: rgba(76, 72, 110, 0.55);
+  --glow-3: rgba(104, 86, 96, 0.45);
+  --fold: rgba(3, 3, 8, 0.3);
+}
+
+/* -------------------------------------------------------------- swatches
+ * What each button in the picker shows: the tint's ground lit by its first
+ * glow, as the prototype's swatches are. Keyed `<theme>-<id>`, because both
+ * themes have a `default`.
+ */
+[data-surface='consumer'] [data-swatch='light-default'] {
+  background: linear-gradient(135deg, #f7ebdd, #e6d3c0);
+}
+[data-surface='consumer'] [data-swatch='light-pearl'] {
+  background: linear-gradient(135deg, #f2f3f6, #cbced8);
+}
+[data-surface='consumer'] [data-swatch='light-blush'] {
+  background: linear-gradient(135deg, #f6e8ee, #d9c2d2);
+}
+[data-surface='consumer'] [data-swatch='light-opal'] {
+  background: linear-gradient(135deg, #fff8ef, #e3dcec);
+}
+[data-surface='consumer'] [data-swatch='light-linen'] {
+  background: linear-gradient(135deg, #faf6ec, #ddd3c0);
+}
+[data-surface='consumer'] [data-swatch='light-lilac'] {
+  background: linear-gradient(135deg, #f6f2fb, #d3c9e3);
+}
+[data-surface='consumer'] [data-swatch='light-seaglass'] {
+  background: linear-gradient(135deg, #f2f8f5, #c7dad5);
+}
+[data-surface='consumer'] [data-swatch='light-honey'] {
+  background: linear-gradient(135deg, #fdeccf, #e4c9a2);
+}
+[data-surface='consumer'] [data-swatch='dark-default'] {
+  background: linear-gradient(135deg, #8a5a3e, #2c2421);
+}
+[data-surface='consumer'] [data-swatch='dark-plum'] {
+  background: linear-gradient(135deg, #7a5266, #2a2229);
+}
+[data-surface='consumer'] [data-swatch='dark-slate'] {
+  background: linear-gradient(135deg, #56637a, #22262c);
+}
+[data-surface='consumer'] [data-swatch='dark-ember'] {
+  background: linear-gradient(135deg, #a4532f, #2e201b);
+}
+[data-surface='consumer'] [data-swatch='dark-moss'] {
+  background: linear-gradient(135deg, #5f6c4b, #232722);
+}
+[data-surface='consumer'] [data-swatch='dark-ink'] {
+  background: linear-gradient(135deg, #4e5486, #1e1f27);
+}

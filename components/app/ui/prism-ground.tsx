@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import styles from '@/components/app/ui/prism-ground.module.css';
+import { TintPicker } from '@/components/app/ui/tint-picker';
 
 /**
  * The light a consumer page sits in: the prism ground.
@@ -52,18 +53,22 @@ const SPARKS: readonly LayerStyle[] = [
 
 export function PrismGround({ variant }: { variant: PrismVariant }) {
   return (
-    <div aria-hidden="true" data-prism={variant} className={styles.ground}>
-      <span className={styles.wash} />
-      {FOLDS.map((style, index) => (
-        <span key={`fold-${index}`} className={styles.fold} style={style} />
-      ))}
-      {RAYS.map((style, index) => (
-        <span key={`ray-${index}`} className={styles.ray} style={style} />
-      ))}
-      <span className={styles.veil} />
-      {SPARKS.map((style, index) => (
-        <span key={`spark-${index}`} className={styles.spark} style={style} />
-      ))}
-    </div>
+    <>
+      {/* TEMPORARY (f-prism t-180): t-181 deletes this line. See tint-picker.tsx. */}
+      <TintPicker />
+      <div aria-hidden="true" data-prism={variant} className={styles.ground}>
+        <span className={styles.wash} />
+        {FOLDS.map((style, index) => (
+          <span key={`fold-${index}`} className={styles.fold} style={style} />
+        ))}
+        {RAYS.map((style, index) => (
+          <span key={`ray-${index}`} className={styles.ray} style={style} />
+        ))}
+        <span className={styles.veil} />
+        {SPARKS.map((style, index) => (
+          <span key={`spark-${index}`} className={styles.spark} style={style} />
+        ))}
+      </div>
+    </>
   );
 }

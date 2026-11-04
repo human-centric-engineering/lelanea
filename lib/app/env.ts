@@ -42,4 +42,16 @@ import { z } from 'zod';
  *
  * Full guide: CUSTOMIZATION.md §4 · .context/environment/overview.md
  */
-export const appEnvSchema = z.object({});
+export const appEnvSchema = z.object({
+  // TEMPORARY (f-prism t-180): shows the tint picker so Lelañea can choose her
+  // light. Off unless set to "true", so production never carries it; a preview
+  // sets it for her. t-181 deletes it with the picker.
+  LELANEA_TINT_PICKER: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => val === 'true')
+    .describe(
+      'Show the temporary tint picker on consumer pages. Off by default; set "true" on a ' +
+        'preview only. Removed once the tints are chosen (f-prism t-181).'
+    ),
+});

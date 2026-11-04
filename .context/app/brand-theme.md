@@ -275,8 +275,18 @@ three inks — the margin `--color-input` keeps. The light frame is the
 prototype's, and clears.
 
 **What the method does not cover:** the halo (it only helps, and is not
-measured), and the tint picker's tints (t-180), which are measured by their
-own test over this same model (`tests/helpers/app/prism-light.ts`).
+measured).
+
+### The temporary tint picker (t-180)
+
+While Lelañea chooses her light, `LELANEA_TINT_PICKER=true` shows a picker on
+every consumer page offering other tints of the prism, in both themes. A tint
+moves only the ground, the glows and the fold (`components/app/ui/tints.css`),
+and each one is measured over this same model by
+`tests/unit/components/app/ui/tints.test.ts`, so none is offered that fails
+4.5:1. The flag is off by default and production never sets it. t-181 writes
+her choice into this file as the defaults and deletes the picker; the list of
+what goes is in `components/app/ui/tint-picker.tsx`.
 
 ## The three contrast rulings (t-18)
 

@@ -27,7 +27,11 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// TEMPORARY (f-prism t-180): the ground mounts the tint picker, an async server
+// component jsdom cannot render. t-181 deletes this line with the mount.
+vi.mock('@/components/app/ui/tint-picker', () => ({ TintPicker: () => null }));
 
 import { PrismGround } from '@/components/app/ui/prism-ground';
 

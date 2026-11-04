@@ -47,6 +47,8 @@ import {
   parseRules,
   rgbaParts,
   type Rule,
+  SHELL_GROUNDS,
+  SHELL_VEIL,
   stripCssComments,
   token,
   worstContrast,
@@ -146,42 +148,6 @@ const GROUNDS = [
   '--read-card',
   '--read-muted',
 ];
-
-/**
- * The shell's own grounds (t-179): the frame (`--app-*`) and the reading panes
- * (`--read-*`), measured over the shell's light rather than the site's — the
- * veil off, and at the quarter strength the shell's ground gives it. The read
- * grounds are in `GROUNDS` as well, because a site page could reach for them.
- */
-const SHELL_GROUNDS = [
-  '--app-background',
-  '--app-card',
-  '--app-muted',
-  '--read-background',
-  '--read-card',
-  '--read-muted',
-];
-
-/**
- * The shell veil's opacity, read from the module that sets it, so thinning it
- * further is measured here rather than assumed.
- */
-const SHELL_VEIL_OPACITY = (() => {
-  const groundCss = stripCssComments(
-    readFileSync(
-      path.join(process.cwd(), 'components', 'app', 'ui', 'prism-ground.module.css'),
-      'utf8'
-    )
-  );
-  const rule = parseRules(groundCss).find(
-    (candidate) => candidate.selector === ".ground[data-prism='app'] .veil"
-  );
-  const opacity = rule?.body.match(/opacity:\s*([\d.]+)/)?.[1];
-  if (opacity === undefined) throw new Error('prism-ground.module.css sets no shell veil opacity');
-  return Number.parseFloat(opacity);
-})();
-
-const SHELL_VEIL = [0, SHELL_VEIL_OPACITY];
 
 /** `[theme, ground]` for every combination, for `it.each`. */
 const GROUND_PAIRINGS = GROUNDS.flatMap((ground) => [
