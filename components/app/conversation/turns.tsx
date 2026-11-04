@@ -71,7 +71,7 @@ export function HerMark() {
       )}
       title={CONVERSATION_COPY.herMark}
     >
-      <LotusMark size={18} water={false} />
+      <LotusMark size={18} light={false} />
     </span>
   );
 }

@@ -85,7 +85,7 @@ export function SiteFooter() {
     <footer className={styles.foot}>
       <div className={styles.footTop}>
         <Link href="/" className={styles.wordmark} aria-label={`${BRAND.name}, home`}>
-          <LotusMark size={30} water={false} />
+          <LotusMark size={30} />
           <span className={styles.wordmarkText} style={{ fontSize: 21 }}>
             {BRAND.name}
           </span>

@@ -623,6 +623,11 @@
   --dot-blend: lighter;
   --dot-halo: 0.42;
   --dot-glow: rgba(236, 162, 108, 0.24);
+  /* The strapline the hero's flower writes on its water (t-184): each letter
+   * flares white and settles to cream. Only where the flower is drawn as
+   * light, which is the only place it writes. */
+  --strap-flare: #ffffff;
+  --strap-ink: #efe2d4;
 }
 
 /* On the sky, which is lighter than the umber, the petals are paler, nearly
@@ -637,6 +642,7 @@
   --dot-pool: rgba(0, 0, 0, 0);
   --dot-halo: 0.5;
   --dot-glow: rgba(250, 196, 150, 0.32);
+  --strap-ink: #fbf4ec;
 }
 
 /* ======================================================= the page and the glass

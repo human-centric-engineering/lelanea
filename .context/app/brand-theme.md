@@ -515,19 +515,15 @@ a canvas repaint is a few milliseconds. At rest — the bud, and the open bloom 
 it shows `public/lotus-anim-*.svg`, baked in the animation's own frames so the
 canvas lines up with them exactly, and the open image loads under the canvas
 while it plays. Every path that skips the animation (reduced motion, no 2D
-context, no JavaScript) still shows a correct lotus. It plays on the landing
-hero (`fluid`, filling its column) and as the app's entry bloom, which is
-server-rendered on every page load (t-132).
+context, no JavaScript) still shows a correct lotus. No page plays it now:
+the landing hero and the app's entry bloom are the flower drawn in light
+(below).
 
-**`LotusMark` is a baked image, not inline SVG.** Inline, the open bloom is
-~270KB of markup in every page's HTML, and the glyph again in every chat
-avatar. Baked, it is one cached request per form. This is safe only because the
-lotus tokens are mode-invariant (above).
-
-**Below 48px without water, the mark is the GLYPH**: the bloom caught 850ms into
-its opening. Fully open the flower is ~2.3× wider than tall, so at the 18px
-avatar it would be a sliver. The glyph is also the favicon (`app/icon.svg` and
-`app/favicon.ico`, divergence row 13) and the apple icon.
+**The 3D model's still marks remain for what cannot run a canvas.** The
+half-open GLYPH (the bloom caught 850ms into its opening) is the favicon
+(`app/icon.svg` and `app/favicon.ico`, divergence row 13) and the apple icon,
+and `public/lotus-mark.svg` is the social card's flower and the email header.
+On the page itself `LotusMark` is the flat lotus drawn in light since t-183.
 
 **After changing the model or any `--color-lotus-*` token, run
 `npm run lotus:assets`.** It rewrites `lotus-frames.ts`, the three marks and
@@ -554,6 +550,40 @@ are the flower's own, which is why the hero water and the CSS rings are gone.
 | Geometry | `components/app/ui/dot-lotus-geometry.ts` | Where each dot sits, the seed head, occlusion, and the timeline. Pure.     |
 | Painter  | `components/app/ui/dot-lotus-paint.ts`    | Sprites from the `--dot-*` tokens, the moving light, and the loop's clock. |
 | Mount    | `components/app/ui/dot-lotus.tsx`         | Canvas over the flat `/dot-lotus.svg`; pauses off-screen and when hidden.  |
+| Mark     | `components/app/ui/lotus-mark.tsx`        | The small mark: solid `/dot-lotus-mark.svg` with the light laid over it.   |
+| Strap    | `components/app/ui/dot-lotus-strap.tsx`   | The strapline the hero's flower writes on its water.                       |
+
+**It is also the app's entry bloom** (t-183), on every full page load
+(t-132). The cover lifts when the flower's own clock reaches `OPENED_AT`
+(`onOpened`), once the last dot has arrived and the first heartbeat is
+landing. That clock stands still in a hidden tab, so a bloom opened in the
+background is still there to see. The glow is the canvas's own, at the heart, so
+the cover carries none. Reduced motion is shown the open flower, still, and
+the cover goes at once.
+
+**The small mark keeps solid petals** (t-183, the prototype's mini lotus). At
+30px a dotted outline reads as speckle. So `LotusMark` shows the flat flower
+cropped close (`MARK_VIEW`), and its canvas draws only the energy: the heart's
+glow and beat, flares at the petal edges, and a few larger dots streaming out
+(`MARK`). There is no pool, no pond and no drift, and it is dotted far more
+sparsely (`MARK_FORM`). Pointing at the link it sits in replays the unfolding.
+The agent's mark beside each reply passes `light={false}`. It repeats down a
+conversation, and a column of hearts beating out of step is noise. The mark
+is decorative, so the link around it carries the name.
+
+**The strapline is written on the water** (t-184): an arc of wide-spaced
+italic along the front of the hero's pond. Each letter condenses out of the
+light as the flower finishes opening, flares (`--strap-flare`) and settles to
+cream (`--strap-ink`). The tokens are set only where the flower is drawn as
+light. A click on the flower writes it again with the unfolding. The letters
+run only while the flower's clock runs (`data-playing`), so a slow
+hydration, a flower off screen or a hidden tab does not write them over a
+closed flower. Where no canvas paints there is no clock to wait for, and
+they are shown settled. Below 760px wide the letters are smaller, so the ends of the
+arc stay on a phone's screen. Reduced motion and no script show
+them settled. The arc is `aria-hidden`; the hero's caption stays in its place
+above the heading, visually hidden, so the words are read once. Both read
+`STRAPLINE` (`lib/site/config.ts`), and the social card does too.
 
 **`--dot-*` move with the theme; `--color-lotus-*` do not.** The dots are
 painted live and never baked, and light reads as light only on dark. So the

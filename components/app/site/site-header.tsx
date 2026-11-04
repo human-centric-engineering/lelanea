@@ -81,7 +81,7 @@ export function SiteHeader() {
       {/* The mark is decorative (`aria-hidden` inside `LotusMark`), so the LINK
           carries the accessible name — one component, one a11y job. */}
       <Link href="/" className={styles.wordmark} aria-label={`${BRAND.name}, home`}>
-        <LotusMark size={30} water={false} />
+        <LotusMark size={30} />
         <span className={styles.wordmarkText}>{BRAND.name}</span>
       </Link>
 

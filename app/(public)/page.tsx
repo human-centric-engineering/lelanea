@@ -12,7 +12,7 @@ import { Ripples } from '@/components/app/site/ripples';
 import { WaitlistForm } from '@/components/app/site/waitlist-form';
 import { getJourneyStructure } from '@/lib/app/content/journey-store';
 import { requireDocument, selectSectionText } from '@/lib/app/content/sections';
-import { CREATOR_PORTRAIT, FLOWER_OF_LIFE, REFLECTION } from '@/lib/site/config';
+import { CREATOR_PORTRAIT, FLOWER_OF_LIFE, REFLECTION, STRAPLINE } from '@/lib/site/config';
 import styles from '@/app/(public)/home.module.css';
 import bandStyles from '@/components/app/site/bands.module.css';
 
@@ -135,7 +135,12 @@ export default async function HomePage() {
       <div className="mx-auto max-w-[1180px] px-[clamp(20px,5vw,72px)]">
         <section className={styles.hero}>
           <div>
-            <Eyebrow as="p">transcendental coaching, at your own pace</Eyebrow>
+            {/* Written on the flower's water instead (t-184), which is
+              decoration; the caption stays here, visually hidden, so the
+              words are read once and in their place above the heading. */}
+            <Eyebrow as="p" className="sr-only">
+              {STRAPLINE}
+            </Eyebrow>
             <h1 className="brand-display">
               <InlineText text={openingLine} />
             </h1>
@@ -153,10 +158,12 @@ export default async function HomePage() {
               announcing the flower would only repeat it. It unfolds on every
               load, as the app's entry bloom does (owner, t-132), drawn in
               points of light on its own pond (t-182) — the water and the rings
-              that sat beneath it are the flower's own now. On the light
-              theme's dusk sky it takes the sky's palette (`data-dot-ground`). */}
+              that sat beneath it are the flower's own now — and writes the
+              strapline on that water as it finishes opening (t-184). On the
+              light theme's dusk sky it takes the sky's palette
+              (`data-dot-ground`). */}
             <div className={styles.bloomArt} data-dot-ground="sky">
-              <DotLotus size={470} />
+              <DotLotus size={470} strap={STRAPLINE} />
             </div>
 
             {/* Who made this (t-171), in the space beneath the bloom: her face,

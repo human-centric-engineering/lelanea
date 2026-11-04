@@ -1,0 +1,92 @@
+/*
+ * The strapline on the water (t-184). Placed in the flower's own units: the
+ * flower's view box is 168 wide from x = -84, and the strap's is 400 wide from
+ * x = -200, sharing its top edge — so it starts 116/168 of the flower's width
+ * to the left and is 400/168 of it wide.
+ */
+.strap {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: -69.048%;
+  width: 238.095%;
+  height: auto;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.strap text {
+  font-family: var(--font-quote);
+  font-style: italic;
+  font-size: 8.8px;
+  letter-spacing: 0.15em;
+  fill: var(--strap-ink, currentColor);
+}
+
+/* The arc spans about half as wide again as the flower. At the hero's 470px
+   cap that is ~690px, so below ~760px of screen (and on every phone, where the
+   flower is most of the width) the letters are smaller, keeping its ends on it. */
+@media (max-width: 760px) {
+  .strap text {
+    font-size: 6.8px;
+  }
+}
+
+/* Each letter after the one before, as the flower finishes opening. Run only
+   while the flower's clock runs (`data-playing` is on its host while it does),
+   so the delay is counted on the flower's own time: a flower waiting off
+   screen, or in a hidden tab, holds its words back with it. */
+.strap tspan {
+  opacity: 0;
+  animation: strap-in 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  /* `--i` is each letter's place, set on the letter itself. */
+  animation-delay: calc(2.5s + var(--i, 0) * 46ms);
+  animation-play-state: paused;
+}
+
+:global([data-playing]) > .strap tspan {
+  animation-play-state: running;
+}
+
+/* No canvas: the flat flower has no clock to wait for, so the words are
+   simply there, settled. */
+:global([data-lit='false']) > .strap tspan {
+  animation: none;
+  opacity: 1;
+}
+
+@keyframes strap-in {
+  0% {
+    opacity: 0;
+    fill: var(--strap-flare, currentColor);
+  }
+  35% {
+    opacity: 1;
+    fill: var(--strap-flare, currentColor);
+  }
+  100% {
+    opacity: 1;
+    fill: var(--strap-ink, currentColor);
+  }
+}
+
+/* Settled from the first paint: reduced motion (before script, and after it,
+   as `.still`), and no script, where nothing would ever start the clock. */
+.strap.still tspan {
+  animation: none;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strap tspan {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+@media (scripting: none) {
+  .strap tspan {
+    animation: none;
+    opacity: 1;
+  }
+}

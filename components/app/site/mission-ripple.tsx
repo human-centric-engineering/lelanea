@@ -74,7 +74,7 @@ export function MissionRipple({
 
         {/* The bloom the rings come from, resting at the foot of the panel. */}
         <div className={styles.foot} aria-hidden="true">
-          <LotusMark size={58} water={false} />
+          <LotusMark size={58} />
           <span className="brand-eyebrow">the mission</span>
         </div>
 

@@ -29,6 +29,7 @@ vi.mock('@/lib/app/content/journey-store', async () =>
 import { render, screen } from '@testing-library/react';
 
 import HomePage, { dynamic, generateMetadata } from '@/app/(public)/page';
+import { STRAPLINE } from '@/lib/site/config';
 import { fakeDocumentStore, rewriteSection } from '@/tests/helpers/app/foundational-documents';
 
 const store = fakeDocumentStore();
@@ -101,6 +102,26 @@ describe('home page content', () => {
     expect(screen.getAllByText('Edited invitation beat.')).toHaveLength(3);
     expect(screen.getAllByText('Edited guide beat.')).toHaveLength(9);
     expect(screen.getAllByText('Edited commitment.')).toHaveLength(2);
+  });
+
+  it('says the strapline once: the arc on the water repeats the caption (t-184)', async () => {
+    render(await HomePage());
+
+    // The caption is in the page, above the heading, for assistive technology
+    // only; the words on the water are decoration.
+    const caption = screen.getByText(STRAPLINE);
+    expect(caption.className).toContain('sr-only');
+    expect(caption.compareDocumentPosition(screen.getByRole('heading', { level: 1 }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    const arc = screen.getByTestId('dot-lotus-strap');
+    expect(arc).toHaveAttribute('aria-hidden', 'true');
+
+    // The same words, letter for letter: change one and this fails.
+    const written = [...arc.querySelectorAll('tspan')]
+      .map((letter) => letter.textContent?.replace('\u00a0', ' '))
+      .join('');
+    expect(written).toBe(caption.textContent);
   });
 
   it('fails loudly when a key a card needs has gone, rather than rendering an empty card', async () => {

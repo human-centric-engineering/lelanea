@@ -23,6 +23,12 @@ export type Point = readonly [number, number];
 /** The SVG's view box: the open flower and its water. */
 export const VIEW = { x: -84, y: -106, width: 168, height: 160 } as const;
 
+/**
+ * The small mark's view box (t-183): the open flower alone, cropped close, as
+ * the prototype's `svg[data-dot-mini]` frames it beside the wordmark.
+ */
+export const MARK_VIEW = { x: -70, y: -103, width: 139, height: 116 } as const;
+
 // ---- Timeline ------------------------------------------------------------
 
 /**
@@ -45,6 +51,17 @@ export const TIMELINE = {
   /** How long a pond ring takes to cross the water and fade. */
   POND_LIFE: 9,
 } as const;
+
+/**
+ * When the flower has opened, in seconds: the last petal's dots have arrived
+ * (the inner ring's last petal, at most `0.12` late) and the seed head has
+ * gathered, which is about when the first heartbeat lands. What the app's entry
+ * bloom hands over on.
+ */
+export const OPENED_AT = Math.max(
+  2 * TIMELINE.RING_GAP + 4 * TIMELINE.PETAL_GAP + 0.12 + TIMELINE.PETAL,
+  TIMELINE.HEART_AT + 4 * 0.08 + 0.8
+);
 
 /**
  * The still frame reduced motion is shown: long enough that everything has
@@ -298,13 +315,38 @@ export function restingAt(d: Dot): Point {
 }
 
 /**
+ * How densely a flower is dotted. The full flower traces every petal closely
+ * and draws each one's inner echo and vein; the small mark (t-183) keeps the
+ * SVG's solid petals and only needs the few dots its light rises from, since a
+ * dotted outline at 30px reads as speckle.
+ */
+export interface FlowerForm {
+  /** Between outline dots, in units. */
+  readonly gap: number;
+  /** Whether each petal carries its inner echo and its vein. */
+  readonly echo: boolean;
+  /** The seed head's rings, centre outward. */
+  readonly heart: readonly (readonly [radius: number, count: number])[];
+}
+
+export const FULL_FORM: FlowerForm = { gap: 2.5, echo: true, heart: HEART_RINGS };
+export const MARK_FORM: FlowerForm = {
+  gap: 12,
+  echo: false,
+  heart: [
+    [0, 1],
+    [7.5, 6],
+  ],
+};
+
+/**
  * The dotted flower, open. Painter's order is kept the way the SVG paints it:
  * a dot is dropped where a petal painted after it, or the seed head, covers
  * it, so back petals tuck behind front ones. The random draws are taken in
  * the prototype's order, from its seed, so every dot lands, twinkles and
  * flares as the prototype's does.
  */
-export function dotFlower(): Dot[] {
+export function dotFlower(form: FlowerForm = FULL_FORM): Dot[] {
   const R = rng(20261101);
   const outlines = PETALS.map((p) => outline(p.d));
   const dots: Dot[] = [];
@@ -342,7 +384,8 @@ export function dotFlower(): Dot[] {
       });
     };
     const line = outlines[i];
-    for (const pt of spaced(line, 2.5)) add(pt, 'edge', 0.9, 1);
+    for (const pt of spaced(line, form.gap)) add(pt, 'edge', 0.9, 1);
+    if (!form.echo) return;
     // The inner echo: the outline drawn again at 62%, from the base.
     const echo = line.map(([x, y]): Point => [x * 0.62, y * 0.62 - 4]);
     for (const pt of spaced(echo, 4.2)) add(pt, 'echo', 0.6, 0.45);
@@ -352,7 +395,7 @@ export function dotFlower(): Dot[] {
       add([0, tip[1] * v], 'vein', 0.56, 0.55);
   });
 
-  HEART_RINGS.forEach(([radius, count], k) => {
+  form.heart.forEach(([radius, count], k) => {
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + k * 0.4;
       dots.push({
@@ -361,10 +404,12 @@ export function dotFlower(): Dot[] {
         lx: Math.cos(a) * radius,
         ly: Math.sin(a) * radius,
         angle: 0,
-        tone: k < 2 ? 3 : k < 4 ? 4 : 5,
+        // A two-ring heart takes a tone a ring; the full one spreads three.
+        tone: form.heart.length < 3 ? 3 + k : k < 2 ? 3 : k < 4 ? 4 : 5,
         delay: TIMELINE.HEART_AT + k * 0.08,
         jx: 0,
         jy: 0,
+        // The full heart's outermost ring, as the prototype sizes it.
         r: k === HEART_RINGS.length - 1 ? 0.75 : 0.62,
         base: 1,
         w: 1 + R() * 2,

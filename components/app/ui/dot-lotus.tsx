@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { cn } from '@/lib/utils';
 
-import { HEART, VIEW } from '@/components/app/ui/dot-lotus-geometry';
+import { HEART, OPENED_AT, VIEW } from '@/components/app/ui/dot-lotus-geometry';
 import {
   dotLoop,
   dotTokens,
@@ -14,6 +14,8 @@ import {
   REACH,
   type DotLayout,
 } from '@/components/app/ui/dot-lotus-paint';
+import { DotLotusStrap } from '@/components/app/ui/dot-lotus-strap';
+import { seenTimeout } from '@/components/app/ui/seen-timeout';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import styles from '@/components/app/ui/dot-lotus.module.css';
 
@@ -31,6 +33,19 @@ export interface DotLotusProps {
    * decoration beside the words it stands for, which is every use today.
    */
   label?: string;
+  /**
+   * Words to write on the water once it has opened (t-184). Decoration: the
+   * same words must be in the page for assistive technology — the hero's
+   * caption, visually hidden.
+   */
+  strap?: string;
+  /**
+   * Called once, when the flower first opens: on its own clock, which stands
+   * still while it is off screen or its tab is hidden. Where no canvas paints,
+   * the flat flower stands in for an opening of the same length of seen time —
+   * except for a flower that waits to be seen, which reports nothing there.
+   */
+  onOpened?: () => void;
   className?: string;
 }
 
@@ -59,33 +74,64 @@ const PAD = REACH * 0.62;
  * resumes when it is back. A reader who asked for less motion is shown the open
  * flower, still: one frame, and nothing scheduled after it.
  *
+ * Given a `strap`, it writes those words along the front of its pond as it
+ * finishes opening, and again on each replay (`DotLotusStrap`).
+ *
  * @see components/app/ui/dot-lotus-geometry.ts — where the dots sit, and when
  * @see components/app/ui/dot-lotus-paint.ts — how they are painted
  */
-export function DotLotus({ size = 440, startInView = false, label, className }: DotLotusProps) {
+export function DotLotus({
+  size = 440,
+  startInView = false,
+  label,
+  strap,
+  onOpened,
+  className,
+}: DotLotusProps) {
   const reduced = useReducedMotion();
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const replayRef = useRef<() => void>(() => undefined);
+  /** Plays the unfolding again; says whether it did. */
+  const replayRef = useRef<() => boolean>(() => false);
+  // Each replay writes the strapline again.
+  const [strapRun, setStrapRun] = useState(0);
+  const openedRef = useRef(onOpened);
+  useEffect(() => {
+    openedRef.current = onOpened;
+  }, [onOpened]);
+  /** Whether `onOpened` has been called: once per mount, whatever re-runs. */
+  const hasOpened = useRef(false);
 
   useEffect(() => {
     const host = hostRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!host || !canvas) return;
-    // No 2D context: the flat flower is the picture after all.
-    if (!ctx) {
-      host.dataset.lit = 'false';
-      return () => {
-        delete host.dataset.lit;
-      };
-    }
-
     // The hook reads the preference in an effect of its own, so on the first
     // run it still says `false`; asked directly, a reader who wants less motion
     // never gets a frame of the animated scene before the still one.
     const still =
       reduced || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+    const open = () => {
+      if (hasOpened.current) return;
+      hasOpened.current = true;
+      openedRef.current?.();
+    };
+
+    // No 2D context: the flat flower is the picture after all. It stands in
+    // for an opening of the same length, counted only while the tab is seen;
+    // shown still, it is open already.
+    if (!ctx) {
+      host.dataset.lit = 'false';
+      let cancel = () => {};
+      if (still) open();
+      else if (!startInView) cancel = seenTimeout(open, OPENED_AT * 1000);
+      return () => {
+        cancel();
+        delete host.dataset.lit;
+      };
+    }
+
     let tokens = dotTokens(host);
     let look = readDotLook(host);
     const scene = dotScene(sharedFlower(), { reduced: still });
@@ -132,6 +178,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     const loop = dotLoop(
       (t) => {
         if (layout) scene.paint(ctx, look, layout, t);
+        if (t >= OPENED_AT) open();
       },
       {
         reduced: still,
@@ -152,6 +199,9 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     const update = () => {
       if (onScreen && started && !document.hidden) loop.play();
       else loop.pause();
+      // The strapline's letters run only while the flower's clock does.
+      if (loop.running) host.dataset.playing = '';
+      else delete host.dataset.playing;
     };
     const replay = () => {
       scene.reset();
@@ -161,6 +211,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     // seen has nothing to replay.
     replayRef.current = () => {
       if (started) replay();
+      return started;
     };
 
     const watching = typeof IntersectionObserver !== 'undefined';
@@ -191,9 +242,14 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
               const entry = entries[entries.length - 1];
               if (!entry.isIntersecting) {
                 // Out of sight, back to nothing, so a return unfolds from the
-                // start rather than showing the last open frame first.
-                started = false;
-                replay();
+                // start rather than showing the last open frame first — and
+                // its words go back with it, to be written again. Only once it
+                // has started: before then there is nothing to take back.
+                if (started) {
+                  started = false;
+                  replay();
+                  setStrapRun((n) => n + 1);
+                }
               } else if (!started && entry.intersectionRatio >= 0.5) {
                 started = true;
                 replay();
@@ -248,8 +304,9 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       theme.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('resize', relayout);
-      replayRef.current = () => undefined;
+      replayRef.current = () => false;
       delete host.dataset.lit;
+      delete host.dataset.playing;
     };
   }, [reduced, startInView, size]);
 
@@ -263,7 +320,9 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       ref={hostRef}
       className={cn(styles.host, className)}
       style={hostStyle}
-      onClick={() => replayRef.current()}
+      onClick={() => {
+        if (replayRef.current()) setStrapRun((n) => n + 1);
+      }}
     >
       {/* A plain <img>: a static SVG gains nothing from next/image. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -277,6 +336,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
         className={styles.image}
       />
       <canvas ref={canvasRef} aria-hidden="true" className={styles.canvas} />
+      {strap ? <DotLotusStrap text={strap} run={strapRun} still={reduced} /> : null}
     </div>
   );
 }

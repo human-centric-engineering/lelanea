@@ -161,7 +161,7 @@ export default async function LelaneaPage() {
                   {/* Decorative: the caption says what this is, and the mark
                       is the brand's, not a depiction of her. */}
                   <Image src={LIGHT_THROUGH_WATER} alt="" fill sizes="300px" />
-                  <LotusMark size={72} water={false} />
+                  <LotusMark size={72} />
                   <figcaption className="sr-only">
                     A portrait of Lelañea Fulton will appear here.
                   </figcaption>

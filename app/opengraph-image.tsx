@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { ogLotusSize } from '@/components/app/ui/lotus-sizes';
 import { BRAND } from '@/lib/brand';
+import { STRAPLINE } from '@/lib/site/config';
 
 export const alt = 'Lelañea — an invitation into conscious living';
 export const size = { width: 1200, height: 630 };
@@ -82,7 +83,7 @@ export default async function OpengraphImage() {
       <img src={lotusSrc} alt="" width={lotusSize.width} height={lotusSize.height} />
       <div style={{ fontSize: 76, letterSpacing: -1 }}>{BRAND.name}</div>
       <div style={{ fontSize: 30, color: OG_COLORS.mutedForeground, letterSpacing: 4 }}>
-        transcendental coaching, at your own pace
+        {STRAPLINE}
       </div>
     </div>,
     size

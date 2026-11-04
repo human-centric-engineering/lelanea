@@ -58,6 +58,13 @@
  */
 export const LAUNCH_WINDOW = '[LAUNCH WINDOW]';
 
+/**
+ * The strapline: the hero's caption, the words the home flower writes on its
+ * water (t-184), and the social card's line. One string, so the three cannot
+ * drift apart.
+ */
+export const STRAPLINE = 'transcendental coaching, at your own pace';
+
 /** The domain, as the footer prints it beside the wordmark. */
 export const SITE_DOMAIN = 'lelanea.com';
 

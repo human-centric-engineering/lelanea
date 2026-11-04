@@ -3,7 +3,7 @@
 /**
  * The entry bloom — when it plays, and that it always gets out of the way.
  *
- * `Lotus` owns the animation and has its own suite. What is ours here is the
+ * `DotLotus` owns the animation and has its own suite. What is ours here is the
  * owner's rule from t-132 — **the lotus unfolds on every full page load**, a
  * refresh and a return included, and NOT on moving around inside the app — and
  * the three ways the cover must come off: the bloom settling, the reader
@@ -20,7 +20,17 @@ import { StrictMode } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus';
+import { OPENED_AT } from '@/components/app/ui/dot-lotus-geometry';
+import {
+  stubBox,
+  stubCanvas,
+  stubFrames,
+  stubMotion,
+  stubOnScreen,
+} from '@/tests/helpers/app/dot-canvas';
+
+/** When the flower has opened and the cover starts to lift (t-183). */
+const ENTRY_OPENED_MS = Math.round(OPENED_AT * 1000);
 
 /**
  * A fresh module per test: whether this document has bloomed is module state,
@@ -32,7 +42,9 @@ async function newDocument() {
   ({ EntryBloom } = await import('@/components/app/shell/entry-bloom'));
 }
 
-const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
+const FAILSAFE_MS = ENTRY_OPENED_MS + 600;
+/** The most the cover waits on a flower that never runs. */
+const BACKSTOP_MS = ENTRY_OPENED_MS + 2000;
 /** The cover's fade-out. */
 const FADE_MS = 900;
 
@@ -51,12 +63,13 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 /** Run the bloom to the end of its opening and its fade. */
 async function settle() {
   await act(async () => {
-    vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+    vi.advanceTimersByTime(ENTRY_OPENED_MS + 50);
   });
   await act(async () => {
     vi.advanceTimersByTime(FADE_MS + 50);
@@ -119,8 +132,13 @@ describe('EntryBloom — on every full page load', () => {
   it('fades out and unmounts once the last petal settles', async () => {
     vi.useFakeTimers();
     render(<EntryBloom />);
+    // Not before: lifting early would cut the opening short.
     await act(async () => {
-      vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+      vi.advanceTimersByTime(ENTRY_OPENED_MS - 50);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+    await act(async () => {
+      vi.advanceTimersByTime(100);
     });
     expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
 
@@ -150,11 +168,11 @@ describe('EntryBloom — the lotus rises as it opens', () => {
     render(<EntryBloom />);
     const rise = screen.getByTestId('entry-bloom-rise');
     expect(rise.className).toMatch(/rise/);
-    expect(rise.style.animationDuration).toBe(`1000ms, ${LOTUS_OPENED_MS + FADE_MS}ms`);
-    // Far bigger than the old 168px bloom: a fluid lotus up to 680px wide,
-    // capped by height too so a short screen does not crop it as it rises.
-    expect(rise.className).toContain('w-[min(86vw,680px,120dvh)]');
-    expect(rise.querySelector('[data-open]')).toHaveStyle({ width: '100%' });
+    expect(rise.style.animationDuration).toBe(`1000ms, ${ENTRY_OPENED_MS + FADE_MS}ms`);
+    // Large, and capped by height too so a short screen does not crop it as
+    // it rises; the flower fills that column rather than sizing to the screen.
+    expect(rise.className).toContain('w-[min(86vw,560px,64dvh)]');
+    expect(rise.firstElementChild?.className).toMatch(/flower/);
   });
 
   it('holds the rise until the bloom starts, so they move together', () => {
@@ -164,14 +182,138 @@ describe('EntryBloom — the lotus rises as it opens', () => {
     expect(screen.getByTestId('entry-bloom-rise').style.animationPlayState).toBe('running');
   });
 
-  it('does not breathe — it is leaving, not resting', async () => {
+  it('is the home flower drawn in light, not the lily', () => {
+    render(<EntryBloom />);
+    const rise = screen.getByTestId('entry-bloom-rise');
+    expect(rise.querySelector('img')).toHaveAttribute('src', '/dot-lotus.svg');
+    // Its glow is the canvas's own, at the heart: no lily, no halation frame.
+    expect(rise.querySelector('canvas')).not.toBeNull();
+    expect(rise.querySelector('[data-open]')).toBeNull();
+  });
+
+  it('lifts when the flower has opened on its own clock, not the wall clock', async () => {
+    stubOnScreen();
+    stubBox(560, 533);
+    stubCanvas();
+    const frames = stubFrames();
+    // Fake timers bring their own clock: watch theirs.
+    vi.useFakeTimers();
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    render(<EntryBloom />);
+    expect(frames.request).toHaveBeenCalled();
+    // Time passing without frames painted is not the flower opening.
+    await act(async () => {
+      vi.advanceTimersByTime(ENTRY_OPENED_MS + 1000);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+    // A frame just short of open, then one at it.
+    now.mockReturnValue(ENTRY_OPENED_MS - 50);
+    frames.run();
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+    now.mockReturnValue(ENTRY_OPENED_MS + 50);
+    frames.run();
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+    await act(async () => {
+      vi.advanceTimersByTime(FADE_MS + 50);
+    });
+    expect(screen.queryByTestId('entry-bloom')).toBeNull();
+  });
+
+  it('still lifts, a little later, if the flower never gets to run', async () => {
+    // Frames that never come: nothing paints, so nothing reports the flower
+    // open. The cover must not stay over the app.
+    stubOnScreen();
+    stubBox(560, 533);
+    stubCanvas();
+    stubFrames();
     vi.useFakeTimers();
     render(<EntryBloom />);
     await act(async () => {
-      vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+      vi.advanceTimersByTime(ENTRY_OPENED_MS + 1900);
     });
-    const bloom = screen.getByTestId('entry-bloom-rise').querySelector('[data-open]');
-    expect(bloom?.className.split(/\s+/)).toEqual(['relative', 'inline-block']);
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+  });
+
+  it('waits for a tab opened in the background to be looked at', async () => {
+    stubOnScreen();
+    stubBox(560, 533);
+    stubCanvas();
+    const frames = stubFrames();
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    vi.useFakeTimers();
+    try {
+      render(<EntryBloom />);
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_OPENED_MS * 3);
+      });
+      expect(frames.request).not.toHaveBeenCalled();
+      expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+      // The rise waits with it.
+      expect(screen.getByTestId('entry-bloom-rise').style.animationPlayState).toBe('paused');
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(frames.request).toHaveBeenCalled();
+      expect(screen.getByTestId('entry-bloom-rise').style.animationPlayState).toBe('running');
+    } finally {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      vi.useRealTimers();
+    }
+  });
+
+  it('lifts at once for reduced motion where no canvas paints either', async () => {
+    stubMotion(true);
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+  });
+
+  it("counts the flat flower's opening only while its tab is seen", async () => {
+    // No canvas here: the flat flower stands in for the opening.
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    vi.useFakeTimers();
+    try {
+      render(<EntryBloom />);
+      await act(async () => {
+        vi.advanceTimersByTime(BACKSTOP_MS * 2);
+      });
+      expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        vi.advanceTimersByTime(ENTRY_OPENED_MS + 50);
+      });
+      expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+    } finally {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    }
+  });
+
+  it('shows reduced motion the open flower, still, and lifts at once', async () => {
+    stubMotion(true);
+    stubOnScreen();
+    stubBox(560, 533);
+    const canvas = stubCanvas();
+    const frames = stubFrames();
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    // The open flower, painted — repainted as each observer reports, but
+    // always the same moment — and no frame ever scheduled after it.
+    expect(canvas.paints()).toBeGreaterThan(0);
+    expect(frames.request).not.toHaveBeenCalled();
+    // Nobody waits for an opening that is not played.
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
     vi.useRealTimers();
   });
 });
@@ -220,7 +362,7 @@ describe('EntryBloom — always gets out of the way', () => {
     // The server HTML carries the fail-safe class and its delay …
     const html = renderToString(<EntryBloom />);
     expect(html).toMatch(/class="[^"]*failsafe/);
-    expect(html).toContain(`animation-delay:${LOTUS_OPENED_MS + 600}ms`);
+    expect(html).toContain(`animation-delay:${ENTRY_OPENED_MS + 600}ms`);
 
     // … and once mounted the component's own clock takes over, so a slow-
     // hydrating device still gets the whole opening.
@@ -264,7 +406,7 @@ describe('EntryBloom — always gets out of the way', () => {
     expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-auto');
 
     await act(async () => {
-      vi.advanceTimersByTime(LOTUS_OPENED_MS + 50);
+      vi.advanceTimersByTime(ENTRY_OPENED_MS + 50);
     });
     expect(screen.getByTestId('entry-bloom').className).toContain('pointer-events-none');
   });

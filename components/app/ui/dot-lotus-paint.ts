@@ -1,6 +1,7 @@
 import { parseColour, rgbaString, type Rgba } from '@/components/app/ui/lotus-colour';
 import {
   HEART,
+  MARK_FORM,
   POND_Y,
   REST_T,
   TIMELINE,
@@ -287,11 +288,35 @@ interface Mote {
 /** How far a loose dot may stream from the heart, in units. */
 export const REACH = 118;
 
+/**
+ * The small mark's light (t-183, the prototype's `MINI`). Its petals are the
+ * SVG's, solid, so the canvas draws none of the flower's dots: only the heart's
+ * glow, the light streaming from it — fewer, larger — and the stars a dot
+ * flares into. No pool, no pond, no drift.
+ */
+export const MARK = {
+  reach: 70,
+  glow: 26,
+  flow: 4,
+  flowSize: 2.4,
+  starSize: 2.6,
+  /** How often a petal tip lets go of two stars on a beat rather than one. */
+  tipPair: 0.35,
+} as const;
+const FULL = { reach: REACH, glow: 50, flow: 16, flowSize: 1, starSize: 1, tipPair: 0.55 };
+
 let shared: Dot[] | null = null;
 /** The flower's dots, built once: they are the same for every mount. */
 export function sharedFlower(): Dot[] {
   shared ??= dotFlower();
   return shared;
+}
+
+let sharedSmall: Dot[] | null = null;
+/** The small mark's dots, built once. */
+export function sharedMark(): Dot[] {
+  sharedSmall ??= dotFlower(MARK_FORM);
+  return sharedSmall;
 }
 
 export interface DotScene {
@@ -303,13 +328,16 @@ export interface DotScene {
 
 /**
  * The flower and everything that moves around it. Holds the light in flight —
- * the streams, the drift, the pond's rings — so it is one per mount.
+ * the streams, the drift, the pond's rings — so it is one per mount. `mark`
+ * paints the small mark's light over its solid petals instead (`MARK`).
  */
 export function dotScene(
   dots: readonly Dot[] = sharedFlower(),
-  { reduced = false }: { reduced?: boolean } = {}
+  { reduced = false, mark = false }: { reduced?: boolean; mark?: boolean } = {}
 ): DotScene {
   const [hx, hy] = HEART;
+  const o = mark ? MARK : FULL;
+  const reach = o.reach;
   const anchors = dots.filter((d) => d.kind === 'edge').map(restingAt);
   const tips = petalTips(dots).map(([x, y]) => ({
     x,
@@ -390,15 +418,17 @@ export function dotScene(
     prevBeatT = beat.on ? beat.t : -1;
     const breath = reduced ? 1 : 1 + 0.006 * Math.sin(t * 0.75);
 
-    // The pool: a feathered oval of calmer colour behind the whole flower, so
-    // the page's light streaks do not run through the dots.
-    ctx.globalAlpha = clamp((t + 0.4) / 1.2);
-    // Its height held inside the canvas, so it feathers out rather than ending
-    // on the canvas's top edge in a straight line.
-    oval(hx, -28, 250, Math.min(136, layout.spanV - 23), look.pool, [0.45, 1]);
-    // A faint shadow at the water line, so the flower sits on something.
-    ctx.globalAlpha = clamp((t - TIMELINE.HEART_AT) / 1.2);
-    oval(hx, 12, 118, 15, look.shadow, [0.5, 0.45]);
+    if (!mark) {
+      // The pool: a feathered oval of calmer colour behind the whole flower, so
+      // the page's light streaks do not run through the dots.
+      ctx.globalAlpha = clamp((t + 0.4) / 1.2);
+      // Its height held inside the canvas, so it feathers out rather than ending
+      // on the canvas's top edge in a straight line.
+      oval(hx, -28, 250, Math.min(136, layout.spanV - 23), look.pool, [0.45, 1]);
+      // A faint shadow at the water line, so the flower sits on something.
+      ctx.globalAlpha = clamp((t - TIMELINE.HEART_AT) / 1.2);
+      oval(hx, 12, 118, 15, look.shadow, [0.5, 0.45]);
+    }
 
     // The glow lives in the heart: it gathers with it and beats with it.
     const glow =
@@ -407,7 +437,7 @@ export function dotScene(
     if (glow > 0 && look.glow[3] > 0) {
       const gx = ox + hx * scale;
       const gy = oy + hy * scale;
-      const gr = 50 * scale * (0.9 + 0.1 * breath);
+      const gr = o.glow * scale * (0.9 + 0.1 * breath);
       const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
       // A bloom, not a disc: strongest at the very heart, on a long soft fall.
       g.addColorStop(0, rgbaString(look.glow));
@@ -426,13 +456,13 @@ export function dotScene(
 
     // Loose dots streaming out from the petals and the heart.
     if (!reduced && t > TIMELINE.FLOW_AT) {
-      spawn += dt * 16 * 0.4;
+      spawn += dt * o.flow * 0.4;
       // As each beat's wave reaches a petal tip, the tip lets go a star or two.
       if (beat.on && beat.env > 0.5) {
         const from = prevBT > beat.t ? -1 : prevBT;
         for (const tip of tips) {
           if (tip.at <= from || tip.at > beat.t) continue;
-          const n = R() < 0.55 ? 2 : 1;
+          const n = R() < o.tipPair ? 2 : 1;
           for (let q = 0; q < n && flows.length < 360; q++) {
             const dir = Math.atan2(tip.y - hy, tip.x - hx) + (R() * 2 - 1) * 0.35;
             const sp = 12 + R() * 12;
@@ -488,19 +518,21 @@ export function dotScene(
       const dist = Math.hypot(p.x - hx, p.y - hy);
       const a =
         Math.sin((Math.PI * age) / p.life) *
-        clamp(1.15 - dist / REACH) *
+        clamp(1.15 - dist / reach) *
         (0.55 + 0.45 * Math.sin(t * p.w + p.ph));
-      put(look.dot[p.tone], p.x, p.y, p.r * 4.4, a);
-      if (p.star) put(look.star, p.x, p.y, 9 * p.r + 4, a * 0.8);
-      return dist < REACH * 1.2;
+      put(look.dot[p.tone], p.x, p.y, p.r * 4.4 * o.flowSize, a);
+      if (p.star) put(look.star, p.x, p.y, (9 * p.r + 4) * o.starSize, a * 0.8);
+      return dist < reach * 1.2;
     });
 
     // The pond: each heartbeat sends a wide oval of faint dots out across the
     // water from the flower's base, widening and fading as a ring on still
     // water does. Reduced motion holds three, still, part-way out.
-    const ages = reduced
-      ? [0.25, 0.5, 0.75].map((f) => f * TIMELINE.POND_LIFE)
-      : ponds.map((born) => t - born);
+    const ages = mark
+      ? []
+      : reduced
+        ? [0.25, 0.5, 0.75].map((f) => f * TIMELINE.POND_LIFE)
+        : ponds.map((born) => t - born);
     for (const age of ages) {
       const pp = age / TIMELINE.POND_LIFE;
       const rx = 58 + pp * 175;
@@ -524,7 +556,7 @@ export function dotScene(
 
     // Drift: a few dots leave the petals and float slowly out to the edges of
     // the page, rising and falling a little as they go.
-    if (!reduced && t > TIMELINE.FLOW_AT) {
+    if (!mark && !reduced && t > TIMELINE.FLOW_AT) {
       driftSpawn += dt * 1.3;
       while (driftSpawn >= 1 && drift.length < 120) {
         driftSpawn -= 1;
@@ -627,35 +659,39 @@ export function dotScene(
       const flare = d.flare ? Math.max(0, Math.sin(t * d.fw + d.fph)) ** 90 : 0;
       const band = reduced ? 0 : Math.exp(-(((x * 0.8 - y * 0.6 - sweep) / 16) ** 2));
       const a = d.base * clamp(p * 2.4) * twinkle * (1 + 0.5 * wave);
-      put(
-        look.shine,
-        x,
-        y,
-        d.r * 4.6 * (look.shineSize + band * 1.6),
-        a * (look.shineBase * twinkle + band * look.sheen)
-      );
+      if (!mark)
+        put(
+          look.shine,
+          x,
+          y,
+          d.r * 4.6 * (look.shineSize + band * 1.6),
+          a * (look.shineBase * twinkle + band * look.sheen)
+        );
       placed.push({ d, x, y, a, f: flare, band, b: wave });
     }
     for (const { d, x, y, a, f, band, b } of placed) {
       // Refracted light, for pale grounds where added light cannot show: a
       // rose edge and a cyan edge either side of each outline dot.
-      if (look.fringe + look.iridesce > 0 && d.kind === 'edge') {
+      if (!mark && look.fringe + look.iridesce > 0 && d.kind === 'edge') {
         const fa = a * (look.fringe + band * look.iridesce);
         const fd = 0.95 * (1 + band * 1.2);
         const fs = d.r * 4.6 * look.dotScale * (0.62 + band * 0.3);
         put(look.fringeA, x - 0.8 * fd, y + 0.6 * fd, fs, fa);
         put(look.fringeB, x + 0.8 * fd, y - 0.6 * fd, fs, fa);
       }
-      put(
-        look.dot[d.tone],
-        x,
-        y,
-        d.r * 4.6 * look.dotScale * (1 + f * 0.8 + band * 0.35 + b * 0.3),
-        a + f * 0.5
-      );
+      // The mark's petals are the SVG's own: only a flaring dot shows.
+      if (!mark)
+        put(
+          look.dot[d.tone],
+          x,
+          y,
+          d.r * 4.6 * look.dotScale * (1 + f * 0.8 + band * 0.35 + b * 0.3),
+          a + f * 0.5
+        );
       if (f > 0.3) {
-        put(look.shine, x, y, (11 * f + 3) * 1.2, f * look.shineBase);
-        put(look.star, x, y, 11 * f + 3, f * 0.9);
+        const size = (11 * f + 3) * o.starSize;
+        put(look.shine, x, y, size * 1.2, f * look.shineBase);
+        put(look.star, x, y, size, f * 0.9);
       }
     }
     ctx.globalAlpha = 1;
