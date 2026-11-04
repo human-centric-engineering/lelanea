@@ -68,15 +68,16 @@ export function namedTints(theme: TintTheme): string[] {
   return TINTS[theme].map((tint) => tint.id).filter((id) => id !== DEFAULT_TINT);
 }
 
-/** A stored value, or the default when it is missing, stale or unreadable. */
-export function readStoredTint(theme: TintTheme): string {
-  try {
-    const stored = window.localStorage.getItem(TINT_STORAGE_KEY[theme]);
-    return stored !== null && namedTints(theme).includes(stored) ? stored : DEFAULT_TINT;
-  } catch {
-    // Storage blocked (private mode, a sandboxed frame): the default.
-    return DEFAULT_TINT;
-  }
+/**
+ * The tint the page is showing: the attribute on `<html>`, or the default when
+ * there is none. Read from the page rather than from storage, because a
+ * blocked store still lets a choice change the page (`applyTint`), and the
+ * picker has to show what is on screen; the pre-paint script has already put
+ * any stored choice there.
+ */
+export function readAppliedTint(theme: TintTheme): string {
+  const applied = document.documentElement.getAttribute(TINT_ATTRIBUTE[theme]);
+  return applied !== null && namedTints(theme).includes(applied) ? applied : DEFAULT_TINT;
 }
 
 /**

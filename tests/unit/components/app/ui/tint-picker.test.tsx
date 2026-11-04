@@ -123,6 +123,15 @@ describe('TintPickerControls', () => {
     );
   });
 
+  it('points aria-controls at the panel only while it exists', () => {
+    render(<TintPickerControls />);
+    const tab = screen.getByRole('button', { name: 'tints' });
+    expect(tab).not.toHaveAttribute('aria-controls');
+    openPicker();
+    expect(tab).toHaveAttribute('aria-controls', 'tint-picker-panel');
+    expect(document.getElementById('tint-picker-panel')).not.toBeNull();
+  });
+
   it('closes again from the same tab', () => {
     render(<TintPickerControls />);
     openPicker();
@@ -156,8 +165,9 @@ describe('TintPickerControls', () => {
     expect(root.getAttribute('data-tint-dark')).toBe('plum');
   });
 
-  it('reads the stored choice back when it opens again', () => {
+  it('shows the stored choice the pre-paint script applied', () => {
     window.localStorage.setItem(TINT_STORAGE_KEY.dark, 'ember');
+    reload();
     render(<TintPickerControls />);
     openPicker();
     expect(screen.getByRole('button', { name: 'Ember' })).toHaveAttribute('aria-pressed', 'true');
@@ -211,6 +221,10 @@ describe('a store that throws', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Opal' }));
     expect(root.getAttribute('data-tint')).toBe('opal');
+    // Reopened, it shows what the page shows, not what the store could not keep.
+    openPicker();
+    openPicker();
+    expect(screen.getByRole('button', { name: 'Opal' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Champagne' }));
     expect(root.hasAttribute('data-tint')).toBe(false);
   });

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import {
   applyTint,
   DEFAULT_TINT,
-  readStoredTint,
+  readAppliedTint,
   TINTS,
   type TintTheme,
 } from '@/components/app/ui/tints';
@@ -21,11 +21,15 @@ const ROWS: readonly { theme: TintTheme; label: string }[] = [
  * panel of swatches, one row per theme. TEMPORARY — see `tint-picker.tsx` for
  * why it exists and the list t-181 deletes.
  *
- * The left edge, halfway down, because it is the one place no consumer page
- * puts anything: the nav's lotus is at the top, the composer and the small-
- * width rail are at the bottom, and the rail is on the right.
+ * The left edge, halfway down, because it is the place that covers least: the
+ * nav's lotus is at the top, the composer and the small-width rail are at the
+ * bottom, and the rail is on the right. From 900px it overlaps the edge of the
+ * shell's nav column, and it sits above dialogs and drawers too (`z-[90]`) —
+ * on purpose, because below them it would also sit below the nav column
+ * (`z-50`) and vanish from the shell. A preview-only tool can afford to be on
+ * top of everything; it cannot afford to be unreachable.
  *
- * Closed on first paint. What is chosen is read from storage when the panel
+ * Closed on first paint. What is chosen is read from the page when the panel
  * OPENS rather than on render, so the server's markup and the first client
  * render agree and nothing has to be corrected in an effect. The page itself
  * is already tinted by then: the server gate's script did that before paint.
@@ -38,7 +42,7 @@ export function TintPickerControls() {
   });
 
   function toggle() {
-    if (!open) setChosen({ light: readStoredTint('light'), dark: readStoredTint('dark') });
+    if (!open) setChosen({ light: readAppliedTint('light'), dark: readAppliedTint('dark') });
     setOpen(!open);
   }
 
@@ -53,7 +57,7 @@ export function TintPickerControls() {
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        aria-controls="tint-picker-panel"
+        aria-controls={open ? 'tint-picker-panel' : undefined}
         className={cn(
           'rounded-r-lg border border-l-0 border-[var(--color-border)] bg-[var(--color-popover)]',
           'px-1.5 py-3 text-[11px] tracking-[0.14em] text-[var(--color-popover-foreground)]',
