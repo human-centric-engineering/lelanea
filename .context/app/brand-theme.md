@@ -243,7 +243,8 @@ warm glow with the veil off.
 
 ### The shell (t-179)
 
-The shell is glass in three tiers, as `prism/app.html` draws it, and each is a
+The shell is glass in three tiers, as
+`.context/app/planning/design/prism/app.html` draws it, and each is a
 re-scope of the three glass tokens in `app/brand-theme.css`:
 
 - **The frame** — the nav, the topbar, the rail — takes `--app-*`, thin, so

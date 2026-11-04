@@ -14,13 +14,14 @@
  *     still changes, the script still runs, the picker still opens on the
  *     default.
  *
- * The gate is an async server component, so it is awaited rather than
- * rendered; what it returns is rendered. The pre-paint script is run as the
+ * The gate is synchronous and returns the async script beside the controls;
+ * the script is awaited rather than rendered, and what it returns is rendered. The pre-paint script is run as the
  * browser would run it, on a page with no attributes, which is what a reload
  * starts from.
  */
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const flag = vi.hoisted(() => ({ on: false }));
@@ -37,7 +38,7 @@ vi.mock('next/headers', () => ({
   headers: async () => new Headers({ 'x-nonce': 'test-nonce' }),
 }));
 
-import { TintPicker } from '@/components/app/ui/tint-picker';
+import { TintPicker, TintScript } from '@/components/app/ui/tint-picker';
 import { TintPickerControls } from '@/components/app/ui/tint-picker-controls';
 import { TINT_SCRIPT, TINT_STORAGE_KEY } from '@/components/app/ui/tints';
 
@@ -73,18 +74,24 @@ describe('TintPicker — the gate', () => {
     // Stored from an earlier session with the flag on: still nothing applies,
     // because without the gate there is no script to read it.
     window.localStorage.setItem(TINT_STORAGE_KEY.light, 'pearl');
-    expect(await TintPicker()).toBeNull();
+    expect(TintPicker()).toBeNull();
     expect(root.hasAttribute('data-tint')).toBe(false);
     expect(root.hasAttribute('data-tint-dark')).toBe(false);
   });
 
-  it('renders the pre-paint script, with the nonce, and the picker with it on', async () => {
+  it('renders the pre-paint script and the picker with it on', () => {
     flag.on = true;
-    const { container } = render(<>{await TintPicker()}</>);
+    const children = React.Children.toArray(
+      (TintPicker() as React.ReactElement<{ children: React.ReactNode }>).props.children
+    ) as React.ReactElement[];
+    expect(children.map((child) => child.type)).toEqual([TintScript, TintPickerControls]);
+  });
+
+  it('gives the script the request’s nonce, and the catalogue’s text', async () => {
+    const { container } = render(await TintScript());
     const script = container.querySelector('script');
     expect(script?.getAttribute('nonce')).toBe('test-nonce');
     expect(script?.innerHTML).toBe(TINT_SCRIPT);
-    expect(screen.getByRole('button', { name: 'tints' })).toBeInTheDocument();
   });
 });
 

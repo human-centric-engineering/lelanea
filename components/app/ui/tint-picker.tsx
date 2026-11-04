@@ -24,8 +24,7 @@ import { env } from '@/lib/env';
  *
  * and these lines elsewhere:
  *
- * - the mount, `<TintPicker />` in `components/app/ui/prism-ground.tsx`, and its
- *   `vi.mock` in `tests/unit/components/app/ui/prism-ground.test.tsx`
+ * - the mount, `<TintPicker />` in `components/app/ui/prism-ground.tsx`
  * - `LELANEA_TINT_PICKER` in `lib/app/env.ts`, and its pinned row in
  *   `tests/unit/lib/app/defaults.test.ts`
  * - `ui/tints.css` from `LITERALS_PINNED_ELSEWHERE` in
@@ -50,20 +49,32 @@ import { env } from '@/lib/env';
  *
  * The script is inline, ahead of the ground it retints, so a reload paints the
  * chosen tint rather than flashing the default first. Production's CSP allows
- * an inline script only with the request's nonce, which is why this is a server
- * component that reads it, as the root layout does for the theme script.
+ * an inline script only with the request's nonce, which is why the script is a
+ * server component that reads it, as the root layout does for the theme script.
  */
-export async function TintPicker() {
+export function TintPicker() {
   if (!env.LELANEA_TINT_PICKER) return null;
-  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <>
-      <script
-        nonce={nonce}
-        suppressHydrationWarning
-        dangerouslySetInnerHTML={{ __html: TINT_SCRIPT }}
-      />
+      <TintScript />
       <TintPickerControls />
     </>
+  );
+}
+
+/**
+ * The pre-paint script, apart from the gate so the gate can stay synchronous:
+ * with the flag off — every test that renders a frame, and production —
+ * nothing async is ever rendered, so a frame's own tests need no knowledge of
+ * the picker.
+ */
+export async function TintScript() {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+  return (
+    <script
+      nonce={nonce}
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: TINT_SCRIPT }}
+    />
   );
 }
