@@ -96,6 +96,51 @@ export interface DotLook {
 
 const BLENDS = new Set(['source-over', 'lighter', 'screen', 'plus-lighter']);
 
+/** Every token the look is read from, fallbacks included. */
+const TOKEN_NAMES = [
+  '--color-lotus-core',
+  '--color-lotus-core-light',
+  '--color-lotus-glint',
+  '--color-lotus-halation',
+  '--color-lotus-petal-mid',
+  '--color-lotus-petal-outer',
+  '--color-lotus-petal-outer-edge',
+  '--color-lotus-ripple',
+  '--dot-1',
+  '--dot-2',
+  '--dot-3',
+  '--dot-blend',
+  '--dot-core-1',
+  '--dot-core-2',
+  '--dot-core-3',
+  '--dot-fringe',
+  '--dot-fringe-a',
+  '--dot-fringe-b',
+  '--dot-glow',
+  '--dot-halo',
+  '--dot-iridesce',
+  '--dot-pond',
+  '--dot-pond-size',
+  '--dot-pool',
+  '--dot-scale',
+  '--dot-shadow',
+  '--dot-sheen',
+  '--dot-shine',
+  '--dot-shine-base',
+  '--dot-shine-size',
+  '--dot-star',
+  '--dot-water',
+] as const;
+
+/**
+ * The tokens as they resolve on `element` now, as one string: compare two to
+ * tell whether the look needs reading again, without drawing a sprite.
+ */
+export function dotTokens(element: Element): string {
+  const style = getComputedStyle(element);
+  return TOKEN_NAMES.map((name) => style.getPropertyValue(name).trim()).join('|');
+}
+
 /**
  * Read the flower's tokens where it sits and draw its sprites: each tone as a
  * soft halo with a solid core, the four-pointed star, the white light a dot
@@ -675,17 +720,25 @@ export interface DotLoop {
 /**
  * The clock. A reader who asked for less motion gets the open flower, still:
  * one frame at `REST_T` and nothing scheduled after it. Otherwise it repaints
- * every animation frame while it is playing, and nothing at all while paused.
+ * every animation frame while it is playing, and nothing at all while paused —
+ * and time spent paused does not count.
  */
 export function dotLoop(
   paint: (t: number) => void,
   { reduced, host }: { reduced: boolean; host: LoopHost }
 ): DotLoop {
-  let start = host.now();
+  // The timeline only advances while it runs: a flower that was hidden, or
+  // scrolled away mid-opening, picks up where it was, so an opening that
+  // began unseen — a page opened in a background tab — is not skipped.
+  let banked = 0;
+  let since = 0;
   let handle = 0;
   let running = false;
 
-  const at = (now: number) => (reduced ? REST_T : (now - start) / 1000);
+  const at = (now: number) => {
+    if (reduced) return REST_T;
+    return banked + (running ? (now - since) / 1000 : 0);
+  };
   const tick = (now: number) => {
     if (!running) return;
     paint(at(now));
@@ -699,16 +752,19 @@ export function dotLoop(
         paint(REST_T);
         return;
       }
+      since = host.now();
       running = true;
       handle = host.request(tick);
     },
     pause() {
+      if (running) banked = at(host.now());
       running = false;
       host.cancel(handle);
     },
     replay() {
-      start = host.now();
-      if (!running) paint(at(start));
+      banked = 0;
+      since = host.now();
+      if (!running) paint(at(since));
     },
     still() {
       paint(at(host.now()));

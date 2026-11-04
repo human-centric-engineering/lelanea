@@ -4,9 +4,10 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 
 import { cn } from '@/lib/utils';
 
-import { K } from '@/components/app/ui/dot-lotus-geometry';
+import { HEART, K } from '@/components/app/ui/dot-lotus-geometry';
 import {
   dotLoop,
+  dotTokens,
   dotScene,
   readDotLook,
   sharedFlower,
@@ -75,8 +76,14 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     // No 2D context: the baked flower stays the picture.
     if (!host || !canvas || !ctx) return;
 
+    // The hook reads the preference in an effect of its own, so on the first
+    // run it still says `false`; asked directly, a reader who wants less motion
+    // never gets a frame of the animated scene before the still one.
+    const still =
+      reduced || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+    let tokens = dotTokens(host);
     let look = readDotLook(host);
-    const scene = dotScene(sharedFlower(), { reduced });
+    const scene = dotScene(sharedFlower(), { reduced: still });
     let layout: DotLayout | null = null;
 
     const measure = () => {
@@ -92,16 +99,24 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       canvas.style.top = `${-pad}px`;
       canvas.style.width = `${pageWidth}px`;
       canvas.style.height = `${height}px`;
-      canvas.width = Math.round(pageWidth * dpr);
-      canvas.height = Math.round(height * dpr);
+      // Assigning a size reallocates and clears the backing store, so only
+      // when it changed: a window resize reaches here twice.
+      const pixelWidth = Math.round(pageWidth * dpr);
+      const pixelHeight = Math.round(height * dpr);
+      if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+      if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
       const ox = box.left - FRAME.box[0] * scale;
+      const oy = pad - FRAME.box[1] * scale;
+      // Light fades out before the nearer of the canvas's top and bottom
+      // edges, measured from the heart, which sits below the canvas's middle.
+      const heartY = oy + HEART[1] * scale;
       layout = {
         ox,
-        oy: pad - FRAME.box[1] * scale,
+        oy,
         scale,
         spanL: ox / scale,
         spanR: (pageWidth - ox) / scale,
-        spanV: height / 2 / scale,
+        spanV: Math.min(heartY, height - heartY) / scale,
         dpr,
       };
     };
@@ -111,7 +126,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
         if (layout) scene.paint(ctx, look, layout, t);
       },
       {
-        reduced,
+        reduced: still,
         host: {
           now: () => performance.now(),
           request: (callback) => window.requestAnimationFrame(callback),
@@ -163,26 +178,37 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     const onVisibility = () => update();
     document.addEventListener('visibilitychange', onVisibility);
 
+    /** Repaint a paused flower in place — never one still waiting to be seen. */
+    const refresh = () => {
+      if (!loop.running && started) loop.still();
+    };
     const relayout = () => {
       measure();
-      if (!loop.running) loop.still();
+      refresh();
     };
     const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(relayout);
     resize?.observe(host);
+    // The page too: a scrollbar arriving moves the flower without resizing it.
+    resize?.observe(document.documentElement);
     window.addEventListener('resize', relayout);
 
-    // The tokens move with the theme and the tint, so read them again.
+    // The tokens move with the theme — and with the surface, which a client
+    // navigation can set after this has first read them. Sprites are rebuilt
+    // only when a token actually changed.
     const theme = new MutationObserver(() => {
+      const next = dotTokens(host);
+      if (next === tokens) return;
+      tokens = next;
       look = readDotLook(host);
-      if (!loop.running) loop.still();
+      refresh();
     });
     theme.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class', 'data-theme', 'data-tint'],
+      attributeFilter: ['class', 'data-theme', 'data-tint', 'data-surface'],
     });
 
     update();
-    if (!loop.running && started) loop.still();
+    refresh();
 
     return () => {
       loop.pause();

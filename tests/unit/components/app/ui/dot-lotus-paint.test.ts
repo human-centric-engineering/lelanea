@@ -299,6 +299,27 @@ describe('dotLoop', () => {
     expect(clock.host.request).toHaveBeenCalledTimes(1);
   });
 
+  it('does not count time spent paused, so an unseen opening is not skipped', () => {
+    const clock = host();
+    const paint = vi.fn();
+    const loop = dotLoop(paint, { reduced: false, host: clock.host });
+
+    // Twenty seconds in a background tab before it is first seen.
+    clock.frame(20_000);
+    loop.play();
+    clock.frame(500);
+    expect(paint).toHaveBeenLastCalledWith(0.5);
+
+    // Hidden again mid-opening, for ten seconds, then back.
+    loop.pause();
+    clock.frame(10_000);
+    loop.still();
+    expect(paint).toHaveBeenLastCalledWith(0.5);
+    loop.play();
+    clock.frame(500);
+    expect(paint).toHaveBeenLastCalledWith(1);
+  });
+
   it('starts the timeline again on replay', () => {
     const clock = host();
     const paint = vi.fn();

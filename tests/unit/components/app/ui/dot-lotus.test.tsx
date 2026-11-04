@@ -207,6 +207,15 @@ describe('DotLotus', () => {
       expect(request).not.toHaveBeenCalled();
     });
 
+    it('never schedules a frame for reduced motion, even before the preference is read', () => {
+      // The hook says `false` on the first run; the flower asks for itself.
+      prefersReduced = true;
+      stubCanvas();
+      render(<DotLotus />);
+      expect(request).not.toHaveBeenCalled();
+      expect(clearRect).toHaveBeenCalled();
+    });
+
     it('shows reduced motion the open flower, still, with no loop', () => {
       prefersReduced = true;
       stubCanvas();
@@ -273,20 +282,59 @@ describe('DotLotus', () => {
       expect(clearRect.mock.calls.length).toBe(paints + 2);
     });
 
-    it('reads its tokens again when the theme changes', async () => {
-      stubCanvas();
-      const style = vi.spyOn(window, 'getComputedStyle');
-      render(<DotLotus />);
-      const reads = style.mock.calls.filter(([element]) => element === host()).length;
+    /** Computed style answering `--dot-1` from a value the test can change. */
+    function tokenStyle() {
+      const tokens = { '--dot-1': '#3d4789' };
+      vi.spyOn(window, 'getComputedStyle').mockImplementation(
+        () =>
+          ({
+            getPropertyValue: (name: string) => (name === '--dot-1' ? tokens['--dot-1'] : ''),
+          }) as CSSStyleDeclaration
+      );
+      return tokens;
+    }
+
+    /** Flip a watched attribute on <html>; the observer delivers on a microtask. */
+    async function mutate(attribute: string) {
       await act(async () => {
-        document.documentElement.classList.toggle('dark');
-        // MutationObserver delivers on a microtask.
+        document.documentElement.setAttribute(attribute, String(Math.random()));
         await Promise.resolve();
       });
-      document.documentElement.classList.remove('dark');
-      expect(style.mock.calls.filter(([element]) => element === host()).length).toBeGreaterThan(
-        reads
-      );
+      document.documentElement.removeAttribute(attribute);
+    }
+
+    it('rebuilds its sprites when a token changes with the theme or the surface', async () => {
+      const getContext = stubCanvas();
+      const tokens = tokenStyle();
+      render(<DotLotus />);
+      const built = getContext.mock.calls.length;
+
+      tokens['--dot-1'] = '#8e98d6';
+      await mutate('data-surface');
+
+      expect(getContext.mock.calls.length).toBeGreaterThan(built);
+    });
+
+    it('leaves its sprites alone when nothing it reads has changed', async () => {
+      const getContext = stubCanvas();
+      tokenStyle();
+      render(<DotLotus />);
+      const built = getContext.mock.calls.length;
+
+      await mutate('class');
+
+      expect(getContext.mock.calls.length).toBe(built);
+    });
+
+    it('does not paint a flower still waiting to be seen when the page resizes', () => {
+      stubCanvas();
+      render(<DotLotus startInView />);
+      intersect(0.3);
+      const paints = clearRect.mock.calls.length;
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+      expect(clearRect.mock.calls.length).toBe(paints);
     });
   });
 
