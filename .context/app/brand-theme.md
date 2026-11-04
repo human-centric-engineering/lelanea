@@ -536,6 +536,37 @@ apple icon.
 `tests/unit/scripts/app/lotus-assets.test.ts` and `lotus-draw.test.ts` fail
 until you do.
 
+### The lotus drawn in light (t-182)
+
+On the home page's hero and closing blooms the flower is drawn as points of
+light (`DotLotus`, a port of the prism prototype's "DOT LOTUS" script). It
+is the prototype's flower, not the 3D model's: the flat, front-on lotus of
+three petal rings that the prototype reads its petals from. Its paths and
+angles are `PETALS`, and the SVG itself is `public/dot-lotus.svg`. A test
+holds the two together. Each ring unfurls from upright, outer ring first, as
+the prototype's does. Then it beats:
+lub-dub, a ring of dots across the pond on each beat, stars let go from the
+petal tips, and loose light drifting to the page's edges. The pond's rings
+are the flower's own, which is why the hero water and the CSS rings are gone.
+
+| Piece    | File                                      | Does                                                                       |
+| -------- | ----------------------------------------- | -------------------------------------------------------------------------- |
+| Geometry | `components/app/ui/dot-lotus-geometry.ts` | Where each dot sits, the seed head, occlusion, and the timeline. Pure.     |
+| Painter  | `components/app/ui/dot-lotus-paint.ts`    | Sprites from the `--dot-*` tokens, the moving light, and the loop's clock. |
+| Mount    | `components/app/ui/dot-lotus.tsx`         | Canvas over the flat `/dot-lotus.svg`; pauses off-screen and when hidden.  |
+
+**`--dot-*` move with the theme; `--color-lotus-*` do not.** The dots are
+painted live and never baked, and light reads as light only on dark. So the
+pale page draws them as ink with a small halo, and the umber adds them
+together as glow. They are read from the flower's own element. That is how the
+hero's dusk sky (`data-dot-ground='sky'`, light mode only) gives its flower
+the dark palette with paler petals.
+
+**Reduced motion shows the open flower, still**: one frame, nothing scheduled.
+The flat SVG stays under the canvas, transparent from the first paint wherever script runs (so the solid flower never flashes before the dots), and is never removed.
+It is the picture wherever no 2D context paints, and a flower given a `label`
+keeps it in the accessibility tree. Both home blooms are decorative.
+
 ## The destructive token has two roles, and only one rule separates them
 
 > The ratios in this section are the teal palette's; the prism's are in the

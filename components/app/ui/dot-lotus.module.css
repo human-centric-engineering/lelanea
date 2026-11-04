@@ -1,0 +1,43 @@
+/*
+ * The dotted lotus's box (t-182). Centred on its column even where the column
+ * is narrower than the flower, as the prism prototype's `.dl-host` is: the
+ * flower is sized by `--dl-max` and the screen, not by whatever holds it.
+ */
+.host {
+  position: relative;
+  left: 50%;
+  translate: -50% 0;
+  width: min(var(--dl-max, 440px), 86vw);
+  cursor: pointer;
+}
+
+/* The flat flower: the picture where no canvas paints, and still the image
+   where one does, so it is made transparent rather than removed. Transparent
+   from the first paint wherever script runs, so the solid flower never shows
+   in the moment before the dots take over. */
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+  opacity: 0;
+}
+
+/* No script, or no 2D context: the flat flower is the picture. */
+@media (scripting: none) {
+  .image {
+    opacity: 1;
+  }
+}
+
+.host[data-lit='false'] .image {
+  opacity: 1;
+}
+
+/* Placed and sized by the component: it runs the width of the page so the
+   light can drift to both edges. */
+.canvas {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}

@@ -7,7 +7,8 @@ import styles from '@/components/app/site/atmosphere.module.css';
 
 /**
  * The home page's last word (t-171): the lotus on a pond at dusk, opening as
- * the reader arrives, and the way in.
+ * the reader arrives, and the way in. The pond's rings are the flower's own,
+ * sent out across the water by its heartbeat (t-182).
  *
  * The page used to end on her channels, with the only waitlist form a long
  * scroll back up. This closes it the way the header does — the same action,
@@ -22,13 +23,6 @@ import styles from '@/components/app/site/atmosphere.module.css';
 export function ClosingBand() {
   return (
     <section className={styles.closing} aria-labelledby="closing-heading">
-      {/* Rings spreading slowly from beneath the bloom. Decorative. */}
-      <div className={styles.pondRings} aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-
       <div className={styles.closingInner}>
         {/* Decorative: the heading beneath it says what this is. */}
         <div className={styles.closingBloom} aria-hidden="true">
