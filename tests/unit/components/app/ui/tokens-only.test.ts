@@ -72,7 +72,7 @@ function sourceFiles(dir: string = APP_DIR, prefix = ''): string[] {
 }
 
 /**
- * The one file allowed to write a colour out, and why: email has no `var()`,
+ * The files allowed to write a colour out, and why. Email has no `var()`,
  * so the chrome under `components/app/emails/` carries the palette as literals.
  * What keeps that honest is `tests/unit/components/app/emails/lelanea-email.test.tsx`,
  * which reads `app/brand-theme.css` and pins every literal in BOTH exported
@@ -81,7 +81,13 @@ function sourceFiles(dir: string = APP_DIR, prefix = ''): string[] {
  * The templates themselves are not exempt: they take colour from the chrome's
  * exported `styles`, and this guard still runs over them.
  */
-const LITERALS_PINNED_ELSEWHERE = new Set(['emails/lelanea-email.tsx']);
+const LITERALS_PINNED_ELSEWHERE = new Set([
+  'emails/lelanea-email.tsx',
+  // TEMPORARY (f-prism t-180): the tint picker's candidate token values, each
+  // measured over the light by `tests/unit/components/app/ui/tints.test.ts`.
+  // t-181 deletes the file and this entry.
+  'ui/tints.css',
+]);
 
 describe('components/app — colour comes from tokens, never from a literal', () => {
   it('still needs the exemption it carries', () => {
