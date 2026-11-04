@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 import { InlineText } from '@/components/app/content/authored-document';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
-import { Lotus } from '@/components/app/ui/lotus';
+import { DotLotus } from '@/components/app/ui/dot-lotus';
 import { ChannelsSection } from '@/components/app/site/channels';
 import { ClosingBand } from '@/components/app/site/closing-band';
 import { Ripples } from '@/components/app/site/ripples';
@@ -151,22 +151,12 @@ export default async function HomePage() {
             <div className={styles.sky} aria-hidden="true" />
             {/* Decorative: the page's name is its `h1` just below, so
               announcing the flower would only repeat it. It unfolds on every
-              load, as the app's entry bloom does (owner, t-132). */}
-            <div className={styles.heroWater} aria-hidden="true" />
-            <div className={styles.bloomArt}>
-              {/* The water it sits on (owner, t-171): a soft teal fade, not a
-                band, and rings spreading slowly outward as on the closing
-                pond. Decorative. */}
-              {/* The flower's own ripples, carried on outward (owner, t-171):
-                centred on the rings baked into its water and the same shape,
-                they begin at the outermost of those and spread from there.
-                Painted before the flower, in ordinary order. Decorative. */}
-              <div className={styles.heroRings} aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </div>
-              <Lotus size={420} water fluid />
+              load, as the app's entry bloom does (owner, t-132), drawn in
+              points of light on its own pond (t-182) — the water and the rings
+              that sat beneath it are the flower's own now. On the light
+              theme's dusk sky it takes the sky's palette (`data-dot-ground`). */}
+            <div className={styles.bloomArt} data-dot-ground="sky">
+              <DotLotus size={440} />
             </div>
 
             {/* Who made this (t-171), in the space beneath the bloom: her face,

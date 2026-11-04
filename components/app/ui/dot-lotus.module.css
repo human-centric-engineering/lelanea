@@ -1,0 +1,33 @@
+/*
+ * The dotted lotus's box (t-182). Centred on its column even where the column
+ * is narrower than the flower, as the prism prototype's `.dl-host` is: the
+ * flower is sized by `--dl-max` and the screen, not by whatever holds it.
+ */
+.host {
+  position: relative;
+  left: 50%;
+  translate: -50% 0;
+  width: min(var(--dl-max, 440px), 86vw);
+  cursor: pointer;
+}
+
+/* The baked flower: the picture where no canvas paints, and still the image
+   once one does, so it is made transparent rather than removed. */
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.host[data-lit='true'] .image {
+  opacity: 0;
+}
+
+/* Placed and sized by the component: it runs the width of the page so the
+   light can drift to both edges. */
+.canvas {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}

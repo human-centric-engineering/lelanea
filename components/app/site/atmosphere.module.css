@@ -228,10 +228,10 @@
 
 /*
  * The home page's closing band: the bloom opening on a soft pool of light,
- * rings spreading slowly from beneath it, and the way in. It follows the page
- * theme like the bands above it (t-178, the prism) — a pale pool in light, a
- * deepening of the umber in dark — rather than going dark in both as the deep
- * teal water did. It draws no top edge of its own: it opens straight off the
+ * its heartbeat sending rings across the water (t-182), and the way in. It
+ * follows the page theme like the bands above it (t-178, the prism) — a pale
+ * pool in light, a deepening of the umber in dark — rather than going dark in
+ * both as the deep teal water did. It draws no top edge of its own: it opens straight off the
  * last band above it, whose etched line is the division, and a second line
  * here doubled the seam (t-178). The ground is
  * tokens (`--closing-*`, `app/brand-theme.css`), so the theme moves it.
@@ -247,64 +247,6 @@
   overflow: hidden;
   background:
     radial-gradient(48% 42% at 50% 46%, var(--closing-glow), transparent 75%), var(--closing-base);
-}
-
-.pondRings {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-}
-
-.pondRings span {
-  position: absolute;
-  left: 50%;
-  top: 44%;
-  width: min(760px, 120%);
-  aspect-ratio: 3.2;
-  translate: -50% -50%;
-  /* 50%, not a pill radius: on a 3.2:1 box that is an ellipse, as a ring on
-     water seen at an angle is. */
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--color-lotus-ripple-far) 55%, transparent);
-  opacity: 0.35;
-  scale: 0.55;
-}
-
-.pondRings span:nth-child(2) {
-  scale: 0.85;
-  opacity: 0.25;
-}
-
-.pondRings span:nth-child(3) {
-  scale: 1.15;
-  opacity: 0.15;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .pondRings span {
-    animation: spread 12s var(--ease-brand) infinite;
-  }
-
-  .pondRings span:nth-child(2) {
-    animation-delay: -4s;
-  }
-
-  .pondRings span:nth-child(3) {
-    animation-delay: -8s;
-  }
-}
-
-@keyframes spread {
-  from {
-    opacity: 0.45;
-    scale: 0.35;
-  }
-
-  to {
-    opacity: 0;
-    scale: 1.45;
-  }
 }
 
 .closingInner {
