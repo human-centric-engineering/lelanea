@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -14,6 +14,7 @@ import {
   REACH,
   type DotLayout,
 } from '@/components/app/ui/dot-lotus-paint';
+import { DotLotusStrap } from '@/components/app/ui/dot-lotus-strap';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import styles from '@/components/app/ui/dot-lotus.module.css';
 
@@ -31,6 +32,12 @@ export interface DotLotusProps {
    * decoration beside the words it stands for, which is every use today.
    */
   label?: string;
+  /**
+   * Words to write on the water once it has opened (t-184). Decoration: the
+   * same words must be in the page for assistive technology — the hero's
+   * caption, visually hidden.
+   */
+  strap?: string;
   className?: string;
 }
 
@@ -59,14 +66,26 @@ const PAD = REACH * 0.62;
  * resumes when it is back. A reader who asked for less motion is shown the open
  * flower, still: one frame, and nothing scheduled after it.
  *
+ * Given a `strap`, it writes those words along the front of its pond as it
+ * finishes opening, and again on each replay (`DotLotusStrap`).
+ *
  * @see components/app/ui/dot-lotus-geometry.ts — where the dots sit, and when
  * @see components/app/ui/dot-lotus-paint.ts — how they are painted
  */
-export function DotLotus({ size = 440, startInView = false, label, className }: DotLotusProps) {
+export function DotLotus({
+  size = 440,
+  startInView = false,
+  label,
+  strap,
+  className,
+}: DotLotusProps) {
   const reduced = useReducedMotion();
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const replayRef = useRef<() => void>(() => undefined);
+  /** Plays the unfolding again; says whether it did. */
+  const replayRef = useRef<() => boolean>(() => false);
+  // Each replay writes the strapline again.
+  const [strapRun, setStrapRun] = useState(0);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -161,6 +180,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     // seen has nothing to replay.
     replayRef.current = () => {
       if (started) replay();
+      return started;
     };
 
     const watching = typeof IntersectionObserver !== 'undefined';
@@ -248,7 +268,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       theme.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('resize', relayout);
-      replayRef.current = () => undefined;
+      replayRef.current = () => false;
       delete host.dataset.lit;
     };
   }, [reduced, startInView, size]);
@@ -263,7 +283,9 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       ref={hostRef}
       className={cn(styles.host, className)}
       style={hostStyle}
-      onClick={() => replayRef.current()}
+      onClick={() => {
+        if (replayRef.current()) setStrapRun((n) => n + 1);
+      }}
     >
       {/* A plain <img>: a static SVG gains nothing from next/image. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -277,6 +299,7 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
         className={styles.image}
       />
       <canvas ref={canvasRef} aria-hidden="true" className={styles.canvas} />
+      {strap ? <DotLotusStrap text={strap} run={strapRun} still={reduced} /> : null}
     </div>
   );
 }
