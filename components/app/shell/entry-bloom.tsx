@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { DotLotus } from '@/components/app/ui/dot-lotus';
 import { OPENED_AT } from '@/components/app/ui/dot-lotus-geometry';
-import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { SHELL_OVERLAY_ATTR } from '@/components/app/shell/use-shell-layout';
 import { cn } from '@/lib/utils';
 
@@ -93,7 +92,6 @@ function failsafeHasRun(element: HTMLElement | null): boolean {
  * should not have to wait: a click, a tap, Escape or Tab lets it go at once.
  */
 export function EntryBloom() {
-  const reduced = useReducedMotion();
   const [phase, setPhase] = useState<'showing' | 'leaving' | 'done'>('showing');
   const [hydrated, setHydrated] = useState(false);
   const cover = useRef<HTMLDivElement>(null);
@@ -119,15 +117,12 @@ export function EntryBloom() {
     setHydrated(true);
   }, []);
 
-  // The flower opens on its own clock from the moment JavaScript is alive, and
-  // the cover lifts once it has. A reader who asked for less motion is shown
-  // the open flower, still, and is not kept waiting for an opening that is not
-  // played: the cover goes at once, as it did for the lily before it.
-  useEffect(() => {
-    if (!hydrated || phase !== 'showing') return;
-    const timer = setTimeout(() => setPhase('leaving'), reduced ? 0 : ENTRY_OPENED_MS);
-    return () => clearTimeout(timer);
-  }, [hydrated, phase, reduced]);
+  // The cover lifts once the flower has opened, on the flower's own clock:
+  // that clock stands still in a hidden tab, so a bloom opened in the
+  // background is still there to see. A reader who asked for less motion is
+  // shown the open flower, still, which has opened from its first frame: the
+  // cover goes at once, as it did for the lily before it.
+  const onOpened = () => setPhase((now) => (now === 'showing' ? 'leaving' : now));
 
   useEffect(() => {
     if (phase !== 'leaving') return;
@@ -212,7 +207,7 @@ export function EntryBloom() {
         }}
         data-testid="entry-bloom-rise"
       >
-        <DotLotus size={560} className={styles.flower} />
+        <DotLotus size={560} onOpened={onOpened} className={styles.flower} />
       </div>
     </div>
   );

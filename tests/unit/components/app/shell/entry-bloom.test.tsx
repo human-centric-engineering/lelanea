@@ -189,17 +189,53 @@ describe('EntryBloom — the lotus rises as it opens', () => {
     expect(rise.querySelector('[data-open]')).toBeNull();
   });
 
-  it('runs the flower until the cover has gone', async () => {
+  it('lifts when the flower has opened on its own clock, not the wall clock', async () => {
     stubOnScreen();
     stubBox(560, 533);
     stubCanvas();
     const frames = stubFrames();
+    // Fake timers bring their own clock: watch theirs.
     vi.useFakeTimers();
+    const now = vi.spyOn(performance, 'now').mockReturnValue(0);
     render(<EntryBloom />);
     expect(frames.request).toHaveBeenCalled();
-    await settle();
+    // Time passing without frames painted is not the flower opening.
+    await act(async () => {
+      vi.advanceTimersByTime(ENTRY_OPENED_MS * 3);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+    // A frame just short of open, then one at it.
+    now.mockReturnValue(ENTRY_OPENED_MS - 50);
+    frames.run();
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+    now.mockReturnValue(ENTRY_OPENED_MS + 50);
+    frames.run();
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+    await act(async () => {
+      vi.advanceTimersByTime(FADE_MS + 50);
+    });
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
     vi.useRealTimers();
+  });
+
+  it('waits for a tab opened in the background to be looked at', async () => {
+    stubOnScreen();
+    stubBox(560, 533);
+    stubCanvas();
+    const frames = stubFrames();
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    vi.useFakeTimers();
+    try {
+      render(<EntryBloom />);
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_OPENED_MS * 3);
+      });
+      expect(frames.request).not.toHaveBeenCalled();
+      expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+    } finally {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      vi.useRealTimers();
+    }
   });
 
   it('shows reduced motion the open flower, still, and lifts at once', async () => {

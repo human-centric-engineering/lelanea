@@ -554,8 +554,10 @@ are the flower's own, which is why the hero water and the CSS rings are gone.
 | Strap    | `components/app/ui/dot-lotus-strap.tsx`   | The strapline the hero's flower writes on its water.                       |
 
 **It is also the app's entry bloom** (t-183), on every full page load
-(t-132). The cover lifts at `OPENED_AT`, once the last dot has arrived and
-the first heartbeat is landing. The glow is the canvas's own, at the heart, so
+(t-132). The cover lifts when the flower's own clock reaches `OPENED_AT`
+(`onOpened`), once the last dot has arrived and the first heartbeat is
+landing. That clock stands still in a hidden tab, so a bloom opened in the
+background is still there to see. The glow is the canvas's own, at the heart, so
 the cover carries none. Reduced motion is shown the open flower, still, and
 the cover goes at once.
 
@@ -574,8 +576,10 @@ italic along the front of the hero's pond. Each letter condenses out of the
 light as the flower finishes opening, flares (`--strap-flare`) and settles to
 cream (`--strap-ink`). The tokens are set only where the flower is drawn as
 light. A click on the flower writes it again with the unfolding. The letters
-are held until the flower's clock starts (`data-lit`), so a slow hydration
-does not write them over a closed flower. Reduced motion and no script show
+run only while the flower's clock runs (`data-playing`), so a slow
+hydration, a flower off screen or a hidden tab does not write them over a
+closed flower. Below 700px wide the letters are smaller, so the ends of the
+arc stay on a phone's screen. Reduced motion and no script show
 them settled. The arc is `aria-hidden`; the hero's caption stays in its place
 above the heading, visually hidden, so the words are read once. Both read
 `STRAPLINE` (`lib/site/config.ts`), and the social card does too.

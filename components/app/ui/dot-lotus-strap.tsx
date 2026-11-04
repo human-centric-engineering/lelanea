@@ -28,8 +28,9 @@ export interface DotLotusStrapProps {
  *
  * DECORATION. It is `aria-hidden`; the words are read from the caption it
  * repeats, which stays in the page, visually hidden, so they are heard once.
- * Its letters wait for the flower's clock to start (the host's `data-lit`), so
- * a page slow to hydrate does not write them over a flower not yet open.
+ * Its letters run only while the flower's clock does (the host's
+ * `data-playing`), so a page slow to hydrate, a flower off screen or a hidden
+ * tab does not write them over a flower not yet open.
  */
 export function DotLotusStrap({ text, run, still }: DotLotusStrapProps) {
   // Ids that cannot clash with a second strap, and that `url(#…)` can carry.

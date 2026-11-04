@@ -10,12 +10,13 @@
  *
  * @see components/app/ui/dot-lotus-strap.tsx
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DotLotus } from '@/components/app/ui/dot-lotus';
+import { OPENED_AT } from '@/components/app/ui/dot-lotus-geometry';
 import {
   stubBox,
   stubCanvas,
@@ -66,16 +67,42 @@ describe('the strapline on the water', () => {
     expect(screen.queryByTestId('dot-lotus-strap')).toBeNull();
   });
 
-  it('waits for the flower to start before its letters come', () => {
-    // The letters' animation runs only under a host the flower has lit.
+  it('runs its letters only while the flower is playing', () => {
+    // The letters' animation runs only under a host whose clock is running.
     render(<DotLotus strap={WORDS} />);
-    expect(strap().parentElement).toHaveAttribute('data-lit');
+    expect(strap().parentElement).toHaveAttribute('data-playing');
     const css = readFileSync(
       path.join(process.cwd(), 'components/app/ui/dot-lotus-strap.module.css'),
       'utf8'
     );
     expect(css).toMatch(/\.strap tspan \{[^}]*animation-play-state: paused/);
-    expect(css).toMatch(/\[data-lit\]\) > \.strap tspan \{\s*animation-play-state: running/);
+    expect(css).toMatch(/\[data-playing\]\) > \.strap tspan \{\s*animation-play-state: running/);
+  });
+
+  it('holds its letters back while the tab is hidden, and lets them go when it returns', () => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    try {
+      render(<DotLotus strap={WORDS} />);
+      expect(strap().parentElement).not.toHaveAttribute('data-playing');
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(strap().parentElement).toHaveAttribute('data-playing');
+    } finally {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    }
+  });
+
+  it('starts its letters as the flower finishes opening', () => {
+    // The delay is CSS and the flower's timeline is not: pinned together here.
+    const css = readFileSync(
+      path.join(process.cwd(), 'components/app/ui/dot-lotus-strap.module.css'),
+      'utf8'
+    );
+    const at = Number(/animation-delay: calc\(([\d.]+)s/.exec(css)?.[1]);
+    expect(at).toBeGreaterThan(OPENED_AT - 0.5);
+    expect(at).toBeLessThanOrEqual(OPENED_AT);
   });
 
   it('shows reduced motion the letters settled, with nothing moving', () => {

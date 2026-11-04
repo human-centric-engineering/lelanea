@@ -23,9 +23,18 @@
   fill: var(--strap-ink, currentColor);
 }
 
-/* Each letter after the one before, once the flower has opened. Held until
-   the flower's clock starts (`data-lit` is set when it does), so the delay is
-   counted from the flower's first frame rather than the page's first paint. */
+/* The line runs about a third wider than the flower, and on a phone the flower
+   is most of the screen's width: smaller there, so its ends stay on it. */
+@media (max-width: 700px) {
+  .strap text {
+    font-size: 6.8px;
+  }
+}
+
+/* Each letter after the one before, as the flower finishes opening. Run only
+   while the flower's clock runs (`data-playing` is on its host while it does),
+   so the delay is counted on the flower's own time: a flower waiting off
+   screen, or in a hidden tab, holds its words back with it. */
 .strap tspan {
   opacity: 0;
   animation: strap-in 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
@@ -34,7 +43,7 @@
   animation-play-state: paused;
 }
 
-:global([data-lit]) > .strap tspan {
+:global([data-playing]) > .strap tspan {
   animation-play-state: running;
 }
 

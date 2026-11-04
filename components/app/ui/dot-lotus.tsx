@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { cn } from '@/lib/utils';
 
-import { HEART, VIEW } from '@/components/app/ui/dot-lotus-geometry';
+import { HEART, OPENED_AT, VIEW } from '@/components/app/ui/dot-lotus-geometry';
 import {
   dotLoop,
   dotTokens,
@@ -38,6 +38,12 @@ export interface DotLotusProps {
    * caption, visually hidden.
    */
   strap?: string;
+  /**
+   * Called once, when the flower has opened: on its own clock, which stands
+   * still while it is off screen or its tab is hidden. Where no canvas paints,
+   * the flat flower stands in for an opening of the same length.
+   */
+  onOpened?: () => void;
   className?: string;
 }
 
@@ -77,6 +83,7 @@ export function DotLotus({
   startInView = false,
   label,
   strap,
+  onOpened,
   className,
 }: DotLotusProps) {
   const reduced = useReducedMotion();
@@ -86,6 +93,10 @@ export function DotLotus({
   const replayRef = useRef<() => boolean>(() => false);
   // Each replay writes the strapline again.
   const [strapRun, setStrapRun] = useState(0);
+  const openedRef = useRef(onOpened);
+  useEffect(() => {
+    openedRef.current = onOpened;
+  });
 
   useEffect(() => {
     const host = hostRef.current;
@@ -95,7 +106,9 @@ export function DotLotus({
     // No 2D context: the flat flower is the picture after all.
     if (!ctx) {
       host.dataset.lit = 'false';
+      const timer = setTimeout(() => openedRef.current?.(), OPENED_AT * 1000);
       return () => {
+        clearTimeout(timer);
         delete host.dataset.lit;
       };
     }
@@ -148,9 +161,14 @@ export function DotLotus({
       };
     };
 
+    let opened = false;
     const loop = dotLoop(
       (t) => {
         if (layout) scene.paint(ctx, look, layout, t);
+        if (!opened && t >= OPENED_AT) {
+          opened = true;
+          openedRef.current?.();
+        }
       },
       {
         reduced: still,
@@ -171,6 +189,9 @@ export function DotLotus({
     const update = () => {
       if (onScreen && started && !document.hidden) loop.play();
       else loop.pause();
+      // The strapline's letters run only while the flower's clock does.
+      if (loop.running) host.dataset.playing = '';
+      else delete host.dataset.playing;
     };
     const replay = () => {
       scene.reset();
@@ -270,6 +291,7 @@ export function DotLotus({
       window.removeEventListener('resize', relayout);
       replayRef.current = () => false;
       delete host.dataset.lit;
+      delete host.dataset.playing;
     };
   }, [reduced, startInView, size]);
 
