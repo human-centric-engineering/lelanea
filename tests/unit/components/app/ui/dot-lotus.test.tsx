@@ -148,6 +148,23 @@ describe('DotLotus', () => {
     });
   });
 
+  it('keeps the baked flower while its box has no width to paint into', () => {
+    stubCanvas();
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0,
+      right: 0,
+      bottom: 0,
+      x: 0,
+      y: 0,
+      toJSON: noop,
+    });
+    render(<DotLotus />);
+    expect(host().dataset.lit).toBeUndefined();
+  });
+
   it('leaves the baked flower as the picture where there is no 2D context', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     render(<DotLotus />);

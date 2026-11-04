@@ -176,6 +176,7 @@ describe('dotScene', () => {
       '--dot-star': '#ffe8cc',
       '--dot-glow': 'rgba(236, 162, 108, 0.24)',
       '--dot-pond': '0.32',
+      '--dot-pool': 'rgba(18, 12, 10, 0.38)',
     });
     return readDotLook(document.createElement('div'), recordingCanvases().make);
   }
@@ -206,6 +207,25 @@ describe('dotScene', () => {
       counts.push(drawn() - before);
     }
     expect(counts[1]).toBeGreaterThan(counts[0] + 100);
+  });
+
+  it('keeps the pool inside the canvas, so it feathers out rather than ending on an edge', () => {
+    const scales: [number, number][] = [];
+    const { ctx } = recordingContext();
+    const recorded = new Proxy(ctx, {
+      get: (target, key) =>
+        key === 'scale'
+          ? (x: number, y: number) => scales.push([x, y])
+          : (target as unknown as Record<string | symbol, unknown>)[key],
+      set: (target, key, value) => Reflect.set(target, key, value),
+    });
+    const short = { ...LAYOUT, spanV: 90 };
+    dotScene(sharedFlower(), { reduced: true }).paint(recorded, look(), short, REST_T);
+    // The first oval is the pool: its vertical radius, in pixels, stops short
+    // of the nearer canvas edge as seen from the heart.
+    const [, ry] = scales[0];
+    expect(ry).toBeGreaterThan(0);
+    expect(ry).toBeLessThanOrEqual(short.spanV * short.scale);
   });
 
   it('forgets the light in flight on reset', () => {
@@ -317,6 +337,19 @@ describe('dotLoop', () => {
     expect(paint).toHaveBeenLastCalledWith(0.5);
     loop.play();
     clock.frame(500);
+    expect(paint).toHaveBeenLastCalledWith(1);
+  });
+
+  it('never steps backwards when a frame began a moment before it resumed', () => {
+    const clock = host();
+    const paint = vi.fn();
+    const loop = dotLoop(paint, { reduced: false, host: clock.host });
+    loop.play();
+    clock.frame(1000);
+    loop.pause();
+    loop.play();
+    // The browser hands the next frame a timestamp from before `play()`.
+    clock.pending.shift()?.(clock.host.now() - 8);
     expect(paint).toHaveBeenLastCalledWith(1);
   });
 

@@ -210,8 +210,25 @@ describe('dotFlower', () => {
     expect(near).toEqual([]);
   });
 
-  it('lets each petal go of a star from its tip', () => {
-    expect(petalTips(flower).length).toBeGreaterThan(20);
+  it('lets go of stars only from tips in view, never from part-way down a petal', () => {
+    const tips = petalTips(flower);
+    expect(tips.length).toBeGreaterThan(10);
+    for (const [x, y] of tips) {
+      const site = flower.dots.find((d) => d.kind === 'edge' && d.x === x && d.y === y);
+      expect(site?.u).toBeGreaterThanOrEqual(0.95);
+    }
+  });
+
+  it("keeps both ends of the open echo and vein, dropping only the outline's repeat", () => {
+    // On the petal most in view, the echo reaches its base on both sides.
+    const counts = new Map<number, number>();
+    for (const d of flower.dots) {
+      if (d.kind === 'echo') counts.set(d.petal, (counts.get(d.petal) ?? 0) + 1);
+    }
+    const [petal] = [...counts].sort((a, b) => b[1] - a[1])[0];
+    const echo = flower.dots.filter((d) => d.kind === 'echo' && d.petal === petal);
+    expect(echo.some((d) => d.u < 0.05 && d.v < 0)).toBe(true);
+    expect(echo.some((d) => d.u < 0.05 && d.v > 0)).toBe(true);
   });
 });
 

@@ -110,6 +110,9 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
       // Light fades out before the nearer of the canvas's top and bottom
       // edges, measured from the heart, which sits below the canvas's middle.
       const heartY = oy + HEART[1] * scale;
+      // Only now is there somewhere to paint, so only now does the baked
+      // flower give way: a box with no width yet keeps its picture.
+      host.dataset.lit = 'true';
       layout = {
         ox,
         oy,
@@ -136,7 +139,6 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     );
 
     measure();
-    host.dataset.lit = 'true';
 
     // Seen: on screen, in a visible tab, and — for a flower that waits to be
     // seen — started.
@@ -152,28 +154,41 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     };
     replayRef.current = replay;
 
-    const observer =
-      typeof IntersectionObserver === 'undefined'
-        ? null
-        : new IntersectionObserver(
+    const watching = typeof IntersectionObserver !== 'undefined';
+    // Whether any of its light is on screen: the flower's box widened by how
+    // far the light reaches above and below it, so the loop does not freeze
+    // while drifting light is still in view.
+    const reach = Math.round(PAD * (host.getBoundingClientRect().width / FRAME.box[2]));
+    const inReach = watching
+      ? new IntersectionObserver(
+          (entries) => {
+            onScreen = entries[entries.length - 1].isIntersecting;
+            if (onScreen) measure();
+            update();
+          },
+          { rootMargin: `${reach}px 0px` }
+        )
+      : null;
+    inReach?.observe(host);
+    // Whether the flower itself has been seen, for one that waits to be: open
+    // once half of it is in view; fold away once it has left entirely, so a
+    // return unfolds it again (owner, t-171).
+    const inView =
+      watching && startInView
+        ? new IntersectionObserver(
             (entries) => {
               const entry = entries[entries.length - 1];
-              onScreen = entry.isIntersecting;
-              if (startInView) {
-                // Fold away once it has left entirely, so a return unfolds it
-                // again (owner, t-171); open once half of it is in view.
-                if (!entry.isIntersecting) started = false;
-                else if (!started && entry.intersectionRatio >= 0.5) {
-                  started = true;
-                  replay();
-                }
+              if (!entry.isIntersecting) started = false;
+              else if (!started && entry.intersectionRatio >= 0.5) {
+                started = true;
+                replay();
               }
-              if (onScreen) measure();
               update();
             },
             { threshold: [0, 0.5] }
-          );
-    observer?.observe(host);
+          )
+        : null;
+    inView?.observe(host);
 
     const onVisibility = () => update();
     document.addEventListener('visibilitychange', onVisibility);
@@ -212,7 +227,8 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
 
     return () => {
       loop.pause();
-      observer?.disconnect();
+      inReach?.disconnect();
+      inView?.disconnect();
       resize?.disconnect();
       theme.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);

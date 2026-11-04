@@ -6,6 +6,7 @@ import {
   REST_T,
   TIMELINE,
   beatAt,
+  clamp,
   dotAt,
   dotFlower,
   lubdub,
@@ -316,7 +317,6 @@ export function sharedFlower(): Flower {
   return shared;
 }
 
-const clamp = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const easeOut = (p: number) => 1 - (1 - p) ** 3;
 
 export interface DotScene {
@@ -428,7 +428,16 @@ export function dotScene(
     // The pool: a feathered oval of calmer colour behind the whole flower, so
     // the page's light streaks do not run through the dots.
     ctx.globalAlpha = clamp((t + 0.4) / 1.2);
-    oval(hx, hy - 23 * K, 250 * K, 136 * K, look.pool, [0.45, 1]);
+    // Its height held inside the canvas, so it feathers out rather than ending
+    // on the canvas's top edge in a straight line.
+    oval(
+      hx,
+      hy - 23 * K,
+      250 * K,
+      Math.max(0, Math.min(136 * K, layout.spanV - 23 * K)),
+      look.pool,
+      [0.45, 1]
+    );
     // A faint shadow at the water line, so the flower sits on something.
     ctx.globalAlpha = clamp((t - TIMELINE.WATER_AT) / 0.6);
     oval(hx, POND_Y - 2 * K, 118 * K, 15 * K, look.shadow, [0.5, 0.45]);
@@ -737,7 +746,9 @@ export function dotLoop(
 
   const at = (now: number) => {
     if (reduced) return REST_T;
-    return banked + (running ? (now - since) / 1000 : 0);
+    // A frame's timestamp is when the frame began, which can be a moment
+    // before `play()` read the clock; never let time step backwards.
+    return banked + (running ? Math.max(0, now - since) / 1000 : 0);
   };
   const tick = (now: number) => {
     if (!running) return;

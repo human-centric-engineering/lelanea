@@ -83,7 +83,7 @@ export function lubdub(s: number): number {
   return Math.exp(-(((s - 0.06) / 0.065) ** 2)) + 0.62 * Math.exp(-(((s - 0.34) / 0.075) ** 2));
 }
 
-const clamp = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+export const clamp = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 export interface Beat {
   readonly on: boolean;
@@ -303,6 +303,9 @@ const ECHO: Path = [
 /** The vein, from just above the base to just short of the tip. */
 const VEIN: Path = steps(0.12, 0.9, 0);
 
+/** How near the tip, along the petal, a dot must be to count as its tip. */
+const TIP_U = 0.95;
+
 export interface Flower {
   /** Every dot of the open flower, petals in paint order, then the heart. */
   readonly dots: readonly DotSite[];
@@ -340,9 +343,27 @@ export function dotFlower(): Flower {
       .map((s) => s.p)
   );
 
+  // Each outline's bounding box, so most petals are ruled out with four
+  // comparisons rather than a walk round every edge: built cold, the full
+  // test took ~470ms on the main thread at hydration (code review, t-182).
+  const boxes = outlines.map((outline) => {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const [x, y] of outline) {
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, y);
+    }
+    return [x0, y0, x1, y1] as const;
+  });
   const covered = (position: number, x: number, y: number) => {
     if (Math.hypot(x - HEART[0], y - HEART[1]) < HEART_COVER) return true;
     for (let j = position + 1; j < outlines.length; j++) {
+      const [x0, y0, x1, y1] = boxes[j];
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       if (insidePolygon(x, y, outlines[j])) return true;
     }
     return false;
@@ -357,8 +378,9 @@ export function dotFlower(): Flower {
     const delay = whorl * TIMELINE.RING_GAP + orderInWhorl[petal] * TIMELINE.PETAL_GAP;
     const add = (kind: DotKind, gap: number, path: Path, r: number, base: number) => {
       const points = spacedOn(pose, trace(pose, path), gap);
-      // A closed loop's last dot is its first.
-      if (kind !== 'vein') points.pop();
+      // The outline is a closed loop, so its last dot is its first. The echo
+      // and the vein are open: both their ends are real dots.
+      if (kind === 'edge') points.pop();
       for (const d of points) {
         if (covered(position, d.x, d.y)) continue;
         dots.push({ kind, petal, u: d.u, v: d.v, x: d.x, y: d.y, tone, r, base, delay });
@@ -372,11 +394,15 @@ export function dotFlower(): Flower {
   return { dots: [...dots, ...heartDots()], outlines, order };
 }
 
-/** Each petal's tip in the open flower, where the beat lets go of a star. */
+/**
+ * Each petal's tip in the open flower, where the beat lets go of a star — for
+ * the petals whose tips are in view. A tip tucked behind a petal in front lets
+ * nothing go, rather than its highest visible dot part-way down the petal.
+ */
 export function petalTips(flower: Flower): Point[] {
   const tips = new Map<number, DotSite>();
   for (const d of flower.dots) {
-    if (d.kind !== 'edge') continue;
+    if (d.kind !== 'edge' || d.u < TIP_U) continue;
     const best = tips.get(d.petal);
     if (!best || d.u > best.u) tips.set(d.petal, d);
   }
