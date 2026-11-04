@@ -249,6 +249,47 @@ describe('DotLotus', () => {
     });
   });
 
+  describe('keeping up with the page', () => {
+    it('repaints a paused flower when its box changes size', () => {
+      let resized: (() => void) | undefined;
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: () => void) {
+            resized = callback;
+          }
+          observe = noop;
+          disconnect = noop;
+        }
+      );
+      stubCanvas();
+      render(<DotLotus />);
+      const paints = clearRect.mock.calls.length;
+      act(() => resized?.());
+      expect(clearRect.mock.calls.length).toBe(paints + 1);
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+      expect(clearRect.mock.calls.length).toBe(paints + 2);
+    });
+
+    it('reads its tokens again when the theme changes', async () => {
+      stubCanvas();
+      const style = vi.spyOn(window, 'getComputedStyle');
+      render(<DotLotus />);
+      const reads = style.mock.calls.filter(([element]) => element === host()).length;
+      await act(async () => {
+        document.documentElement.classList.toggle('dark');
+        // MutationObserver delivers on a microtask.
+        await Promise.resolve();
+      });
+      document.documentElement.classList.remove('dark');
+      expect(style.mock.calls.filter(([element]) => element === host()).length).toBeGreaterThan(
+        reads
+      );
+    });
+  });
+
   it('plays the unfolding again on a click', () => {
     stubCanvas();
     render(<DotLotus />);
