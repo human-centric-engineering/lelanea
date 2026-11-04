@@ -578,7 +578,8 @@ cream (`--strap-ink`). The tokens are set only where the flower is drawn as
 light. A click on the flower writes it again with the unfolding. The letters
 run only while the flower's clock runs (`data-playing`), so a slow
 hydration, a flower off screen or a hidden tab does not write them over a
-closed flower. Below 700px wide the letters are smaller, so the ends of the
+closed flower. Where no canvas paints there is no clock to wait for, and
+they are shown settled. Below 760px wide the letters are smaller, so the ends of the
 arc stay on a phone's screen. Reduced motion and no script show
 them settled. The arc is `aria-hidden`; the hero's caption stays in its place
 above the heading, visually hidden, so the words are read once. Both read

@@ -94,6 +94,42 @@ describe('the strapline on the water', () => {
     }
   });
 
+  it('shows its letters settled where no canvas paints, with no clock to wait for', () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    render(<DotLotus strap={WORDS} />);
+    expect(strap().parentElement).toHaveAttribute('data-lit', 'false');
+    const css = readFileSync(
+      path.join(process.cwd(), 'components/app/ui/dot-lotus-strap.module.css'),
+      'utf8'
+    );
+    expect(css).toMatch(
+      /\[data-lit='false'\]\) > \.strap tspan \{\s*animation: none;\s*opacity: 1;/
+    );
+  });
+
+  it('is written again when a flower that waits to be seen folds away', () => {
+    let report: IntersectionObserverCallback = () => undefined;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          report = callback;
+        }
+        observe = () => undefined;
+        disconnect = () => undefined;
+      }
+    );
+    render(<DotLotus strap={WORDS} startInView />);
+    const first = strap().querySelector('text');
+    act(() => {
+      report(
+        [{ isIntersecting: false, intersectionRatio: 0 } as IntersectionObserverEntry],
+        {} as IntersectionObserver
+      );
+    });
+    expect(strap().querySelector('text')).not.toBe(first);
+  });
+
   it('starts its letters as the flower finishes opening', () => {
     // The delay is CSS and the flower's timeline is not: pinned together here.
     const css = readFileSync(

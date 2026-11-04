@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { DotLotus } from '@/components/app/ui/dot-lotus';
 import { OPENED_AT } from '@/components/app/ui/dot-lotus-geometry';
@@ -32,6 +32,13 @@ const DRIFT_MS = ENTRY_OPENED_MS + FADE_MS;
  * the page loads: the opening, plus a beat. See `failsafe` below.
  */
 const FAILSAFE_MS = ENTRY_OPENED_MS + 600;
+
+/**
+ * Once JavaScript is alive, the most the cover waits on the flower, counted
+ * only while the tab is seen: if its loop never runs (an observer that never
+ * reports, frames that never come), the cover still goes.
+ */
+const BACKSTOP_MS = ENTRY_OPENED_MS + 2000;
 
 /**
  * Whether this document has already shown the bloom. Module scope is exactly
@@ -94,6 +101,8 @@ function failsafeHasRun(element: HTMLElement | null): boolean {
 export function EntryBloom() {
   const [phase, setPhase] = useState<'showing' | 'leaving' | 'done'>('showing');
   const [hydrated, setHydrated] = useState(false);
+  // Whether the tab is seen: the rise is held while it is not, with the flower.
+  const [seen, setSeen] = useState(true);
   const cover = useRef<HTMLDivElement>(null);
   const decided = useRef(false);
 
@@ -122,7 +131,23 @@ export function EntryBloom() {
   // background is still there to see. A reader who asked for less motion is
   // shown the open flower, still, which has opened from its first frame: the
   // cover goes at once, as it did for the lily before it.
-  const onOpened = () => setPhase((now) => (now === 'showing' ? 'leaving' : now));
+  const lift = useCallback(() => setPhase((now) => (now === 'showing' ? 'leaving' : now)), []);
+
+  useEffect(() => {
+    if (!hydrated || phase !== 'showing') return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const count = () => {
+      clearTimeout(timer);
+      setSeen(!document.hidden);
+      if (!document.hidden) timer = setTimeout(lift, BACKSTOP_MS);
+    };
+    count();
+    document.addEventListener('visibilitychange', count);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', count);
+    };
+  }, [hydrated, phase, lift]);
 
   useEffect(() => {
     if (phase !== 'leaving') return;
@@ -203,11 +228,12 @@ export function EntryBloom() {
           // move: run from the first paint, a slow page finished the rise
           // before the bloom had opened. Until then the lotus is not yet shown
           // (the fade-in's start state) over the plain cover.
-          animationPlayState: hydrated ? 'running' : 'paused',
+          // And held while the tab is not seen, as the flower's clock is.
+          animationPlayState: hydrated && seen ? 'running' : 'paused',
         }}
         data-testid="entry-bloom-rise"
       >
-        <DotLotus size={560} onOpened={onOpened} className={styles.flower} />
+        <DotLotus size={560} onOpened={lift} className={styles.flower} />
       </div>
     </div>
   );

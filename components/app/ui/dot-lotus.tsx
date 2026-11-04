@@ -96,28 +96,46 @@ export function DotLotus({
   const openedRef = useRef(onOpened);
   useEffect(() => {
     openedRef.current = onOpened;
-  });
+  }, [onOpened]);
+  /** Whether `onOpened` has been called: once per mount, whatever re-runs. */
+  const hasOpened = useRef(false);
 
   useEffect(() => {
     const host = hostRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!host || !canvas) return;
-    // No 2D context: the flat flower is the picture after all.
-    if (!ctx) {
-      host.dataset.lit = 'false';
-      const timer = setTimeout(() => openedRef.current?.(), OPENED_AT * 1000);
-      return () => {
-        clearTimeout(timer);
-        delete host.dataset.lit;
-      };
-    }
-
     // The hook reads the preference in an effect of its own, so on the first
     // run it still says `false`; asked directly, a reader who wants less motion
     // never gets a frame of the animated scene before the still one.
     const still =
       reduced || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+    const open = () => {
+      if (hasOpened.current) return;
+      hasOpened.current = true;
+      openedRef.current?.();
+    };
+
+    // No 2D context: the flat flower is the picture after all. It stands in
+    // for an opening of the same length, counted only while the tab is seen;
+    // shown still, it is open already.
+    if (!ctx) {
+      host.dataset.lit = 'false';
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const count = () => {
+        clearTimeout(timer);
+        if (!document.hidden) timer = setTimeout(open, OPENED_AT * 1000);
+      };
+      if (still) open();
+      else count();
+      document.addEventListener('visibilitychange', count);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('visibilitychange', count);
+        delete host.dataset.lit;
+      };
+    }
+
     let tokens = dotTokens(host);
     let look = readDotLook(host);
     const scene = dotScene(sharedFlower(), { reduced: still });
@@ -161,14 +179,10 @@ export function DotLotus({
       };
     };
 
-    let opened = false;
     const loop = dotLoop(
       (t) => {
         if (layout) scene.paint(ctx, look, layout, t);
-        if (!opened && t >= OPENED_AT) {
-          opened = true;
-          openedRef.current?.();
-        }
+        if (t >= OPENED_AT) open();
       },
       {
         reduced: still,
@@ -235,6 +249,8 @@ export function DotLotus({
                 // start rather than showing the last open frame first.
                 started = false;
                 replay();
+                // Its words go back with it, to be written again.
+                setStrapRun((n) => n + 1);
               } else if (!started && entry.intersectionRatio >= 0.5) {
                 started = true;
                 replay();

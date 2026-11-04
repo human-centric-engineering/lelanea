@@ -43,6 +43,8 @@ async function newDocument() {
 }
 
 const FAILSAFE_MS = ENTRY_OPENED_MS + 600;
+/** The most the cover waits on a flower that never runs. */
+const BACKSTOP_MS = ENTRY_OPENED_MS + 2000;
 /** The cover's fade-out. */
 const FADE_MS = 900;
 
@@ -201,7 +203,7 @@ describe('EntryBloom — the lotus rises as it opens', () => {
     expect(frames.request).toHaveBeenCalled();
     // Time passing without frames painted is not the flower opening.
     await act(async () => {
-      vi.advanceTimersByTime(ENTRY_OPENED_MS * 3);
+      vi.advanceTimersByTime(ENTRY_OPENED_MS + 1000);
     });
     expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
     // A frame just short of open, then one at it.
@@ -215,7 +217,25 @@ describe('EntryBloom — the lotus rises as it opens', () => {
       vi.advanceTimersByTime(FADE_MS + 50);
     });
     expect(screen.queryByTestId('entry-bloom')).toBeNull();
-    vi.useRealTimers();
+  });
+
+  it('still lifts, a little later, if the flower never gets to run', async () => {
+    // Frames that never come: nothing paints, so nothing reports the flower
+    // open. The cover must not stay over the app.
+    stubOnScreen();
+    stubBox(560, 533);
+    stubCanvas();
+    stubFrames();
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    await act(async () => {
+      vi.advanceTimersByTime(ENTRY_OPENED_MS + 1900);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
   });
 
   it('waits for a tab opened in the background to be looked at', async () => {
@@ -232,9 +252,48 @@ describe('EntryBloom — the lotus rises as it opens', () => {
       });
       expect(frames.request).not.toHaveBeenCalled();
       expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+      // The rise waits with it.
+      expect(screen.getByTestId('entry-bloom-rise').style.animationPlayState).toBe('paused');
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(frames.request).toHaveBeenCalled();
+      expect(screen.getByTestId('entry-bloom-rise').style.animationPlayState).toBe('running');
     } finally {
       Object.defineProperty(document, 'hidden', { configurable: true, value: false });
       vi.useRealTimers();
+    }
+  });
+
+  it('lifts at once for reduced motion where no canvas paints either', async () => {
+    stubMotion(true);
+    vi.useFakeTimers();
+    render(<EntryBloom />);
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+  });
+
+  it("counts the flat flower's opening only while its tab is seen", async () => {
+    // No canvas here: the flat flower stands in for the opening.
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    vi.useFakeTimers();
+    try {
+      render(<EntryBloom />);
+      await act(async () => {
+        vi.advanceTimersByTime(BACKSTOP_MS * 2);
+      });
+      expect(screen.getByTestId('entry-bloom').className).toContain('opacity-100');
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        vi.advanceTimersByTime(ENTRY_OPENED_MS + 50);
+      });
+      expect(screen.getByTestId('entry-bloom').className).toContain('opacity-0');
+    } finally {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
     }
   });
 
