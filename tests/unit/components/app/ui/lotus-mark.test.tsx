@@ -152,6 +152,51 @@ describe('LotusMark — its light', () => {
     expect(painted.at(-1)).toBeCloseTo(0, 5);
   });
 
+  it('runs where there is no way to ask whether it can be seen', () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    stubCanvas();
+    const frames = stubFrames();
+    render(<LotusMark />);
+    expect(frames.request).toHaveBeenCalled();
+  });
+
+  it('picks up again when its tab comes back', () => {
+    stubCanvas();
+    const frames = stubFrames();
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    render(<LotusMark />);
+    expect(frames.request).not.toHaveBeenCalled();
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(frames.request).toHaveBeenCalled();
+  });
+
+  it('repaints its still frame in the new colours when the theme changes', async () => {
+    stubMotion(true);
+    const canvas = stubCanvas();
+    stubFrames();
+    render(<LotusMark />);
+    const before = canvas.paints();
+    // Set on the mark itself: happy-dom does not inherit custom properties.
+    const host = flower()?.parentElement as HTMLElement;
+    const flip = async () => {
+      document.documentElement.toggleAttribute('data-theme');
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    };
+    // A theme change that leaves its colours alone paints nothing new…
+    await flip();
+    expect(canvas.paints()).toBe(before);
+    // …and one that moves them repaints the still flower.
+    host.style.setProperty('--color-lotus-core', '#123456');
+    await flip();
+    document.documentElement.removeAttribute('data-theme');
+    expect(canvas.paints()).toBeGreaterThan(before);
+  });
+
   it('lets go of everything when it unmounts', () => {
     stubCanvas();
     const frames = stubFrames();
