@@ -24,7 +24,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const flag = vi.hoisted(() => ({ on: false }));
+const flag = vi.hoisted((): { on: boolean; nonce: string | null } => ({
+  on: false,
+  nonce: 'test-nonce',
+}));
 
 vi.mock('@/lib/env', () => ({
   env: {
@@ -35,7 +38,7 @@ vi.mock('@/lib/env', () => ({
 }));
 
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({ 'x-nonce': 'test-nonce' }),
+  headers: async () => new Headers(flag.nonce === null ? {} : { 'x-nonce': flag.nonce }),
 }));
 
 import { TintPicker, TintScript } from '@/components/app/ui/tint-picker';
@@ -60,6 +63,7 @@ function openPicker() {
 
 beforeEach(() => {
   flag.on = false;
+  flag.nonce = 'test-nonce';
   window.localStorage.clear();
   root.removeAttribute('data-tint');
   root.removeAttribute('data-tint-dark');
@@ -95,6 +99,15 @@ describe('TintPicker — the gate', () => {
   });
 });
 
+describe('TintScript without a nonce', () => {
+  it('renders no nonce attribute when the request carries none', async () => {
+    // Development: the proxy sets no nonce, and its CSP allows inline scripts.
+    flag.nonce = null;
+    const { container } = render(await TintScript());
+    expect(container.querySelector('script')?.hasAttribute('nonce')).toBe(false);
+  });
+});
+
 describe('TintPickerControls', () => {
   it('opens on the default of each theme when nothing is stored', () => {
     render(<TintPickerControls />);
@@ -108,6 +121,15 @@ describe('TintPickerControls', () => {
       'aria-pressed',
       'true'
     );
+  });
+
+  it('closes again from the same tab', () => {
+    render(<TintPickerControls />);
+    openPicker();
+    expect(screen.getByRole('button', { name: 'tints' })).toHaveAttribute('aria-expanded', 'true');
+    openPicker();
+    expect(screen.queryByRole('group', { name: 'Choose the light' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'tints' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('sets the light tint, and it survives a reload', () => {
