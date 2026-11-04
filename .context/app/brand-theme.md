@@ -563,7 +563,7 @@ hero's dusk sky (`data-dot-ground='sky'`, light mode only) gives its flower
 the dark palette with paler petals.
 
 **Reduced motion shows the open flower, still**: one frame, nothing scheduled.
-The flat SVG stays under the canvas, made transparent rather than removed.
+The flat SVG stays under the canvas, transparent from the first paint wherever script runs (so the solid flower never flashes before the dots), and is never removed.
 It is the picture wherever no 2D context paints, and a flower given a `label`
 keeps it in the accessibility tree. Both home blooms are decorative.
 

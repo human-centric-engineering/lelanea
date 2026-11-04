@@ -148,7 +148,7 @@ describe('DotLotus', () => {
     });
   });
 
-  it('keeps the baked flower while its box has no width to paint into', () => {
+  it('does not light the canvas while its box has no width to paint into', () => {
     stubCanvas();
     vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockReturnValue({
       left: 0,
@@ -165,11 +165,14 @@ describe('DotLotus', () => {
     expect(host().dataset.lit).toBeUndefined();
   });
 
-  it('leaves the baked flower as the picture where there is no 2D context', () => {
+  it('shows the flat flower as the picture where there is no 2D context', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
-    render(<DotLotus />);
-    expect(host().dataset.lit).toBeUndefined();
+    const { unmount } = render(<DotLotus />);
+    expect(host().dataset.lit).toBe('false');
     expect(request).not.toHaveBeenCalled();
+    const element = host();
+    unmount();
+    expect(element.dataset.lit).toBeUndefined();
   });
 
   describe('the loop', () => {

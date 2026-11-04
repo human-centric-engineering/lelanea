@@ -48,9 +48,10 @@ const PAD = REACH * 0.62;
  *
  * Under the canvas is the prototype's flat lotus (`/dot-lotus.svg`), the
  * flower the dots trace. It is the picture wherever the canvas never paints — no
- * 2D context, no JavaScript — and once the canvas does paint it is made
- * transparent, not removed, so a flower given a `label` keeps its image in the
- * accessibility tree. The canvas itself is `aria-hidden` always.
+ * 2D context, no JavaScript. Where script runs it is transparent from the
+ * first paint, so the solid flower never shows before the dots take over, and
+ * it is made transparent rather than removed, so a flower given a `label`
+ * keeps its image in the accessibility tree. The canvas itself is `aria-hidden` always.
  *
  * ## It only runs while it can be seen
  *
@@ -71,8 +72,14 @@ export function DotLotus({ size = 440, startInView = false, label, className }: 
     const host = hostRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
-    // No 2D context: the flat flower stays the picture.
-    if (!host || !canvas || !ctx) return;
+    if (!host || !canvas) return;
+    // No 2D context: the flat flower is the picture after all.
+    if (!ctx) {
+      host.dataset.lit = 'false';
+      return () => {
+        delete host.dataset.lit;
+      };
+    }
 
     // The hook reads the preference in an effect of its own, so on the first
     // run it still says `false`; asked directly, a reader who wants less motion
