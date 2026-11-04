@@ -2,12 +2,19 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { Lotus } from '@/components/app/ui/lotus';
-import { LOTUS_OPENED_MS } from '@/components/app/ui/lotus-model';
+import { DotLotus } from '@/components/app/ui/dot-lotus';
+import { OPENED_AT } from '@/components/app/ui/dot-lotus-geometry';
+import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import { SHELL_OVERLAY_ATTR } from '@/components/app/shell/use-shell-layout';
 import { cn } from '@/lib/utils';
 
 import styles from '@/components/app/shell/entry-bloom.module.css';
+
+/**
+ * When the flower has opened and the cover starts to lift: the last petal's
+ * light has arrived and the heart's first beat is landing (t-183).
+ */
+export const ENTRY_OPENED_MS = Math.round(OPENED_AT * 1000);
 
 /** The fade once the last petal has settled — long enough to read as a fade-out, not a cut. */
 const FADE_MS = 900;
@@ -19,13 +26,13 @@ const FADE_IN_MS = 1000;
  * It drifts up through the whole opening and on through the fade-out, so it
  * is still rising as it disappears rather than stopping and then vanishing.
  */
-const DRIFT_MS = LOTUS_OPENED_MS + FADE_MS;
+const DRIFT_MS = ENTRY_OPENED_MS + FADE_MS;
 
 /**
  * If JavaScript never arrives, CSS lifts the cover on its own this long after
  * the page loads: the opening, plus a beat. See `failsafe` below.
  */
-const FAILSAFE_MS = LOTUS_OPENED_MS + 600;
+const FAILSAFE_MS = ENTRY_OPENED_MS + 600;
 
 /**
  * Whether this document has already shown the bloom. Module scope is exactly
@@ -86,6 +93,7 @@ function failsafeHasRun(element: HTMLElement | null): boolean {
  * should not have to wait: a click, a tap, Escape or Tab lets it go at once.
  */
 export function EntryBloom() {
+  const reduced = useReducedMotion();
   const [phase, setPhase] = useState<'showing' | 'leaving' | 'done'>('showing');
   const [hydrated, setHydrated] = useState(false);
   const cover = useRef<HTMLDivElement>(null);
@@ -110,6 +118,16 @@ export function EntryBloom() {
     shownThisDocument = true;
     setHydrated(true);
   }, []);
+
+  // The flower opens on its own clock from the moment JavaScript is alive, and
+  // the cover lifts once it has. A reader who asked for less motion is shown
+  // the open flower, still, and is not kept waiting for an opening that is not
+  // played: the cover goes at once, as it did for the lily before it.
+  useEffect(() => {
+    if (!hydrated || phase !== 'showing') return;
+    const timer = setTimeout(() => setPhase('leaving'), reduced ? 0 : ENTRY_OPENED_MS);
+    return () => clearTimeout(timer);
+  }, [hydrated, phase, reduced]);
 
   useEffect(() => {
     if (phase !== 'leaving') return;
@@ -176,11 +194,14 @@ export function EntryBloom() {
         fading out with the cover (owner, 3 Oct 2026). The drift is a deliberate
         exception to §6.5's 4–8px translation limit, asked for by name; reduced
         motion gets neither the drift nor the fade-in (the module's media query).
-        No breath: it is leaving, not resting. Capped by height as well as
-        width (120dvh), so a landscape phone does not crop it as it rises.
+        Capped by height as well as width (64dvh), so a landscape phone does not
+        crop it as it rises: the dotted flower is nearly as tall as it is wide.
+
+        The home page's flower, drawn in points of light (t-183): its glow is
+        the canvas's own, at the heart, so the cover carries none.
       */}
       <div
-        className={cn('w-[min(86vw,680px,120dvh)]', styles.rise)}
+        className={cn('w-[min(86vw,560px,64dvh)]', styles.rise)}
         style={{
           animationDuration: `${FADE_IN_MS}ms, ${DRIFT_MS}ms`,
           // Held until JavaScript is alive, which is when the petals start to
@@ -191,7 +212,7 @@ export function EntryBloom() {
         }}
         data-testid="entry-bloom-rise"
       >
-        <Lotus size={520} autoOpen idle={false} water fluid onOpened={() => setPhase('leaving')} />
+        <DotLotus size={560} className={styles.flower} />
       </div>
     </div>
   );

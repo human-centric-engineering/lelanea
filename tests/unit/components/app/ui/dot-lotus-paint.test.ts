@@ -18,6 +18,7 @@ import {
   dotScene,
   readDotLook,
   sharedFlower,
+  sharedMark,
   type DotLayout,
   type MakeCanvas,
 } from '@/components/app/ui/dot-lotus-paint';
@@ -226,6 +227,49 @@ describe('dotScene', () => {
     const [, ry] = scales[0];
     expect(ry).toBeGreaterThan(0);
     expect(ry).toBeLessThanOrEqual(short.spanV * short.scale);
+  });
+
+  describe('as the small mark (t-183)', () => {
+    /** How many sprites one frame at `t` puts down, run up to it as the loop would. */
+    function drawnAt(scene: ReturnType<typeof dotScene>, t: number) {
+      const sprites = look();
+      const { ctx, drawn } = recordingContext();
+      for (let s = Math.max(0, t - 4); s < t; s += 1 / 30) scene.paint(ctx, sprites, LAYOUT, s);
+      const before = drawn();
+      scene.paint(ctx, sprites, LAYOUT, t);
+      return drawn() - before;
+    }
+
+    it("draws none of the petals: they are the SVG's own", () => {
+      // At rest and still, all that is left to draw is a flaring dot or two.
+      // The full flower at the same moment draws every dot.
+      const mark = drawnAt(dotScene(sharedMark(), { reduced: true, mark: true }), REST_T);
+      expect(mark).toBeLessThan(sharedMark().length);
+      expect(drawnAt(dotScene(sharedFlower(), { reduced: true }), REST_T)).toBeGreaterThan(
+        sharedFlower().length
+      );
+    });
+
+    it('still glows at the heart', () => {
+      const { ctx, stops } = recordingContext();
+      dotScene(sharedMark(), { reduced: true, mark: true }).paint(ctx, look(), LAYOUT, REST_T);
+      expect(stops.some(([, colour]) => colour.startsWith('rgba(236, 162, 108'))).toBe(true);
+    });
+
+    it('lets go of light once it beats, and sends no ring across a pond', () => {
+      const scene = dotScene(sharedMark(), { mark: true });
+      const quiet = drawnAt(scene, TIMELINE.FLOW_AT - 0.1);
+      const beating = drawnAt(dotScene(sharedMark(), { mark: true }), TIMELINE.FLOW_AT + 6);
+      expect(beating).toBeGreaterThan(quiet);
+      // The full flower's pond alone draws a hundred-odd dots a ring.
+      expect(beating).toBeLessThan(100);
+    });
+
+    it('is dotted far more sparsely than the full flower', () => {
+      expect(sharedMark().length).toBeLessThan(sharedFlower().length / 4);
+      expect(sharedMark().some((d) => d.kind === 'echo' || d.kind === 'vein')).toBe(false);
+      expect(sharedMark().filter((d) => d.kind === 'heart')).toHaveLength(7);
+    });
   });
 
   it('forgets the light in flight on reset', () => {

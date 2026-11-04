@@ -220,7 +220,13 @@ describe('ShellNav — slim mode', () => {
     // to be edited by hand when t-73 added the notes, and a literal here fails
     // in a way that says nothing about what changed.
     expect(screen.getAllByRole('link')).toHaveLength(SHELL_NAV.filter(isNavItem).length + 1);
-    expect(screen.getByRole('link', { name: 'Lelañea, back to the site' })).toBeTruthy();
+    const wordmark = screen.getByRole('link', { name: 'Lelañea, back to the site' });
+    // The mark drawn in light (t-183) adds nothing to that name.
+    expect(wordmark.querySelector('img[src="/dot-lotus-mark.svg"]')).toHaveAttribute(
+      'aria-hidden',
+      'true'
+    );
+    expect(wordmark.querySelector('canvas')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('gives every item the brand tooltip carrying its hint', async () => {
@@ -341,9 +347,9 @@ describe('ShellNav — collapsing changes the width and nothing else', () => {
     const slim = regions()[0].className;
 
     // 72px, and the number is measured rather than eyeballed: `LotusMark` sizes
-    // by BLOOM width, not frame height, so `size={30}` renders 46 × 30 — the
-    // slim stack is 30 + 10 + 32. This said 70 on the strength of a "25px mark"
-    // and was two pixels short of its own contents, every child `flex-none`.
+    // by the flower's width, so `size={30}` renders 30 × 25 (t-183) — the slim
+    // stack is 25 + 10 + 32. It was once 30 + 10 + 32, which is why a row of
+    // 70 fell two pixels short of its own contents, every child `flex-none`.
     expect(expanded).toContain('h-[72px]');
     expect(slim).toContain('h-[72px]');
     // The stack is the prototype's layout; only its HEIGHT was ever the problem.

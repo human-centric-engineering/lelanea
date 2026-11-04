@@ -198,6 +198,14 @@ describe('SiteHeader', () => {
     // platform default suite-wide, so a literal here would assert the value of
     // an unconfigured install. That the wordmark tracks the seam AT ALL is the
     // separate question, pinned in site-brand.test.tsx with the seam filled.
-    expect(screen.getByRole('link', { name: `${BRAND.name}, home` })).toHaveAttribute('href', '/');
+    const wordmark = screen.getByRole('link', { name: `${BRAND.name}, home` });
+    expect(wordmark).toHaveAttribute('href', '/');
+    // The mark drawn in light (t-183) adds nothing to that name: its flower
+    // and its canvas are both hidden.
+    expect(wordmark.querySelector('img[src="/dot-lotus-mark.svg"]')).toHaveAttribute(
+      'aria-hidden',
+      'true'
+    );
+    expect(wordmark.querySelector('canvas')).toHaveAttribute('aria-hidden', 'true');
   });
 });

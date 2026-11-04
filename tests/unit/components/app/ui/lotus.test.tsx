@@ -19,10 +19,10 @@
  *      whole session by an accessibility preference — the quiet way a
  *      reduced-motion path breaks a product.
  *
- *   3. **`size` means the bloom, not the frame.** §6.6 promises `Lotus` and
- *      `LotusMark` are interchangeable at the same size, and the two frames
- *      differ by half again in width. Nothing but a test notices when that
- *      stops being true.
+ *   3. **`size` means the bloom, not the frame.** The water frame is half
+ *      again as wide as the bloom inside it. Nothing but a test notices when
+ *      that stops being true. (`LotusMark` was once this flower too; since
+ *      t-183 it is the flat lotus, with its own suite.)
  *
  * The `matchMedia` fake is the one from `tests/unit/hooks/use-theme.test.tsx`,
  * for the same reason: the preference has to be something the test can CHANGE,
@@ -39,13 +39,7 @@ import { renderToString } from 'react-dom/server';
 import path from 'node:path';
 
 import { LOTUS_OPENED_MS, Lotus } from '@/components/app/ui/lotus';
-import { LotusMark } from '@/components/app/ui/lotus-mark';
-import {
-  LOTUS_GLYPH_BELOW,
-  drawLotus,
-  lotusFrameSize,
-  lotusFrames,
-} from '@/components/app/ui/lotus-draw';
+import { drawLotus, lotusFrameSize, lotusFrames } from '@/components/app/ui/lotus-draw';
 
 type Listener = (event: MediaQueryListEvent) => void;
 
@@ -178,22 +172,6 @@ describe('Lotus', () => {
       const frameWidth = Number.parseFloat(bloom().style.width);
 
       expect(frameWidth * lotusFrames().animated.water.bloomFraction).toBeCloseTo(size, 5);
-    });
-
-    it('matches LotusMark at the same size', () => {
-      render(
-        <>
-          <Lotus autoOpen={false} size={64} />
-          <LotusMark size={64} />
-        </>
-      );
-      const [animated, mark] = [...document.querySelectorAll('img')];
-
-      // The same bloom width in both; the frames differ only in height (the
-      // animated one has room for the bud).
-      expect(Math.round(Number(animated.getAttribute('width')))).toBe(
-        Number(mark.getAttribute('width'))
-      );
     });
 
     it('fills its column when fluid, never wider than `size` makes it', () => {
@@ -464,59 +442,5 @@ describe('Lotus', () => {
       expect(() => render(<Lotus open />)).not.toThrow();
       expect(bloom()).toHaveAttribute('data-open', 'true');
     });
-  });
-});
-
-describe('LotusMark', () => {
-  function img(): HTMLImageElement {
-    const element = document.querySelector('img');
-    if (!element) throw new Error('no mark rendered');
-    return element;
-  }
-
-  it('is the baked bloom on water by default', () => {
-    render(<LotusMark />);
-    expect(img()).toHaveAttribute('src', '/lotus-mark.svg');
-    // A still image: nothing here can move.
-    expect(document.querySelector('[data-open]')).toBeNull();
-  });
-
-  it('is the half-open glyph without water below the glyph threshold', () => {
-    // The open flower is ~2.3× wider than tall; at avatar size it would be a
-    // sliver, so small marks show the bloom part-way open.
-    render(<LotusMark size={LOTUS_GLYPH_BELOW - 1} water={false} />);
-    expect(img()).toHaveAttribute('src', '/lotus-glyph.svg');
-  });
-
-  it('is the open bloom without water at and above the threshold', () => {
-    render(<LotusMark size={LOTUS_GLYPH_BELOW} water={false} />);
-    expect(img()).toHaveAttribute('src', '/lotus-bloom.svg');
-  });
-
-  it('sizes the BLOOM, whichever frame is around it', () => {
-    const frames = lotusFrames().still;
-    for (const [props, frame] of [
-      [{ size: 120 }, frames.water],
-      [{ size: 120, water: false }, frames.tight],
-      [{ size: 24, water: false }, frames.glyph],
-    ] as const) {
-      const { unmount } = render(<LotusMark {...props} />);
-      expect(Number(img().getAttribute('width'))).toBe(
-        Math.round(props.size / frame.bloomFraction)
-      );
-      unmount();
-    }
-  });
-
-  it('points only at files that exist', () => {
-    for (const file of ['lotus-mark.svg', 'lotus-bloom.svg', 'lotus-glyph.svg']) {
-      expect(existsSync(path.join(process.cwd(), 'public', file)), file).toBe(true);
-    }
-  });
-
-  it('is hidden from assistive technology', () => {
-    render(<LotusMark />);
-    expect(img()).toHaveAttribute('alt', '');
-    expect(img()).toHaveAttribute('aria-hidden', 'true');
   });
 });

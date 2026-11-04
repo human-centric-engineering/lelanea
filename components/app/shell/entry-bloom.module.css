@@ -3,7 +3,7 @@
  * The cover is server-rendered so it is there from the first paint. If the
  * page's scripts never run, nothing in React would ever take it away, and the
  * app would sit behind it. Until the component has mounted, this fades it out
- * by itself; the delay is set inline from `LOTUS_OPENED_MS`, so it cannot drift
+ * by itself; the delay is set inline from `ENTRY_OPENED_MS`, so it cannot drift
  * from the bloom's own length. Once JavaScript is alive the class is removed and
  * the component's clock decides.
  *
@@ -49,6 +49,12 @@
   to {
     transform: translateY(-12vh);
   }
+}
+
+/* The flower fills the rising column, which is capped by height as well as
+   width; on its own it sizes to the screen's width alone. */
+.rise .flower {
+  width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {

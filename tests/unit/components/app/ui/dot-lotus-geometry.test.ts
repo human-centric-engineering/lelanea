@@ -16,6 +16,8 @@ import { describe, expect, it } from 'vitest';
 import {
   HEART,
   HEART_RINGS,
+  MARK_VIEW,
+  OPENED_AT,
   PETALS,
   REST_T,
   TIMELINE,
@@ -95,6 +97,20 @@ describe('the petals', () => {
       expect(outline(PETALS[i].d)).toEqual(outline(d));
       expect(PETALS[i].angle).toBeCloseTo((Number(degrees ?? 0) * Math.PI) / 180, 9);
     });
+  });
+
+  it("are the small mark's petals too, cropped close and without the water (t-183)", () => {
+    const svg = readFileSync(path.join(process.cwd(), 'public/dot-lotus-mark.svg'), 'utf8');
+    const box = MARK_VIEW;
+    expect(svg).toContain(`viewBox="${box.x} ${box.y} ${box.width} ${box.height}"`);
+    const drawn = [...svg.matchAll(/<path d="(M0,0[^"]+)"(?: transform="rotate\(([-\d.]+)\)")?/g)];
+    expect(drawn).toHaveLength(PETALS.length);
+    drawn.forEach(([, d, degrees], i) => {
+      expect(outline(PETALS[i].d)).toEqual(outline(d));
+      expect(PETALS[i].angle).toBeCloseTo((Number(degrees ?? 0) * Math.PI) / 180, 9);
+    });
+    // The home flower's water lines are the only stroked paths; the mark has none.
+    expect(svg).not.toContain('stroke=');
   });
 
   it('come in three rings, outer to inner, each opening in its own order', () => {
@@ -228,6 +244,16 @@ describe('unfurling', () => {
 });
 
 describe('the timeline', () => {
+  it('is open once the last dot of the flower has arrived, and not before (t-183)', () => {
+    // What the entry bloom hands over on: lifting before it would cut the
+    // opening short; long after it, the reader waits on a flower already open.
+    const arrived = (d: ReturnType<typeof dotFlower>[number]) =>
+      d.delay + (d.kind === 'heart' ? 0.8 : TIMELINE.PETAL);
+    const last = Math.max(...dotFlower().map(arrived));
+    expect(OPENED_AT).toBeGreaterThanOrEqual(last);
+    expect(OPENED_AT - last).toBeLessThan(0.1);
+  });
+
   it.each([
     [0, 'unfurl'],
     [TIMELINE.HEART_AT - 0.01, 'unfurl'],

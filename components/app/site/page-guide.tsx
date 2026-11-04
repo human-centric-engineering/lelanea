@@ -51,7 +51,7 @@ export function PageGuide({ items, className }: { items: PageGuideItem[]; classN
   return (
     <nav className={cn(styles.guide, className)} aria-label="On this page">
       {/* Decorative: the brand's mark, not a link and not a heading. */}
-      <LotusMark size={40} water={false} />
+      <LotusMark size={40} />
       <p className="brand-eyebrow text-muted-foreground">on this page</p>
       <ol>
         {items.map((item, index) => (
