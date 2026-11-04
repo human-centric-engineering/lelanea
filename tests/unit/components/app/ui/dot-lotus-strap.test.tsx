@@ -108,26 +108,38 @@ describe('the strapline on the water', () => {
   });
 
   it('is written again when a flower that waits to be seen folds away', () => {
+    // The observer that decides whether it has been seen: the one that asks
+    // when half of it is in view.
     let report: IntersectionObserverCallback = () => undefined;
     vi.stubGlobal(
       'IntersectionObserver',
       class {
-        constructor(callback: IntersectionObserverCallback) {
-          report = callback;
+        constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+          if (Array.isArray(options?.threshold)) report = callback;
         }
         observe = () => undefined;
         disconnect = () => undefined;
       }
     );
+    stubBox(470, 448);
     render(<DotLotus strap={WORDS} startInView />);
+    const seen = (ratio: number) =>
+      act(() => {
+        report(
+          [{ isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
+          {} as IntersectionObserver
+        );
+      });
+    // Not yet seen, so leaving the screen has nothing to take back.
+    const unseen = strap().querySelector('text');
+    seen(0);
+    expect(strap().querySelector('text')).toBe(unseen);
+    // Seen, then gone: a fresh line, held with the folded flower.
+    seen(1);
     const first = strap().querySelector('text');
-    act(() => {
-      report(
-        [{ isIntersecting: false, intersectionRatio: 0 } as IntersectionObserverEntry],
-        {} as IntersectionObserver
-      );
-    });
+    seen(0);
     expect(strap().querySelector('text')).not.toBe(first);
+    expect(strap().parentElement).not.toHaveAttribute('data-playing');
   });
 
   it('starts its letters as the flower finishes opening', () => {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { DotLotus } from '@/components/app/ui/dot-lotus';
+import { seenTimeout } from '@/components/app/ui/seen-timeout';
 import { OPENED_AT } from '@/components/app/ui/dot-lotus-geometry';
 import { SHELL_OVERLAY_ATTR } from '@/components/app/shell/use-shell-layout';
 import { cn } from '@/lib/utils';
@@ -123,6 +124,9 @@ export function EntryBloom() {
     decided.current = true;
     if (shownThisDocument || failsafeHasRun(cover.current)) setPhase('done');
     shownThisDocument = true;
+    // Before the first frame that runs the rise, so a tab loaded in the
+    // background never starts it.
+    setSeen(!document.hidden);
     setHydrated(true);
   }, []);
 
@@ -135,17 +139,12 @@ export function EntryBloom() {
 
   useEffect(() => {
     if (!hydrated || phase !== 'showing') return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const count = () => {
-      clearTimeout(timer);
-      setSeen(!document.hidden);
-      if (!document.hidden) timer = setTimeout(lift, BACKSTOP_MS);
-    };
-    count();
-    document.addEventListener('visibilitychange', count);
+    const onVisibility = () => setSeen(!document.hidden);
+    document.addEventListener('visibilitychange', onVisibility);
+    const cancel = seenTimeout(lift, BACKSTOP_MS);
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', count);
+      cancel();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [hydrated, phase, lift]);
 

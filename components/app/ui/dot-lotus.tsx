@@ -15,6 +15,7 @@ import {
   type DotLayout,
 } from '@/components/app/ui/dot-lotus-paint';
 import { DotLotusStrap } from '@/components/app/ui/dot-lotus-strap';
+import { seenTimeout } from '@/components/app/ui/seen-timeout';
 import { useReducedMotion } from '@/components/app/ui/use-reduced-motion';
 import styles from '@/components/app/ui/dot-lotus.module.css';
 
@@ -39,9 +40,10 @@ export interface DotLotusProps {
    */
   strap?: string;
   /**
-   * Called once, when the flower has opened: on its own clock, which stands
+   * Called once, when the flower first opens: on its own clock, which stands
    * still while it is off screen or its tab is hidden. Where no canvas paints,
-   * the flat flower stands in for an opening of the same length.
+   * the flat flower stands in for an opening of the same length of seen time —
+   * except for a flower that waits to be seen, which reports nothing there.
    */
   onOpened?: () => void;
   className?: string;
@@ -121,17 +123,11 @@ export function DotLotus({
     // shown still, it is open already.
     if (!ctx) {
       host.dataset.lit = 'false';
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const count = () => {
-        clearTimeout(timer);
-        if (!document.hidden) timer = setTimeout(open, OPENED_AT * 1000);
-      };
+      let cancel = () => {};
       if (still) open();
-      else count();
-      document.addEventListener('visibilitychange', count);
+      else if (!startInView) cancel = seenTimeout(open, OPENED_AT * 1000);
       return () => {
-        clearTimeout(timer);
-        document.removeEventListener('visibilitychange', count);
+        cancel();
         delete host.dataset.lit;
       };
     }
@@ -246,11 +242,14 @@ export function DotLotus({
               const entry = entries[entries.length - 1];
               if (!entry.isIntersecting) {
                 // Out of sight, back to nothing, so a return unfolds from the
-                // start rather than showing the last open frame first.
-                started = false;
-                replay();
-                // Its words go back with it, to be written again.
-                setStrapRun((n) => n + 1);
+                // start rather than showing the last open frame first — and
+                // its words go back with it, to be written again. Only once it
+                // has started: before then there is nothing to take back.
+                if (started) {
+                  started = false;
+                  replay();
+                  setStrapRun((n) => n + 1);
+                }
               } else if (!started && entry.intersectionRatio >= 0.5) {
                 started = true;
                 replay();
