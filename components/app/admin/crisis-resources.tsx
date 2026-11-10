@@ -383,7 +383,7 @@ function CopyForm({
         <StatusBadge status={copy.status} version={copy.version} signedOffAt={copy.signedOffAt} />
       </div>
 
-      <form onSubmit={(event) => void save(event)} className="space-y-4" noValidate>
+      <form method="post" onSubmit={(event) => void save(event)} className="space-y-4" noValidate>
         {COPY_FIELDS.map((field) => {
           const id = `crisis-copy-${field.key}`;
           const Control = field.multiline ? Textarea : Input;
@@ -635,6 +635,7 @@ function RegionEditor(
 
   return (
     <form
+      method="post"
       onSubmit={(event) => void save(event)}
       noValidate
       className="space-y-4 rounded-md border border-dashed p-4"

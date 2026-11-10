@@ -30,6 +30,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { FieldHelp } from '@/components/ui/field-help';
 import { ClientDate } from '@/components/ui/client-date';
+import { SaveError } from '@/components/forms/form-error';
+import { useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import type { PaginationMeta } from '@/types/api';
@@ -158,11 +160,13 @@ function SettingsForm({
     initialSettings ? String(initialSettings.defaultMonthlyCeilingUsd) : ''
   );
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const save = useSaveFailure({
+    fallback: 'The settings did not save. Nothing was changed — try again.',
+  });
   const [saved, setSaved] = useState(false);
 
-  const onSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const onSubmit = async (event?: React.BaseSyntheticEvent) => {
+    event?.preventDefault();
     setSaved(false);
 
     const firstWordsDeadlineMs = secondsToMs(firstWords);
@@ -170,12 +174,11 @@ function SettingsForm({
     const defaultMonthlyCeilingUsd = parseUsd(ceiling);
     const problem = checkSettings(firstWordsDeadlineMs, turnDeadlineMs, defaultMonthlyCeilingUsd);
     if (problem) {
-      setError(problem);
+      save.show(problem);
       return;
     }
 
     setSaving(true);
-    setError(null);
     try {
       const response = await fetch(AGENT_SETTINGS_ENDPOINT, {
         method: 'PUT',
@@ -185,14 +188,14 @@ function SettingsForm({
       });
       const parsed = await parseApiResponse<{ settings: SettingsJson }>(response);
       if (!parsed.success) {
-        setError(errorMessage(parsed.error));
+        save.show(errorMessage(parsed.error));
         return;
       }
       setSettings(parsed.data.settings);
       setSaved(true);
       onSaved();
-    } catch {
-      setError('The settings did not save. Nothing was changed — try again.');
+    } catch (err) {
+      save.report(err);
     } finally {
       setSaving(false);
     }
@@ -218,7 +221,8 @@ function SettingsForm({
       </div>
 
       <form
-        onSubmit={(event) => void onSubmit(event)}
+        method="post"
+        onSubmit={save.submit(onSubmit)}
         className="grid max-w-xl gap-4 sm:grid-cols-3"
         noValidate
       >
@@ -283,22 +287,19 @@ function SettingsForm({
           />
         </div>
 
-        <div className="flex items-center gap-3 sm:col-span-3">
-          <Button type="submit" disabled={!settings || saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-          {saved && !error && (
-            <span role="status" className="text-muted-foreground text-sm">
-              Saved.
-            </span>
-          )}
+        <div className="space-y-2 sm:col-span-3">
+          <SaveError failure={save.failure} />
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={!settings || saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+            {saved && !save.failure && (
+              <span role="status" className="text-muted-foreground text-sm">
+                Saved.
+              </span>
+            )}
+          </div>
         </div>
-
-        {error && (
-          <p role="alert" className="text-destructive text-sm sm:col-span-3">
-            {error}
-          </p>
-        )}
       </form>
     </section>
   );
@@ -506,7 +507,7 @@ function BudgetRow({
 }) {
   const [value, setValue] = useState(user.overrideUsd === null ? '' : String(user.overrideUsd));
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const save = useSaveFailure({ fallback: 'That did not save. Nothing was changed — try again.' });
 
   // Re-seed when the row is replaced from outside (a page change, a reload).
   useEffect(() => {
@@ -514,14 +515,14 @@ function BudgetRow({
   }, [user.overrideUsd]);
 
   const send = async (method: 'PUT' | 'DELETE') => {
-    setError(null);
+    save.clear();
     let body: string | undefined;
     if (method === 'PUT') {
       const monthlyCeilingUsd = parseUsd(value);
-      if (monthlyCeilingUsd === null) return setError('Enter an amount, or Clear.');
-      if (monthlyCeilingUsd < 0) return setError('A limit cannot be negative.');
+      if (monthlyCeilingUsd === null) return save.show('Enter an amount, or Clear.');
+      if (monthlyCeilingUsd < 0) return save.show('A limit cannot be negative.');
       if (monthlyCeilingUsd > MAX_MONTHLY_CEILING_USD) {
-        return setError(`A limit cannot be more than ${usd.format(MAX_MONTHLY_CEILING_USD)}.`);
+        return save.show(`A limit cannot be more than ${usd.format(MAX_MONTHLY_CEILING_USD)}.`);
       }
       body = JSON.stringify({ monthlyCeilingUsd });
     }
@@ -535,10 +536,10 @@ function BudgetRow({
         body,
       });
       const parsed = await parseApiResponse<{ budget: UserBudgetRow }>(response);
-      if (!parsed.success) return setError(errorMessage(parsed.error));
+      if (!parsed.success) return save.show(errorMessage(parsed.error));
       onChange(parsed.data.budget);
-    } catch {
-      setError('That did not save. Nothing was changed — try again.');
+    } catch (err) {
+      save.report(err);
     } finally {
       setBusy(false);
     }
@@ -584,11 +585,9 @@ function BudgetRow({
             </Button>
           )}
         </div>
-        {error && (
-          <p role="alert" className="text-destructive mt-1 text-xs">
-            {error}
-          </p>
-        )}
+        <div className="mt-1">
+          <SaveError failure={save.failure} />
+        </div>
       </td>
     </tr>
   );

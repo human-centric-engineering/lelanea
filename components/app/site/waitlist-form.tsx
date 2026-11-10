@@ -185,6 +185,7 @@ export function WaitlistForm() {
 
   return (
     <form
+      method="post"
       // `scroll-margin-top` is what keeps the heading clear of the sticky bar
       // when the header's CTA lands here; 78px of bar plus room to breathe.
       className={CARD}

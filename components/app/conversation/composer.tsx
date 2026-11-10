@@ -162,6 +162,8 @@ export function Composer({
 
   return (
     <form
+      method="post"
+      noValidate
       className="flex-none px-6 pt-2 pb-5 max-[760px]:px-3.5 max-[760px]:pb-4"
       onSubmit={(event) => {
         event.preventDefault();

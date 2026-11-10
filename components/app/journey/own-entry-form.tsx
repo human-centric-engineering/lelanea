@@ -33,6 +33,8 @@ export function OwnEntryForm({
 
   return (
     <form
+      method="post"
+      noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();

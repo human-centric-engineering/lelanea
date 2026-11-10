@@ -87,6 +87,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ClientDate } from '@/components/ui/client-date';
+import { SaveError } from '@/components/forms/form-error';
+import { useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import type { PaginationMeta } from '@/types/api';
@@ -96,7 +98,7 @@ import {
   WAITLIST_ADMIN_EXPORT_ENDPOINT,
   waitlistAdminInviteEndpoint,
 } from '@/lib/app/waitlist/endpoint';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import type { EmailStatus } from '@/lib/email/send';
 
@@ -274,7 +276,11 @@ export function WaitlistTable({
   const [inviteName, setInviteName] = useState('');
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // A row action's failure, not the list's load: one box above the table for
+  // every row, each message naming its person (§124).
+  const rowSave = useSaveFailure({ fallback: 'That did not save. Try again.' });
+  const { clear: clearRowSave, report: reportRowSave } = rowSave;
   const [notice, setNotice] = useState<InviteNotice | null>(null);
   const { copied, copy } = useCopyToClipboard();
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -319,7 +325,7 @@ export function WaitlistTable({
       requestSeqRef.current = seq;
 
       setIsLoading(true);
-      setError(null);
+      setLoadError(null);
       try {
         const params = new URLSearchParams({ page: String(page), limit: String(meta.limit) });
         if (term) params.set('q', term);
@@ -365,7 +371,7 @@ export function WaitlistTable({
         // Said out loud rather than swallowed: a table that silently keeps showing
         // the previous page after a failed fetch reads as "these are the matches"
         // when they are not.
-        setError('That did not load. Try again.');
+        setLoadError('That did not load. Try again.');
       } finally {
         if (requestSeqRef.current === seq) setIsLoading(false);
       }
@@ -421,9 +427,9 @@ export function WaitlistTable({
    * the pagination totals move and the page has to be re-read to stay honest.
    */
   const setRemoved = useCallback(
-    async (id: string, removed: boolean) => {
+    async (id: string, email: string, removed: boolean) => {
       setMutatingId(id);
-      setError(null);
+      clearRowSave();
       try {
         // `{ body: … }`, not the body directly — `apiClient.patch(path, options)`
         // takes an options bag, and passing the payload in its place sends an
@@ -431,18 +437,12 @@ export function WaitlistTable({
         await apiClient.patch(`${WAITLIST_ADMIN_ENDPOINT}/${id}`, { body: { removed } });
         await fetchPage(meta.page, appliedSearch, appliedFilters);
       } catch (err) {
-        setError(
-          err instanceof APIClientError
-            ? err.message
-            : removed
-              ? 'That entry was not removed. Try again.'
-              : 'That entry was not restored. Try again.'
-        );
+        reportRowSave(err, removed ? `${email} was not removed` : `${email} was not restored`);
       } finally {
         setMutatingId(null);
       }
     },
-    [appliedFilters, appliedSearch, fetchPage, meta.page]
+    [appliedFilters, appliedSearch, fetchPage, meta.page, clearRowSave, reportRowSave]
   );
 
   /**
@@ -455,22 +455,20 @@ export function WaitlistTable({
    * `fetchPage` already re-reads the last page that exists.
    */
   const eraseEntry = useCallback(
-    async (id: string) => {
+    async (id: string, email: string) => {
       setMutatingId(id);
-      setError(null);
+      clearRowSave();
       setNotice(null);
       try {
         await apiClient.delete(`${WAITLIST_ADMIN_ENDPOINT}/${id}`);
         await fetchPage(meta.page, appliedSearch, appliedFilters);
       } catch (err) {
-        setError(
-          err instanceof APIClientError ? err.message : 'That entry was not erased. Try again.'
-        );
+        reportRowSave(err, `${email} was not erased`);
       } finally {
         setMutatingId(null);
       }
     },
-    [appliedFilters, appliedSearch, fetchPage, meta.page]
+    [appliedFilters, appliedSearch, fetchPage, meta.page, clearRowSave, reportRowSave]
   );
 
   /**
@@ -485,9 +483,9 @@ export function WaitlistTable({
    * the page loaded; the route's message says which, and the re-fetch shows it.
    */
   const sendInvite = useCallback(
-    async (id: string, name: string) => {
+    async (id: string, email: string, name: string) => {
       setMutatingId(id);
-      setError(null);
+      clearRowSave();
       setNotice(null);
       try {
         const result = await apiClient.post<InviteResult>(waitlistAdminInviteEndpoint(id), {
@@ -511,17 +509,14 @@ export function WaitlistTable({
         );
         await fetchPage(meta.page, appliedSearch, appliedFilters);
       } catch (err) {
-        // The row may have moved (a 409 says so); show it as it stands — and
-        // only THEN say why, because `fetchPage` clears the error on its way in.
+        // The row may have moved (a 409 says so): say why, and show it as it stands.
+        reportRowSave(err, `The invitation to ${email} was not sent`);
         await fetchPage(meta.page, appliedSearch, appliedFilters);
-        setError(
-          err instanceof APIClientError ? err.message : 'That invitation was not sent. Try again.'
-        );
       } finally {
         setMutatingId(null);
       }
     },
-    [appliedFilters, appliedSearch, fetchPage, meta.page]
+    [appliedFilters, appliedSearch, fetchPage, meta.page, clearRowSave, reportRowSave]
   );
 
   const openInvite = useCallback((entry: WaitlistAdminEntry) => {
@@ -596,11 +591,12 @@ export function WaitlistTable({
         </div>
       </div>
 
-      {error && (
+      {loadError && (
         <p role="alert" className="text-destructive text-sm">
-          {error}
+          {loadError}
         </p>
       )}
+      <SaveError failure={rowSave.failure} />
       {notice && (
         <div
           role="status"
@@ -764,7 +760,7 @@ export function WaitlistTable({
                               });
                               return;
                             }
-                            void setRemoved(entry.id, false);
+                            void setRemoved(entry.id, entry.email, false);
                           }}
                         >
                           <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden />
@@ -917,7 +913,7 @@ export function WaitlistTable({
               onClick={() => {
                 const target = pendingRemoval;
                 setPendingRemoval(null);
-                if (target) void setRemoved(target.id, true);
+                if (target) void setRemoved(target.id, target.email, true);
               }}
             >
               Remove from waitlist
@@ -970,7 +966,7 @@ export function WaitlistTable({
               onClick={() => {
                 const target = pendingRestore;
                 setPendingRestore(null);
-                if (target) void setRemoved(target.id, false);
+                if (target) void setRemoved(target.id, target.email, false);
               }}
             >
               Put back on the list
@@ -1022,7 +1018,7 @@ export function WaitlistTable({
               onClick={() => {
                 const target = pendingErasure;
                 setPendingErasure(null);
-                if (target) void eraseEntry(target.id);
+                if (target) void eraseEntry(target.id, target.email);
               }}
             >
               Delete their data
@@ -1049,13 +1045,15 @@ export function WaitlistTable({
       >
         <DialogContent>
           <form
+            method="post"
+            noValidate
             onSubmit={(event) => {
               event.preventDefault();
               const target = pendingInvite;
               const name = inviteName.trim();
               if (!target || !name) return;
               setPendingInvite(null);
-              void sendInvite(target.id, name);
+              void sendInvite(target.id, target.email, name);
             }}
           >
             <DialogHeader>

@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { parseApiResponse } from '@/lib/api/parse-response';
+import { unreadableNumbers } from '@/lib/errors/save-error';
 import {
   SLOT_DEFINITIONS_ENDPOINT,
   SLOT_TAXONOMY_EXPORT_ENDPOINT,
@@ -426,10 +427,16 @@ function DefinitionForm({
 
   return (
     <form
+      method="post"
+      noValidate
       aria-label={`Edit ${loaded.slug}`}
       className="grid gap-4 sm:grid-cols-2"
       onSubmit={(event) => {
         event.preventDefault();
+        // `noValidate` means the browser no longer stops a number it cannot read
+        // ("1e"), which it reports as '' and `toPayload` would send as 0.
+        const unreadable = unreadableNumbers(event.currentTarget);
+        if (unreadable) return onError(unreadable.message);
         void save();
       }}
     >
@@ -520,10 +527,16 @@ function AddDefinitionForm({
 
   return (
     <form
+      method="post"
+      noValidate
       aria-label="Add a data slot"
       className="bg-muted/40 grid gap-4 rounded-md border p-4 sm:grid-cols-2"
       onSubmit={(event) => {
         event.preventDefault();
+        // `noValidate` means the browser no longer stops a number it cannot read
+        // ("1e"), which it reports as '' and `toPayload` would send as 0.
+        const unreadable = unreadableNumbers(event.currentTarget);
+        if (unreadable) return onError(unreadable.message);
         void add();
       }}
     >
