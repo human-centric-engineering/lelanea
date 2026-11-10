@@ -31,7 +31,7 @@ import { Switch } from '@/components/ui/switch';
 import { FieldHelp } from '@/components/ui/field-help';
 import { ClientDate } from '@/components/ui/client-date';
 import { SaveError } from '@/components/forms/form-error';
-import { useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import type { PaginationMeta } from '@/types/api';
@@ -162,6 +162,7 @@ function SettingsForm({
   const [saving, setSaving] = useState(false);
   const save = useSaveFailure({
     fallback: 'The settings did not save. Nothing was changed — try again.',
+    fields: NO_SERVER_FIELDS,
   });
   const [saved, setSaved] = useState(false);
 
@@ -507,7 +508,10 @@ function BudgetRow({
 }) {
   const [value, setValue] = useState(user.overrideUsd === null ? '' : String(user.overrideUsd));
   const [busy, setBusy] = useState(false);
-  const save = useSaveFailure({ fallback: 'That did not save. Nothing was changed — try again.' });
+  const save = useSaveFailure({
+    fallback: 'That did not save. Nothing was changed — try again.',
+    fields: NO_SERVER_FIELDS,
+  });
 
   // Re-seed when the row is replaced from outside (a page change, a reload).
   useEffect(() => {

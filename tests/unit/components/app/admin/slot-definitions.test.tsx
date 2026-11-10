@@ -214,6 +214,30 @@ describe('rewording a slot', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/version 3, now 5/);
   });
 
+  it.each([
+    ['150', 'A priority weight is between 0 and 100.'],
+    ['2.5', 'A priority weight is a whole number.'],
+    ['', 'A priority weight is a whole number.'],
+  ])(
+    'holds the route’s priority rule itself: %j is refused before anything is sent',
+    async (typed, message) => {
+      // The form sets noValidate, so the input's min/max no longer stop Save. A
+      // blank one matters most: `Number('')` would have gone over as 0.
+      const user = userEvent.setup();
+      render(<SlotDefinitionsPanel initialView={VIEW} />);
+
+      await user.click(screen.getByRole('button', { name: 'Edit' }));
+      const form = screen.getByRole('form', { name: 'Edit life_work' });
+      const priority = within(form).getByLabelText('Asked how early');
+      await user.clear(priority);
+      if (typed) await user.type(priority, typed);
+      await user.click(within(form).getByRole('button', { name: 'Save v3' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(message);
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
+
   it('says plainly when a save changed nothing, rather than implying a new version', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(

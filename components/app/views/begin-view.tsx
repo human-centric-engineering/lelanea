@@ -7,7 +7,7 @@ import { Button } from '@/components/app/ui/button';
 import { useConsentBannerClearance } from '@/components/app/ui/consent-clearance';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
-import { useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { SaveError } from '@/components/forms/form-error';
 import { logger } from '@/lib/logging';
 import {
@@ -160,7 +160,7 @@ export interface BeginViewProps {
 export function BeginView({ initialStatus, documents }: BeginViewProps) {
   const [status, setStatus] = React.useState<GateStatusJson>(initialStatus);
   const [busy, setBusy] = React.useState(false);
-  const save = useSaveFailure({ fallback: DID_NOT_LAND });
+  const save = useSaveFailure({ fallback: DID_NOT_LAND, fields: NO_SERVER_FIELDS });
   // The cookie banner is fixed over the bottom of the page, where each step's
   // button is pinned. Padding by its height keeps the button above it (t-117).
   const clearance = useConsentBannerClearance();

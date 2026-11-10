@@ -84,7 +84,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FieldHelp } from '@/components/ui/field-help';
 import { ClientDate } from '@/components/ui/client-date';
 import { SaveError } from '@/components/forms/form-error';
-import { useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import type { PaginationMeta } from '@/types/api';
@@ -226,7 +226,10 @@ export function DesignationTable({
   const [loadError, setLoadError] = useState<string | null>(null);
   // A row's save, not the list's load: one box above the table for every row,
   // so a failure on a row far down the page is brought into view (§124).
-  const rowSave = useSaveFailure({ fallback: 'That did not save. Try again.' });
+  const rowSave = useSaveFailure({
+    fallback: 'That did not save. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
   const { clear: clearRowSave, show: showRowSave, report: reportRowSave } = rowSave;
   /** The document whose licensing note is being edited, and the draft text. */
   const [licensingDraft, setLicensingDraft] = useState<{ id: string; text: string } | null>(null);

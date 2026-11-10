@@ -5,7 +5,7 @@ import { useEffect, useId, useState } from 'react';
 import { Chip } from '@/components/app/ui/chip';
 import { useTheme } from '@/hooks/use-theme';
 import { apiClient } from '@/lib/api/client';
-import { useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { SaveError } from '@/components/forms/form-error';
 import { cn } from '@/lib/utils';
 import {
@@ -174,7 +174,10 @@ function LeaningsPanel({ initial }: { initial: LeaningsView }) {
 function LeaningDial({ initial, describedBy }: { initial: LeaningDialView; describedBy: string }) {
   const [dial, setDial] = useState(initial);
   const [saving, setSaving] = useState(false);
-  const save = useSaveFailure({ fallback: 'That didn’t save. Try again.' });
+  const save = useSaveFailure({
+    fallback: 'That didn’t save. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
   const name = useId();
   const errorId = useId();
 

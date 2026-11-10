@@ -88,7 +88,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ClientDate } from '@/components/ui/client-date';
 import { SaveError } from '@/components/forms/form-error';
-import { useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import type { PaginationMeta } from '@/types/api';
@@ -279,7 +279,10 @@ export function WaitlistTable({
   const [loadError, setLoadError] = useState<string | null>(null);
   // A row action's failure, not the list's load: one box above the table for
   // every row, each message naming its person (§124).
-  const rowSave = useSaveFailure({ fallback: 'That did not save. Try again.' });
+  const rowSave = useSaveFailure({
+    fallback: 'That did not save. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
   const { clear: clearRowSave, report: reportRowSave } = rowSave;
   const [notice, setNotice] = useState<InviteNotice | null>(null);
   const { copied, copy } = useCopyToClipboard();

@@ -248,6 +248,18 @@ function toPayload(draft: DraftFields) {
   };
 }
 
+/**
+ * The route's rule for `priorityWeight` (`lib/app/slots/validation.ts`), held on
+ * Save too: the form sets `noValidate`, so the input's `min`/`max` no longer
+ * stop a press. Same words as the route's, so either says the same thing.
+ */
+function checkPriority(value: string): string | null {
+  const n = Number(value);
+  if (value.trim() === '' || !Number.isInteger(n)) return 'A priority weight is a whole number.';
+  if (n < 0 || n > 100) return 'A priority weight is between 0 and 100.';
+  return null;
+}
+
 function FieldRow({
   id,
   label,
@@ -437,6 +449,8 @@ function DefinitionForm({
         // ("1e"), which it reports as '' and `toPayload` would send as 0.
         const unreadable = unreadableNumbers(event.currentTarget);
         if (unreadable) return onError(unreadable.message);
+        const priorityProblem = checkPriority(draft.priorityWeight);
+        if (priorityProblem) return onError(priorityProblem);
         void save();
       }}
     >
@@ -537,6 +551,8 @@ function AddDefinitionForm({
         // ("1e"), which it reports as '' and `toPayload` would send as 0.
         const unreadable = unreadableNumbers(event.currentTarget);
         if (unreadable) return onError(unreadable.message);
+        const priorityProblem = checkPriority(draft.priorityWeight);
+        if (priorityProblem) return onError(priorityProblem);
         void add();
       }}
     >

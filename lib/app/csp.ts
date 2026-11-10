@@ -55,6 +55,7 @@
  * that a fork which has filled `appFrameSrc` takes them in an upgrade without a
  * merge conflict. Keep `appFrameSrc` last.)
  */
+import { AUDIO_MEDIA_ORIGINS } from '@/lib/app/content/audio-hosts';
 import { YOUTUBE_EMBED_ORIGIN } from '@/lib/app/content/video-hosts';
 
 /** Extra `script-src` origins. Empty = platform default (`'self'` plus the per-request nonce). */
@@ -62,7 +63,7 @@ export const appScriptSrc: string[] = [];
 /** Extra `connect-src` origins. Empty = platform default (`'self'` only in production). */
 export const appConnectSrc: string[] = [];
 /** Extra `media-src` origins. Empty = platform default (`'self'` and `blob:`). */
-export const appMediaSrc: string[] = [];
+export const appMediaSrc: string[] = [...AUDIO_MEDIA_ORIGINS];
 
 /**
  * Extra `frame-src` origins. Empty = platform default (`'self'` only).
