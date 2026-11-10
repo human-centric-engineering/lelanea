@@ -305,6 +305,24 @@ describe('forgetDeletedConversations', () => {
     }
   });
 
+  it('names a failure that is not an Error, and counts it against its conversation', async () => {
+    const deleteMany = prismaFake.appTurn.deleteMany.getMockImplementation()!;
+    prismaFake.appTurn.deleteMany.mockRejectedValue('deadlock detected');
+    try {
+      const result = await forgetDeletedConversations([DELETED], { userId: ME });
+
+      expect(result.failed).toBe(2);
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('Could not forget'), {
+        conversationId: DELETED,
+        turns: 2,
+        attempts: 1,
+        error: 'deadlock detected',
+      });
+    } finally {
+      prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);
+    }
+  });
+
   it('changes nothing on a second run', async () => {
     await forgetDeletedConversations([DELETED], { userId: ME });
     const after = JSON.stringify(world.values);
@@ -526,5 +544,29 @@ describe('onConversationsDeleted', () => {
       error: 'connection reset',
     });
     expect(world.turns.filter((row) => row.conversationId === DELETED)).toHaveLength(2);
+  });
+
+  it('still never throws when what fails is not an Error, and says what it was', async () => {
+    // A driver or a hook can reject with a bare string. The promise above has
+    // to hold whatever is thrown, and the log must still name it.
+    prismaFake.aiConversation.findMany.mockRejectedValueOnce('socket hang up');
+
+    await expect(
+      onConversationsDeleted({ conversationIds: [DELETED], userId: ME })
+    ).resolves.toBeUndefined();
+
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('the sweep will'), {
+      conversations: 1,
+      error: 'socket hang up',
+    });
+  });
+
+  it('forgets every owner’s turns when no person is named, as the sweep does', async () => {
+    world.conversations = world.conversations.filter((row) => row.id !== THEIRS);
+
+    await onConversationsDeleted({ conversationIds: [DELETED, THEIRS] });
+
+    expect(world.turns.some((row) => row.conversationId === DELETED)).toBe(false);
+    expect(world.turns.some((row) => row.conversationId === THEIRS)).toBe(false);
   });
 });
