@@ -14,9 +14,10 @@
  * Its inputs are FILES, and it imports none of them. A branch that renames a
  * component reaches this through no module graph, and a branch that only edits
  * markdown reaches it through none either — so a scoped run would skip it on
- * exactly the two branches that break it. That is the condition
- * `scripts/ci/scoped-tests.ts` describes for appending, and this is the third
- * leaf entry (see `.context/app/platform-divergences.md` row 4).
+ * exactly the two branches that break it. That is the condition for an
+ * always-run test, so it is declared in `leafAlwaysRunTests`
+ * (`lib/app/leaf-ci.ts`), never in `scripts/ci/scoped-tests.ts`, which is
+ * Sunrise's (retired divergence row 4).
  *
  * `.test.ts`, deliberately, and not `.tsx`: `validateAlwaysRun` rejects a
  * `.test.tsx` path outright and aborts the runner — `sunrise#763`.

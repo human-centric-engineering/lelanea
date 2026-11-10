@@ -284,12 +284,11 @@ describe('forgetDeletedConversations', () => {
 
   // A driver can reject with a bare string; the log must name it either way.
   it.each([
-    ['an Error', new Error('lock timeout'), 'lock timeout'],
-    ['not an Error', 'lock timeout', 'lock timeout'],
+    ['an Error', new Error('lock timeout')],
+    ['not an Error', 'lock timeout'],
   ])(
     'carries on for everyone else when one person’s forgetting fails (%s)',
-    async (_kind, failure, logged) => {
-      world.conversations = world.conversations.filter((row) => row.id !== THEIRS);
+    async (_kind, failure) => {
       const deleteMany = prismaFake.appTurn.deleteMany.getMockImplementation()!;
       prismaFake.appTurn.deleteMany.mockImplementation(async (args) => {
         // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the case under test: a rejection that may not be an Error
@@ -305,7 +304,7 @@ describe('forgetDeletedConversations', () => {
           conversationId: DELETED,
           turns: 2,
           attempts: 1,
-          error: logged,
+          error: 'lock timeout',
         });
       } finally {
         prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);

@@ -39,7 +39,9 @@ carried for, as `sunrise#N` or `daybreak#N`: the Hub reads this file from
 `main` and counts those rows. `none` says why no upstream change should remove
 the row; an edit an upstream ought to make possible is an issue to file, in
 the same PR. **Every row has a deletion
-trigger**, checked at every sync; without one the ledger only grows.
+trigger**, checked at every sync; without one the ledger only grows. A row that
+no change should ever remove (our own terms page) says so in its trigger, as
+permanent, rather than leaving it blank.
 
 The table is the index. Each row's full record (what exactly changed, what
 forced it, how to resolve a conflict, the upstream history, the deletion
@@ -91,7 +93,10 @@ the issue closed.
 | 30  | `lib/orchestration/llm/model-registry.ts`, `lib/tenancy/process-state.ts` (Sunrise)                                                                                                                                            | A code-registered price survives a matrix hydrate                                            | The pinned model's exact rate has no other home in a cold process                                                   | Re-apply the option, the map, the branch, the refresh loop and the reset line      | `none` — Sunrise declined `sunrise#984`; the move off this edit is t-175                        | t-175 merges: the price lives on a matrix row                        |
 | 31  | `CLAUDE.md` (Daybreak's Hub block)                                                                                                                                                                                             | Daybreak's `hce-hub:bootstrap` block deleted; ours is the only one                           | Left in, it points our agents at Daybreak's Hub project                                                             | Keep the deletion                                                                  | `daybreak#330`                                                                                  | Daybreak stops committing a Hub block                                |
 
-Next row: 32
+| 32 | `app/(public)/page.tsx` (Sunrise) | Replaced whole: Lelañea's home page, with `generateMetadata` reading her `purpose` sentence | The starter's home page is a placeholder; Sunrise's own answer is the thin shim, not yet done here | Keep mine, wholesale | `none` — the move to the thin shim is ours: t-191 | t-191 merges: the route is a one-line re-export |
+| 33 | `.prettierignore` (Sunrise) | `.context/app/planning/` excluded from formatting | Prettier has no fork seam, and the planning prototype fails its HTML parser, failing `format:check` | Take theirs, re-add the entry and its comment | `sunrise#1211` | A fork-owned ignore file the format scripts read |
+| 34 | `tests/unit/lib/daybreak-version.test.ts` (Daybreak) | The `DAYBREAK_VERSION === package.json` parity case removed, with the reason recorded in place | False by design in a leaf: our `package.json` carries our version | Take theirs, delete the parity case again; never restore it | `daybreak#331` | The case skips itself outside Daybreak's repo |
+Next row: 35
 
 ## Retired rows
 
@@ -424,3 +429,36 @@ every sync since. Cite rows by number.
 - **Merge action:** Keep the deletion. If Daybreak regenerates its block, the conflict is a modify/delete of that region; resolve it by deleting the block again, and re-run `get_project_bootstrap` for ours if the Hub's wording has moved on.
 - **Upstream:** [`daybreak#330`](https://github.com/human-centric-engineering/daybreak/issues/330), filed 10 November 2026: keep Daybreak's bootstrap in a gitignored `CLAUDE.local.md`, the road Sunrise offers, so no leaf inherits it. Daybreak's 0.8.0 changelog asks a leaf to delete the block; this asks Daybreak to stop committing it.
 - **Delete when:** Daybreak stops committing a Hub block (for example by moving it to `CLAUDE.local.md`, the road Sunrise offers).
+
+### Row 32
+
+**`app/(public)/page.tsx` — Lelañea's home page, replaced whole**
+
+- **File:** `app/(public)/page.tsx` (Sunrise; blob identical on `sunrise/main` and `daybreak/main`).
+- **Change:** The starter's placeholder home page replaced by ours: 287 lines, exporting `generateMetadata` (her `purpose` sentence, read per request; see row 24) and the page.
+- **Why no seam could carry it:** None was needed. Sunrise's answer for a marketing page is the thin shim (`CUSTOMIZATION.md` §6): move the page into a component the fork owns and reduce the route to a one-line `app:shim` re-export, which merges cleanly. Ours was written into the route file instead, and went unledgered until `/code-review` on t-190 found it.
+- **Merge action:** Keep mine, wholesale: a conflict means Sunrise edited its placeholder. Taking upstream would restore the starter's home page.
+- **Upstream:** `none`. Nothing upstream is missing; the shim is ours to do, as t-191.
+- **Delete when:** t-191 merges and the route is the shim. A shim is the routine edit Sunrise's ledger rules leave out, so the row then retires.
+
+### Row 33
+
+**`.prettierignore` — the planning material is not formatted**
+
+- **File:** `.prettierignore` (Sunrise; blob identical on `sunrise/main` and `daybreak/main`).
+- **Change:** One entry, `.context/app/planning/`, and the comment explaining it: the product description, the approved prototype (`.context/app/planning/design/lelanea.html`) and the exported design-system kit are source inputs the build reads, not source it maintains, and reformatting would rewrite authored copy and a signed-off prototype.
+- **Why no seam could carry it:** The format scripts read `.prettierignore` only. `lelanea.html` also fails Prettier's HTML parser outright (an implied-end-tag `SyntaxError`), which exits 2 and fails the whole `format:check`. Its ESLint twin needed no edit: it is a global ignore block in `lib/app/eslint.config.mjs` (moved there at t-190 from the root `eslint.config.mjs`, where it had been unledgered).
+- **Merge action:** Take theirs, re-add the entry and its comment at the end of the file.
+- **Upstream:** [`sunrise#1211`](https://github.com/human-centric-engineering/sunrise/issues/1211) (`upstream-gap`), filed 10 November 2026: a fork-owned ignore file the format scripts read beside core's.
+- **Delete when:** #1211 ships through Daybreak. Move the entry into the fork's ignore file and take upstream's `.prettierignore`.
+
+### Row 34
+
+**`tests/unit/lib/daybreak-version.test.ts` — the version-parity case removed**
+
+- **File:** `tests/unit/lib/daybreak-version.test.ts` (Daybreak; absent from `sunrise/main`).
+- **Change:** The case asserting `DAYBREAK_VERSION === packageJson.version` and its `package.json` import are removed, and a comment in their place says why. The rest of the file is unchanged.
+- **Why no seam could carry it:** In a leaf the assertion is false by design: `package.json` carries Lelañea's version and `DAYBREAK_VERSION` the framework's. Daybreak's own note on the case, and `building-on-daybreak.md` ("Two tests you are expected to adjust"), tell a leaf to delete it. The `CLAUDE.md` banner records it too.
+- **Merge action:** Take theirs, then delete the parity case again. Never restore it.
+- **Upstream:** [`daybreak#331`](https://github.com/human-centric-engineering/daybreak/issues/331), filed 10 November 2026: let the case tell which repo it runs in, so a leaf takes the file unchanged. The same class as `daybreak#258`.
+- **Delete when:** #331 ships in a Daybreak release we sync. Take the file as it is, and drop the banner's note.

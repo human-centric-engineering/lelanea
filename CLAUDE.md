@@ -5,8 +5,8 @@
 > This repository is **Lelañea**, an application built **on** the Daybreak
 > framework (`human-centric-engineering/daybreak`), which is itself built on the
 > Sunrise platform (`human-centric-engineering/sunrise`). Lelañea was cut from
-> Daybreak `daybreak-v0.2.0` and is currently synced to **`daybreak-v0.9.0`**
-> (Sunrise 0.16.0).
+> Daybreak `daybreak-v0.2.0` and is currently synced to **`daybreak-v0.11.0`**
+> (Sunrise 0.18.0).
 >
 > **You are building an app. You are not developing Daybreak, and you are not
 > developing Sunrise.** Everything below this banner is **Sunrise's own platform

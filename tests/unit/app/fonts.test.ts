@@ -116,7 +116,8 @@ describe('app/fonts.ts', () => {
     it('points at the ledger row that explains the edit', () => {
       // The comment is what stops a future sync resolving this conflict by
       // taking upstream and silently dropping the brand's typography.
-      expect(LAYOUT_SOURCE).toContain('platform-divergences.md');
+      // The full path and the rows: Daybreak's own ledger has the same file name.
+      expect(LAYOUT_SOURCE).toContain('.context/app/platform-divergences.md, rows 1 and 8');
     });
   });
 });
