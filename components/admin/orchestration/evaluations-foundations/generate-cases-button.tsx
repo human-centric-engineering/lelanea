@@ -48,18 +48,16 @@ import {
   type PreviewResult,
   type ProposedCase,
 } from '@/components/admin/orchestration/evaluations-foundations/case-review-step';
+import { SaveError } from '@/components/forms/form-error';
+import { apiErrorFromResponse } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 
 interface AgentOption {
   id: string;
   name: string;
   slug: string;
-}
-
-interface CommitResult {
-  datasetId: string;
-  appendedCount: number;
-  newCaseCount: number;
 }
 
 interface GenerateCasesButtonProps {
@@ -92,7 +90,13 @@ export function GenerateCasesButton({
 
   const [generating, setGenerating] = React.useState(false);
   const [committing, setCommitting] = React.useState(false);
+  // A failed generate (an LLM preview, nothing saved) keeps its own box.
   const [error, setError] = React.useState<string | null>(null);
+  // A refused save of the accepted cases: above the footer holding Save (§124).
+  const commitSave = useSaveFailure({
+    fallback: 'Could not save the cases. Try again in a moment.',
+    fields: NO_SERVER_FIELDS,
+  });
   const [preview, setPreview] = React.useState<PreviewResult | null>(null);
   const [selectedIndices, setSelectedIndices] = React.useState<Set<number>>(new Set());
 
@@ -100,13 +104,22 @@ export function GenerateCasesButton({
     setStep('configure');
     setPreview(null);
     setError(null);
+    commitSave.clear();
     setSelectedIndices(new Set());
   }
 
-  function handleOpen(next: boolean): void {
-    if (!next) reset();
-    setOpen(next);
+  function close(): void {
+    reset();
+    setOpen(false);
   }
+
+  // Committed while the cases are being saved: a refusal lands here.
+  const dialog = useCommittedDialog({
+    open,
+    pending: committing,
+    onClose: close,
+    clear: commitSave.clear,
+  });
 
   async function handleGenerate(): Promise<void> {
     if (!agentId) {
@@ -154,30 +167,26 @@ export function GenerateCasesButton({
 
   async function handleCommit(): Promise<void> {
     if (!preview) return;
+    commitSave.clear();
     const accepted = preview.cases.filter((_, i) => selectedIndices.has(i));
     if (accepted.length === 0) {
-      setError('Select at least one case to save.');
+      commitSave.show('Select at least one case to save.');
       return;
     }
     setCommitting(true);
-    setError(null);
     try {
       const res = await fetch(API.ADMIN.ORCHESTRATION.evalDatasetGenerateCasesCommit(datasetId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cases: accepted }),
       });
-      const payload = (await res.json()) as ApiSuccess<CommitResult> | ApiError;
-      if (!res.ok || !payload.success) {
-        setError(!payload.success ? payload.error.message : `Failed (${res.status})`);
-        return;
-      }
+      if (!res.ok) throw await apiErrorFromResponse(res);
       // Refresh the server-rendered dataset page so the new caseCount
       // + content hash + first-N case list reflect the synth.
       router.refresh();
-      handleOpen(false);
+      close();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      commitSave.report(err);
     } finally {
       setCommitting(false);
     }
@@ -194,11 +203,11 @@ export function GenerateCasesButton({
 
   return (
     <>
-      <Button variant="outline" onClick={() => handleOpen(true)}>
+      <Button variant="outline" onClick={() => setOpen(true)}>
         <Sparkles className="mr-1.5 h-4 w-4" aria-hidden />
         Generate cases
       </Button>
-      <Dialog open={open} onOpenChange={handleOpen}>
+      <Dialog open={open} onOpenChange={dialog.onOpenChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Generate dataset cases</DialogTitle>
@@ -235,11 +244,12 @@ export function GenerateCasesButton({
               {error}
             </div>
           ) : null}
+          <SaveError failure={commitSave.failure} />
 
           <DialogFooter>
             {step === 'configure' ? (
               <>
-                <Button variant="ghost" onClick={() => handleOpen(false)} disabled={generating}>
+                <Button variant="ghost" onClick={close} disabled={generating}>
                   Cancel
                 </Button>
                 <Button
@@ -256,12 +266,12 @@ export function GenerateCasesButton({
               </>
             ) : (
               <>
-                <Button variant="ghost" onClick={reset} disabled={committing}>
+                <Button variant="ghost" onClick={reset} {...dialog.cancelProps}>
                   Back
                 </Button>
                 <Button
-                  onClick={() => void handleCommit()}
-                  disabled={committing || selectedIndices.size === 0}
+                  {...dialog.actionProps({ disabled: selectedIndices.size === 0 })}
+                  onClick={(e) => dialog.confirm(e, handleCommit)}
                 >
                   {committing ? (
                     <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />

@@ -138,7 +138,13 @@ function isUserScalar(name: string, scalar: Scalar): boolean {
   );
 }
 
-function userColumnsOf(model: SchemaModel): Set<string> {
+/**
+ * The columns of `model` that hold a user's id: the keys of a relation to
+ * `User`, and the user-id scalars above. Also the tenancy guard's test of
+ * whether a user-owned model links to a user (t-984), so the two guards agree
+ * on what a user link is.
+ */
+export function userColumnsOf(model: SchemaModel): Set<string> {
   const cols = new Set<string>();
   // A key of a relation to some other model holds that model's id, whatever it is named.
   const otherKeys = new Set<string>();
@@ -189,7 +195,10 @@ export function auditOwnerClassification(
       problems.push(`${name} is classified but is not a model in the schema`);
       continue;
     }
-    if (!required.has(name)) {
+    // A read rule is the one shape whose readability need not run through a
+    // user link: a space note is read by the space's members (t-985).
+    const ruled = c.kind === 'personal' && 'reader' in c.owner;
+    if (!required.has(name) && !ruled) {
       problems.push(`${name} is classified but links to no user and no personal model`);
     }
     if (c.kind === 'not-personal') {
@@ -205,6 +214,24 @@ export function auditOwnerClassification(
         continue;
       }
       ownerOptional = model.scalars.get(column)?.optional ?? false;
+    } else if ('reader' in c.owner) {
+      // A fork's read rule (t-985). Core's rows are owned by a column or a
+      // parent; a rule there would be a decision no core route agrees with.
+      if (!forkModels.has(name)) {
+        problems.push(`${name} has a read rule, which is for fork models only`);
+        continue;
+      }
+      if (typeof c.owner.reader !== 'function') {
+        problems.push(`${name}'s owner.reader is not a function`);
+        continue;
+      }
+      // A miss by unique key asks whether the row exists by its id
+      // (readOwnerSchema refuses the model without one, failing every query).
+      if (c.enforced && !model.scalars.has('id')) {
+        problems.push(`${name} has a read rule and is enforced but has no id`);
+      }
+      // The rule decides ownerless rows itself.
+      ownerOptional = false;
     } else {
       const { field, parent } = c.owner.through;
       const rel = model.relations.get(field);

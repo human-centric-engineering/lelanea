@@ -152,14 +152,56 @@ describe('SettingsTab', () => {
     );
   });
 
-  it('falls back to the error message when the failure carries no field details', async () => {
+  it('shows the fallback, not the browser, when the server never answered', async () => {
     const user = userEvent.setup();
-    vi.mocked(apiClient.patch).mockRejectedValue(new Error('network down'));
+    vi.mocked(apiClient.patch).mockRejectedValue(
+      new APIClientError('Failed to fetch', 'NETWORK_ERROR')
+    );
 
     render(<SettingsTab settings={settings()} />);
     await user.click(screen.getByRole('button', { name: /save settings/i }));
 
-    expect(await screen.findByText(/network down/i)).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to save settings');
+    expect(screen.queryByText(/failed to fetch/i)).not.toBeInTheDocument();
+  });
+
+  // `noValidate` turns the inputs' `required` off, so the handler has to hold it.
+  it('blocks a blank name without saving, and focuses it', async () => {
+    const user = userEvent.setup();
+    render(<SettingsTab settings={settings()} />);
+
+    await user.clear(screen.getByLabelText('Name'));
+    await user.click(screen.getByRole('button', { name: /save settings/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Name is required.');
+    expect(screen.getByLabelText('Name')).toHaveFocus();
+    expect(apiClient.patch).not.toHaveBeenCalled();
+  });
+
+  it('blocks a half-typed date, which would otherwise read as cleared', async () => {
+    const user = userEvent.setup();
+    render(<SettingsTab settings={settings()} />);
+
+    const from = screen.getByLabelText(/available from/i);
+    Object.defineProperty(from, 'validity', { value: { badInput: true }, configurable: true });
+    await user.click(screen.getByRole('button', { name: /save settings/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Available from: enter a complete date and time.'
+    );
+    expect(from).toHaveFocus();
+    expect(apiClient.patch).not.toHaveBeenCalled();
+  });
+
+  it('blocks a blank audience without saving', async () => {
+    const user = userEvent.setup();
+    render(<SettingsTab settings={settings()} />);
+
+    await user.clear(screen.getByLabelText('Audience'));
+    await user.click(screen.getByRole('button', { name: /save settings/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Audience is required.');
+    expect(apiClient.patch).not.toHaveBeenCalled();
   });
 
   it('shows an error and stays put when the delete fails', async () => {

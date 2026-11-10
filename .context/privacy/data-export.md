@@ -229,11 +229,12 @@ erased — `smoke:erasure` is where that assertion belongs.
 
 A table can identify a person without declaring a Prisma relation to `User` —
 and then it is invisible to a relation-based scan, **and to the erasure
-cascade**. Sunrise has four, all in the manifest by hand:
+cascade**. Sunrise has five, all in the manifest by hand:
 
 | Table                 | Identified by                                                          | How it is matched                                                                                                                  |
 | --------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `ContactSubmission`   | `email` — no user id at all                                            | `email`, exactly, normalised; verified accounts only                                                                               |
+| `WaitlistEntry`       | `email`, and `userId` once a waitlist invitation is redeemed           | `userId`, or `email` exactly, normalised, verified accounts only (`waitlistEntriesOf()`, `lib/waitlist/subject.ts`)                |
 | `FeatureFlag`         | `createdBy String?`, no relation                                       | `createdBy`, as an attribution source                                                                                              |
 | `AiWebhookDelivery`   | `destination` — an email-channel delivery's address; and its `payload` | `destination` (or a `previousDestinations` entry), exactly, normalised, verified accounts only; or the payload naming them (below) |
 | `AiEventHookDelivery` | its `payload` — the subject's id, or a conversation or run of theirs   | JSON containment on `payload.data`, through `lib/privacy/delivery-payloads.ts`                                                     |
@@ -250,6 +251,12 @@ The guard casts **two nets**, because the first one missed both of these:
 `exportUserData()` fetches it directly into the bundle's `erasureReceipts`
 section rather than through a manifest source. That allowlist is an accounting
 note, not an escape hatch — anything added to it still owes a reader a reason.
+The section holds the receipts naming the account's id and the waitlist
+receipts of its erased entries, matched by `waitlistReceiptsOf()` — the linked
+entry's, and those under its address once verified (§125: a waitlist-only
+erasure names no account — see the erasure doc's
+[Waitlist-only receipts](./data-erasure.md#waitlist-only-receipts)). Every
+receipt is exported without `actorUserId`, the erasing admin's id.
 
 Being invisible to the cascade means erasure needs its own step for each.
 `eraseUser()` deletes `ContactSubmission` rows through the same matcher the

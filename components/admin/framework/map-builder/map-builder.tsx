@@ -18,7 +18,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Check, FlaskConical } from 'lucide-react';
+import { Check, FlaskConical } from 'lucide-react';
 import {
   ReactFlowProvider,
   useEdgesState,
@@ -30,7 +30,10 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { headlineOnly } from '@/components/admin/framework/headline-only';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { logger } from '@/lib/logging';
 import {
   mapDefinitionSchema,
@@ -127,7 +130,11 @@ function MapBuilderInner({
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const {
+    failure: saveFailure,
+    report: reportSave,
+    clear: clearSave,
+  } = useSaveFailure({ fallback: 'Failed to save the draft', fields: NO_SERVER_FIELDS });
   const [hasDraft, setHasDraft] = useState<boolean>(
     graph.draftDefinition !== null && graph.draftDefinition !== undefined
   );
@@ -140,18 +147,15 @@ function MapBuilderInner({
     graph.publishedVersion?.version ?? null
   );
   const [publishing, setPublishing] = useState(false);
-  const [publishError, setPublishError] = useState<string | null>(null);
+  const {
+    failure: publishFailure,
+    report: reportPublish,
+    clear: clearPublish,
+  } = useSaveFailure({ fallback: 'Failed to publish', fields: NO_SERVER_FIELDS });
   const [published, setPublished] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [simulatorOpen, setSimulatorOpen] = useState(false);
-
-  // Clear any stale publish error whenever the dialog is opened or dismissed, so a prior
-  // failed publish's alert never bleeds into a fresh dialog.
-  const handlePublishDialogOpenChange = useCallback((open: boolean) => {
-    setPublishError(null);
-    setPublishDialogOpen(open);
-  }, []);
 
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -307,7 +311,7 @@ function MapBuilderInner({
 
   const handleSave = useCallback(async () => {
     setSaving(true);
-    setSaveError(null);
+    clearSave();
     try {
       const definition = flowToMapDefinition(nodes, edges);
       await apiClient.patch(mapPath(graph.slug), { body: { definition } });
@@ -316,24 +320,18 @@ function MapBuilderInner({
       setTimeout(() => setSaved(false), 2500);
       router.refresh();
     } catch (err) {
-      const message =
-        err instanceof APIClientError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : 'Failed to save the draft';
-      setSaveError(message);
-      logger.error('Map draft save failed', { slug: graph.slug, error: message });
+      reportSave(headlineOnly(err));
+      logger.error('Map draft save failed', err, { slug: graph.slug });
     } finally {
       setSaving(false);
     }
-  }, [edges, graph.slug, nodes, router]);
+  }, [clearSave, edges, graph.slug, nodes, reportSave, router]);
 
   const handleDiscard = useCallback(async () => {
     if (!window.confirm('Discard the in-progress draft? The published version is unchanged.')) {
       return;
     }
-    setSaveError(null);
+    clearSave();
     try {
       await apiClient.patch(mapPath(graph.slug), { body: { definition: null } });
       // Reset the canvas to the published snapshot the discard fell back to, read
@@ -348,11 +346,10 @@ function MapBuilderInner({
       setHasDraft(false);
       router.refresh();
     } catch (err) {
-      const message = err instanceof APIClientError ? err.message : 'Failed to discard the draft';
-      setSaveError(message);
-      logger.error('Map draft discard failed', { slug: graph.slug, error: message });
+      reportSave(headlineOnly(err), 'Failed to discard the draft');
+      logger.error('Map draft discard failed', err, { slug: graph.slug });
     }
-  }, [graph, router, setEdges, setNodes]);
+  }, [clearSave, graph, reportSave, router, setEdges, setNodes]);
 
   // Publish promotes the SAVED draft to a new immutable version (workflow-builder
   // model). The publish gate (`validatePublishableMap`) 400s on an invalid draft — its
@@ -362,7 +359,7 @@ function MapBuilderInner({
   const handlePublish = useCallback(
     async (changeSummary: string | undefined) => {
       setPublishing(true);
-      setPublishError(null);
+      clearPublish();
       try {
         const result = await apiClient.post<{ version: { version: number } }>(
           `${mapPath(graph.slug)}/publish`,
@@ -375,14 +372,13 @@ function MapBuilderInner({
         setTimeout(() => setPublished(false), 2500);
         router.refresh();
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to publish';
-        setPublishError(message);
-        logger.error('Map publish failed', { slug: graph.slug, error: message });
+        reportPublish(headlineOnly(err));
+        logger.error('Map publish failed', err, { slug: graph.slug });
       } finally {
         setPublishing(false);
       }
     },
-    [graph.slug, router]
+    [clearPublish, graph.slug, reportPublish, router]
   );
 
   // Roll back to a prior version: the service mints a NEW version copying the target and
@@ -393,7 +389,11 @@ function MapBuilderInner({
   const handleRollback = useCallback(
     async (targetVersion: number) => {
       await apiClient.post(`${mapPath(graph.slug)}/rollback`, { body: { targetVersion } });
-      const fresh = await apiClient.get<MapEditorGraph>(mapPath(graph.slug));
+      // The rollback has committed from here. A failed reload must not read as a refused rollback,
+      // whatever the server said, so it reaches the dialog as an error with no words of its own.
+      const fresh = await apiClient.get<MapEditorGraph>(mapPath(graph.slug)).catch(() => {
+        throw new Error('Rolled back, but the canvas could not be reloaded');
+      });
       const flow = toFlow(pickEditableDefinition(fresh));
       setNodes(flow.nodes);
       setEdges(flow.edges);
@@ -498,9 +498,10 @@ function MapBuilderInner({
               hasDraft={hasDraft}
               nextVersion={(publishedVersion ?? 0) + 1}
               open={publishDialogOpen}
-              onOpenChange={handlePublishDialogOpenChange}
+              onOpenChange={setPublishDialogOpen}
               publishing={publishing}
-              errorMessage={publishError}
+              failure={publishFailure}
+              clearFailure={clearPublish}
               published={published}
               onPublish={handlePublish}
               onOpenHistory={() => setHistoryOpen(true)}
@@ -508,13 +509,9 @@ function MapBuilderInner({
           </div>
         </header>
 
-        {saveError && (
-          <div
-            role="alert"
-            className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
-          >
-            <AlertCircle className="h-4 w-4" />
-            <span>{saveError}</span>
+        {saveFailure && (
+          <div className="border-b px-4 py-2">
+            <SaveError failure={saveFailure} />
           </div>
         )}
 

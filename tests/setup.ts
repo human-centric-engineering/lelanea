@@ -43,6 +43,26 @@ process.env.RATE_LIMIT_BYPASS = 'true';
 // fails type-check (7,419 errors when this was bumped). `/vitest` extends
 // vitest's `expect` directly and augments `vitest`'s `Assertion`.
 import '@testing-library/jest-dom/vitest';
+
+// `findBy…` resolves on the commit that shows an element, and Testing Library's
+// short wait usually lets the passive effects from that commit run. When they
+// miss it, an assertion on what they did fails at random: `<SaveError>` moving
+// focus failed main's CI at the 0.17.0 cut (t-995). So every async query and
+// user-event call ends with those effects run.
+if (typeof document !== 'undefined') {
+  const { configure, getConfig } = await import('@testing-library/react/pure');
+  const { reactEffects } = await import('@/tests/helpers/flush-react-effects');
+  const { asyncWrapper } = getConfig();
+  configure({
+    asyncWrapper: async (cb) => {
+      try {
+        return await asyncWrapper(cb);
+      } finally {
+        reactEffects.flush();
+      }
+    },
+  });
+}
 import { expect, vi, afterEach } from 'vitest';
 
 /**
@@ -348,6 +368,70 @@ vi.mock('@/lib/app/brand', async (importOriginal) => {
  * fail in a fork.
  */
 vi.mock('@/lib/app/emails', () => ({ emailOverrides: {} }));
+
+/**
+ * Pin the waitlist config seam to "no waitlist", for every test file (§125).
+ *
+ * Same class as the emails pin: `waitlistConfig` is read from
+ * `lib/app/waitlist-config.ts`, a committed file a fork fills, so a fork that
+ * has a waitlist would turn on the routes, the admin page and the erasure step
+ * inside the CORE suite, and red every core test that asserts they are off.
+ * Tests that need a waitlist `vi.doMock` their own config (and call
+ * `__resetWaitlistConfigForTests()`); restore this pin with another
+ * `vi.doMock`, never `vi.doUnmock`. `defaults.test.ts` reads the real scaffold
+ * through `vi.importActual`.
+ */
+vi.mock('@/lib/app/waitlist-config', () => ({ waitlistConfig: null }));
+
+/**
+ * Pin the org-tier admin seam, the user-created seam and the erasure seam to
+ * "registers nothing", for every test file (#1125, #1139).
+ *
+ * Same class as the pins above. Each scaffold is a lazy init that a core
+ * registry runs on its first read, and a test-only reset re-arms it, so a fork
+ * that fills one has its registrations live inside the CORE suite. Measured on
+ * a fork-shaped fill of all three (orchestration closed to org admins, a
+ * user-created hook that throws as one reaching a mocked database would, an
+ * erasure cleanup hook): 40 failures across eight core files, beside the
+ * `defaults.test.ts` rows a fork is meant to fail. Five of those files failed
+ * for the closed section alone, where the issue had named three. That is the
+ * enumerating failure the brand pin describes, so these are global too.
+ *
+ * Three files judge a fork's REAL seams and restore them with their own
+ * `vi.mock(…, (importOriginal) => importOriginal())`: `defaults.test.ts`
+ * ("seams ship empty", which must be able to fail in a fork),
+ * `stale-writers.test.ts` (reads the fork's `registerStaleWriter()` calls) and
+ * `admin-tier-roster.test.ts` (judges the fork's org-tier pages). A test that
+ * needs a seam filled mocks it itself, as `org-tier-admin-pages.test.ts`,
+ * `user-created-hooks.test.ts` and `erasure-hooks-seam.test.ts` do.
+ * A fork tests its own filled seam in `tests/unit/lib/app/<seam>.test.ts`,
+ * which may read the real seam too. `defaults.test.ts` fails any other file
+ * that reads a pinned seam past its pin, or unmocks one.
+ *
+ * Six seams are pinned, not every lazy init in `lib/app/`: these are the ones
+ * a measured fill failed. The rest are #636's sweep.
+ */
+// Each keeps the module's other exports, as the brand pin derives its keys: a
+// fork may export more from these files, and a mock that dropped it would fail
+// any core test whose imports reach it. Only the init is replaced.
+vi.mock('@/lib/app/admin-tier', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  initAppOrgTierAdminPages: () => {
+    // Opens no page and closes no section: Sunrise's shipped default.
+  },
+}));
+vi.mock('@/lib/app/user-created', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  initAppUserCreatedHooks: () => {
+    // Registers no hook: Sunrise's shipped default.
+  },
+}));
+vi.mock('@/lib/app/erasure', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  initAppErasureHooks: () => {
+    // Registers no hook and declares no writer: Sunrise's shipped default.
+  },
+}));
 
 /**
  * Mock Analytics

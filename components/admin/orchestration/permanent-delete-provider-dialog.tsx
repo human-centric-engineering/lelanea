@@ -24,6 +24,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { SaveError } from '@/components/forms/form-error';
+import type { SaveFailure } from '@/lib/errors/save-error';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 
 export interface PermanentDeleteTarget {
   id: string;
@@ -33,7 +36,10 @@ export interface PermanentDeleteTarget {
 
 export interface PermanentDeleteProviderDialogProps {
   target: PermanentDeleteTarget | null;
-  error: string | null;
+  /** The refused delete, from `useSaveFailure()`; shown above the buttons. */
+  failure: SaveFailure | null;
+  /** Clears `failure`; called each time the dialog opens. */
+  clearFailure?: () => void;
   isDeleting: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -41,18 +47,22 @@ export interface PermanentDeleteProviderDialogProps {
 
 export function PermanentDeleteProviderDialog({
   target,
-  error,
+  failure,
+  clearFailure,
   isDeleting,
   onCancel,
   onConfirm,
 }: PermanentDeleteProviderDialogProps) {
+  // Committed while the delete runs; a failure from one row never shows on the next.
+  const dialog = useCommittedDialog({
+    open: !!target,
+    pending: isDeleting,
+    onClose: onCancel,
+    clear: clearFailure,
+  });
+
   return (
-    <AlertDialog
-      open={!!target}
-      onOpenChange={(open) => {
-        if (!open) onCancel();
-      }}
-    >
+    <AlertDialog open={!!target} onOpenChange={dialog.onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
@@ -74,23 +84,16 @@ export function PermanentDeleteProviderDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        {error && (
-          <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">{error}</div>
-        )}
+        <SaveError failure={failure} />
 
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel {...dialog.cancelProps}>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            // preventDefault so Radix doesn't auto-close the dialog
-            // when the async delete is in flight. The dialog stays
-            // open until either the caller flips `target` to null
-            // (success) or the user clicks Cancel.
-            onClick={(e) => {
-              e.preventDefault();
-              onConfirm();
-            }}
+            // The dialog stays open until either the caller flips `target`
+            // to null (success) or the user clicks Cancel.
+            {...dialog.actionProps()}
+            onClick={(e) => dialog.confirm(e, onConfirm)}
             className="bg-destructive hover:bg-destructive/90"
-            disabled={isDeleting}
           >
             {isDeleting ? 'Deleting…' : 'Delete permanently'}
           </AlertDialogAction>

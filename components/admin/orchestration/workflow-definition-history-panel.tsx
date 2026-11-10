@@ -35,8 +35,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { SaveError } from '@/components/forms/form-error';
 import { apiClient, APIClientError } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { cn } from '@/lib/utils';
 
 interface VersionRow {
@@ -83,7 +86,11 @@ export function WorkflowDefinitionHistoryPanel({
   const [diffOpen, setDiffOpen] = useState<VersionRow | null>(null);
   const [revertTarget, setRevertTarget] = useState<VersionRow | null>(null);
   const [reverting, setReverting] = useState(false);
-  const [revertError, setRevertError] = useState<string | null>(null);
+  const revertSave = useSaveFailure({
+    fallback: 'Rollback failed. Try again in a moment.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const { clear: clearRevertSave, report: reportRevertSave } = revertSave;
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -113,7 +120,7 @@ export function WorkflowDefinitionHistoryPanel({
   const handleRevert = useCallback(async () => {
     if (!revertTarget) return;
     setReverting(true);
-    setRevertError(null);
+    clearRevertSave();
     try {
       await apiClient.post(API.ADMIN.ORCHESTRATION.workflowRollback(workflowId), {
         body: { targetVersionId: revertTarget.id },
@@ -122,13 +129,19 @@ export function WorkflowDefinitionHistoryPanel({
       await fetchHistory();
       onReverted?.();
     } catch (err) {
-      setRevertError(
-        err instanceof APIClientError ? err.message : 'Rollback failed. Try again in a moment.'
-      );
+      reportRevertSave(err);
     } finally {
       setReverting(false);
     }
-  }, [revertTarget, workflowId, fetchHistory, onReverted]);
+  }, [revertTarget, workflowId, fetchHistory, onReverted, clearRevertSave, reportRevertSave]);
+
+  // Committed while the rollback runs: Escape and outside clicks wait for it.
+  const revertDialog = useCommittedDialog({
+    open: !!revertTarget,
+    pending: reverting,
+    onClose: () => setRevertTarget(null),
+    clear: clearRevertSave,
+  });
 
   return (
     <div className="border-border rounded-md border">
@@ -242,15 +255,7 @@ export function WorkflowDefinitionHistoryPanel({
       </Dialog>
 
       {/* Rollback confirm */}
-      <AlertDialog
-        open={!!revertTarget}
-        onOpenChange={(open) => {
-          if (!open) {
-            setRevertTarget(null);
-            setRevertError(null);
-          }
-        }}
-      >
+      <AlertDialog open={!!revertTarget} onOpenChange={revertDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Roll back to this version?</AlertDialogTitle>
@@ -260,22 +265,17 @@ export function WorkflowDefinitionHistoryPanel({
               rollback.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {revertError && <p className="text-destructive text-sm">{revertError}</p>}
+          <SaveError failure={revertSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={reverting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...revertDialog.cancelProps}>Cancel</AlertDialogCancel>
             {/*
-              `event.preventDefault()` keeps the dialog open across the async
-              POST so a failure surfaces inline via `revertError` rather than
-              the dialog auto-closing per Radix's default action behaviour.
-              `handleRevert` itself closes the dialog on success by clearing
-              `revertTarget`.
+              The action keeps the dialog open across the async POST so a
+              failure surfaces inline via `<SaveError>`; `handleRevert` closes
+              it on success by clearing `revertTarget`.
             */}
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void handleRevert();
-              }}
-              disabled={reverting}
+              {...revertDialog.actionProps()}
+              onClick={(e) => revertDialog.confirm(e, handleRevert)}
             >
               {reverting ? 'Rolling back…' : 'Rollback'}
             </AlertDialogAction>

@@ -4,7 +4,9 @@ import { useEffect, useId, useState } from 'react';
 
 import { Chip } from '@/components/app/ui/chip';
 import { useTheme } from '@/hooks/use-theme';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { SaveError } from '@/components/forms/form-error';
 import { cn } from '@/lib/utils';
 import {
   LEANING_STOPS,
@@ -172,7 +174,10 @@ function LeaningsPanel({ initial }: { initial: LeaningsView }) {
 function LeaningDial({ initial, describedBy }: { initial: LeaningDialView; describedBy: string }) {
   const [dial, setDial] = useState(initial);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const save = useSaveFailure({
+    fallback: 'That didn’t save. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
   const name = useId();
   const errorId = useId();
 
@@ -180,7 +185,7 @@ function LeaningDial({ initial, describedBy }: { initial: LeaningDialView; descr
     const before = dial;
     setDial({ ...dial, position: stop, stored: stop });
     setSaving(true);
-    setError(null);
+    save.clear();
     try {
       const raw = await apiClient.patch<unknown>(LEANINGS_ROUTE, {
         body: { key: dial.key, stop },
@@ -189,11 +194,7 @@ function LeaningDial({ initial, describedBy }: { initial: LeaningDialView; descr
       setDial({ ...before, ...parsed.dial });
     } catch (caught: unknown) {
       setDial(before);
-      setError(
-        caught instanceof APIClientError && caught.message
-          ? caught.message
-          : 'That didn’t save. Try again.'
-      );
+      save.report(caught);
     } finally {
       setSaving(false);
     }
@@ -202,7 +203,7 @@ function LeaningDial({ initial, describedBy }: { initial: LeaningDialView; descr
   return (
     <fieldset
       className="border-b border-[var(--color-divider)] px-1 pt-[11px] pb-3"
-      aria-describedby={error ? `${describedBy} ${errorId}` : describedBy}
+      aria-describedby={save.failure ? `${describedBy} ${errorId}` : describedBy}
       aria-busy={saving}
     >
       {/*
@@ -258,10 +259,10 @@ function LeaningDial({ initial, describedBy }: { initial: LeaningDialView; descr
           Lelañea keeps this from going all the way.
         </p>
       ) : null}
-      {error ? (
-        <p id={errorId} role="alert" className="text-destructive mt-2 text-[12.5px]">
-          {error}
-        </p>
+      {save.failure ? (
+        <div id={errorId} className="mt-2">
+          <SaveError failure={save.failure} />
+        </div>
       ) : null}
     </fieldset>
   );

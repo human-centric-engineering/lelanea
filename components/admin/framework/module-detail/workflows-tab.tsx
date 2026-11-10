@@ -5,9 +5,9 @@
  *
  * Lists the workflows bound to the module's lifecycle events, and lets an operator bind an
  * event to a workflow, enable/disable a binding, or unbind. Pure UI over 07's shipped
- * `/modules/[slug]/workflows[/bindingId]` endpoints; the server owns all validation, and its
- * field errors surface via the shared `apiFieldErrors` helper. Built on the shared binding-tab
- * primitives ({@link useBindingRoster}, {@link useRowActions}, {@link RowConfirm}).
+ * `/modules/[slug]/workflows[/bindingId]` endpoints; the server owns all validation, and a
+ * refused save shows through `<SaveError>`. Built on the shared binding-tab primitives
+ * ({@link useBindingRoster}, {@link useRowActions}, {@link RowConfirm}).
  *
  * Unlike agent seats, a workflow `eventType` is free-form (X1 — the module-lifecycle event
  * vocabulary belongs to f-engagement/08), so it is a text field, not a picker; and there is no
@@ -18,7 +18,7 @@
  * The `enabled` toggle below writes no template and needs neither.
  */
 
-import { useState } from 'react';
+import { useState, type BaseSyntheticEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Badge } from '@/components/ui/badge';
@@ -43,7 +43,8 @@ import {
 } from '@/components/ui/table';
 import { FieldHelp } from '@/components/ui/field-help';
 import { apiClient } from '@/lib/api/client';
-import { apiFieldErrors } from '@/components/admin/framework/module-detail/api-field-errors';
+import { SaveError } from '@/components/forms/form-error';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import {
   ROSTER_LIMIT,
   useBindingRoster,
@@ -81,21 +82,26 @@ export function WorkflowsTab({ slug, bindings }: WorkflowsTabProps) {
   const [eventType, setEventType] = useState('');
   const [inputTemplate, setInputTemplate] = useState('');
   const [enabled, setEnabled] = useState(true);
-  const [errors, setErrors] = useState<string[]>([]);
+  const save = useSaveFailure({ fallback: 'Failed to bind workflow', fields: NO_SERVER_FIELDS });
   const [busy, setBusy] = useState(false);
 
   function openForm() {
     setAdding(true);
-    setErrors([]);
+    save.clear();
     setWorkflowId('');
     roster.reset();
     void roster.load();
   }
 
-  async function bind(e: React.FormEvent) {
-    e.preventDefault();
+  async function bind(e?: BaseSyntheticEvent) {
+    e?.preventDefault();
     if (!workflowId || eventType.trim() === '') {
-      setErrors(['Choose a workflow and enter an event type.']);
+      save.block([
+        {
+          field: workflowId ? 'bind-event' : 'bind-workflow',
+          message: 'Choose a workflow and enter an event type.',
+        },
+      ]);
       return;
     }
     // Parse the operator's template for JSON syntax only; the server re-validates its shape
@@ -108,13 +114,12 @@ export function WorkflowsTab({ slug, bindings }: WorkflowsTabProps) {
         parsedTemplate = JSON.parse(rawTemplate);
         hasTemplate = true;
       } catch {
-        setErrors(['Input template: invalid JSON.']);
+        save.block([{ field: 'bind-template', message: 'Input template: invalid JSON.' }]);
         return;
       }
     }
 
     setBusy(true);
-    setErrors([]);
     try {
       await apiClient.post(base, {
         body: {
@@ -131,7 +136,7 @@ export function WorkflowsTab({ slug, bindings }: WorkflowsTabProps) {
       setAdding(false);
       router.refresh();
     } catch (err) {
-      setErrors(apiFieldErrors(err, 'Failed to bind workflow'));
+      save.report(err);
     } finally {
       setBusy(false);
     }
@@ -175,7 +180,9 @@ export function WorkflowsTab({ slug, bindings }: WorkflowsTabProps) {
 
       {adding && (
         <form
-          onSubmit={(e) => void bind(e)}
+          method="post"
+          noValidate
+          onSubmit={save.submit(bind)}
           className="bg-muted/40 space-y-4 rounded-md border p-4"
         >
           <RosterSearch
@@ -270,13 +277,7 @@ export function WorkflowsTab({ slug, bindings }: WorkflowsTabProps) {
             </p>
           )}
 
-          {errors.length > 0 && (
-            <ul className="text-destructive space-y-1 text-sm" role="alert">
-              {errors.map((msg, i) => (
-                <li key={i}>{msg}</li>
-              ))}
-            </ul>
-          )}
+          <SaveError failure={save.failure} />
 
           <div className="flex items-center gap-2">
             <Button type="submit" size="sm" disabled={busy || roster.roster === null}>
@@ -295,11 +296,7 @@ export function WorkflowsTab({ slug, bindings }: WorkflowsTabProps) {
         </form>
       )}
 
-      {rows.error && (
-        <p className="text-destructive text-sm" role="alert">
-          {rows.error}
-        </p>
-      )}
+      <SaveError failure={rows.failure} />
 
       {bindings === null ? (
         <p className="text-muted-foreground text-sm" role="alert">

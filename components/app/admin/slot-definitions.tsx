@@ -48,6 +48,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { parseApiResponse } from '@/lib/api/parse-response';
+import { unreadableNumbers, type SaveFailure } from '@/lib/errors/save-error';
+import { useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { SaveError } from '@/components/forms/form-error';
 import {
   SLOT_DEFINITIONS_ENDPOINT,
   SLOT_TAXONOMY_EXPORT_ENDPOINT,
@@ -57,7 +60,7 @@ import {
   slotDefinitionEndpoint,
   slotDefinitionHistoryEndpoint,
 } from '@/lib/app/slots/endpoint';
-import { MAX_DESCRIPTION_LENGTH } from '@/lib/app/slots/validation';
+import { MAX_DESCRIPTION_LENGTH, slotDefinitionUpdateSchema } from '@/lib/app/slots/validation';
 import type { SlotUploadMode } from '@/lib/app/slots/validation';
 import type {
   SlotDefinitionRow,
@@ -247,6 +250,17 @@ function toPayload(draft: DraftFields) {
   };
 }
 
+/**
+ * The route's rule for `priorityWeight`, read from its own schema and held on
+ * Save too: the form sets `noValidate`, so the input's `min`/`max` no longer
+ * stop a press. A blank input is refused first, since `Number('')` is 0.
+ */
+function checkPriority(value: string): string | null {
+  if (value.trim() === '') return 'Enter how early this is asked for, from 0 to 100.';
+  const parsed = slotDefinitionUpdateSchema.shape.priorityWeight.safeParse(Number(value));
+  return parsed.success ? null : (parsed.error.issues[0]?.message ?? 'Check this number.');
+}
+
 function FieldRow({
   id,
   label,
@@ -384,7 +398,7 @@ function DefinitionForm({
   definition: DefinitionJson;
   groups: string[];
   onSaved: (definition: DefinitionJson, sync: SlotSyncOutcome, changed: string[]) => void;
-  onError: (message: string) => void;
+  onError: (message: string, fields?: SaveFailure['fields']) => void;
 }) {
   /**
    * The row this draft was made from — **not** the live `definition` prop.
@@ -426,10 +440,18 @@ function DefinitionForm({
 
   return (
     <form
+      method="post"
+      noValidate
       aria-label={`Edit ${loaded.slug}`}
       className="grid gap-4 sm:grid-cols-2"
       onSubmit={(event) => {
         event.preventDefault();
+        // `noValidate` means the browser no longer stops a number it cannot read
+        // ("1e"), which it reports as '' and `toPayload` would send as 0.
+        const unreadable = unreadableNumbers(event.currentTarget);
+        if (unreadable) return onError(unreadable.message, unreadable.fields);
+        const priorityProblem = checkPriority(draft.priorityWeight);
+        if (priorityProblem) return onError(priorityProblem);
         void save();
       }}
     >
@@ -493,7 +515,7 @@ function AddDefinitionForm({
 }: {
   groups: string[];
   onAdded: (definition: DefinitionJson, sync: SlotSyncOutcome) => void;
-  onError: (message: string) => void;
+  onError: (message: string, fields?: SaveFailure['fields']) => void;
 }) {
   const [slug, setSlug] = useState('');
   const [draft, setDraft] = useState<DraftFields>({
@@ -520,10 +542,18 @@ function AddDefinitionForm({
 
   return (
     <form
+      method="post"
+      noValidate
       aria-label="Add a data slot"
       className="bg-muted/40 grid gap-4 rounded-md border p-4 sm:grid-cols-2"
       onSubmit={(event) => {
         event.preventDefault();
+        // `noValidate` means the browser no longer stops a number it cannot read
+        // ("1e"), which it reports as '' and `toPayload` would send as 0.
+        const unreadable = unreadableNumbers(event.currentTarget);
+        if (unreadable) return onError(unreadable.message, unreadable.fields);
+        const priorityProblem = checkPriority(draft.priorityWeight);
+        if (priorityProblem) return onError(priorityProblem);
         void add();
       }}
     >
@@ -701,7 +731,7 @@ function UploadPanel({
   onError,
 }: {
   onApplied: (plan: SlotUploadPlan, sync: SlotSyncOutcome) => void;
-  onError: (message: string) => void;
+  onError: (message: string, fields?: SaveFailure['fields']) => void;
 }) {
   const [text, setText] = useState('');
   const [mode, setMode] = useState<SlotUploadMode>('merge');
@@ -912,7 +942,9 @@ export function SlotDefinitionsPanel({
 }) {
   const [definitions, setDefinitions] = useState<DefinitionJson[]>(initialView.definitions);
   const [groups, setGroups] = useState<string[]>(initialView.groups);
-  const [error, setError] = useState<string | null>(null);
+  // Every refusal on the panel, a save's or the form's own check, by the one
+  // box that brings itself into view (§124): the forms sit far down the page.
+  const save = useSaveFailure({ fallback: 'That did not save. Try again.' });
   const [notice, setNotice] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -930,14 +962,15 @@ export function SlotDefinitionsPanel({
     );
   }
 
-  function report(message: string) {
-    setError(message);
+  function report(message: string, fields?: SaveFailure['fields']) {
+    // Fields named here are focused, by the input's `id`, instead of the box.
+    save.show(message, fields);
     setNotice(null);
     setWarning(null);
   }
 
   function landed(message: string, sync: SlotSyncOutcome) {
-    setError(null);
+    save.clear();
     setNotice(message);
     setWarning(syncWarning(sync));
   }
@@ -981,17 +1014,13 @@ export function SlotDefinitionsPanel({
 
   return (
     <div className="space-y-6">
-      {error && (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      )}
+      <SaveError failure={save.failure} />
       {warning && (
         <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">
           {warning}
         </p>
       )}
-      {notice && !error && <p className="text-muted-foreground text-sm">{notice}</p>}
+      {notice && !save.failure && <p className="text-muted-foreground text-sm">{notice}</p>}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

@@ -40,7 +40,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SaveError } from '@/components/forms/form-error';
+import { APIClientError, apiErrorFromResponse } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { parseApiResponse } from '@/lib/api/parse-response';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 
 interface DatasetOption {
   id: string;
@@ -82,7 +87,13 @@ export function SaveToDatasetButton({
   const [datasets, setDatasets] = React.useState<DatasetOption[] | null>(null);
   const [datasetId, setDatasetId] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
+  // The datasets list failing to load keeps its own box.
   const [error, setError] = React.useState<string | null>(null);
+  // A refused capture: above the footer holding Save; the dialog stays open (§124).
+  const save = useSaveFailure({
+    fallback: 'Could not save to the dataset. Try again in a moment.',
+    fields: NO_SERVER_FIELDS,
+  });
   const [success, setSuccess] = React.useState<CaptureResult | null>(null);
 
   // Lazy-load datasets when the modal opens. Cheap (single paginated
@@ -121,12 +132,12 @@ export function SaveToDatasetButton({
   }, [open, datasets]);
 
   async function handleSave(): Promise<void> {
+    save.clear();
     if (!datasetId) {
-      setError('Pick a destination dataset.');
+      save.show('Pick a destination dataset.');
       return;
     }
     setSubmitting(true);
-    setError(null);
     try {
       const body =
         source.kind === 'conversation_turn'
@@ -141,15 +152,19 @@ export function SaveToDatasetButton({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const payload = (await res.json()) as ApiSuccess<CaptureResult> | ApiError;
-      if (!res.ok || !payload.success) {
-        const msg = !payload.success ? payload.error.message : `Failed (${res.status})`;
-        setError(msg);
-        return;
+      if (!res.ok) throw await apiErrorFromResponse(res);
+      const payload = await parseApiResponse<CaptureResult>(res);
+      if (!payload.success) {
+        throw new APIClientError(
+          payload.error.message,
+          payload.error.code,
+          res.status,
+          payload.error.details
+        );
       }
       setSuccess(payload.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      save.report(err);
     } finally {
       setSubmitting(false);
     }
@@ -163,13 +178,21 @@ export function SaveToDatasetButton({
     setError(null);
   }
 
+  // Committed while saving: a refusal lands here, not in a closed dialog.
+  const dialog = useCommittedDialog({
+    open,
+    pending: submitting,
+    onClose: handleClose,
+    clear: save.clear,
+  });
+
   return (
     <>
       <Button size={size} variant="outline" onClick={() => setOpen(true)}>
         <Bookmark className="mr-1.5 h-3.5 w-3.5" aria-hidden />
         {label}
       </Button>
-      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : handleClose())}>
+      <Dialog open={open} onOpenChange={dialog.onOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Save to dataset</DialogTitle>
@@ -219,12 +242,16 @@ export function SaveToDatasetButton({
             </div>
           )}
 
+          {!success ? <SaveError failure={save.failure} /> : null}
           {!success ? (
             <DialogFooter>
-              <Button variant="ghost" onClick={handleClose} disabled={submitting}>
+              <Button variant="ghost" onClick={handleClose} {...dialog.cancelProps}>
                 Cancel
               </Button>
-              <Button onClick={() => void handleSave()} disabled={submitting || !datasetId}>
+              <Button
+                {...dialog.actionProps({ disabled: !datasetId })}
+                onClick={(e) => dialog.confirm(e, handleSave)}
+              >
                 {submitting ? (
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />
                 ) : null}

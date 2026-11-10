@@ -83,6 +83,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { FieldHelp } from '@/components/ui/field-help';
 import { ClientDate } from '@/components/ui/client-date';
+import { SaveError } from '@/components/forms/form-error';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import type { PaginationMeta } from '@/types/api';
@@ -221,7 +223,18 @@ export function DesignationTable({
   const [appliedUndesignatedOnly, setAppliedUndesignatedOnly] = useState(false);
   const [loadFailed, setLoadFailed] = useState(initialLoadFailed);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // A row's save, not the list's load: one box above the table for every row,
+  // so a failure on a row far down the page is brought into view (§124).
+  const rowSave = useSaveFailure({
+    fallback: 'That did not save. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const { clear: clearRowSave, show: showRowSave, report: reportRowSave } = rowSave;
+  // Which row the box speaks for. Rows save independently and at once, so one
+  // row's save starting must not wipe another row's failure: only a retry of
+  // the row that failed, or a fresh page, clears it.
+  const failedRowRef = useRef<string | null>(null);
   /** The document whose licensing note is being edited, and the draft text. */
   const [licensingDraft, setLicensingDraft] = useState<{ id: string; text: string } | null>(null);
   /**
@@ -297,7 +310,10 @@ export function DesignationTable({
       requestSeqRef.current = seq;
 
       setIsLoading(true);
-      setError(null);
+      setLoadError(null);
+      // A row's failure names a row that a new page or search may not show.
+      clearRowSave();
+      failedRowRef.current = null;
       try {
         const params = new URLSearchParams({ page: String(page), limit: String(meta.limit) });
         // Trimmed before the truthiness test: `q` is `.trim().min(1)` server-side,
@@ -340,13 +356,13 @@ export function DesignationTable({
         if (requestSeqRef.current !== seq) return;
         // Said out loud rather than swallowed: a table that keeps showing the
         // previous page after a failed fetch reads as "these are the matches".
-        setError('The list did not load. Try again — the rows below may be out of date.');
+        setLoadError('The list did not load. Try again — the rows below may be out of date.');
         setLoadFailed(true);
       } finally {
         if (requestSeqRef.current === seq) setIsLoading(false);
       }
     },
-    [meta.limit]
+    [meta.limit, clearRowSave]
   );
 
   /**
@@ -424,6 +440,7 @@ export function DesignationTable({
   const save = useCallback(
     async (
       documentId: string,
+      documentName: string,
       patch: {
         purpose?: DocumentPurpose | null;
         sensitivity?: DocumentSensitivity | null;
@@ -431,7 +448,10 @@ export function DesignationTable({
       }
     ): Promise<boolean> => {
       setSavingIds((ids) => new Set(ids).add(documentId));
-      setError(null);
+      if (failedRowRef.current === documentId) {
+        clearRowSave();
+        failedRowRef.current = null;
+      }
       try {
         const response = await fetch(`${DESIGNATION_ADMIN_ENDPOINT}/${documentId}`, {
           method: 'PATCH',
@@ -447,7 +467,11 @@ export function DesignationTable({
             quotable: boolean;
           };
         }>(response);
-        if (!parsed.success) throw new Error(parsed.error.message);
+        if (!parsed.success) {
+          failedRowRef.current = documentId;
+          showRowSave(`Couldn't save "${documentName}": ${parsed.error.message}`);
+          return false;
+        }
 
         const next = parsed.data.designation;
         setDocuments((rows) =>
@@ -465,11 +489,8 @@ export function DesignationTable({
         );
         return true;
       } catch (caught) {
-        setError(
-          caught instanceof Error
-            ? `That did not save: ${caught.message}`
-            : 'That did not save. Try again.'
-        );
+        failedRowRef.current = documentId;
+        reportRowSave(caught, `Couldn't save "${documentName}"`);
         return false;
       } finally {
         setSavingIds((ids) => {
@@ -479,7 +500,7 @@ export function DesignationTable({
         });
       }
     },
-    []
+    [clearRowSave, showRowSave, reportRowSave]
   );
 
   const totalPages = Math.max(1, meta.totalPages);
@@ -517,11 +538,13 @@ export function DesignationTable({
         </div>
       </div>
 
-      {error && (
+      {loadError && (
         <p role="alert" className="text-destructive text-sm">
-          {error}
+          {loadError}
         </p>
       )}
+
+      <SaveError failure={rowSave.failure} />
 
       {addedOutsideView && (
         <p role="status" className="text-muted-foreground text-sm">
@@ -655,7 +678,7 @@ export function DesignationTable({
                   value={document.purpose ?? UNSET}
                   disabled={savingIds.has(document.id)}
                   onValueChange={(value) =>
-                    void save(document.id, {
+                    void save(document.id, document.name, {
                       purpose: value === UNSET ? null : (value as DocumentPurpose),
                     })
                   }
@@ -679,7 +702,7 @@ export function DesignationTable({
                   value={document.sensitivity ?? UNSET}
                   disabled={savingIds.has(document.id)}
                   onValueChange={(value) =>
-                    void save(document.id, {
+                    void save(document.id, document.name, {
                       sensitivity: value === UNSET ? null : (value as DocumentSensitivity),
                     })
                   }
@@ -720,9 +743,11 @@ export function DesignationTable({
                           // Closing it first destroyed the note on any failure —
                           // and the text an admin loses that way is the one they
                           // just typed out of a permission email, unrecoverable.
-                          void save(document.id, { licensing: text }).then((saved) => {
-                            if (saved) setLicensingDraft(null);
-                          });
+                          void save(document.id, document.name, { licensing: text }).then(
+                            (saved) => {
+                              if (saved) setLicensingDraft(null);
+                            }
+                          );
                         }}
                       >
                         Save

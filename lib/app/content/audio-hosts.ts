@@ -12,10 +12,11 @@
  * episode page on a podcast site or Spotify opens in a new tab, as every audio
  * link did before. Unlike a video, nothing is refused for its host.
  *
- * **The CSP decides where it can actually play from.** `media-src` is fixed at
- * `'self' blob:` in Sunrise's `lib/security/headers.ts`, with no app seam, so a
- * file on another origin is refused by the browser until its origin is allowed.
- * That ask is on sunrise#841. So the web card offers a player only where the
+ * **The CSP decides where it can actually play from.** `media-src` is
+ * `'self' blob:` plus the origins `lib/app/csp.ts` adds through `appMediaSrc`
+ * (Sunrise 0.17.0, sunrise#841), which it takes from
+ * {@link AUDIO_MEDIA_ORIGINS}, so a file on any other origin is refused by the
+ * browser. So the web card offers a player only where the
  * page may play the file ({@link canPlayInPage}), and a link elsewhere; if a
  * file it does offer still fails, the card says so and offers the link.
  *
@@ -42,10 +43,13 @@ export interface AudioPlayer {
 
 /**
  * The origins, besides the page's own, that the web app may play audio from:
- * the `media-src` this app adds to the CSP. **Empty today**, because Sunrise's
- * `media-src` is fixed at `'self' blob:` with no app seam (sunrise#841). When
- * her audio host is chosen, its origin goes here AND into the policy, through
- * that seam or a fork fix, and the two must name the same origins.
+ * the `media-src` this app adds to the CSP. **Empty today**: no audio host is
+ * chosen yet. `lib/app/csp.ts` spreads this list into `appMediaSrc`, so an
+ * origin added here is allowed by the policy too, and re-pins the `lib/app/csp.ts`
+ * row in `tests/unit/lib/app/defaults.test.ts`. **Exact origins only**: the
+ * CSP would accept a wildcard (`https://*.cdn.com`), but {@link canPlayInPage}
+ * compares origins exactly, so a wildcard here would allow files the card then
+ * refuses to play.
  *
  * The API still serves a player for a file on any origin: a native client has
  * no CSP. The web card asks {@link canPlayInPage} and shows a link instead of

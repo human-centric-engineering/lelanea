@@ -101,6 +101,25 @@ const { delegateFor, resetDelegates, userFindUnique, userDelete, receiptCreate, 
   });
 
 vi.mock('@/lib/db/client', () => ({ prisma }));
+
+/**
+ * The erasure bridge, re-mocked to its real body. Since Sunrise 0.17.0
+ * (#1139) `tests/setup.ts` pins `lib/app/erasure` to "registers nothing" for
+ * every file, which is right for core's suite and would leave our waitlist
+ * hook unregistered here. Re-mocked rather than restored with `importOriginal`,
+ * as the pin guard in `defaults.test.ts` asks: framework first, then the leaf,
+ * exactly as the bridge does.
+ */
+// The two inits are imported below and called only when core's registry runs
+// the bridge, by which time both have loaded: an async factory that imported
+// them itself would deadlock, since the registry imports this bridge and the
+// leaf seam imports the registry.
+vi.mock('@/lib/app/erasure', () => ({
+  initAppErasureHooks: () => {
+    initFrameworkErasureHooks();
+    initLeafErasureHooks();
+  },
+}));
 vi.mock('@/lib/logging', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -111,6 +130,8 @@ vi.mock('@/lib/storage/upload', () => ({
 
 import { exportUserData } from '@/lib/privacy/export-user';
 import { eraseUser } from '@/lib/privacy/erase-user';
+import { initFrameworkErasureHooks } from '@/lib/framework/privacy/erasure';
+import { initLeafErasureHooks } from '@/lib/app/leaf-erasure';
 import { __resetErasureCleanupHooksForTests } from '@/lib/privacy/erasure-hooks';
 import { __resetAppSubjectSourceRegistryForTests } from '@/lib/privacy/subject-source-registry';
 

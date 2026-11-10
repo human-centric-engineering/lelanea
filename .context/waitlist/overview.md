@@ -1,0 +1,399 @@
+# Waitlist
+
+A pre-launch waitlist a fork switches on: Sunrise owns the table, the routes,
+the privacy wiring, the admin page and invites; the fork owns its
+fields, copy and look. The binding design is the
+[Sunrise Waitlist spec](https://claude.ai/artifact/NVEu3CqpBAXskCoBQnBExN).
+
+## Switching it on
+
+Two switches, answering different questions:
+
+| Question                | Who changes it               | Where it lives                                                       |
+| ----------------------- | ---------------------------- | -------------------------------------------------------------------- |
+| Does the app have one?  | The fork's developers        | `lib/app/waitlist-config.ts` — `null` (shipped) means no waitlist    |
+| Is a list taking joins? | The admin running the launch | A `WaitlistListState` row per org and list, set on `/admin/waitlist` |
+
+Neither is an env var: neither should differ between staging and production,
+and closing a list must not need a redeploy. A declared list starts open
+unless it says `startsClosed: true`; once a row exists, the row wins.
+
+```ts
+// lib/app/waitlist-config.ts
+import type { WaitlistConfig } from '@/lib/waitlist/config';
+
+export const waitlistConfig: WaitlistConfig | null = {
+  consentVersion: '2026-11-01', // the version of your privacy notice
+  fields: [
+    {
+      key: 'role',
+      label: 'What do you do?',
+      kind: 'select',
+      options: [
+        { value: 'producer', label: 'Producer' },
+        { value: 'dj', label: 'DJ' },
+      ],
+    },
+    {
+      key: 'useCase',
+      label: 'What would you use it for?',
+      kind: 'textarea',
+      help: 'A sentence is plenty.',
+    },
+  ],
+  lists: [{ key: 'default' }],
+  screen: ({ email }) =>
+    email.endsWith('@mailinator.com')
+      ? { action: 'flag', reason: 'disposable-domain' }
+      : { action: 'accept' },
+  retention: { unconfirmedDays: 30 }, // the default; your privacy notice says the same
+  joinPath: '/#waitlist', // where the form is; the login page points here (default '/')
+};
+```
+
+Then mount the form wherever you like:
+
+```tsx
+import { Waitlist } from '@/components/waitlist/waitlist';
+
+<Waitlist copy={{ submitLabel: 'Get early access', consentNotice: <PrivacyLine /> }} />;
+```
+
+`<Waitlist>` is a server component. It builds the same answer
+`GET /api/v1/waitlist` gives, from the same functions, but reads them directly
+rather than through `serverFetch()`: that route is rate-limited by IP, and a
+server-side call would put every visitor's render in one bucket, so a busy
+launch page would lose its form to a 429. It renders nothing without a config
+or when the state cannot be read, and shows the closed message for a closed
+list — including one closed after the page rendered, when the join answers 409. `<WaitlistForm>` (`components/waitlist/waitlist-form.tsx`) is the client
+form, for a page that supplies the fields itself. Every label, placeholder and
+message it draws is a `copy` prop.
+
+**An invalid config switches the waitlist off** and logs
+`Waitlist config is invalid` with each problem — a select without options,
+duplicate keys, a field key that is a body name (`email`, `name`, `list`,
+`website`, `referrer`) or an `Object` member (`constructor`, `toString`…).
+Half a waitlist is worse than none.
+
+## Routes
+
+| Route                           | Who                  | What                                                                   |
+| ------------------------------- | -------------------- | ---------------------------------------------------------------------- |
+| `GET /api/v1/waitlist`          | Anyone               | `{ lists: [{ key, open }], fields }` — the form's fields, serialisable |
+| `POST /api/v1/waitlist`         | Anyone               | Join. 5 an hour per IP (`waitlistLimiter`, `RATE_LIMIT_WAITLIST`)      |
+| `POST /api/v1/waitlist/confirm` | Anyone with the link | `{ entry, token }`: confirm the address. Single use, 7 days            |
+| `POST /api/v1/waitlist/leave`   | Anyone with the link | `{ token }`: erase the entry, with a receipt                           |
+
+Admin routes — org-tier (`withAdminAuth({ tier: 'org' })`, listed in
+`ORG_TIER_ADMIN_ROUTES`), so an org's OWNER or ADMIN works their own org's list:
+
+| Route                                     | What                                                                                                        |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/admin/waitlist`              | One page: `page`, `limit` (≤100), `sortBy` (`createdAt` / `email` / `confirmedAt`), `sortOrder`, filters ↓  |
+| `GET /api/v1/admin/waitlist/counts`       | Per list: open or closed, counts by state, confirmed by source; and the declared fields                     |
+| `GET /api/v1/admin/waitlist/export`       | CSV with the same filters. `exportLimiter` keyed `export:waitlist:user:<id>`; BOM; `no-store`; 10,000 rows  |
+| `PATCH /api/v1/admin/waitlist/:id`        | `{ removed: boolean }` — the state to reach                                                                 |
+| `DELETE /api/v1/admin/waitlist/:id`       | Erase: the row, a waitlist receipt, and this org's pending invitation for the address                       |
+| `PATCH /api/v1/admin/waitlist/lists/:key` | `{ open: boolean }` for a declared list — records who and when                                              |
+| `POST /api/v1/admin/waitlist/:id/invite`  | Invite one entry, or re-send its own pending invitation. `inviteLimiter`. See [Invites](#invites)           |
+| `POST /api/v1/admin/waitlist/invite`      | Invite a wave: ticked `ids`, the `next` N, or a random `sample` of N. Up to 50; `waitlistInviteWaveLimiter` |
+
+The filters: `list`, `q` (the address as typed, the name, or any declared
+answer — a JSON-path text match), `includeUnconfirmed`, `includeRemoved`,
+`includeJoined`, `flaggedOnly`. **By default only confirmed entries still on
+the list** are listed and exported: anyone can type any address into the
+form, so an unconfirmed entry is asked for, never assumed. Every route
+answers 404 without a config, and the page and its nav item are hidden.
+
+The join routes and confirm answer 404 without a config too. **Leave never
+does**: no switch may stop someone leaving, so a fork that drops its config
+still lets the links in people's inboxes take them off. The join body:
+`{ email, name?, list?, details?: { <field key>: string }, utm_source?, utm_medium?, utm_campaign?, referrer? }`.
+`list` may be left out when there is one list. Unknown `details` keys are a 400.
+
+## The join rules
+
+Each was found in Lelanea's waitlist, in review or in use, and each has a test.
+
+- **One answer for every accepted join**: a first join, a repeat, a confirmed
+  repeat, a removed address re-joining, a flagged join and a honeypot hit get
+  the same status, body and headers. Anything else tells a stranger whether an
+  address is on the list. What does differ says nothing about the address: a
+  400 (the body), a 409 `WAITLIST_CLOSED` (whether a list is open is public),
+  and a 429 (the caller).
+- **The honeypot is decided on its value**, before validation: absent, `null`
+  and `''` are a person. (Deciding it on a validation error, as the contact form
+  does, turns `website: null` into success with nothing written.)
+- **Before confirmation, a repeat replaces the answers**; **after, it only
+  fills empty ones**. `consentedAt` and `consentVersion` never move.
+- **Removed stays removed.** A re-join increments `rejoinRequests` and stamps
+  `rejoinRequestedAt`, nothing else.
+- **A flag sticks.** `screen()` can flag, never unflag; a throwing `screen()`
+  flags `screen-error`.
+- **Exact address matching**, on the trimmed, lower-cased form — never
+  `mode: 'insensitive'` (#766).
+- **No address in the logs.** The route logs the list and the outcome.
+
+Attribution is reduced before it is stored: the first `Accept-Language` tag,
+the referrer's host only, UTM values capped at 100 characters.
+
+## Confirming the address, and leaving
+
+Anyone can type anyone's address into the form, so every entry starts
+unconfirmed, and the join sends a link that proves the address is the
+person's own.
+
+- **The join sends one email, after the response** (`after()`, through
+  `keepRunningAfterResponse`, handed a function so that nothing of the mail,
+  not even the read deciding whether to send, starts before the response has
+  gone). The answer and its timing are the same for a member and a stranger.
+  A new or still-unconfirmed entry gets the confirmation link; a confirmed
+  address submitted again gets the "already on the list" note, with no link. A
+  removed address, an entry `screen()` flagged, a honeypot hit and a closed
+  list get nothing: an entry held back as suspected abuse does not get to use
+  your sender either.
+- **At most one email an hour per entry**, both kinds together, claimed with
+  a conditional write on `lastEmailedAt`. The form cannot be used to flood an
+  inbox from your sender. The "already on the list" note waits longer: 30 days
+  since the entry's last email (`WAITLIST_NOTE_INTERVAL_MS`), so anyone who
+  types a confirmed address cannot mail its owner every hour for good.
+- **Only a real send counts.** A send that fails, or that `sendEmail` reports
+  as `disabled` (email not configured, in development and test), gives the
+  slot back and withdraws the link it minted.
+- **At most three confirmation links per entry, ever**
+  (`WAITLIST_CONFIRM_MAX_LINKS`, counted in `confirmLinksSent`). Each link
+  restarts the entry's retention window, so without a cap a stranger
+  resubmitting an address nobody confirms could mail it every hour and keep
+  it on the list for good. Past the cap the entry gets nothing more and is
+  deleted when its window runs out; its owner can join afresh after that.
+- **A name is put in an email only if it looks like a first name**
+  (`firstNameOf()`, `lib/waitlist/mail.ts`): a letter, then letters,
+  apostrophes or hyphens, up to 40. Anything else gets "Hello,". A URL typed as
+  a name would otherwise arrive as a link from your real sender. Overrides get
+  the filtered `firstName`, never the raw text.
+- **The confirm link** is `/waitlist/confirm?entry=…&token=…`: 32 random bytes,
+  only their hash stored, in `WaitlistConfirmToken` (no address), seven days,
+  single use. The table is tenant-owned and cascades with its entry, so
+  whatever deletes an entry, including a fork's own cleanup, deletes its
+  links. **A re-send adds a link and never
+  kills one**: every link sent works until it expires or the address is
+  confirmed, so a failed send, or a stranger resubmitting the address, cannot
+  break the link already in the inbox. Confirming uses up all of them. A send
+  that fails gives back the hour's slot and withdraws its unsent link. The
+  token is lowercase hex; an uppercased copy still works. The page shows
+  a button; **opening the link alone confirms nothing**, because mail scanners
+  open links before people do. An expired, used, unknown or malformed link
+  gets one answer: `400 INVALID_TOKEN`.
+- **The leave link** is `/waitlist/leave?token=…`, HMAC-signed rather than
+  stored, with no expiry: it works for as long as the entry exists. The press
+  erases the entry and writes a waitlist-only receipt (`self_service`). A
+  second press answers "you're off the list" again. An entry whose org is
+  suspended answers `503`, because it is still there.
+- **Closing a list stops joins only.** Confirming and leaving still work.
+- **Unconfirmed entries are deleted after `retention.unconfirmedDays`**
+  (default 30) by the `waitlistRetention` maintenance job, once per org,
+  counted from `confirmWindowFrom` (see [Retention](#retention)). An entry
+  linked to an account is left for the account's erasure.
+
+The two emails are registry kinds, `waitlistConfirm` and
+`waitlistAlreadyOnList` (`lib/email/registry.ts`). Override them in
+`lib/app/emails.ts` like any other; keep the leave link in both.
+
+Both links name an entry, not a person, so their routes read the entry's org
+under `runAsCredentialLookup` and enter it as `waitlist-link`
+(`lib/waitlist/entry-org.ts`), as the approval-token routes do.
+
+## Invites
+
+An invitation from the list is an ordinary Sunrise invitation, issued and
+emailed by `deliverInvitation()` (`lib/auth/invitation-delivery.ts`) and
+redeemed by accept-invite or Google sign-in like any other. It also carries
+the entry's id (`InvitationMetadata.waitlistEntryId`), which is how the
+account is linked to the entry. `lib/waitlist/invite.ts`.
+
+- **Who can be invited**: a confirmed entry, still on the list, not flagged,
+  not signed up, whose address has no account. Anything else is refused with
+  its reason (`409 { reason }` for one entry, a refused row in a wave):
+  `removed` (restore first), `joined`, `unconfirmed`, `flagged`,
+  `account_exists`, `invitation_pending`, or `changed`.
+- **Always `USER`, always into the entry's org.** Nobody is made an admin, or
+  put in another org, from a waitlist.
+- **One live invitation per address.** Invitations are install-wide and keyed
+  by address. The entry's own pending invitation is re-sent (a new link, a new
+  `invitedAt`). Anyone else's (Admin → Users → Invite, another org's list) is
+  left alone, and the invite is refused as `invitation_pending`. The check
+  fails closed: an invitation whose metadata cannot be read counts as someone
+  else's, and a failed lookup fails the invite. A re-send deletes only the
+  entry's own invitations by id (`lib/waitlist/invitations.ts`), so an
+  invitation someone else issues for the address meanwhile survives it.
+- **`invitedAt` is stamped under the row lock**, before the invitation is
+  written: a conditional update that re-checks every refusal and that
+  `invitedAt` is still what was read. A removal, an erasure or a second
+  admin's invite landing in between makes it match nothing, and this invite
+  is refused as `changed` instead of being sent beside "Removed" or sent
+  twice. If the invitation cannot be written, `invitedAt` is put back. A
+  failed email does not undo the invite: the response says
+  `emailStatus: 'failed'`, and Resend sends another.
+- **Removing an entry revokes its invitation.** `PATCH { removed: true }`
+  deletes every invitation the entry was sent, so a person taken off the list
+  cannot sign up with a link sent earlier; restoring sends nothing. A removal
+  that lands while an invitation is being written is caught by the invite,
+  which reads the entry again once the invitation exists and revokes it. A
+  removed entry is never linked to an account.
+- **No link in the response.** Like an org's own invitations
+  (`POST /api/v1/orgs/:id/invitations`), the link reaches the person by email
+  only.
+- **The email greets them by a first name only if it looks like one**
+  (`firstNameOf()`), else "Hi there". The account is created with the name
+  they gave, or the part of the address before the `@`.
+- **Waves** (decision 7): the rows the admin ticked (`mode: 'ids'`), the next
+  N by join date (`'next'`), or N at random (`'sample'`), the last two drawn
+  from entries that can be invited and have not been, narrowed to one list
+  and/or one exact answer (`answer: { field, value }`). Each entry is invited
+  as the single route would, in turn, and the answer reports every row:
+  `{ selected, invited, refused, failed, emailNotSent, rows }`. At most
+  `WAITLIST_INVITE_WAVE_MAX` (50) a wave, and its own limiter,
+  `waitlistInviteWaveLimiter` (5 waves an hour per admin): `inviteLimiter`
+  counts single invitations by IP and would stop a wave a tenth of the way.
+- **Logged and audited by entry id**, never the address, by the waitlist's
+  own code (`waitlist_entry.invite`, `waitlist_entry.reinvite`,
+  `waitlist.invite_wave`). The platform's invitation delivery, shared by every
+  invite route, logs the address it issues to and emails, as it does for an
+  invite from Admin → Users.
+  The platform's invitation helpers log the address themselves, as they do
+  for every invite route.
+
+### Linking the account
+
+The sign-up that redeems a waitlist invitation links the entry: `userId` and
+`joinedAt` (`linkWaitlistEntryToAccount()`, `lib/waitlist/link.ts`). It runs
+in Sunrise's own after-hook (`userCreateAfterHook`, `lib/auth/config.ts`),
+before the fork's user-created hooks, on the password and the OAuth path. It
+is keyed by the id the redeemed invitation carried (`RedeemedInvitation`,
+which also hands `waitlistEntryId` to a fork's hook), never by matching the
+address, and runs in the entry's org. The address is a guard, not the key: an
+entry whose address differs, or that is already linked, erased since, or in a
+suspended org is left, and a warning is logged. **A sign-up with no waitlist
+invitation touches no entry**, including one for an address that is on the
+list: that person signed up some other way, and the entry stays as it was.
+
+A linked entry counts as signed up, is never invited again, and is not pruned
+by retention; it goes with the account (`userId` cascades).
+
+### The login page
+
+Under `SIGNUP_MODE=invite_only` the login page hides its sign-up link and
+`/signup` redirects there. With a waitlist config it also says "Accounts are
+by invitation for now. Join the waitlist to hear when we open", linking to
+`joinPath` (a path on this site; default `/`). Without a config, or when
+sign-up is open, it shows nothing new.
+`components/waitlist/waitlist-login-notice.tsx`.
+
+## Tenancy
+
+Both tables are tenant-owned. Public joins land in the **install org**, entered
+with `runAsOrg(INSTALL_ORG_ID, …, { source: 'public-form' })`. At `multi`, a
+fork's tenant resolver does not route a join to another org yet.
+
+The migration that creates the tables enables and forces row-level security on
+them **if the install's switch is already on** (it reads `ai_agent`'s flag).
+They are the first tenant-owned tables since §107. Without this, a
+`migrate deploy` on a multi-tenant install would leave them readable across
+orgs until `db:tenancy:enable` ran again.
+
+## Privacy
+
+- **Subject access / erasure** match through `waitlistEntriesOf()`
+  (`lib/waitlist/subject.ts`): an entry linked to the account, or under its
+  address once the account has verified it. See
+  [data-export](../privacy/data-export.md#tables-with-no-user-fk) and
+  [data-erasure](../privacy/data-erasure.md).
+- **Erasing a waitlist-only person** (no account) goes through
+  `eraseWaitlistEntry()` (`lib/waitlist/erase.ts`): it deletes the entry and
+  its outstanding confirmation token, writes a `waitlist` erasure receipt, and
+  deletes the pending invitation for the address that this org issued —
+  otherwise a working sign-up link survives the erasure. Another org's
+  invitation is left (invitations are install-wide, one per address); one
+  whose metadata cannot be read is left and logged. The admin page's Erase and
+  the leave link both call it. See
+  [Waitlist-only receipts](../privacy/data-erasure.md#waitlist-only-receipts).
+- **Removing is not erasing.** Remove (`PATCH { removed: true }`) keeps the
+  row — `removedAt`, never a delete — so a re-join stays removed and Art. 15
+  still discloses it, and revokes any invitation it was sent. Erase deletes it.
+- **`userId` cascades** with the account: an entry is personal data.
+- **Org export** includes both tables.
+- **Your privacy notice** must cover what the form collects, that an
+  unconfirmed entry is deleted after `retention.unconfirmedDays`, that answers
+  are kept while the list is open, and the version you put in
+  `consentVersion`.
+
+## The admin page
+
+`/admin/waitlist` (org-tier, in Management). Per list: open/closed with the
+button that changes it, counts by state (confirmed, unconfirmed, flagged,
+invited, signed up, removed) and confirmed by source. Below it, the people:
+search, filters, sortable columns, Invite / Resend on every row that can be
+invited, tick boxes to invite several at once, **Invite a wave…** (earliest
+first or at random, with a count, a list and an answer), Remove / Restore (Restore asks first, and
+says how many times a removed address tried to re-join) and Erase (asks
+first). The export button states its row cap. The table drops a stale
+response, never shows "empty" after a failed load, and the server breaks
+sort ties by `id`. Every field has a `<FieldHelp>`; a failed save shows
+`<SaveError>` beside the button pressed.
+
+## Retention
+
+Every state has a limit, each a config setting (`retention`, defaults in
+`DEFAULT_WAITLIST_RETENTION`), enforced by the per-org maintenance job
+`waitlistRetention` (hourly, `lib/waitlist/retention.ts`):
+
+| State                         | Deleted                                       | Setting            |
+| ----------------------------- | --------------------------------------------- | ------------------ |
+| Removed                       | 90 days after removal                         | `removedDays`      |
+| Confirmed, on a closed list   | 12 months after the list closed               | `closedListMonths` |
+| Unconfirmed, not removed      | 30 days after its window started (at least 7) | `unconfirmedDays`  |
+| Joined (linked to an account) | with the account, never by this job           | —                  |
+
+A list "closed" is its `WaitlistListState` row with `open: false`; its
+`changedAt` dates the window, and closing a closed list again does not move
+it. Invites go on after a close, so an entry invited since the cut-off is
+kept. A list closed only by the config (`startsClosed`, never touched on the
+page) has no close date: its card says so and offers **Mark closed**, which
+records today, and the window runs from then. A joined entry is never pruned,
+even once removed. Each prune deletes in batches of 1,000, up to 20 a run and
+within 15 seconds an org, so a backlog of up to 20,000 goes in the run that
+finds it and a bigger one over the following hourly runs. The 15 seconds are
+shared fairly: each prune gets an equal part of what is left when it starts,
+so a backlog in one window cannot hold up the others. Deleting a removed
+entry ends its "stays removed" protection, which is safe because a new entry
+for the address must be confirmed by its owner.
+An unconfirmed entry's window starts at `confirmWindowFrom`: its join, its
+latest confirmation link, or an admin's Restore, whichever came last. It is
+never shorter than the link's seven days, so retention never deletes an entry
+while a link to confirm it still works, and a restored entry is not deleted on
+the next run. A removed unconfirmed entry waits out the removed window instead. Every deleted entry's
+confirmation tokens cascade with it.
+These deletions are retention, not erasure requests, and write no receipt.
+**The windows hold with no config.** A fork that drops its waitlist config
+keeps the rows it collected, and its notice still promised their limits, so
+the job prunes them on the default windows; an org with no entries costs it
+one read.
+Rows on a list the config no longer declares are not shown on the admin page.
+This job still deletes them on its usual windows — a removed one 90 days on, a
+confirmed one 12 months after its list closed — but a confirmed entry on a
+list that was never closed is kept for ever. Close a list before removing it
+from the config, or erase what is left. `npm run smoke:waitlist-admin` holds
+the windows against a real database.
+
+## Testing
+
+The config seam is pinned to `null` for every test file (`tests/setup.ts`). A
+test that needs a waitlist `vi.doMock`s `@/lib/app/waitlist-config`, calls
+`__resetWaitlistConfigForTests()`, and restores the pin with another
+`vi.doMock` — never `vi.doUnmock`. See
+`tests/unit/app/api/v1/waitlist/route.test.ts`.
+
+`npm run smoke:waitlist-invite` walks join → confirm → invite → sign up →
+entry linked against the dev database, with the real sign-up and email off,
+and checks two concurrent invites send one and a sign-up with no waitlist
+invitation links nothing.

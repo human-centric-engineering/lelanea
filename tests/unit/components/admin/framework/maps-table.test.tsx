@@ -14,13 +14,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { APIClientError } from '@/lib/api/client';
+
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 const api = vi.hoisted(() => ({ post: vi.fn() }));
-vi.mock('@/lib/api/client', () => ({
+vi.mock('@/lib/api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/client')>()),
   apiClient: api,
-  APIClientError: class APIClientError extends Error {},
 }));
 
 import { MapsTable, type MapListItem } from '@/components/admin/framework/maps-table';
@@ -161,8 +163,24 @@ describe('MapsTable create', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('');
   });
 
+  it('can still close after a create, if the navigation stalls', async () => {
+    api.post.mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    render(<MapsTable initialMaps={[]} />);
+
+    await user.click(screen.getByRole('button', { name: /New map/ }));
+    await user.type(screen.getByLabelText('Name'), 'Fresh');
+    await user.click(screen.getByRole('button', { name: 'Create map' }));
+
+    await waitFor(() => expect(router.push).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Creating…' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
   it('surfaces a create failure without routing away', async () => {
-    api.post.mockRejectedValueOnce(new Error('slug already in use'));
+    api.post.mockRejectedValueOnce(new APIClientError('slug already in use', 'X', 409));
     const user = userEvent.setup();
     render(<MapsTable initialMaps={[]} />);
 

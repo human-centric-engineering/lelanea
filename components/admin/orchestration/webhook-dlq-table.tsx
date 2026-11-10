@@ -45,8 +45,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { formatEventLabel } from '@/lib/orchestration/webhooks/event-labels';
 import { parsePaginationMeta } from '@/lib/validations/common';
@@ -81,6 +84,11 @@ export interface WebhookDlqTableProps {
   subscriptions: { id: string; url: string; description: string | null }[];
 }
 
+/** What a row is called: its subscription's description, else where it went. */
+function deliveryLabel(d: DlqDelivery): string {
+  return d.subscription?.description ?? d.destination ?? 'Subscription';
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export function WebhookDlqTable({
@@ -96,7 +104,16 @@ export function WebhookDlqTable({
   const [until, setUntil] = useState('');
   const [loading, setLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  // A refused row retry or bulk replay: shown in the one box above the table (§124).
+  // It names the row retried, or the bulk replay, since they share it.
+  const actionSave = useSaveFailure({ fallback: 'Try again.', fields: NO_SERVER_FIELDS });
+  // The row whose discard dialog is open. A refused discard shows inside it,
+  // and it stays open.
+  const [discardId, setDiscardId] = useState<string | null>(null);
+  const discardSave = useSaveFailure({
+    fallback: 'Delete failed. Please try again.',
+    fields: NO_SERVER_FIELDS,
+  });
 
   const fetchPage = useCallback(
     async (page: number) => {
@@ -132,18 +149,15 @@ export function WebhookDlqTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscriptionFilter, eventFilter, since, until]);
 
-  const handleRetry = async (deliveryId: string) => {
+  const handleRetry = async (delivery: DlqDelivery) => {
+    const deliveryId = delivery.id;
     setActionId(deliveryId);
-    setActionError(null);
+    actionSave.clear();
     try {
       await apiClient.post(API.ADMIN.ORCHESTRATION.retryDelivery(deliveryId));
       void fetchPage(meta.page);
     } catch (err) {
-      setActionError(
-        err instanceof APIClientError
-          ? `Retry failed: ${err.message}`
-          : 'Retry failed. Please try again.'
-      );
+      actionSave.report(err, `Couldn't retry the delivery to "${deliveryLabel(delivery)}"`);
     } finally {
       setActionId(null);
     }
@@ -151,7 +165,7 @@ export function WebhookDlqTable({
 
   const handleBulkReplay = async () => {
     setActionId('bulk');
-    setActionError(null);
+    actionSave.clear();
     try {
       const body: Record<string, unknown> = {};
       if (subscriptionFilter !== 'all') {
@@ -164,7 +178,7 @@ export function WebhookDlqTable({
         // would only skip it, and say nothing.
         body.deliveryIds = deliveries.filter((d) => d.subscription).map((d) => d.id);
         if ((body.deliveryIds as string[]).length === 0) {
-          setActionError(
+          actionSave.show(
             deliveries.length > 0
               ? 'Nothing to replay on this page: every row’s subscription was deleted.'
               : 'Nothing to replay on this page.'
@@ -176,11 +190,7 @@ export function WebhookDlqTable({
       await apiClient.post(API.ADMIN.ORCHESTRATION.WEBHOOK_DLQ_REPLAY, { body });
       void fetchPage(meta.page);
     } catch (err) {
-      setActionError(
-        err instanceof APIClientError
-          ? `Bulk replay failed: ${err.message}`
-          : 'Bulk replay failed. Please try again.'
-      );
+      actionSave.report(err, 'Bulk replay failed');
     } finally {
       setActionId(null);
     }
@@ -188,20 +198,26 @@ export function WebhookDlqTable({
 
   const handleDelete = async (deliveryId: string) => {
     setActionId(deliveryId);
-    setActionError(null);
+    discardSave.clear();
     try {
       await apiClient.delete(API.ADMIN.ORCHESTRATION.deliveryById(deliveryId));
+      setDiscardId(null);
       void fetchPage(meta.page);
     } catch (err) {
-      setActionError(
-        err instanceof APIClientError
-          ? `Delete failed: ${err.message}`
-          : 'Delete failed. Please try again.'
-      );
+      discardSave.report(err);
     } finally {
       setActionId(null);
     }
   };
+
+  // One discard dialog is open at a time (each row's trigger sets its id):
+  // committed while its discard runs, cleared each time it opens.
+  const discardDialog = useCommittedDialog({
+    open: discardId !== null,
+    pending: discardId !== null && actionId === discardId,
+    onClose: () => setDiscardId(null),
+    clear: discardSave.clear,
+  });
 
   return (
     <div className="space-y-4">
@@ -274,7 +290,7 @@ export function WebhookDlqTable({
         </Button>
       </div>
 
-      {actionError && <p className="text-destructive text-sm">{actionError}</p>}
+      <SaveError failure={actionSave.failure} />
 
       <div className="rounded-md border">
         <Table>
@@ -309,7 +325,7 @@ export function WebhookDlqTable({
                         className="hover:underline"
                       >
                         <span className="block max-w-[220px] truncate text-sm">
-                          {d.subscription.description ?? d.destination ?? 'Subscription'}
+                          {deliveryLabel(d)}
                         </span>
                         <span className="text-muted-foreground block max-w-[220px] truncate text-xs">
                           {d.destination ?? 'Destination not recorded'}
@@ -342,7 +358,7 @@ export function WebhookDlqTable({
                         variant="ghost"
                         size="icon"
                         disabled={actionId === d.id || !d.subscription}
-                        onClick={() => void handleRetry(d.id)}
+                        onClick={() => void handleRetry(d)}
                         title={
                           d.subscription
                             ? 'Retry delivery'
@@ -355,11 +371,15 @@ export function WebhookDlqTable({
                           <RotateCcw className="h-4 w-4" />
                         )}
                       </Button>
-                      <AlertDialog>
+                      <AlertDialog
+                        open={discardId === d.id}
+                        onOpenChange={discardDialog.onOpenChange}
+                      >
                         <AlertDialogTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => setDiscardId(d.id)}
                             disabled={actionId === d.id}
                             title="Discard from DLQ"
                           >
@@ -375,9 +395,16 @@ export function WebhookDlqTable({
                               handled by the retention sweep.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
+                          <SaveError failure={discardSave.failure} />
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => void handleDelete(d.id)}>
+                            <AlertDialogCancel {...discardDialog.cancelProps}>
+                              Cancel
+                            </AlertDialogCancel>
+                            {/* Closes only on success, so a refusal can be read inside it. */}
+                            <AlertDialogAction
+                              {...discardDialog.actionProps()}
+                              onClick={(e) => discardDialog.confirm(e, () => handleDelete(d.id))}
+                            >
                               Delete
                             </AlertDialogAction>
                           </AlertDialogFooter>

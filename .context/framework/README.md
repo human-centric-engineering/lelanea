@@ -23,6 +23,8 @@ reserves for its own forks.**
 - **`.context/framework/` is Daybreak's** — Daybreak's feature/domain docs. A
   leaf app inherits this from Daybreak and treats it like Sunrise's docs: read,
   don't edit; it merges through on a Daybreak upgrade.
+- [`platform-divergences.md`](./platform-divergences.md) lists every edit Daybreak
+  carries to a Sunrise file. Read it before resolving a conflict in a sync.
 - **`.context/app/` is the leaf app's** — Daybreak (like Sunrise) ships **nothing**
   into it, so a leaf's docs never conflict on a Daybreak or Sunrise merge.
 

@@ -6,6 +6,9 @@
  * Inline AlertDialog for soft-deleting a capability. Accepts a list of
  * agents currently using the capability so admins can see which agents
  * will lose this tool before they confirm.
+ *
+ * A refused delete shows inside the dialog, above its buttons, and the dialog
+ * stays open: the parent closes it (clears `target`) only on success (§124).
  */
 
 import {
@@ -19,6 +22,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { agentCount, OtherOrgUsage } from '@/components/admin/orchestration/other-org-usage';
+import { SaveError } from '@/components/forms/form-error';
+import type { SaveFailure } from '@/lib/errors/save-error';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 
 export interface DeleteCapabilityTarget {
   id: string;
@@ -36,7 +42,10 @@ export interface DeleteCapabilityDialogProps {
   usedBy: UsedByAgent[];
   /** Agents in other orgs using it: counted, never named (§107 t-752). */
   otherOrgAgentCount?: number;
-  error: string | null;
+  /** The refused delete, from `useSaveFailure()`; shown above the buttons. */
+  failure: SaveFailure | null;
+  /** Clears `failure`; called each time the dialog opens. */
+  clearFailure?: () => void;
   isDeleting: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -46,18 +55,22 @@ export function DeleteCapabilityDialog({
   target,
   usedBy,
   otherOrgAgentCount = 0,
-  error,
+  failure,
+  clearFailure,
   isDeleting,
   onCancel,
   onConfirm,
 }: DeleteCapabilityDialogProps) {
+  // Committed while the delete runs; a failure from one row never shows on the next.
+  const dialog = useCommittedDialog({
+    open: !!target,
+    pending: isDeleting,
+    onClose: onCancel,
+    clear: clearFailure,
+  });
+
   return (
-    <AlertDialog
-      open={!!target}
-      onOpenChange={(open) => {
-        if (!open) onCancel();
-      }}
-    >
+    <AlertDialog open={!!target} onOpenChange={dialog.onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete capability</AlertDialogTitle>
@@ -94,14 +107,14 @@ export function DeleteCapabilityDialog({
           </div>
         )}
 
-        {error && <p className="text-destructive text-sm">{error}</p>}
+        <SaveError failure={failure} />
 
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel {...dialog.cancelProps}>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            {...dialog.actionProps()}
+            onClick={(e) => dialog.confirm(e, onConfirm)}
             className="bg-red-600 hover:bg-red-700"
-            disabled={isDeleting}
           >
             {isDeleting ? 'Deleting…' : 'Delete'}
           </AlertDialogAction>

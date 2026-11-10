@@ -99,6 +99,7 @@ const MOCK_WEBHOOKS: WebhookListItem[] = [
 describe('WebhooksTable', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Element.prototype.scrollIntoView = vi.fn();
     mockFetch.mockResolvedValue({
       ok: true,
       json: () =>
@@ -279,6 +280,31 @@ describe('WebhooksTable', () => {
     expect(notice).toHaveTextContent(/that subscription changed since you opened it/i);
     expect(switches[0]).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByText(/could not update webhook/i)).not.toBeInTheDocument();
+  });
+
+  it('brings the stale notice back into focus on a second refusal (§124)', async () => {
+    const { apiClient, APIClientError } = await import('@/lib/api/client');
+    vi.mocked(apiClient.patch).mockRejectedValue(
+      new APIClientError('This changed since you opened it.', 'STALE_RECORD', 412)
+    );
+    const userEvent = await import('@testing-library/user-event');
+    const user = userEvent.default.setup();
+    render(
+      <WebhooksTable
+        initialWebhooks={MOCK_WEBHOOKS}
+        initialMeta={{ ...META, total: 2, totalPages: 1 }}
+      />
+    );
+    const switches = screen.getAllByRole('switch');
+
+    await user.click(switches[0]);
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
+
+    // The admin moves on to another row, which is refused too
+    await user.click(switches[1]);
+
+    await waitFor(() => expect(apiClient.patch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
   });
 
   // ── New tests ────────────────────────────────────────────────────────────────
@@ -621,9 +647,10 @@ describe('WebhooksTable', () => {
 
     await confirmDeleteOfFirstRow();
 
-    expect(await screen.findByText('Delete failed: locked')).toBeInTheDocument();
-    // The dialog closes either way.
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    // Shown inside the dialog, which stays open so it can be read (§124).
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('locked');
+    expect(screen.getByRole('alertdialog')).toContainElement(alert);
   });
 
   it('shows a generic message when deleting fails with anything else', async () => {
@@ -652,7 +679,9 @@ describe('WebhooksTable', () => {
     expect(switches[0]).toHaveAttribute('aria-checked', 'true');
     await user.click(switches[0]);
 
-    expect(await screen.findByText('Could not update webhook. Try again.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Couldn\'t update "https://example.com/hooks/sunrise". Try again.')
+    ).toBeInTheDocument();
     await waitFor(() => expect(switches[0]).toHaveAttribute('aria-checked', 'true'));
   });
 
@@ -686,7 +715,7 @@ describe('WebhooksTable', () => {
 
     // Assert — error banner shown with the APIClientError message
     await waitFor(() => {
-      expect(screen.getByText(/could not update webhook: fail/i)).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('fail');
     });
   });
 

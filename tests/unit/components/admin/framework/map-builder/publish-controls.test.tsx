@@ -26,7 +26,8 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof PublishCo
       open={false}
       onOpenChange={onOpenChange}
       publishing={false}
-      errorMessage={null}
+      failure={null}
+      clearFailure={vi.fn()}
       published={false}
       onPublish={onPublish}
       onOpenHistory={onOpenHistory}
@@ -90,8 +91,19 @@ describe('PublishControls', () => {
   });
 
   it('surfaces a publish error in the dialog', () => {
-    renderControls({ open: true, errorMessage: 'Map is not publishable' });
+    renderControls({
+      open: true,
+      failure: { message: 'Map is not publishable', stale: false, fields: [] },
+    });
     expect(screen.getByRole('alert')).toHaveTextContent('Map is not publishable');
+  });
+
+  it('holds the dialog open while a publish is in flight', async () => {
+    const { onOpenChange } = renderControls({ open: true, publishing: true });
+
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await userEvent.keyboard('{Escape}');
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it('shows the Published flash indicator', () => {

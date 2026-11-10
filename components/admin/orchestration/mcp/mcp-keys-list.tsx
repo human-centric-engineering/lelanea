@@ -42,8 +42,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { FieldHelp } from '@/components/ui/field-help';
 import { Tip } from '@/components/ui/tooltip';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { logger } from '@/lib/logging';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { McpScope, ALL_MCP_SCOPES } from '@/types/mcp';
 import { apiKeyRowSchema, type ApiKeyRow } from '@/lib/validations/mcp';
 import { z } from 'zod';
@@ -76,12 +80,42 @@ export function McpKeysList({ initialKeys }: McpKeysListProps) {
     keyId: string;
     plaintext: string;
   } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Create and revoke fail inside their dialogs; a row's Rotate above the table.
+  const createFailure = useSaveFailure({
+    fallback: 'Could not create the API key. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const [revokeId, setRevokeId] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const revokeFailure = useSaveFailure({
+    fallback: 'Could not revoke the key. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const listFailure = useSaveFailure({
+    fallback: 'Could not rotate the key. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+
+  /**
+   * Re-reads the list after a save. The save already happened, so a failed
+   * read is logged rather than reported as the save failing: the new key's
+   * plaintext is on screen by then.
+   */
+  async function refreshKeys() {
+    try {
+      const rawList = await apiClient.get<unknown>(API.ADMIN.ORCHESTRATION.MCP_KEYS, {
+        params: { page: 1, limit: 50 },
+      });
+      setKeys(z.array(apiKeyRowSchema).parse(rawList));
+    } catch (err) {
+      logger.error('mcp-keys-list: refresh after a save failed', err);
+    }
+  }
 
   async function handleCreate() {
     if (!newKeyName.trim() || newKeyScopes.length === 0) return;
     setCreating(true);
-    setError(null);
+    createFailure.clear();
     try {
       const body: Record<string, unknown> = {
         name: newKeyName.trim(),
@@ -94,59 +128,54 @@ export function McpKeysList({ initialKeys }: McpKeysListProps) {
         body,
       });
       setShowPlaintext(data.plaintext);
-
-      // Refetch to get full row data
-      const rawList = await apiClient.get<unknown>(API.ADMIN.ORCHESTRATION.MCP_KEYS, {
-        params: { page: 1, limit: 50 },
-      });
-      setKeys(z.array(apiKeyRowSchema).parse(rawList));
       setNewKeyName('');
       setNewKeyScopes([McpScope.TOOLS_LIST, McpScope.TOOLS_EXECUTE]);
       setNewKeyExpiry('');
       setNewKeyRateLimit('');
     } catch (err) {
-      // A refused rate limit (§111 t-811) says what the limit is; show it.
-      setError(
-        err instanceof APIClientError && err.status === 400
-          ? err.message
-          : 'Failed to create API key.'
-      );
+      // A refused rate limit (§111 t-811) says what the limit is; it shows.
+      createFailure.report(err);
+      return;
     } finally {
       setCreating(false);
     }
+    // Full row data for the new key.
+    await refreshKeys();
   }
 
   async function handleRevoke(keyId: string) {
-    setError(null);
+    setRevoking(true);
+    revokeFailure.clear();
     try {
       await apiClient.patch(API.ADMIN.ORCHESTRATION.mcpKeyById(keyId), {
         body: { isActive: false },
       });
       setKeys((prev) => prev.map((k) => (k.id === keyId ? { ...k, isActive: false } : k)));
-    } catch {
-      setError('Failed to revoke key.');
+      setRevokeId(null);
+    } catch (err) {
+      revokeFailure.report(err);
+    } finally {
+      setRevoking(false);
     }
   }
 
-  async function handleRotate(keyId: string) {
+  async function handleRotate(key: ApiKeyRow) {
+    const keyId = key.id;
     setRotatingId(keyId);
-    setError(null);
+    listFailure.clear();
     try {
       const data = await apiClient.post<{ plaintextKey: string }>(
         API.ADMIN.ORCHESTRATION.mcpKeyRotate(keyId)
       );
       setRotatedPlaintext({ keyId, plaintext: data.plaintextKey });
-
-      // Refetch to update prefix
-      const rawList = await apiClient.get<unknown>(API.ADMIN.ORCHESTRATION.MCP_KEYS, {
-        params: { page: 1, limit: 50 },
-      });
-      setKeys(z.array(apiKeyRowSchema).parse(rawList));
-    } catch {
-      setError('Failed to rotate key.');
+    } catch (err) {
+      listFailure.report(err, `Couldn't rotate "${key.name}"`);
+      return;
     } finally {
       setRotatingId(null);
     }
+    // The rotated key's new prefix.
+    await refreshKeys();
   }
 
   function toggleScope(scope: string) {
@@ -160,9 +189,28 @@ export function McpKeysList({ initialKeys }: McpKeysListProps) {
     return new Date(expiresAt) < new Date();
   }
 
+  // Each dialog is committed while its save runs, so its failure is shown in
+  // it; each failure is cleared as its dialog opens.
+  const createDialog = useCommittedDialog({
+    open: createDialogOpen,
+    pending: creating,
+    onOpen: () => setCreateDialogOpen(true),
+    onClose: () => {
+      setCreateDialogOpen(false);
+      setShowPlaintext(null);
+    },
+    clear: createFailure.clear,
+  });
+  // One revoke dialog is open at a time (each row's trigger sets its id).
+  const revokeDialog = useCommittedDialog({
+    open: revokeId !== null,
+    pending: revoking,
+    onClose: () => setRevokeId(null),
+    clear: revokeFailure.clear,
+  });
+
   return (
     <div className="space-y-4">
-      {error && <p className="text-destructive text-sm">{error}</p>}
       {/* Rotated key plaintext dialog */}
       <Dialog
         open={rotatedPlaintext !== null}
@@ -194,13 +242,7 @@ export function McpKeysList({ initialKeys }: McpKeysListProps) {
       </Dialog>
 
       {/* Create Key Dialog */}
-      <Dialog
-        open={createDialogOpen}
-        onOpenChange={(open) => {
-          setCreateDialogOpen(open);
-          if (!open) setShowPlaintext(null);
-        }}
-      >
+      <Dialog open={createDialogOpen} onOpenChange={createDialog.onOpenChange}>
         <DialogTrigger asChild>
           <Button size="sm">Create API Key</Button>
         </DialogTrigger>
@@ -308,11 +350,15 @@ export function McpKeysList({ initialKeys }: McpKeysListProps) {
             </div>
           )}
 
+          <SaveError failure={createFailure.failure} />
+
           <DialogFooter>
             {!showPlaintext && (
               <Button
-                onClick={() => void handleCreate()}
-                disabled={!newKeyName.trim() || newKeyScopes.length === 0 || creating}
+                {...createDialog.actionProps({
+                  disabled: !newKeyName.trim() || newKeyScopes.length === 0,
+                })}
+                onClick={(e) => createDialog.confirm(e, handleCreate)}
               >
                 {creating ? 'Creating...' : 'Create Key'}
               </Button>
@@ -320,6 +366,8 @@ export function McpKeysList({ initialKeys }: McpKeysListProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SaveError failure={listFailure.failure} />
 
       {/* Keys Table */}
       <div className="rounded-md border">
@@ -425,18 +473,22 @@ export function McpKeysList({ initialKeys }: McpKeysListProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => void handleRotate(key.id)}
+                              onClick={() => void handleRotate(key)}
                               disabled={rotatingId === key.id}
                               className="text-xs"
                             >
                               {rotatingId === key.id ? 'Rotating...' : 'Rotate'}
                             </Button>
-                            <AlertDialog>
+                            <AlertDialog
+                              open={revokeId === key.id}
+                              onOpenChange={revokeDialog.onOpenChange}
+                            >
                               <AlertDialogTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="text-destructive text-xs"
+                                  onClick={() => setRevokeId(key.id)}
                                 >
                                   Revoke
                                 </Button>
@@ -449,11 +501,18 @@ export function McpKeysList({ initialKeys }: McpKeysListProps) {
                                     it will lose access. This action cannot be undone.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
+                                <SaveError failure={revokeFailure.failure} />
                                 <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogCancel {...revokeDialog.cancelProps}>
+                                    Cancel
+                                  </AlertDialogCancel>
+                                  {/* Closes only on success, so a failure stays readable here. */}
                                   <AlertDialogAction
                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    onClick={() => void handleRevoke(key.id)}
+                                    {...revokeDialog.actionProps()}
+                                    onClick={(e) =>
+                                      revokeDialog.confirm(e, () => handleRevoke(key.id))
+                                    }
                                   >
                                     Revoke
                                   </AlertDialogAction>

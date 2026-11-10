@@ -31,6 +31,15 @@ const DESCRIPTORS: FieldDescriptor[] = [
   { key: 'enabled', type: 'boolean', label: 'Enabled', required: false },
   { key: 'tier', type: 'enum', label: 'Tier', required: false, options: ['free', 'pro'] },
   { key: 'meta', type: 'json', label: 'Meta', required: false },
+  {
+    key: 'ratio',
+    type: 'number',
+    label: 'Ratio',
+    required: false,
+    integer: false,
+    min: 0.5,
+    max: 2,
+  },
 ];
 
 function form(over: Partial<ModuleConfigFormView> = {}): ModuleConfigFormView {
@@ -68,6 +77,40 @@ describe('ConfigTab', () => {
       changeSummary: undefined,
     });
     expect(refresh).toHaveBeenCalled();
+  });
+
+  // `noValidate` turns off what the inputs declare, so the handler has to hold each limit.
+  it.each([
+    ['Ratio', '0.1', 'Ratio: must be at least 0.5'],
+    ['Ratio', '3', 'Ratio: must be at most 2'],
+    ['Max Items', '1.5', 'Max Items: must be a whole number'],
+  ])('blocks %s = %s without saving', async (label, value, message) => {
+    const user = userEvent.setup();
+    render(<ConfigTab slug="demo" form={form()} />);
+
+    const field = screen.getByLabelText(label);
+    await user.type(field, value);
+    await user.click(screen.getByRole('button', { name: /save config/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    expect(field).toHaveFocus();
+    expect(saveModuleConfig).not.toHaveBeenCalled();
+  });
+
+  it('accepts a number on its limit', async () => {
+    const user = userEvent.setup();
+    vi.mocked(saveModuleConfig).mockResolvedValue({
+      version: { id: 'v1', version: 1, changeSummary: null, createdBy: 'u', createdAt: 'x' },
+    });
+    render(<ConfigTab slug="demo" form={form()} />);
+
+    await user.type(screen.getByLabelText('Ratio'), '2');
+    await user.click(screen.getByRole('button', { name: /save config/i }));
+
+    expect(saveModuleConfig).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ config: expect.objectContaining({ ratio: 2 }) })
+    );
   });
 
   it('blocks submit on invalid JSON without calling the API', async () => {

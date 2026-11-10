@@ -191,6 +191,13 @@ model AiWorkflowExecution {
   // the resume path and as a short pointer for the in-flight banner.
   currentStep          String?
   executionTrace       Json // array of step execution logs
+  // Where the DAG walk had got to: the steps of the iteration in flight, the
+  // steps waiting on predecessors, the visited set, bounded-retry counts. Saved
+  // at the start of every walk iteration and with every checkpoint, and read by
+  // a crash-resume so it continues exactly where the run stopped (t-966). Step
+  // ids and counts only — no step output, so erasure has nothing to scrub here.
+  // Shape: `walkPositionSchema` in lib/orchestration/engine/walk-position.ts.
+  walkState            Json?
   totalTokensUsed      Int       @default(0)
   totalCostUsd         Float     @default(0)
   budgetLimitUsd       Float?
@@ -358,6 +365,16 @@ model AiWorkflowRunningStep {
   // settles in the post-`Promise.allSettled` loop.
   completedAt DateTime?
   turns       Json?
+  // Which attempt of the step is running: 0 for the first, 1 for the first
+  // retry, and so on. Written with the turns clear between retry attempts, and
+  // read on resume so a resumed run continues the attempt its replayed turns
+  // belong to rather than restarting at 0 (#1143). Capabilities see it as
+  // `CapabilityContext.stepAttempt`.
+  attempt     Int       @default(0)
+  // The running attempt's id (`CapabilityContext.stepAttemptId`), so a
+  // crash-resume continues the attempt under the same id. Minted by the
+  // engine; null on rows written before it existed (#1143).
+  attemptId   String?
 
   execution AiWorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 

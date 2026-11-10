@@ -18,6 +18,7 @@
 import { useEffect, useState } from 'react';
 import { Check, History } from 'lucide-react';
 
+import { SaveError } from '@/components/forms/form-error';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -29,6 +30,8 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import type { SaveFailure } from '@/lib/errors/save-error';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 
 const MAX_CHANGE_SUMMARY_CHARS = 500;
 
@@ -42,8 +45,10 @@ export interface PublishControlsProps {
   onOpenChange: (open: boolean) => void;
   /** True while the publish request is in flight. */
   publishing: boolean;
-  /** Publish error (e.g. the validation 400), rendered in the dialog. */
-  errorMessage: string | null;
+  /** The refused publish; shown inside the dialog, which stays open. */
+  failure: SaveFailure<never> | null;
+  /** Clears `failure`; called as the dialog opens and closes. */
+  clearFailure: () => void;
   /** Flash true briefly after a successful publish, for the "Published" indicator. */
   published: boolean;
   /** Promote the saved draft with an optional trimmed change summary. */
@@ -58,12 +63,19 @@ export function PublishControls({
   open,
   onOpenChange,
   publishing,
-  errorMessage,
+  failure,
+  clearFailure,
   published,
   onPublish,
   onOpenHistory,
 }: PublishControlsProps) {
   const [summary, setSummary] = useState('');
+  const dialog = useCommittedDialog({
+    open,
+    pending: publishing,
+    onClose: () => onOpenChange(false),
+    clear: clearFailure,
+  });
 
   // Reset the input each time the dialog re-opens so a previous summary doesn't bleed
   // into the next publish.
@@ -102,7 +114,7 @@ export function PublishControls({
         Publish
       </Button>
 
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={dialog.onOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Publish draft</DialogTitle>
@@ -134,18 +146,14 @@ export function PublishControls({
             </p>
           </div>
 
-          {errorMessage && (
-            <p className="text-destructive text-sm" role="alert">
-              {errorMessage}
-            </p>
-          )}
+          <SaveError failure={failure} />
 
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={publishing}
+              onClick={() => dialog.onOpenChange(false)}
+              {...dialog.cancelProps}
             >
               Cancel
             </Button>
@@ -153,7 +161,7 @@ export function PublishControls({
               type="button"
               data-testid="map-publish-confirm"
               onClick={handleConfirm}
-              disabled={publishing || tooLong}
+              {...dialog.actionProps({ disabled: tooLong })}
             >
               {publishing ? 'Publishing…' : 'Publish'}
             </Button>

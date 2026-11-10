@@ -655,6 +655,7 @@ export function VoiceComparisonBoard({
           )}
 
           {queueError && (
+            // save-error-box-ignore: queueing or stopping a comparison starts or ends an evaluation run, which saves nothing, as with core's run and test actions
             <p role="alert" className="text-destructive mt-4 text-sm">
               {queueError}
             </p>

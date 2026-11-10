@@ -14,11 +14,12 @@
  * - Welcome message and description
  * - Suspense boundary for LoginForm
  * - Card structure and layout
+ * - Join-the-waitlist link (invite_only + a waitlist config; §125 t-978)
  *
  * @see app/(auth)/login/page.tsx
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import LoginPage, { metadata } from '@/app/(auth)/login/page';
 import { isInviteOnly } from '@/lib/auth/signup-mode';
@@ -42,6 +43,11 @@ vi.mock('@/components/forms/login-form', () => ({
 vi.mock('@/lib/auth/signup-mode', () => ({
   isInviteOnly: vi.fn(() => false),
 }));
+
+// LELAÑEA divergence (row 15): the page also renders our own closed-door
+// notice under invite_only. Stubbed here so this file judges the platform's
+// page as it ships; ours is tested in tests/unit/app/login-invite-only.test.tsx.
+vi.mock('@/components/app/site/invite-only-notice', () => ({ InviteOnlyNotice: () => null }));
 
 /**
  * Test Suite: Login Page
@@ -408,5 +414,65 @@ describe('LoginPage', () => {
       const signUpLink = screen.getByRole('link', { name: /sign up/i });
       expect(form.compareDocumentPosition(signUpLink)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });
+  });
+});
+
+/**
+ * Join-the-waitlist link (§125 t-978)
+ *
+ * The link needs both signals: sign-up is by invitation (`isInviteOnly()`) and
+ * the app declared a waitlist (the config seam, pinned null in tests/setup.ts).
+ * Each test installs a config with `vi.doMock`, resets the config cache, and
+ * imports the page fresh so the seam is read again. The pin is restored with
+ * another `vi.doMock` (never `vi.doUnmock`).
+ */
+describe('LoginPage — waitlist link', () => {
+  const CONFIG = { consentVersion: '2026-11-01', fields: [] };
+
+  async function renderWith(config: Record<string, unknown> | null, inviteOnly: boolean) {
+    vi.resetModules();
+    vi.doMock('@/lib/app/waitlist-config', () => ({ waitlistConfig: config }));
+    const { __resetWaitlistConfigForTests } = await import('@/lib/waitlist/config');
+    __resetWaitlistConfigForTests();
+    const signupMode = await import('@/lib/auth/signup-mode');
+    vi.mocked(signupMode.isInviteOnly).mockReturnValue(inviteOnly);
+    const { default: Page } = await import('@/app/(auth)/login/page');
+    return render(<Page />);
+  }
+
+  afterEach(() => {
+    vi.doMock('@/lib/app/waitlist-config', () => ({ waitlistConfig: null }));
+  });
+
+  it('links to "/" by default under invite_only with a waitlist', async () => {
+    await renderWith(CONFIG, true);
+
+    const link = screen.getByRole('link', { name: 'Join the waitlist' });
+    expect(link).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: /sign up/i })).not.toBeInTheDocument();
+  });
+
+  it('links to the configured joinPath', async () => {
+    await renderWith({ ...CONFIG, joinPath: '/#waitlist' }, true);
+
+    expect(screen.getByRole('link', { name: 'Join the waitlist' })).toHaveAttribute(
+      'href',
+      '/#waitlist'
+    );
+  });
+
+  it('shows nothing about a waitlist under invite_only when the app has none', async () => {
+    await renderWith(null, true);
+
+    expect(screen.queryByRole('link', { name: 'Join the waitlist' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/by invitation/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /sign up/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the Sign up link and omits the waitlist link when sign-up is open, even with a waitlist', async () => {
+    await renderWith(CONFIG, false);
+
+    expect(screen.queryByRole('link', { name: 'Join the waitlist' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sign up/i })).toHaveAttribute('href', '/signup');
   });
 });

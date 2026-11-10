@@ -7,7 +7,10 @@
  * `metadata.pendingApproval` is set.
  *
  * State machine:
- *   idle → submitting → waiting → completed | failed | expired
+ *   idle → waiting → completed | failed | expired
+ *
+ * (While the decision's POST is in flight the card shows `sending`, which is
+ * component state, not a reducer state.)
  *
  * Approve / Reject POSTs hit the channel-specific token endpoint
  * (`…/approve/chat`, `…/reject/chat`). The actorLabel is set
@@ -34,7 +37,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { SaveError } from '@/components/forms/form-error';
+import { apiErrorFromResponse } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { useTimeout } from '@/lib/hooks/use-timeout';
 import {
   extractFinalOutput,
@@ -71,6 +78,19 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
   const [rejectReason, setRejectReason] = useState('');
   const [approveNotes, setApproveNotes] = useState('');
   const [approveOpen, setApproveOpen] = useState(false);
+  // The decision being sent. Its dialog stays open until the server accepts
+  // it, and shows a refusal inside it (§124).
+  const [sending, setSending] = useState<'approve' | 'reject' | null>(null);
+  const approveSave = useSaveFailure({
+    fallback: 'Could not send the approval. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const rejectSave = useSaveFailure({
+    fallback: 'Could not send the rejection. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const { clear: clearApproveSave, report: reportApproveSave } = approveSave;
+  const { clear: clearRejectSave, report: reportRejectSave } = rejectSave;
 
   const pollAbortRef = useRef<AbortController | null>(null);
   const submitAbortRef = useRef<AbortController | null>(null);
@@ -148,15 +168,12 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
     [pendingApproval.executionId, pendingApproval.approveToken, onResolved, schedule]
   );
 
+  /** Sends the decision; true once the server accepted it. */
   const submit = useCallback(
-    async (action: 'approve' | 'reject', body: Record<string, unknown>) => {
+    async (action: 'approve' | 'reject', body: Record<string, unknown>): Promise<boolean> => {
       submitAbortRef.current?.abort();
       const controller = new AbortController();
       submitAbortRef.current = controller;
-
-      dispatch({
-        type: action === 'approve' ? 'approve_submit' : 'reject_submit',
-      });
 
       try {
         const url =
@@ -172,24 +189,15 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        if (!res.ok) {
-          const json = (await res.json().catch(() => ({}))) as {
-            error?: { message?: string };
-          };
-          dispatch({
-            type: 'failure',
-            payload: { message: json.error?.message ?? `Request failed (${res.status})` },
-          });
-          return;
-        }
-        dispatch({ type: 'submit_ok' });
+        if (!res.ok) throw await apiErrorFromResponse(res);
+        dispatch({ type: 'submit_ok', payload: { action } });
         startPolling(action);
+        return true;
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return;
-        dispatch({
-          type: 'failure',
-          payload: { message: err instanceof Error ? err.message : 'Request failed' },
-        });
+        if (err instanceof Error && err.name === 'AbortError') return false;
+        if (action === 'approve') reportApproveSave(err);
+        else reportRejectSave(err);
+        return false;
       }
     },
     [
@@ -197,23 +205,46 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
       pendingApproval.approveToken,
       pendingApproval.rejectToken,
       startPolling,
+      reportApproveSave,
+      reportRejectSave,
     ]
   );
 
-  const handleApprove = useCallback(() => {
-    void submit('approve', approveNotes ? { notes: approveNotes } : {});
-    setApproveOpen(false);
-  }, [submit, approveNotes]);
+  const handleApprove = useCallback(async () => {
+    clearApproveSave();
+    setSending('approve');
+    const ok = await submit('approve', approveNotes ? { notes: approveNotes } : {});
+    setSending(null);
+    if (ok) setApproveOpen(false);
+  }, [submit, approveNotes, clearApproveSave]);
 
-  const handleReject = useCallback(() => {
+  const handleReject = useCallback(async () => {
     if (!rejectReason.trim()) return;
-    void submit('reject', { reason: rejectReason.trim() });
-    setRejectOpen(false);
-  }, [submit, rejectReason]);
+    clearRejectSave();
+    setSending('reject');
+    const ok = await submit('reject', { reason: rejectReason.trim() });
+    setSending(null);
+    if (ok) setRejectOpen(false);
+  }, [submit, rejectReason, clearRejectSave]);
+
+  // Each dialog is committed while either decision is in flight; an earlier
+  // refusal never greets a reopen.
+  const approveDialog = useCommittedDialog({
+    open: approveOpen,
+    pending: sending !== null,
+    onClose: () => setApproveOpen(false),
+    clear: clearApproveSave,
+  });
+  const rejectDialog = useCommittedDialog({
+    open: rejectOpen,
+    pending: sending !== null,
+    onClose: () => setRejectOpen(false),
+    clear: clearRejectSave,
+  });
 
   const expired = state.kind === 'expired';
   const failed = state.kind === 'failed';
-  const busy = state.kind === 'submitting' || state.kind === 'waiting';
+  const busy = state.kind === 'waiting';
 
   return (
     <div
@@ -225,7 +256,7 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
       <div className="font-medium">Action requires your approval</div>
       <p className="text-muted-foreground mt-1 whitespace-pre-wrap">{pendingApproval.prompt}</p>
 
-      {state.kind === 'idle' && (
+      {state.kind === 'idle' && !sending && (
         <div className="mt-3 flex gap-2">
           <Button
             type="button"
@@ -249,12 +280,12 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
         </div>
       )}
 
-      {busy && (
+      {(busy || sending) && (
         <div className="text-muted-foreground mt-3 flex items-center gap-2 text-xs">
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
           <span>
-            {state.kind === 'submitting'
-              ? `Submitting ${state.action === 'approve' ? 'approval' : 'rejection'}…`
+            {sending
+              ? `Submitting ${sending === 'approve' ? 'approval' : 'rejection'}…`
               : 'Waiting for the workflow to finish…'}
           </span>
         </div>
@@ -280,7 +311,7 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
       )}
 
       {/* Approve dialog */}
-      <AlertDialog open={approveOpen} onOpenChange={setApproveOpen}>
+      <AlertDialog open={approveOpen} onOpenChange={approveDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Approve action?</AlertDialogTitle>
@@ -305,14 +336,16 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
               rows={3}
             />
           </div>
+          <SaveError failure={approveSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...approveDialog.cancelProps}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleApprove();
-              }}
+              {...approveDialog.actionProps()}
+              onClick={(e) => approveDialog.confirm(e, handleApprove)}
             >
+              {sending === 'approve' && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              )}
               Approve
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -320,7 +353,7 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
       </AlertDialog>
 
       {/* Reject dialog */}
-      <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
+      <AlertDialog open={rejectOpen} onOpenChange={rejectDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reject action?</AlertDialogTitle>
@@ -348,16 +381,17 @@ export function ApprovalCard({ pendingApproval, onResolved }: ApprovalCardProps)
               required
             />
           </div>
+          <SaveError failure={rejectSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...rejectDialog.cancelProps}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleReject();
-              }}
-              disabled={!rejectReason.trim()}
+              {...rejectDialog.actionProps({ disabled: !rejectReason.trim() })}
+              onClick={(e) => rejectDialog.confirm(e, handleReject)}
               className="bg-destructive hover:bg-destructive/90"
             >
+              {sending === 'reject' && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              )}
               Reject
             </AlertDialogAction>
           </AlertDialogFooter>

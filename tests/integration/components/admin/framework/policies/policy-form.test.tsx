@@ -195,4 +195,41 @@ describe('PolicyFormDialog', () => {
 
     expect(await screen.findByText('autoApprove: Required')).toBeInTheDocument();
   });
+
+  it('keeps a refused save inside the open dialog, and clears it when the kind changes', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    vi.mocked(apiClient.post).mockRejectedValue(new APIClientError('Refused', 'X', 500));
+    render(<PolicyFormDialog open onOpenChange={onOpenChange} policy={null} onSaved={vi.fn()} />);
+
+    await selectOption(user, /^auto-approve$/i, /^none$/i);
+    await user.click(screen.getByRole('button', { name: /create policy/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Refused');
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    await selectOption(user, /^kind$/i, /^relevance_gating$/i);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('closes on Cancel', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(<PolicyFormDialog open onOpenChange={onOpenChange} policy={null} onSaved={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('locks Cancel and the save button while a save is in flight', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.post).mockReturnValue(new Promise(() => {}));
+    renderCreate();
+
+    await selectOption(user, /^auto-approve$/i, /^none$/i);
+    await user.click(screen.getByRole('button', { name: /create policy/i }));
+
+    expect(await screen.findByRole('button', { name: /saving/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
+  });
 });

@@ -337,6 +337,24 @@ describe('the eleven leanings', () => {
     expect((stop(pace, 'At rest') as HTMLInputElement).checked).toBe(true);
   });
 
+  it('says what the server refused, not a count of fields the dial does not have', async () => {
+    // A VALIDATION_ERROR names its paths (`stop`), and no input on this page is
+    // called that: read as fields, the box would say "1 field needs fixing."
+    patch.mockRejectedValue(
+      new APIClientError('Validation failed', 'VALIDATION_ERROR', 400, {
+        errors: [{ path: 'stop', message: 'That stop is out of range.' }],
+      })
+    );
+    renderSettings();
+    const pace = dial('Energetic', 'Slow and spacious');
+
+    await userEvent.click(stop(pace, 'Toward Slow and spacious'));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('That stop is out of range.');
+    expect(alert.textContent).not.toMatch(/field/);
+  });
+
   it('offers only the stops the bounds allow, and says it is held back', () => {
     renderSettings(leaningsView({ questions: { max: 1 } }));
     const questions = dial('Question-led', 'Guidance-led');

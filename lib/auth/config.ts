@@ -11,7 +11,9 @@ import { sendEmail } from '@/lib/email/send';
 import { validateEmailConfig } from '@/lib/email/client';
 import { resolveEmailTemplate } from '@/lib/email/registry';
 import { logger } from '@/lib/logging';
-import { dispatchUserCreated } from '@/lib/auth/user-created-hooks';
+import { dispatchUserCreated, type RedeemedInvitation } from '@/lib/auth/user-created-hooks';
+import { linkWaitlistEntryToAccount } from '@/lib/waitlist/link';
+import type { InvitationMetadata } from '@/lib/validations/admin';
 import {
   activeOrgForSession,
   initialMembershipFor,
@@ -20,7 +22,7 @@ import {
   signupRecordFor,
   undecidedMembershipsForNewUser,
   writeNewUserMemberships,
-  type AcceptedInvitation,
+  invitedOrgId,
   type NewUserMemberships,
   type SignupRecord,
 } from '@/lib/tenancy/membership';
@@ -28,6 +30,7 @@ import { ORG_ROLES } from '@/lib/tenancy/roles';
 import { isMultiTenant } from '@/lib/tenancy/context';
 import {
   getPendingSignup,
+  getRedeemedInvitation,
   setInvitationAccepted,
   setPendingSignup,
   wasInvitationAccepted,
@@ -45,7 +48,7 @@ import {
   isFirstHumanBootstrap,
 } from '@/lib/auth/signup-mode';
 import { parseEmailChangeToken, getVerificationTokenFromRequest } from '@/lib/auth/change-email';
-import { revokeUserSessions, findMostRecentSessionToken } from '@/lib/auth/sessions';
+import { revokeUserSessions } from '@/lib/auth/sessions';
 import { isPlatformAdmin, PLATFORM_ADMIN_ROLE, DEFAULT_USER_ROLE } from '@/lib/auth/roles';
 
 /**
@@ -112,6 +115,37 @@ export type SessionCreateData = {
 } & Record<string, unknown>;
 
 /**
+ * Which invitation this signup redeemed, for the user-created seam (#1136):
+ * what the before hook recorded, which on the Google path held the only copy,
+ * else accept-invite's own metadata. Asked only once the signup is known to
+ * have redeemed one.
+ */
+async function redeemedBy(userId: string): Promise<RedeemedInvitation | null> {
+  let recorded: RedeemedInvitation | null = null;
+  try {
+    recorded = await getRedeemedInvitation();
+  } catch (error) {
+    // Say so, rather than let a fault pass for "the record could not be read".
+    logger.error('Failed to read which invitation a new user redeemed', error, { userId });
+  }
+  if (recorded) return recorded;
+  const accepted = invitedSignupInvitation();
+  return accepted ? redeemedInvitation(accepted) : null;
+}
+
+/** The identity of an invitation a signup redeemed, for the user-created seam (#1136). */
+function redeemedInvitation(metadata: InvitationMetadata): RedeemedInvitation {
+  return {
+    invitedAt: metadata.invitedAt,
+    invitedBy: metadata.invitedBy,
+    // The same rule the membership is decided by, so the two cannot disagree.
+    orgId: invitedOrgId(metadata),
+    // Only when present, so every other invitation reads exactly as before.
+    ...(metadata.waitlistEntryId ? { waitlistEntryId: metadata.waitlistEntryId } : {}),
+  };
+}
+
+/**
  * Record the membership this signup will write, so the session hook (which
  * may run first — see `lib/auth/pending-signup.ts`) and the after hook agree
  * on it. `user` is the row as it will be created, `invitation` what admitted
@@ -131,14 +165,15 @@ export type SessionCreateData = {
  */
 async function recordPendingMembership(
   user: UserCreateData,
-  invitation: AcceptedInvitation | null,
+  invitation: InvitationMetadata | null,
   viaInvitation: boolean
 ): Promise<SignupRecord> {
   // Three steps, each with its own failure: the fallback below is for a
   // decision that failed, and must not narrow a role when only recording did.
   if (viaInvitation) {
     try {
-      await setInvitationAccepted();
+      // Which invitation, from the same record the membership is decided by.
+      await setInvitationAccepted(invitation ? redeemedInvitation(invitation) : null);
     } catch (error) {
       logger.error('Failed to record the invitation acceptance for a new user', error, {
         email: user.email,
@@ -393,7 +428,16 @@ export async function userCreateBeforeHook(
           email: user.email,
         });
         const promoted = { ...user, role: PLATFORM_ADMIN_ROLE };
-        const record = await recordPendingMembership(promoted, null, oauthInvitationAccepted);
+        // An accept-invite signup can be the first human too. Its invitation
+        // still decides the org, so the membership and the invitation reported
+        // agree; the role is the promotion's, not the invitation's, or the
+        // first admin would not own the install org.
+        const accepted = invitedSignupInvitation();
+        const record = await recordPendingMembership(
+          promoted,
+          accepted ? { ...accepted, role: PLATFORM_ADMIN_ROLE } : null,
+          oauthInvitationAccepted || isInvitedSignup()
+        );
         return { data: { ...promoted, ...record } };
       }
 
@@ -556,25 +600,26 @@ export async function userCreateAfterHook(
     });
   }
 
-  // Check if this is an invitation acceptance (for password flow)
-  let isPasswordInvitation = false;
-
-  try {
-    if (!isOAuthSignup) {
-      // Check for password invitation acceptance (non-expired invitation)
-      const invitation = await getValidInvitation(user.email);
-
-      if (invitation) {
-        isPasswordInvitation = true;
-        logger.info('Detected password invitation acceptance', {
-          userId: user.id,
-          email: user.email,
-        });
-      }
-    }
-  } catch (error) {
-    // Log but don't fail user creation
-    logger.error('Error processing invitation in database hook', error, {
+  // Whether this signup redeemed an invitation, from the two signals that
+  // prove a token was presented (#1136): the acceptance the before hook
+  // recorded (the OAuth path, which consumed the token, and accept-invite),
+  // and the accept-invite route's own context, which it enters only after
+  // validating the token. NOT "an invitation is pending for this address": a
+  // public email/password signup for an invited address presented no token,
+  // and reporting it as invited let a fork grant that invitation's roles to
+  // whoever claimed the address first.
+  const viaInvitation =
+    (await wasInvitationAccepted().catch((error: unknown) => {
+      // On the Google path this is the only record: say so, rather than
+      // report an invited signup as a stranger with nothing to explain why.
+      logger.error('Failed to read whether a new user redeemed an invitation', error, {
+        userId: user.id,
+      });
+      return false;
+    })) || isInvitedSignup();
+  const redeemed = viaInvitation ? await redeemedBy(user.id) : null;
+  if (viaInvitation && !isOAuthSignup) {
+    logger.info('Detected password invitation acceptance', {
       userId: user.id,
       email: user.email,
     });
@@ -583,14 +628,14 @@ export async function userCreateAfterHook(
   // Determine if welcome email should be sent immediately
   const requiresVerification = env.REQUIRE_EMAIL_VERIFICATION ?? env.NODE_ENV === 'production';
 
-  const shouldSendWelcomeNow = isOAuthSignup || !requiresVerification || isPasswordInvitation;
+  const shouldSendWelcomeNow = isOAuthSignup || !requiresVerification || viaInvitation;
 
   if (shouldSendWelcomeNow) {
     logger.info('Sending welcome email to new user', {
       userId: user.id,
       userEmail: user.email,
       signupMethod,
-      isInvitation: isPasswordInvitation,
+      isInvitation: viaInvitation,
     });
 
     await sendEmail({
@@ -617,20 +662,30 @@ export async function userCreateAfterHook(
     });
   }
 
+  // The waitlist entry this invitation was sent from (§125 t-978), linked to
+  // the account by the id the invitation carried — never by the address — on
+  // the password and the OAuth path alike. Core's own work, so it runs before
+  // the fork's hooks, and they see the entry linked. Never throws.
+  if (redeemed?.waitlistEntryId) {
+    await linkWaitlistEntryToAccount({
+      entryId: redeemed.waitlistEntryId,
+      userId: user.id,
+      email: user.email,
+    });
+  }
+
   // Fork-owned seam (#464). Dispatched last, so an app hook sees the account in
   // its fully initialised state — preferences set, invitation redeemed, welcome
   // email decided. Never throws: `dispatchUserCreated` logs and swallows a
   // failing hook, because the user row already exists by this point and failing
   // here would report a successful signup to the caller as an error.
-  // The OAuth before hook consumed its invitation token, so the lookup above
-  // cannot see it; it recorded the acceptance on the request state (#688).
-  const viaInvitation = isPasswordInvitation || (await wasInvitationAccepted().catch(() => false));
   await dispatchUserCreated({
     userId: user.id,
     email: user.email,
     name: user.name,
     signupMethod: isOAuthSignup ? 'oauth' : 'email',
     viaInvitation,
+    invitation: redeemed,
   });
 }
 
@@ -706,10 +761,12 @@ export async function afterEmailVerificationHook(
     // The address has just changed. Two things follow, neither of which applies
     // to a signup.
     //
-    // 1. Revoke other sessions. This is the point the change actually commits,
+    // 1. Revoke sessions. This is the point the change actually commits,
     //    and the whole reason #489 is a security issue: without this, a session
     //    stolen before the change survives it. Anything holding a cookie from
-    //    before this moment loses it.
+    //    before this moment loses it, except the session this click itself
+    //    carries. An unverified account never reaches this hook; see
+    //    .context/auth/security.md.
     //
     //    Best-effort by design. better-auth does NOT wrap this callback in its
     //    error handling (unlike the send-email callbacks), so a throw here
@@ -717,17 +774,25 @@ export async function afterEmailVerificationHook(
     //    been written — the user would see an error for a change that did in
     //    fact succeed. Log and continue instead.
     try {
-      const current = await auth.api.getSession({ headers: request?.headers ?? new Headers() });
-      // If this request carries no visible session, better-auth may have just
-      // minted one (the new-address click from a cookie-less browser/device is
-      // the ordinary case, not an edge one) — see
-      // findMostRecentSessionToken's doc for why the newest row is safe to
-      // spare here without weakening the revocation.
-      const exceptSessionToken =
-        current?.session?.token ?? (await findMostRecentSessionToken(user.id));
+      // A failed lookup is the same as no session: revoke everything rather
+      // than leave a stolen session alive because the check could not run.
+      const current = await auth.api
+        .getSession({ headers: request?.headers ?? new Headers() })
+        .catch((error: unknown) => {
+          logger.warn('Could not read the session during an email change', {
+            userId: user.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        });
+      // Spare only a session this request proves it holds. A new-address click
+      // from a cookie-less browser or device is the ordinary case: better-auth
+      // (since 1.7.16) mints no session for it, so there is nothing to keep, and
+      // the newest row could be a stolen one. Every session goes, and the user
+      // signs in again at the new address.
       await revokeUserSessions({
         userId: user.id,
-        exceptSessionToken,
+        exceptSessionToken: current?.session?.token ?? null,
         reason: 'email_changed',
       });
     } catch (error) {
@@ -802,19 +867,19 @@ export async function sendVerificationEmailHook({
   // that assumes "this address is being verified for the first time by its
   // owner-to-be" is reading a different situation than it thinks.
   //
-  // Concretely, the invitation skip immediately below would strand the change:
-  // an existing user moving to an address that happens to hold a pending
-  // invitation would get no verification email, no error, and an account stuck
-  // mid-change. The invitation skip exists for signup (where the accept-invite
-  // route marks the address verified itself), and a change is not that.
+  // The invitation skip below is about signup only: it reads accept-invite's
+  // context, which a change never runs in, so a user moving to a new address
+  // always gets a verification email for it. The token is parsed here for the
+  // log line that says which kind of verification this is.
   const emailChange = await parseEmailChangeToken(token);
 
   if (!emailChange) {
-    // Check if this is an invitation acceptance - if so, skip verification email
-    // The invitation acceptance flow marks email as verified immediately
-    const invitation = await getValidInvitation(user.email);
-
-    if (invitation) {
+    // Skip the verification email for accept-invite, which marks the address
+    // verified itself, having validated the token. Its own context says so —
+    // not "an invitation is pending for this address": a public signup for an
+    // invited address presented no token and must be verified like any other
+    // (#1136).
+    if (isInvitedSignup()) {
       logger.info('Skipping verification email for invitation acceptance', {
         userId: user.id,
         email: user.email,
@@ -829,7 +894,14 @@ export async function sendVerificationEmailHook({
 
   // Replace the default callbackURL (/) with our verification callback page
   // This page handles both success (redirect to dashboard) and error states (show resend option)
-  const verificationUrl = url.replace('callbackURL=%2F', 'callbackURL=%2Fverify-email%2Fcallback');
+  // A change is marked, because the page cannot say "verified" or redirect for
+  // one: the click may leave the user signed out, and on an unverified account
+  // it moves the address without verifying it.
+  const callbackPath = emailChange
+    ? '%2Fverify-email%2Fcallback%3FemailChanged%3D1'
+    : '%2Fverify-email%2Fcallback';
+  // Only the default: a caller's own callback is left alone, not prefixed.
+  const verificationUrl = url.replace(/callbackURL=%2F(?=&|$)/, `callbackURL=${callbackPath}`);
 
   await sendEmail({
     to: user.email,
@@ -1175,8 +1247,8 @@ export const auth = betterAuth({
     // because a session expires and an email address does not. With it, the
     // change is a two-step the attacker cannot finish: approve from the current
     // inbox, then verify at the new one. The database is untouched until the
-    // second step, and `afterEmailVerificationHook` revokes other sessions when
-    // it lands.
+    // second step, and `afterEmailVerificationHook` revokes sessions when it
+    // lands.
     //
     // `updateEmailWithoutVerification` is deliberately left off. It would let an
     // unverified account skip straight to a direct write, and the token it mints

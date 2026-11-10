@@ -71,6 +71,8 @@ export function SynopsisEditor({
 
   return (
     <form
+      method="post"
+      noValidate
       className="mt-2 flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();

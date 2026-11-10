@@ -49,6 +49,38 @@ export interface UserCreatedContext {
    * email" should skip that step.
    */
   viaInvitation: boolean;
+  /**
+   * The invitation this signup redeemed, so a hook can match rows it keeps
+   * against that invitation rather than against the address (#1136). `null`
+   * when the signup redeemed none, and also in the rare case it redeemed a
+   * token whose invitation record could not be read: `viaInvitation` is then
+   * true and this is null.
+   */
+  invitation: RedeemedInvitation | null;
+}
+
+/**
+ * Which invitation a signup redeemed. Sunrise holds at most one live invitation
+ * per address at a time (an expired one may linger), so the address and
+ * `invitedAt` identify it; the token
+ * itself is consumed by then (on the Google path, before the account exists).
+ * A resend replaces the invitation, with a new `invitedAt` (and the resender
+ * as `invitedBy`), so match on the invitation as last sent.
+ */
+export interface RedeemedInvitation {
+  /** When it was sent (ISO 8601), as recorded on the invitation. */
+  invitedAt: string;
+  /** The id of the user who sent it. */
+  invitedBy: string;
+  /** The org it invited the user into: the install org when it named none. */
+  orgId: string;
+  /**
+   * The waitlist entry it was sent from, when an admin invited the user from
+   * the waitlist (§125). Absent for every other invitation. Sunrise links the
+   * entry to the account itself before the hooks run; this is for a hook that
+   * keeps its own rows about the entry.
+   */
+  waitlistEntryId?: string;
 }
 
 /** A unit of app-owned work that runs once, after a user row is created. */
@@ -59,7 +91,8 @@ const hooks = new Map<string, UserCreatedHook>();
 /**
  * Register a user-creation hook. Idempotent by `key` — re-registering the same
  * key replaces the prior hook (safe under HMR / repeated module imports). Call
- * at module-import time from `lib/app/user-created.ts`.
+ * it inside `initAppUserCreatedHooks()` in `lib/app/user-created.ts`, not at
+ * that module's top level, so a throw part-way through rolls back.
  */
 export function registerUserCreatedHook(key: string, hook: UserCreatedHook): void {
   hooks.set(key, hook);

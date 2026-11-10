@@ -104,6 +104,13 @@ vi.mock('@/lib/orchestration/agents/reconcile-platform-agents', () => ({
 
 // The pending-erasure retrier (t-842): its own module, mocked idle by default.
 vi.mock('@/lib/privacy/erasure-requests', () => ({ processPendingErasures: vi.fn() }));
+vi.mock('@/lib/waitlist/retention', () => ({
+  runWaitlistRetention: vi.fn(async () => ({
+    unconfirmedDeleted: 0,
+    removedDeleted: 0,
+    closedListDeleted: 0,
+  })),
+}));
 
 // The fork seam (#469). Left unmocked, the real empty registry always resolves
 // `undefined`, so neither the "a fork registered jobs" nor the rejection arm of
@@ -410,6 +417,92 @@ describe('POST /api/v1/admin/orchestration/maintenance/tick', () => {
       expect(processDueSchedules).not.toHaveBeenCalled(); // test-review:accept no_arg_called — HEAD never ticks
     });
 
+    describe('authenticated by CRON_SECRET (#1130)', () => {
+      const SECRET = 'q3Jx8m2Vt9Lw4Rz7Nc1Hb6Pk0Yd5Gf3S';
+      const saved = process.env.CRON_SECRET;
+      afterEach(() => {
+        if (saved === undefined) delete process.env.CRON_SECRET;
+        else process.env.CRON_SECRET = saved;
+      });
+
+      function cronRequest(bearer: string, query = ''): NextRequest {
+        return new NextRequest(
+          `http://localhost:3000/api/v1/admin/orchestration/maintenance/tick${query}`,
+          { method: 'GET', headers: { authorization: `Bearer ${bearer}` } }
+        );
+      }
+
+      it('runs the tick without consulting the API-key or session guard', async () => {
+        process.env.CRON_SECRET = SECRET;
+        vi.mocked(auth.api.getSession).mockResolvedValue(mockUnauthenticatedUser());
+
+        const response = await GET(cronRequest(SECRET));
+
+        expect(response.status).toBe(202);
+        expect(processDueSchedules).toHaveBeenCalledTimes(1);
+        expect(mockAfter).toHaveBeenCalledWith(expect.any(Promise));
+        expect(mockResolveApiKey).not.toHaveBeenCalled(); // test-review:accept no_arg_called — the secret is checked before the guard
+        expect(auth.api.getSession).not.toHaveBeenCalled(); // test-review:accept no_arg_called — the secret is checked before the guard
+      });
+
+      it('honours ?force=1', async () => {
+        process.env.CRON_SECRET = SECRET;
+        mockIdleSweep();
+        await GET(cronRequest(SECRET));
+        await (mockAfter.mock.calls[0][0] as Promise<void>);
+
+        expect((await GET(cronRequest(SECRET))).status).toBe(200);
+        expect((await GET(cronRequest(SECRET, '?force=1'))).status).toBe(202);
+      });
+
+      it('falls through to the guard for a wrong secret, and runs nothing', async () => {
+        process.env.CRON_SECRET = SECRET;
+        vi.mocked(auth.api.getSession).mockResolvedValue(mockUnauthenticatedUser());
+
+        const response = await GET(cronRequest(`${SECRET.slice(0, -1)}X`));
+
+        expect(response.status).toBe(401);
+        expect(mockResolveApiKey).toHaveBeenCalledTimes(1);
+        expect(processDueSchedules).not.toHaveBeenCalled(); // test-review:accept no_arg_called — refused before the tick
+      });
+
+      it('still accepts an admin API key when CRON_SECRET is set to something else', async () => {
+        process.env.CRON_SECRET = SECRET;
+        mockResolveApiKey.mockResolvedValue(adminApiKey());
+
+        const response = await GET(cronRequest(`sk_${'b'.repeat(64)}`));
+
+        expect(response.status).toBe(202);
+      });
+
+      it('still refuses a browser session when CRON_SECRET is set', async () => {
+        process.env.CRON_SECRET = SECRET;
+
+        const response = await GET(makeRequest('', 'GET'));
+
+        expect(response.status).toBe(403);
+        expect(processDueSchedules).not.toHaveBeenCalled(); // test-review:accept no_arg_called — refused before the tick
+      });
+
+      it('wraps a tick failure in the standard error envelope', async () => {
+        process.env.CRON_SECRET = SECRET;
+        const runTick = await import('@/lib/orchestration/maintenance/run-tick');
+        const spy = vi
+          .spyOn(runTick, 'runMaintenanceTick')
+          .mockRejectedValue(new Error('tick blew up'));
+        try {
+          const response = await GET(cronRequest(SECRET));
+          const body = await parseJson<{ success: boolean; error: { code: string } }>(response);
+
+          expect(response.status).toBe(500);
+          expect(body.success).toBe(false);
+          expect(body.error.code).toBe('INTERNAL_ERROR');
+        } finally {
+          spy.mockRestore();
+        }
+      });
+    });
+
     it('returns 401 with neither a key nor a session', async () => {
       vi.mocked(auth.api.getSession).mockResolvedValue(mockUnauthenticatedUser());
 
@@ -470,6 +563,7 @@ describe('POST /api/v1/admin/orchestration/maintenance/tick', () => {
       'auditLogRetention',
       'platformAgents',
       'pendingErasures',
+      'waitlistRetention',
     ]);
     expect(typeof body.data.durationMs).toBe('number');
     expect(body.data.durationMs).toBeGreaterThanOrEqual(0);
@@ -490,6 +584,7 @@ describe('POST /api/v1/admin/orchestration/maintenance/tick', () => {
     expect(body.data).not.toHaveProperty('auditLogRetention');
     expect(body.data).not.toHaveProperty('platformAgents');
     expect(body.data).not.toHaveProperty('pendingErasures');
+    expect(body.data).not.toHaveProperty('waitlistRetention');
   });
 
   it('still invokes all seven maintenance tasks (six in background)', async () => {
@@ -589,9 +684,10 @@ describe('POST /api/v1/admin/orchestration/maintenance/tick', () => {
     expect(response.status).toBe(202);
     expect(body.data.schedules).toEqual({ error: 'schedules DB down' });
     // Background tasks still kick off even when schedules fail
-    // (11 tasks: evaluationRuns added in Phase 1, auditLogRetention split out in
-    // §108, platformAgents added in §116, pendingErasures in t-842).
-    expect(body.data.backgroundTasks).toHaveLength(11);
+    // (12 tasks: evaluationRuns added in Phase 1, auditLogRetention split out in
+    // §108, platformAgents added in §116, pendingErasures in t-842,
+    // waitlistRetention in §125 t-976/t-977).
+    expect(body.data.backgroundTasks).toHaveLength(12);
   });
 
   it('returns a readable schedules.error when processDueSchedules rejects a non-Error', async () => {

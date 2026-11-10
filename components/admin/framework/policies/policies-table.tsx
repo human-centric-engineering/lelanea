@@ -38,6 +38,7 @@ import {
 import { apiClient } from '@/lib/api/client';
 import { FACILITATION_POLICY_KINDS } from '@/lib/framework/facilitation/policies/kinds';
 import type { FacilitationPolicyView } from '@/lib/framework/facilitation/policies/view';
+import { SaveError } from '@/components/forms/form-error';
 import { useRowActions } from '@/components/admin/framework/module-detail/use-row-actions';
 import { RowConfirm } from '@/components/admin/framework/module-detail/row-confirm';
 import { PolicyFormDialog } from '@/components/admin/framework/policies/policy-form';
@@ -164,11 +165,7 @@ export function PoliciesTable({ initialPolicies }: PoliciesTableProps) {
         </Button>
       </div>
 
-      {rows.error && (
-        <p className="text-destructive text-sm" role="alert">
-          {rows.error}
-        </p>
-      )}
+      <SaveError failure={rows.failure} />
 
       <div className="rounded-md border">
         <Table>

@@ -38,8 +38,11 @@ import {
   SupportLevelHelp,
   SUPPORT_GRANT_LEVEL_LABELS,
 } from '@/components/admin/support-access/support-level-help';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import type { SupportGrantLevel } from '@/lib/tenancy/roles';
 
 /** One grant as `GET /api/v1/orgs/[id]/support-grants` returns it. */
@@ -75,31 +78,38 @@ function personName(person: { name: string | null } | null): string {
 export function SupportGrantsTable({ orgId, grants }: SupportGrantsTableProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<SupportGrantRow | null>(null);
+  // Revoke is the only row action, and it is confirmed in the dialog: its
+  // failure shows there, and the dialog stays open.
+  const revokeSave = useSaveFailure({
+    fallback: 'Could not revoke support access. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
 
   const revoke = async (grant: SupportGrantRow) => {
-    setRevoking(null);
     setBusy(true);
-    setError(null);
+    revokeSave.clear();
     try {
       await apiClient.delete(API.ORGS.supportGrant(orgId, grant.id));
+      setRevoking(null);
       router.refresh();
     } catch (err) {
-      setError(err instanceof APIClientError ? err.message : 'An unexpected error occurred');
+      revokeSave.report(err);
     } finally {
       setBusy(false);
     }
   };
 
+  // Committed while the revoke runs; a failure from one grant never shows on the next.
+  const revokeDialog = useCommittedDialog({
+    open: !!revoking,
+    pending: busy,
+    onClose: () => setRevoking(null),
+    clear: revokeSave.clear,
+  });
+
   return (
     <div className="space-y-3">
-      {error && (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      )}
-
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -175,7 +185,7 @@ export function SupportGrantsTable({ orgId, grants }: SupportGrantsTableProps) {
         </Table>
       </div>
 
-      <AlertDialog open={!!revoking} onOpenChange={(open) => !open && setRevoking(null)}>
+      <AlertDialog open={!!revoking} onOpenChange={revokeDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Revoke support access</AlertDialogTitle>
@@ -184,9 +194,17 @@ export function SupportGrantsTable({ orgId, grants }: SupportGrantsTableProps) {
               working in it. You can grant access again at any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <SaveError failure={revokeSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => revoking && void revoke(revoking)}>
+            <AlertDialogCancel {...revokeDialog.cancelProps}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              {...revokeDialog.actionProps()}
+              onClick={(e) =>
+                revokeDialog.confirm(e, () => {
+                  if (revoking) void revoke(revoking);
+                })
+              }
+            >
               Revoke
             </AlertDialogAction>
           </AlertDialogFooter>

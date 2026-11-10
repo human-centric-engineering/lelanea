@@ -25,8 +25,11 @@ import {
 import { FieldHelp } from '@/components/ui/field-help';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SaveError } from '@/components/forms/form-error';
 import { apiClient, APIClientError } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { useTimeout } from '@/lib/hooks/use-timeout';
 
 interface InviteToken {
@@ -70,7 +73,16 @@ export function AgentInviteTokensTab({ agentId }: AgentInviteTokensTabProps) {
   const schedule = useTimeout();
   const [tokens, setTokens] = useState<InviteToken[] | null>(null);
   const [loading, setLoading] = useState(true);
+  // Load and clipboard failures; a refused revoke or create is a save (§124).
   const [error, setError] = useState<string | null>(null);
+  const listSave = useSaveFailure({
+    fallback: 'Could not revoke the token. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const createSave = useSaveFailure({
+    fallback: 'Could not create the token. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -101,7 +113,7 @@ export function AgentInviteTokensTab({ agentId }: AgentInviteTokensTabProps) {
 
   const handleCreate = async () => {
     setCreating(true);
-    setError(null);
+    createSave.clear();
     try {
       const body: Record<string, unknown> = {};
       if (newLabel.trim()) body.label = newLabel.trim();
@@ -115,20 +127,21 @@ export function AgentInviteTokensTab({ agentId }: AgentInviteTokensTabProps) {
       setNewExpiresAt('');
       await fetchTokens();
     } catch (err) {
-      setError(err instanceof APIClientError ? err.message : 'Failed to create token');
+      // The dialog stays open with the failure above its buttons.
+      createSave.report(err);
     } finally {
       setCreating(false);
     }
   };
 
-  const handleRevoke = async (tokenId: string) => {
-    setRevoking(tokenId);
-    setError(null);
+  const handleRevoke = async (token: InviteToken) => {
+    setRevoking(token.id);
+    listSave.clear();
     try {
-      await apiClient.delete(API.ADMIN.ORCHESTRATION.agentInviteTokenById(agentId, tokenId));
+      await apiClient.delete(API.ADMIN.ORCHESTRATION.agentInviteTokenById(agentId, token.id));
       await fetchTokens();
     } catch (err) {
-      setError(err instanceof APIClientError ? err.message : 'Failed to revoke token');
+      listSave.report(err, `Couldn't revoke "${token.label || token.token.slice(0, 8)}"`);
     } finally {
       setRevoking(null);
     }
@@ -143,6 +156,14 @@ export function AgentInviteTokensTab({ agentId }: AgentInviteTokensTabProps) {
       setError('Could not copy to clipboard. Your browser may require a secure (HTTPS) context.');
     }
   };
+
+  // Committed while the create runs; an earlier failure never greets a reopen.
+  const createDialog = useCommittedDialog({
+    open: showCreate,
+    pending: creating,
+    onClose: () => setShowCreate(false),
+    clear: createSave.clear,
+  });
 
   if (loading) {
     return (
@@ -199,6 +220,8 @@ export function AgentInviteTokensTab({ agentId }: AgentInviteTokensTabProps) {
           {error}
         </div>
       )}
+
+      <SaveError failure={listSave.failure} />
 
       {tokens && tokens.length > 0 ? (
         <div className="rounded-md border">
@@ -262,7 +285,7 @@ export function AgentInviteTokensTab({ agentId }: AgentInviteTokensTabProps) {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => void handleRevoke(t.id)}
+                          onClick={() => void handleRevoke(t)}
                           disabled={revoking === t.id}
                           className="text-destructive hover:text-destructive h-7 px-2"
                           aria-label={`Revoke token ${t.label || t.token.slice(0, 8)}`}
@@ -288,7 +311,7 @@ export function AgentInviteTokensTab({ agentId }: AgentInviteTokensTabProps) {
       )}
 
       {/* Create token dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={createDialog.onOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create invite token</DialogTitle>
@@ -340,11 +363,21 @@ export function AgentInviteTokensTab({ agentId }: AgentInviteTokensTabProps) {
               <DatePicker id="token-expires" value={newExpiresAt} onChange={setNewExpiresAt} />
             </div>
           </div>
+          <SaveError failure={createSave.failure} />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCreate(false)}
+              {...createDialog.cancelProps}
+            >
               Cancel
             </Button>
-            <Button type="button" onClick={() => void handleCreate()} disabled={creating}>
+            <Button
+              type="button"
+              {...createDialog.actionProps()}
+              onClick={(e) => createDialog.confirm(e, handleCreate)}
+            >
               {creating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

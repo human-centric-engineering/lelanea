@@ -16,7 +16,7 @@
  * never a false "nothing in scope".
  */
 
-import { useState, type ReactNode } from 'react';
+import { useState, type BaseSyntheticEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +38,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClient } from '@/lib/api/client';
-import { apiFieldErrors } from '@/components/admin/framework/module-detail/api-field-errors';
+import { SaveError } from '@/components/forms/form-error';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import {
   ROSTER_LIMIT,
   useBindingRoster,
@@ -159,32 +160,31 @@ function GrantSection<T>({
 
   const [adding, setAdding] = useState(false);
   const [selectedId, setSelectedId] = useState('');
-  const [errors, setErrors] = useState<string[]>([]);
+  const save = useSaveFailure({ fallback: `Failed to grant ${noun}`, fields: NO_SERVER_FIELDS });
   const [busy, setBusy] = useState(false);
 
   function openForm() {
     setAdding(true);
-    setErrors([]);
+    save.clear();
     setSelectedId('');
     roster.reset();
     void roster.load();
   }
 
-  async function grant(e: React.FormEvent) {
-    e.preventDefault();
+  async function grant(e?: BaseSyntheticEvent) {
+    e?.preventDefault();
     if (!selectedId) {
-      setErrors([`Choose a ${noun}.`]);
+      save.block([{ field: `grant-${paramKey}`, message: `Choose a ${noun}.` }]);
       return;
     }
     setBusy(true);
-    setErrors([]);
     try {
       await apiClient.post(base, { body: { [paramKey]: selectedId } });
       setSelectedId('');
       setAdding(false);
       router.refresh();
     } catch (err) {
-      setErrors(apiFieldErrors(err, `Failed to grant ${noun}`));
+      save.report(err);
     } finally {
       setBusy(false);
     }
@@ -214,7 +214,9 @@ function GrantSection<T>({
 
       {adding && (
         <form
-          onSubmit={(e) => void grant(e)}
+          method="post"
+          noValidate
+          onSubmit={save.submit(grant)}
           className="bg-muted/40 space-y-4 rounded-md border p-4"
         >
           <RosterSearch
@@ -259,13 +261,7 @@ function GrantSection<T>({
             </p>
           )}
 
-          {errors.length > 0 && (
-            <ul className="text-destructive space-y-1 text-sm" role="alert">
-              {errors.map((msg, i) => (
-                <li key={i}>{msg}</li>
-              ))}
-            </ul>
-          )}
+          <SaveError failure={save.failure} />
 
           <div className="flex items-center gap-2">
             <Button type="submit" size="sm" disabled={busy || roster.roster === null}>
@@ -284,11 +280,7 @@ function GrantSection<T>({
         </form>
       )}
 
-      {rows.error && (
-        <p className="text-destructive text-sm" role="alert">
-          {rows.error}
-        </p>
-      )}
+      <SaveError failure={rows.failure} />
 
       {items.length === 0 ? (
         <p className="text-muted-foreground text-sm">No {title.toLowerCase()} in scope.</p>

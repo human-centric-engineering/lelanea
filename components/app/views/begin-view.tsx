@@ -7,6 +7,8 @@ import { Button } from '@/components/app/ui/button';
 import { useConsentBannerClearance } from '@/components/app/ui/consent-clearance';
 import { Eyebrow } from '@/components/app/ui/eyebrow';
 import { apiClient } from '@/lib/api/client';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { SaveError } from '@/components/forms/form-error';
 import { logger } from '@/lib/logging';
 import {
   ACKNOWLEDGEMENT_KINDS,
@@ -158,7 +160,7 @@ export interface BeginViewProps {
 export function BeginView({ initialStatus, documents }: BeginViewProps) {
   const [status, setStatus] = React.useState<GateStatusJson>(initialStatus);
   const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const save = useSaveFailure({ fallback: DID_NOT_LAND, fields: NO_SERVER_FIELDS });
   // The cookie banner is fixed over the bottom of the page, where each step's
   // button is pinned. Padding by its height keeps the button above it (t-117).
   const clearance = useConsentBannerClearance();
@@ -166,13 +168,14 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
 
   const acknowledge = (kind: AcknowledgementKind): void => {
     setBusy(true);
-    setError(null);
+    save.clear();
     apiClient
       .post<GateStatusJson>(ACKNOWLEDGEMENTS_ROUTE, { body: { kind } })
       .then(setStatus)
       .catch((caught: unknown) => {
         logger.warn('Acknowledgement did not land', { kind, error: String(caught) });
-        setError(DID_NOT_LAND);
+        // Our words, not the server's: this step speaks in Lelañea's voice.
+        save.show(DID_NOT_LAND);
       })
       .finally(() => setBusy(false));
   };
@@ -248,11 +251,7 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
           <Button type="button" disabled={busy} onClick={() => acknowledge(current)}>
             {copy.action}
           </Button>
-          {error ? (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          ) : null}
+          <SaveError failure={save.failure} />
         </div>
       </footer>
     </div>

@@ -16,7 +16,7 @@
  * can edit inline per row (f-admin-surfaces t-4).
  */
 
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type BaseSyntheticEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Badge } from '@/components/ui/badge';
@@ -44,7 +44,8 @@ import type {
   ModuleAgentBindingListItem,
   ModuleAgentRolesView,
 } from '@/lib/framework/modules/view';
-import { apiFieldErrors } from '@/components/admin/framework/module-detail/api-field-errors';
+import { SaveError } from '@/components/forms/form-error';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import {
   ROSTER_LIMIT,
   useBindingRoster,
@@ -83,13 +84,16 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
   const [agentId, setAgentId] = useState('');
   const [role, setRole] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
+  const save = useSaveFailure({ fallback: 'Failed to bind agent', fields: NO_SERVER_FIELDS });
   const [busy, setBusy] = useState(false);
 
   // Per-binding `config` editor: at most one row's editor is open at a time.
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
   const [configDraft, setConfigDraft] = useState('');
-  const [configErrors, setConfigErrors] = useState<string[]>([]);
+  const configSave = useSaveFailure({
+    fallback: 'Failed to save config',
+    fields: NO_SERVER_FIELDS,
+  });
   const [configBusy, setConfigBusy] = useState(false);
 
   // Row actions gate on a busy/confirm state OR an open config editor, so a config edit can't be
@@ -104,20 +108,21 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
 
   function openForm() {
     setAdding(true);
-    setErrors([]);
+    save.clear();
     setAgentId('');
     roster.reset();
     void roster.load();
   }
 
-  async function bind(e: React.FormEvent) {
-    e.preventDefault();
+  async function bind(e?: BaseSyntheticEvent) {
+    e?.preventDefault();
     if (!agentId || !role) {
-      setErrors(['Choose an agent and a seat.']);
+      save.block([
+        { field: agentId ? 'bind-role' : 'bind-agent', message: 'Choose an agent and a seat.' },
+      ]);
       return;
     }
     setBusy(true);
-    setErrors([]);
     try {
       await apiClient.post(base, { body: { agentId, role, isPrimary } });
       setAgentId('');
@@ -126,7 +131,7 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
       setAdding(false);
       router.refresh();
     } catch (err) {
-      setErrors(apiFieldErrors(err, 'Failed to bind agent'));
+      save.report(err);
     } finally {
       setBusy(false);
     }
@@ -156,16 +161,17 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
 
   function openConfig(binding: ModuleAgentBindingListItem) {
     setEditingConfigId(binding.id);
-    setConfigErrors([]);
+    configSave.clear();
     setConfigDraft(binding.config ? JSON.stringify(binding.config, null, 2) : '');
   }
 
   function closeConfig() {
     setEditingConfigId(null);
-    setConfigErrors([]);
+    configSave.clear();
   }
 
   async function saveConfig(bindingId: string) {
+    configSave.clear();
     // An empty editor clears the override (`config: null`); otherwise the text must parse to a
     // JSON *object* (the server's `config` schema). We forward the parsed value as-is and let
     // the server re-validate — the client parse is convenience, not the trust boundary.
@@ -176,24 +182,25 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
       try {
         value = JSON.parse(raw);
       } catch {
-        setConfigErrors(['Config: invalid JSON.']);
+        configSave.block([{ field: `config-${bindingId}`, message: 'Config: invalid JSON.' }]);
         return;
       }
       if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        setConfigErrors(['Config must be a JSON object.']);
+        configSave.block([
+          { field: `config-${bindingId}`, message: 'Config must be a JSON object.' },
+        ]);
         return;
       }
       config = value as Record<string, unknown>;
     }
 
     setConfigBusy(true);
-    setConfigErrors([]);
     try {
       await apiClient.patch(`${base}/${bindingId}`, { body: { config } });
       setEditingConfigId(null);
       router.refresh();
     } catch (err) {
-      setConfigErrors(apiFieldErrors(err, 'Failed to save config'));
+      configSave.report(err);
     } finally {
       setConfigBusy(false);
     }
@@ -231,7 +238,9 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
 
       {adding && canBind && (
         <form
-          onSubmit={(e) => void bind(e)}
+          method="post"
+          noValidate
+          onSubmit={save.submit(bind)}
           className="bg-muted/40 space-y-4 rounded-md border p-4"
         >
           <RosterSearch
@@ -303,13 +312,7 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
             </p>
           )}
 
-          {errors.length > 0 && (
-            <ul className="text-destructive space-y-1 text-sm" role="alert">
-              {errors.map((msg, i) => (
-                <li key={i}>{msg}</li>
-              ))}
-            </ul>
-          )}
+          <SaveError failure={save.failure} />
 
           <div className="flex items-center gap-2">
             <Button type="submit" size="sm" disabled={busy || roster.roster === null}>
@@ -328,11 +331,7 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
         </form>
       )}
 
-      {rows.error && (
-        <p className="text-destructive text-sm" role="alert">
-          {rows.error}
-        </p>
-      )}
+      <SaveError failure={rows.failure} />
 
       {bindings === null ? (
         <p className="text-muted-foreground text-sm" role="alert">
@@ -441,13 +440,7 @@ export function AgentsTab({ slug, agentRoles, bindings }: AgentsTabProps) {
                             className="max-w-lg font-mono text-xs"
                             placeholder="{ }"
                           />
-                          {configErrors.length > 0 && (
-                            <ul className="text-destructive space-y-1 text-sm" role="alert">
-                              {configErrors.map((msg, i) => (
-                                <li key={i}>{msg}</li>
-                              ))}
-                            </ul>
-                          )}
+                          <SaveError failure={configSave.failure} />
                           <div className="flex items-center gap-2">
                             <Button
                               size="sm"

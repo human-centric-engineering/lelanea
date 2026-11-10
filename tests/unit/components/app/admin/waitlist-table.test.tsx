@@ -59,7 +59,17 @@ const { patch, post, del, APIClientErrorMock } = vi.hoisted(() => ({
   patch: vi.fn(),
   post: vi.fn(),
   del: vi.fn(),
-  APIClientErrorMock: class APIClientError extends Error {},
+  // The real one's shape: `readSaveError` reads `code` and `details`.
+  APIClientErrorMock: class APIClientError extends Error {
+    constructor(
+      message: string,
+      public code?: string,
+      public status?: number,
+      public details?: Record<string, unknown>
+    ) {
+      super(message);
+    }
+  },
 }));
 vi.mock('@/lib/api/client', () => ({
   apiClient: { patch, post, delete: del },
@@ -354,6 +364,45 @@ describe('WaitlistTable', () => {
 
       const alert = await waitFor(() => screen.getByRole('alert'));
       expect(within(alert).getByText(/was not removed/)).toBeTruthy();
+    });
+
+    it('says what the server refused, naming the person, not a count of fields', async () => {
+      // A VALIDATION_ERROR names its paths, and this table has no field by that
+      // name: read as fields, the box would say "1 field needs fixing."
+      const user = userEvent.setup();
+      patch.mockRejectedValue(
+        new APIClientErrorMock('Validation failed', 'VALIDATION_ERROR', 400, {
+          errors: [{ path: 'removed', message: 'Expected a yes or no.' }],
+        })
+      );
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={META} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+      await user.click(screen.getByRole('button', { name: 'Remove from waitlist' }));
+
+      const alert = await waitFor(() => screen.getByRole('alert'));
+      expect(alert.textContent).toMatch(/was not removed: Expected a yes or no\.$/);
+      expect(alert.textContent).not.toMatch(/field/);
+    });
+
+    it('drops a row’s failure once a new page is showing, since that row may not be on it', async () => {
+      const user = userEvent.setup();
+      patch.mockRejectedValue(new Error('network'));
+      const meta = { page: 1, limit: 25, total: 60, totalPages: 3 };
+      fetchMock.mockResolvedValue(
+        listResponse([entry({ id: 'entry-2', email: 'bo@example.com' })], { ...meta, page: 2 })
+      );
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={meta} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+      await user.click(screen.getByRole('button', { name: 'Remove from waitlist' }));
+      expect((await screen.findByRole('alert')).textContent).toMatch(
+        /ada@example.com was not removed/
+      );
+
+      await user.click(screen.getByRole('button', { name: /Next/ }));
+
+      await waitFor(() => expect(screen.queryByText(/ada@example.com was not removed/)).toBeNull());
     });
   });
 

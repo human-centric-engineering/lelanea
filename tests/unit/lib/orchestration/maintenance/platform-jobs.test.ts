@@ -49,8 +49,10 @@ vi.mock('@/lib/orchestration/agents/reconcile-platform-agents', () => ({
   reconcilePlatformAgentsIfStale: vi.fn(),
 }));
 vi.mock('@/lib/privacy/erasure-requests', () => ({ processPendingErasures: vi.fn() }));
+vi.mock('@/lib/waitlist/retention', () => ({ runWaitlistRetention: vi.fn() }));
 
 import { logger } from '@/lib/logging';
+import { runWaitlistRetention } from '@/lib/waitlist/retention';
 import {
   processOrphanedExecutions,
   processPendingExecutions,
@@ -142,6 +144,11 @@ function mockIdleTasks(): void {
   });
   vi.mocked(backfillMissingEmbeddings).mockResolvedValue({ processed: 0, failed: 0 });
   vi.mocked(enforceRetentionPolicies).mockResolvedValue(RETENTION_IDLE);
+  vi.mocked(runWaitlistRetention).mockResolvedValue({
+    unconfirmedDeleted: 0,
+    removedDeleted: 0,
+    closedListDeleted: 0,
+  });
   vi.mocked(processPendingExecutions).mockResolvedValue({ recovered: 0, failed: 0, errors: [] });
   vi.mocked(processPendingEvaluationRuns).mockResolvedValue({
     claimed: 0,
@@ -179,6 +186,7 @@ describe('PLATFORM_JOB_NAMES', () => {
       'auditLogRetention',
       'platformAgents',
       'pendingErasures',
+      'waitlistRetention',
     ]);
   });
 
@@ -203,6 +211,7 @@ describe('PLATFORM_JOB_NAMES', () => {
       ['auditLogRetention', { system: expect.stringContaining('audit') }],
       ['platformAgents', 'per-org'],
       ['pendingErasures', { system: expect.stringContaining('pendingErasures') }],
+      ['waitlistRetention', 'per-org'],
     ]);
   });
 
@@ -395,6 +404,15 @@ describe('runDuePlatformJobs — foundWork', () => {
         vi
           .mocked(enforceRetentionPolicies)
           .mockResolvedValue({ ...RETENTION_IDLE, executionsDeleted: 3 }),
+    ],
+    [
+      'waitlistRetention',
+      () =>
+        vi.mocked(runWaitlistRetention).mockResolvedValue({
+          unconfirmedDeleted: 2,
+          removedDeleted: 0,
+          closedListDeleted: 0,
+        }),
     ],
     [
       'auditLogRetention',

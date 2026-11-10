@@ -12,7 +12,7 @@
  * (create / save / publish / rollback) all shipped in f-map.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type BaseSyntheticEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Flame, Plus, Search } from 'lucide-react';
@@ -39,7 +39,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { headlineOnly } from '@/components/admin/framework/headline-only';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { logger } from '@/lib/logging';
 
 /** The map-list row shape the table reads (a structural subset of the API row). */
@@ -191,34 +195,39 @@ function CreateMapDialog({
   const [slugTouched, setSlugTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Created and on its way to the editor: Create stays off, but the dialog can still close if the
+  // navigation stalls, which `submitting` would forbid.
+  const [created, setCreated] = useState(false);
+  const save = useSaveFailure({ fallback: 'Failed to create the map', fields: NO_SERVER_FIELDS });
 
   // Mirror the name into the slug until the author edits the slug directly.
   const effectiveSlug = slugTouched ? slug : slugify(name);
 
   // The dialog stays mounted, so reset the form whenever it closes — otherwise a
   // half-filled-then-cancelled create reopens with the previous values.
-  function handleOpenChange(next: boolean) {
-    if (!next) {
+  const dialog = useCommittedDialog({
+    open,
+    pending: submitting,
+    onClose: () => {
       setName('');
       setSlug('');
       setSlugTouched(false);
       setDescription('');
-      setError(null);
-      setSubmitting(false);
-    }
-    onOpenChange(next);
-  }
+      setCreated(false);
+      onOpenChange(false);
+    },
+    clear: save.clear,
+  });
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e?: BaseSyntheticEvent) {
+    e?.preventDefault();
     const finalSlug = slugify(effectiveSlug);
-    if (!name.trim() || !finalSlug) {
-      setError('A name and a slug are both required.');
+    const missing = !name.trim() ? 'map-name' : !finalSlug ? 'map-slug' : null;
+    if (missing) {
+      save.block([{ field: missing, message: 'A name and a slug are both required.' }]);
       return;
     }
     setSubmitting(true);
-    setError(null);
     try {
       await apiClient.post('/api/v1/admin/framework/maps', {
         body: {
@@ -227,24 +236,20 @@ function CreateMapDialog({
           ...(description.trim() ? { description: description.trim() } : {}),
         },
       });
+      setCreated(true);
       router.push(`/admin/framework/maps/${encodeURIComponent(finalSlug)}`);
     } catch (err) {
-      const message =
-        err instanceof APIClientError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : 'Failed to create the map';
-      setError(message);
-      logger.error('Map create failed', { slug: finalSlug, error: message });
+      save.report(headlineOnly(err));
+      logger.error('Map create failed', err, { slug: finalSlug });
+    } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={dialog.onOpenChange}>
       <DialogContent>
-        <form onSubmit={(e) => void handleSubmit(e)}>
+        <form method="post" noValidate onSubmit={save.submit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>New facilitation map</DialogTitle>
             <DialogDescription>
@@ -293,19 +298,20 @@ function CreateMapDialog({
                 rows={2}
               />
             </div>
-            {error && (
-              <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-                {error}
-              </p>
-            )}
+            <SaveError failure={save.failure} />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => dialog.onOpenChange(false)}
+              {...dialog.cancelProps}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Creating…' : 'Create map'}
+            <Button type="submit" {...dialog.actionProps({ disabled: created })}>
+              {submitting || created ? 'Creating…' : 'Create map'}
             </Button>
           </DialogFooter>
         </form>

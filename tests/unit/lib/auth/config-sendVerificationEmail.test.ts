@@ -216,6 +216,17 @@ describe('lib/auth/config - sendVerificationEmail callback', () => {
       );
     });
 
+    it("should leave a caller's own callback path alone", async () => {
+      const user = createMockUser({ id: 'user-31', email: 'own@example.com', name: 'Own' });
+      const url = 'https://example.com/verify?token=xyz&callbackURL=%2Fsettings';
+
+      await sendVerificationEmailHook({ user, url, token: 'xyz' });
+
+      expect(VerifyEmailEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ verificationUrl: url })
+      );
+    });
+
     it('should pass URL through unchanged when callbackURL pattern is not present', async () => {
       // Arrange: URL without the expected callbackURL=%2F pattern
       const user = createMockUser({
@@ -300,6 +311,25 @@ describe('lib/auth/config - sendVerificationEmail callback', () => {
       expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'new@example.com' }));
     });
 
+    it('marks the callback so the page can say the address changed', async () => {
+      // The click may leave the user signed out, and on an unverified account
+      // verifies nothing, so the page must not take its signup path.
+      const user = createMockUser({ id: 'user-30', email: 'new@example.com', name: 'Mover' });
+
+      await sendVerificationEmailHook({
+        user,
+        url: 'https://example.com/verify?token=abc&callbackURL=%2F',
+        token: 'change-token',
+      });
+
+      expect(VerifyEmailEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          verificationUrl:
+            'https://example.com/verify?token=abc&callbackURL=%2Fverify-email%2Fcallback%3FemailChanged%3D1',
+        })
+      );
+    });
+
     it('does not consult the invitation table at all for a change', async () => {
       const user = createMockUser({ id: 'mover-2', email: 'new@example.com', name: 'Mover' });
 
@@ -315,54 +345,59 @@ describe('lib/auth/config - sendVerificationEmail callback', () => {
   });
 
   describe('invitation acceptance (should skip)', () => {
-    it('should not send verification email when user has a valid invitation', async () => {
-      // Arrange: invitation exists
+    // accept-invite runs the signup inside `runInvitedSignup`, after
+    // validating the token, and marks the address verified itself (#1136).
+    const metadata = {
+      name: 'Invited',
+      role: 'USER',
+      invitedBy: 'admin-id',
+      invitedAt: '2026-11-01T10:00:00.000Z',
+    };
+
+    it('does not send a verification email for an accept-invite signup, and says why', async () => {
+      const { runInvitedSignup } = await import('@/lib/auth/signup-mode');
       const user = createMockUser({
         id: 'invited-1',
         email: 'invited@example.com',
         name: 'Invited',
       });
-      getValidInvitation.mockResolvedValue({
-        id: 'inv-1',
-        email: 'invited@example.com',
-        metadata: { role: 'ADMIN' },
-      });
 
-      // Act
-      await sendVerificationEmailHook({
-        user,
-        url: 'https://example.com/verify?token=abc',
-        token: 'abc',
-      });
+      await runInvitedSignup(
+        () =>
+          sendVerificationEmailHook({
+            user,
+            url: 'https://example.com/verify?token=abc',
+            token: 'abc',
+          }),
+        metadata
+      );
 
-      // Assert: no email sent
       expect(sendEmail).not.toHaveBeenCalled();
-    });
-
-    it('should log skip message for invitation acceptance', async () => {
-      // Arrange
-      const user = createMockUser({
-        id: 'invited-2',
-        email: 'invited2@example.com',
-        name: 'Invited 2',
-      });
-      getValidInvitation.mockResolvedValue({
-        id: 'inv-2',
-        email: 'invited2@example.com',
-        metadata: {},
-      });
-
-      // Act
-      await sendVerificationEmailHook({
-        user,
-        url: 'https://example.com/verify?token=abc',
-        token: 'abc',
-      });
-
-      // Assert
       expect(logger.info).toHaveBeenCalledWith(
         'Skipping verification email for invitation acceptance',
-        { userId: 'invited-2', email: 'invited2@example.com' }
+        { userId: 'invited-1', email: 'invited@example.com' }
+      );
+    });
+
+    it('sends a verification email to a public signup for an address with a pending invitation', async () => {
+      // No token was presented: the address is unproven, whatever is pending
+      // for it. Skipped, it would get no email at all (#1136 security review).
+      getValidInvitation.mockResolvedValue({
+        email: 'claimed@example.com',
+        metadata,
+        expiresAt: new Date(Date.now() + 86400000),
+        createdAt: new Date(),
+      });
+      const user = createMockUser({ id: 'claimer', email: 'claimed@example.com', name: 'C' });
+
+      await sendVerificationEmailHook({
+        user,
+        url: 'https://example.com/verify?token=abc',
+        token: 'abc',
+      });
+
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'claimed@example.com' })
       );
     });
   });
@@ -381,21 +416,6 @@ describe('lib/auth/config - sendVerificationEmail callback', () => {
           token: 'abc',
         })
       ).rejects.toThrow('SMTP unavailable');
-    });
-
-    it('should propagate error when getValidInvitation fails', async () => {
-      // Arrange
-      const user = createMockUser({ id: 'fail-2', email: 'fail2@example.com', name: 'Fail 2' });
-      getValidInvitation.mockRejectedValue(new Error('DB connection lost'));
-
-      // Act & Assert
-      await expect(
-        sendVerificationEmailHook({
-          user,
-          url: 'https://example.com/verify?token=abc',
-          token: 'abc',
-        })
-      ).rejects.toThrow('DB connection lost');
     });
   });
 });

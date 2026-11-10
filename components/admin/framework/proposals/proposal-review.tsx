@@ -12,7 +12,7 @@
  * which validates + publishes a new map version server-side, author preserved) or **reject**
  * it with a required reason (→ `POST …/reject`). Both go through the shipped API — the server
  * owns the state transition + conflict checks, so a stale decision (already decided, or the
- * map moved) surfaces as the server's error message. On success the page re-pulls
+ * map moved) shows the server's message inside the dialog, which stays open. On success the page re-pulls
  * (`router.refresh()`), so the decided status + its buttons update from the server truth.
  */
 
@@ -35,7 +35,11 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { FieldHelp } from '@/components/ui/field-help';
+import { headlineOnly } from '@/components/admin/framework/headline-only';
+import { SaveError } from '@/components/forms/form-error';
 import { apiClient } from '@/lib/api/client';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import type { StructureChangeProposalView } from '@/lib/framework/facilitation/emergence/view';
 import {
   AuthorLabel,
@@ -59,26 +63,31 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
   const [confirming, setConfirming] = useState<'approve' | 'reject' | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const save = useSaveFailure({
+    fallback: 'Failed to record the decision',
+    fields: NO_SERVER_FIELDS,
+  });
+  const dialog = useCommittedDialog({
+    open: confirming !== null,
+    pending: busy,
+    onClose: () => {
+      setConfirming(null);
+      setReason('');
+    },
+    clear: save.clear,
+  });
 
   const isPending = proposal.status === 'pending';
 
-  function closeDialog() {
-    if (busy) return;
-    setConfirming(null);
-    setReason('');
-    setError(null);
-  }
-
   async function approve() {
     setBusy(true);
-    setError(null);
+    save.clear();
     try {
       await apiClient.post(`${PROPOSALS_URL}/${proposal.id}/approve`);
       setConfirming(null);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve the proposal');
+      save.report(headlineOnly(err));
     } finally {
       setBusy(false);
     }
@@ -87,7 +96,7 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
   async function reject() {
     if (!reason.trim()) return;
     setBusy(true);
-    setError(null);
+    save.clear();
     try {
       await apiClient.post(`${PROPOSALS_URL}/${proposal.id}/reject`, {
         body: { reason: reason.trim() },
@@ -96,7 +105,7 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
       setReason('');
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reject the proposal');
+      save.report(headlineOnly(err));
     } finally {
       setBusy(false);
     }
@@ -174,10 +183,7 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
           <Button
             variant="outline"
             className="gap-1 text-green-700 hover:bg-green-50 hover:text-green-800 dark:text-green-400 dark:hover:bg-green-950 dark:hover:text-green-300"
-            onClick={() => {
-              setError(null);
-              setConfirming('approve');
-            }}
+            onClick={() => setConfirming('approve')}
           >
             <CheckCircle2 className="h-4 w-4" /> Approve &amp; publish
           </Button>
@@ -185,7 +191,6 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
             variant="outline"
             className="gap-1 text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-400 dark:hover:bg-red-950 dark:hover:text-red-300"
             onClick={() => {
-              setError(null);
               setReason('');
               setConfirming('reject');
             }}
@@ -196,7 +201,7 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
       )}
 
       {/* Approve confirm — publishes a new map version server-side. */}
-      <AlertDialog open={confirming === 'approve'} onOpenChange={(o) => !o && closeDialog()}>
+      <AlertDialog open={confirming === 'approve'} onOpenChange={dialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Approve &amp; publish this proposal?</AlertDialogTitle>
@@ -206,15 +211,12 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
               is preserved. This cannot be undone from here.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          <SaveError failure={save.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...dialog.cancelProps}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void approve();
-              }}
-              disabled={busy}
+              onClick={(e) => dialog.confirm(e, approve)}
+              {...dialog.actionProps()}
               className="bg-green-600 hover:bg-green-700"
             >
               {busy ? (
@@ -229,7 +231,7 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
       </AlertDialog>
 
       {/* Reject confirm — reason required. */}
-      <AlertDialog open={confirming === 'reject'} onOpenChange={(o) => !o && closeDialog()}>
+      <AlertDialog open={confirming === 'reject'} onOpenChange={dialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reject this proposal?</AlertDialogTitle>
@@ -253,15 +255,12 @@ export function ProposalReview({ proposal }: ProposalReviewProps) {
               rows={3}
             />
           </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          <SaveError failure={save.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...dialog.cancelProps}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void reject();
-              }}
-              disabled={busy || !reason.trim()}
+              onClick={(e) => dialog.confirm(e, reject)}
+              {...dialog.actionProps({ disabled: !reason.trim() })}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {busy ? (

@@ -469,6 +469,8 @@ function QuestionEditor({
 
   return (
     <form
+      method="post"
+      noValidate
       className="flex flex-col gap-5"
       data-testid={`discovery-question-${question.id}`}
       onSubmit={(event) => {

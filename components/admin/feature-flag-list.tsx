@@ -31,9 +31,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Plus, Trash2, Info } from 'lucide-react';
 import type { FeatureFlag } from '@/types/prisma';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
 import { ClientDate } from '@/components/ui/client-date';
+import { SaveError } from '@/components/forms/form-error';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 
 interface FeatureFlagListProps {
   initialFlags: FeatureFlag[];
@@ -53,7 +56,17 @@ export function FeatureFlagList({
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // One failure box above the table for row toggles; the delete dialog has its own.
+  const listSave = useSaveFailure({
+    fallback: 'Could not update the flag. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const deleteSave = useSaveFailure({
+    fallback: 'Could not delete the flag. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const { clear: clearList, report: reportList } = listSave;
+  const { clear: clearDelete, report: reportDelete } = deleteSave;
 
   // Sync with parent state when initialFlags changes (e.g., after creating a new flag)
   useEffect(() => {
@@ -63,24 +76,25 @@ export function FeatureFlagList({
   /**
    * Toggle a flag's enabled state
    */
-  const handleToggle = useCallback(async (flag: FeatureFlag) => {
-    setTogglingId(flag.id);
-    setError(null);
+  const handleToggle = useCallback(
+    async (flag: FeatureFlag) => {
+      setTogglingId(flag.id);
+      clearList();
 
-    try {
-      const updatedFlag = await apiClient.patch<FeatureFlag>(API.ADMIN.featureFlag(flag.id), {
-        body: { enabled: !flag.enabled },
-      });
+      try {
+        const updatedFlag = await apiClient.patch<FeatureFlag>(API.ADMIN.featureFlag(flag.id), {
+          body: { enabled: !flag.enabled },
+        });
 
-      setFlags((prev) => prev.map((f) => (f.id === flag.id ? updatedFlag : f)));
-    } catch (err) {
-      if (err instanceof APIClientError) {
-        setError(err.message);
+        setFlags((prev) => prev.map((f) => (f.id === flag.id ? updatedFlag : f)));
+      } catch (err) {
+        reportList(err, `Couldn't update "${flag.name}"`);
+      } finally {
+        setTogglingId(null);
       }
-    } finally {
-      setTogglingId(null);
-    }
-  }, []);
+    },
+    [clearList, reportList]
+  );
 
   /**
    * Delete a flag
@@ -89,20 +103,27 @@ export function FeatureFlagList({
     if (!deleteId) return;
 
     setIsDeleting(true);
-    setError(null);
+    clearDelete();
 
     try {
       await apiClient.delete(API.ADMIN.featureFlag(deleteId));
       setFlags((prev) => prev.filter((f) => f.id !== deleteId));
       setDeleteId(null);
     } catch (err) {
-      if (err instanceof APIClientError) {
-        setError(err.message);
-      }
+      // The dialog stays open with the failure above its buttons.
+      reportDelete(err);
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteId]);
+  }, [deleteId, clearDelete, reportDelete]);
+
+  // Committed while the delete runs; a failure from one row never shows on the next.
+  const deleteDialog = useCommittedDialog({
+    open: !!deleteId,
+    pending: isDeleting,
+    onClose: () => setDeleteId(null),
+    clear: clearDelete,
+  });
 
   return (
     <div className="space-y-4">
@@ -121,12 +142,7 @@ export function FeatureFlagList({
         )}
       </div>
 
-      {/* Error message */}
-      {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/20 dark:text-red-400">
-          {error}
-        </div>
-      )}
+      <SaveError failure={listSave.failure} />
 
       {/* Table */}
       <div className="rounded-md border">
@@ -216,7 +232,7 @@ export function FeatureFlagList({
       </div>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+      <AlertDialog open={!!deleteId} onOpenChange={deleteDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Feature Flag</AlertDialogTitle>
@@ -225,12 +241,13 @@ export function FeatureFlagList({
               code checking this flag will receive a &quot;false&quot; value.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <SaveError failure={deleteSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...deleteDialog.cancelProps}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => void handleDelete()}
+              {...deleteDialog.actionProps()}
+              onClick={(e) => deleteDialog.confirm(e, handleDelete)}
               className="bg-red-600 hover:bg-red-700"
-              disabled={isDeleting}
             >
               {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>

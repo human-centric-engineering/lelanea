@@ -154,7 +154,9 @@ describe('PoliciesTable', () => {
 
     await user.click(screen.getByRole('switch', { name: /toggle auto_approval policy/i }));
 
-    expect(await screen.findByText('Update blew up')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Failed to update the policy: Update blew up'
+    );
   });
 
   it('cancels a delete confirm without calling DELETE', async () => {

@@ -19,13 +19,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { APIClientError } from '@/lib/api/client';
+
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 const api = vi.hoisted(() => ({ patch: vi.fn(), get: vi.fn(), post: vi.fn() }));
-vi.mock('@/lib/api/client', () => ({
+vi.mock('@/lib/api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/client')>()),
   apiClient: api,
-  APIClientError: class APIClientError extends Error {},
 }));
 
 // Controls what `getIntersectingNodes` returns for the drag-to-group tests.
@@ -269,7 +271,7 @@ describe('MapBuilder save', () => {
   });
 
   it('surfaces a save failure as an inline alert', async () => {
-    api.patch.mockRejectedValueOnce(new Error('boom'));
+    api.patch.mockRejectedValueOnce(new APIClientError('boom', 'X', 500));
     const user = userEvent.setup();
     render(<MapBuilder graph={graph()} />);
 
@@ -318,7 +320,7 @@ describe('MapBuilder discard', () => {
     render(<MapBuilder graph={graph({ draftDefinition: PUBLISHED_DEF })} />);
 
     await user.click(screen.getByRole('button', { name: 'Discard draft' }));
-    // A non-APIClientError maps to the generic fallback message.
+    // A non-APIClientError has no words of its own, so the context says it all.
     expect(await screen.findByRole('alert')).toHaveTextContent('Failed to discard the draft');
   });
 });
@@ -669,6 +671,25 @@ describe('MapBuilder version controls', () => {
     // The fresh map (published v3 = the rolled-back 2-node snapshot, no draft) drives the
     // canvas — so it shows 2 nodes and the pill reflects v3.
     await waitFor(() => expect(screen.getByTestId('rf')).toHaveAttribute('data-node-count', '2'));
+  });
+
+  it('does not report a committed rollback as refused when the reload fails', async () => {
+    api.get
+      .mockResolvedValueOnce(VERSION_LIST)
+      .mockRejectedValueOnce(new APIClientError('Internal server error', 'INTERNAL_ERROR', 500))
+      .mockResolvedValueOnce(VERSION_LIST);
+    api.post.mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    render(<MapBuilder graph={graph()} />);
+
+    await user.click(screen.getByTestId('map-history-open'));
+    await screen.findByTestId('map-version-1');
+    await user.click(screen.getByTestId('map-rollback-1'));
+    await user.click(screen.getByRole('button', { name: /^confirm$/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/couldn.t confirm the rollback/i);
+    expect(alert).not.toHaveTextContent(/internal server error/i);
   });
 });
 

@@ -84,6 +84,9 @@ model Org {
   aiWorkflowStepDispatchs           AiWorkflowStepDispatch[]
   aiWorkflowRunningSteps            AiWorkflowRunningStep[]
   aiWorkflowExecutionLeaseEvents    AiWorkflowExecutionLeaseEvent[]
+  waitlistEntries                   WaitlistEntry[]
+  waitlistListStates                WaitlistListState[]
+  waitlistConfirmTokens             WaitlistConfirmToken[]
 
   // DAYBREAK "keep mine" (§34 f-framework-tenancy, Hub t-134): back-relations for
   // the 19 tenant-owned framework_* models. Prisma relations are two-sided and

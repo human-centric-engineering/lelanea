@@ -680,6 +680,32 @@ export const ORG_DATA_SOURCES: OrgDataSource[] = [
       return rows.map((row) => ({ id: row.id, label: row.name, createdAt: row.createdAt }));
     },
   },
+  {
+    model: 'WaitlistEntry',
+    section: 'waitlistEntries',
+    disposition: 'export',
+    description:
+      'Everyone on the organisation’s waitlists: address, answers, where they came from, consent and its notice version, and whether each was confirmed, removed, invited or joined.',
+    fetch: ({ orgId }) =>
+      prisma.waitlistEntry.findMany({
+        where: ownedBy(orgId),
+        orderBy: byCreatedAt,
+      }),
+  },
+  {
+    model: 'WaitlistListState',
+    section: 'waitlistLists',
+    disposition: 'export',
+    description:
+      'Whether each of the organisation’s waitlists is taking sign-ups, and when it last changed.',
+    // `changedById` names a person; the org receives that one of its admins
+    // changed the list, which is its own record, as with the audit log.
+    fetch: ({ orgId }) =>
+      prisma.waitlistListState.findMany({
+        where: ownedBy(orgId),
+        orderBy: { changedAt: 'asc' },
+      }),
+  },
 ];
 
 /**
@@ -699,5 +725,10 @@ export const ORG_EXCLUDED_SOURCES: OrgExcludedSource[] = [
     model: 'AiWorkflowExecutionLeaseEvent',
     reason:
       'Engine lease bookkeeping for stuck-execution recovery — lease tokens and heartbeat events, nothing the organisation authored; the executions themselves are exported.',
+  },
+  {
+    model: 'WaitlistConfirmToken',
+    reason:
+      'Hashes of the one-time links that confirm a waitlist address: credential material, and nothing the organisation authored. Whether each entry was confirmed is exported with the entries.',
   },
 ];

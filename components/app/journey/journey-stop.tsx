@@ -329,6 +329,8 @@ function SteerForm({
   const [steer, setSteer] = useState('');
   return (
     <form
+      method="post"
+      noValidate
       className="mt-3 flex flex-col gap-2"
       onSubmit={(event) => {
         event.preventDefault();
