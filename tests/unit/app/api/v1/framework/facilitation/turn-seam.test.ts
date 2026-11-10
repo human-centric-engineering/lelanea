@@ -2,7 +2,7 @@
  * The turn seam in Daybreak's facilitation route — at rest, and wired (§08 t-54;
  * `signal` and `keepAlive` §08 t-55).
  *
- * Lelañea carries a seam in a file Daybreak owns (`.context/app/divergences.md`,
+ * Lelañea carries a seam in a file Daybreak owns (`.context/app/platform-divergences.md`,
  * Row 18). `B19` asks three things of it, demonstrated rather than asserted:
  * generic, ledgered, and **behaviour-neutral at rest**. The last is this file's
  * first half: with the hook at its shipped pass-through, the route calls

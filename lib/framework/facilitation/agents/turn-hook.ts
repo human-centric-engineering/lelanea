@@ -2,7 +2,7 @@
  * Facilitation turn hook — a seam a leaf fills to own what happens around a
  * facilitation turn.
  *
- * **Carried by Lelañea ahead of Daybreak** (`.context/app/divergences.md`,
+ * **Carried by Lelañea ahead of Daybreak** (`.context/app/platform-divergences.md`,
  * Row 18; proposed upstream as daybreak#265). The facilitation role route hands every turn to
  * {@link runFacilitationTurn} instead of calling `streamChat` itself. With
  * nothing registered it runs the turn exactly as the route always did.

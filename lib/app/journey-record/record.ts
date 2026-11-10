@@ -9,7 +9,7 @@
  * this record is not: a draft is replaced, a kept entry is edited, and §12
  * says anything in it can be removed, which has to take the words with it. So
  * the record is `app_journey_entry`, and a synopsis points at its session's
- * `session.started` row. It is ledgered in `.context/app/divergences.md` (Row
+ * `session.started` row. It is ledgered in `.context/app/platform-divergences.md` (Row
  * 29), with daybreak#293 proposing the element it stands in for.
  *
  * **This module is the only code that reads or writes the table.** Keeping

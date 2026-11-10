@@ -132,7 +132,7 @@ export interface TurnWrite {
  * Call {@link coinedSlugs} before the transaction opens and pass its answer.
  *
  * STOPGAP — a direct write to Daybreak's `framework_slot_value`. Owner ruling,
- * 3 Oct 2026; divergence row in `.context/app/divergences.md`. Replace with
+ * 3 Oct 2026; divergence row in `.context/app/platform-divergences.md`. Replace with
  * Daybreak's per-value removal when it ships (daybreak#286).
  */
 export async function wipeTurnWrites(

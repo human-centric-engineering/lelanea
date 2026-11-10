@@ -44,7 +44,7 @@
  * that had just been "corrected" in the round before. The test is the statement
  * of record: it fails if Daybreak changes the behaviour, which prose cannot.
  * That matters here more than usual, because this seam is carried ahead of
- * Daybreak (`.context/app/divergences.md` Row 22) and its upstream version may
+ * Daybreak (`.context/app/platform-divergences.md` Row 22) and its upstream version may
  * not behave identically.
  *
  * ## A stored row that fails validation is dropped, not served

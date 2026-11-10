@@ -63,7 +63,7 @@
  *
  * Wiping a version writes Daybreak's `framework_slot_value` directly. It is the
  * same write t-78's removal makes, under the same owner ruling and the same
- * divergence row (`.context/app/divergences.md`), and it goes when Daybreak
+ * divergence row (`.context/app/platform-divergences.md`), and it goes when Daybreak
  * ships a per-value removal (daybreak#286).
  *
  * @see lib/app/slots/wipe.ts — the placeholder write

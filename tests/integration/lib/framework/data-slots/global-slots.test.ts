@@ -1,6 +1,6 @@
 /**
  * Global slots beside module slots, over repeated boots — the partition proof for
- * the seam carried ahead of Daybreak (`.context/app/divergences.md`, Row 22).
+ * the seam carried ahead of Daybreak (`.context/app/platform-divergences.md`, Row 22).
  *
  * The unit test pins the calls each pass issues; this one runs both passes against
  * a small STATEFUL in-memory table (no live DB in vitest), so "the global pass

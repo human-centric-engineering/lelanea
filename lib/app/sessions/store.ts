@@ -16,7 +16,7 @@
  * module-only, and journey creation dropped `session.started`). So this file
  * writes the rows itself, shaped as the writer Daybreak would offer: open or
  * resume, read current and previous, close lazily. It is a stand-in, ledgered
- * in `.context/app/divergences.md`, and goes when Daybreak ships the writer.
+ * in `.context/app/platform-divergences.md`, and goes when Daybreak ships the writer.
  *
  * ## Two arrivals at once open one session: the primary key is the guard
  *

@@ -282,28 +282,35 @@ describe('forgetDeletedConversations', () => {
     expect(world.turns.some((row) => row.id === 'turn-c')).toBe(false);
   });
 
-  it('carries on for everyone else when one person’s forgetting fails', async () => {
-    world.conversations = world.conversations.filter((row) => row.id !== THEIRS);
-    const deleteMany = prismaFake.appTurn.deleteMany.getMockImplementation()!;
-    prismaFake.appTurn.deleteMany.mockImplementation(async (args) => {
-      if (args.where.userId === ME) throw new Error('lock timeout');
-      return deleteMany(args);
-    });
-    try {
-      const result = await forgetDeletedConversations([DELETED, THEIRS]);
-
-      expect(result).toEqual({ turns: 1, versions: 1, deferred: 0, failed: 2 });
-      expect(world.turns.some((row) => row.id === 'turn-x')).toBe(false);
-      expect(logError).toHaveBeenCalledWith(expect.stringContaining('Could not forget'), {
-        conversationId: DELETED,
-        turns: 2,
-        attempts: 1,
-        error: 'lock timeout',
+  // A driver can reject with a bare string; the log must name it either way.
+  it.each([
+    ['an Error', new Error('lock timeout')],
+    ['not an Error', 'lock timeout'],
+  ])(
+    'carries on for everyone else when one person’s forgetting fails (%s)',
+    async (_kind, failure) => {
+      const deleteMany = prismaFake.appTurn.deleteMany.getMockImplementation()!;
+      prismaFake.appTurn.deleteMany.mockImplementation(async (args) => {
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the case under test: a rejection that may not be an Error
+        if (args.where.userId === ME) return Promise.reject(failure);
+        return deleteMany(args);
       });
-    } finally {
-      prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);
+      try {
+        const result = await forgetDeletedConversations([DELETED, THEIRS]);
+
+        expect(result).toEqual({ turns: 1, versions: 1, deferred: 0, failed: 2 });
+        expect(world.turns.some((row) => row.id === 'turn-x')).toBe(false);
+        expect(logError).toHaveBeenCalledWith(expect.stringContaining('Could not forget'), {
+          conversationId: DELETED,
+          turns: 2,
+          attempts: 1,
+          error: 'lock timeout',
+        });
+      } finally {
+        prismaFake.appTurn.deleteMany.mockImplementation(deleteMany);
+      }
     }
-  });
+  );
 
   it('changes nothing on a second run', async () => {
     await forgetDeletedConversations([DELETED], { userId: ME });
@@ -526,5 +533,27 @@ describe('onConversationsDeleted', () => {
       error: 'connection reset',
     });
     expect(world.turns.filter((row) => row.conversationId === DELETED)).toHaveLength(2);
+  });
+
+  it('still never throws when what fails is not an Error, and says what it was', async () => {
+    // A driver or a hook can reject with a bare string. The promise above has
+    // to hold whatever is thrown, and the log must still name it.
+    prismaFake.aiConversation.findMany.mockRejectedValueOnce('socket hang up');
+
+    await expect(
+      onConversationsDeleted({ conversationIds: [DELETED], userId: ME })
+    ).resolves.toBeUndefined();
+
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('the sweep will'), {
+      conversations: 1,
+      error: 'socket hang up',
+    });
+  });
+
+  it('forgets every owner’s turns when the caller names no person', async () => {
+    await onConversationsDeleted({ conversationIds: [DELETED, THEIRS], userId: null });
+
+    expect(world.turns.some((row) => row.conversationId === DELETED)).toBe(false);
+    expect(world.turns.some((row) => row.conversationId === THEIRS)).toBe(false);
   });
 });

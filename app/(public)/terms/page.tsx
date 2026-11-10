@@ -41,7 +41,7 @@ export const dynamic = 'force-dynamic';
  * governing jurisdiction unnamed, and clause 10 cross-references the lineage
  * document without linking it. All three need her or a lawyer, not a page.
  *
- * @see .context/app/divergences.md — row 9
+ * @see .context/app/platform-divergences.md — row 9
  * @see .context/app/content.md — the pipeline
  */
 export default async function TermsOfUsePage() {

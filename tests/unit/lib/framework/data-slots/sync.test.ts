@@ -307,7 +307,7 @@ describe('syncRegisteredSlotDefinitions', () => {
 });
 
 /**
- * The global-slot seam carried ahead of Daybreak (`.context/app/divergences.md`,
+ * The global-slot seam carried ahead of Daybreak (`.context/app/platform-divergences.md`,
  * Row 22). The first block is the neutrality proof: with no provider registered,
  * the sync must issue exactly the module pass's calls and nothing else.
  */

@@ -3,11 +3,13 @@
 /**
  * Unit Tests: `hooks/use-theme.tsx` — the system preference is a DEFAULT, not a choice
  *
- * This file exists because of a carried divergence
- * (`.context/app/divergences.md` row 2). Upstream Sunrise wrote the resolved
- * system preference straight back into `localStorage` on first paint, so from
- * the second visit onward "hasn't chosen yet" and "chose light" were the same
- * stored state — and switching the OS to dark afterwards did nothing, forever.
+ * This file pins a carried divergence (`.context/app/platform-divergences.md`
+ * row 2): `choice`, `clearTheme` and the `sessionIntent` that keeps a pick whose
+ * storage write failed (sunrise#1207). It was opened for an older defect, now
+ * fixed upstream (sunrise#756, Sunrise 0.16.0): the resolved system preference
+ * was written back into `localStorage` on first paint, so "hasn't chosen yet"
+ * and "chose light" were the same stored state, and switching the OS to dark
+ * afterwards did nothing. The cases for that stay as a regression guard.
  *
  * Against Sunrise's near-greyscale pair that is invisible. Against Lelañea's
  * oyster white and near-black charcoal it is the whole first impression, which

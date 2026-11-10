@@ -396,7 +396,7 @@ twin daybreak#265 already names.
 Every turn on a facilitation seat goes through the turn hook — Daybreak's route
 hands it to `runFacilitationTurn()`, and `lib/app/leaf-bootstrap.ts` registers
 `runRecordedTurn()` (`lib/app/agent/turns.ts`) into it at boot. The seam is ours,
-carried in Daybreak's route: [`divergences.md`](./divergences.md) Row 18,
+carried in Daybreak's route: [`platform-divergences.md`](./platform-divergences.md) Row 18,
 [`daybreak#265`](https://github.com/human-centric-engineering/daybreak/issues/265).
 
 **The record is `app_turn`, one row per turn id per person** — the answer to

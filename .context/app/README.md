@@ -28,7 +28,7 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 | [`building-with-daybreak.md`](./building-with-daybreak.md) | **Read first.** Daybreak's elements are what Lelañea is made of: name the element before designing                            |
 | [`syncing.md`](./syncing.md)                               | Pulling a Daybreak release, and the three traps around it                                                                     |
 | [`local-dev.md`](./local-dev.md)                           | Running locally alongside a Daybreak checkout                                                                                 |
-| [`divergences.md`](./divergences.md)                       | Every edit we carry to a Daybreak- or Sunrise-owned file, and why                                                             |
+| [`platform-divergences.md`](./platform-divergences.md)     | Every edit we carry to a Daybreak- or Sunrise-owned file, and why                                                             |
 | [`brand-theme.md`](./brand-theme.md)                       | The palette, the three typefaces, and how a surface gets branded                                                              |
 | [`content.md`](./content.md)                               | Lelañea's authored words: seed input, the stores, the API, the renderer                                                       |
 | [`waitlist.md`](./waitlist.md)                             | The public waitlist: the model, the routes, the admin list, Art. 15 / Art. 17                                                 |
@@ -79,7 +79,7 @@ rediscovered. Re-checked against the tree and the repo settings at t-19.
   no lawyer has seen. It closes when Lelañea Fulton's own policy is written, not before. The
   Terms of Use cross-reference it (clause 12) and the authored file flags it as
   an open review note. See `app/(public)/privacy/page.tsx` and
-  [`divergences.md`](./divergences.md) row 10.
+  [`platform-divergences.md`](./platform-divergences.md) row 10.
 - **No provider keys are configured.** OpenAI, Resend and Google OAuth were
   deliberately not inherited from Daybreak; add Lelañea's own when a feature
   first needs one. Still true: `.env.local` carries only the database, the

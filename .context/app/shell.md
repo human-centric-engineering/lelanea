@@ -712,7 +712,7 @@ reads as data rather than as copy.
 ## See also
 
 - [`brand-theme.md`](./brand-theme.md) — the tokens every colour here comes from
-- [`divergences.md`](./divergences.md) — rows 1 and 2 touch `app/layout.tsx`, which
+- [`platform-divergences.md`](./platform-divergences.md) — rows 1 and 8 touch `app/layout.tsx`, which
   the shell renders inside
 - [`local-dev.md`](./local-dev.md) — including how to run a production preview on
   the test domain, which is how the `sunrise#769` diagnosis was settled

@@ -38,7 +38,7 @@ const RAW_SQL = /[\w$)\]]\.\$(queryRaw|executeRaw)(Unsafe|Typed)?\s*[(`<]|\bPris
  * cannot hand a narrowed caller another member's rows. Sorted by file.
  */
 const MANIFEST: ReadonlyArray<{ file: string; table: string; why: string }> = [
-  // LELAÑEA DIVERGENCE (.context/app/divergences.md row 19, sunrise#799): our
+  // LELAÑEA DIVERGENCE (.context/app/platform-divergences.md row 19, sunrise#799): our
   // raw reads of core's enforced conversation tables. This guard names a fork
   // file and offers it no seam, so the rows live here.
   {

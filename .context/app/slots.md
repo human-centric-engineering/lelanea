@@ -26,7 +26,7 @@ below).
 Nothing writes `framework_slot_definition` directly. A provider registered from
 `lib/app/leaf-bootstrap.ts` reads our active rows, and Daybreak's global pass
 reconciles them (`lib/framework/data-slots/sync.ts`). That seam is carried ahead
-of Daybreak — [`divergences.md`](./divergences.md) Row 22, proposed upstream as
+of Daybreak — [`platform-divergences.md`](./platform-divergences.md) Row 22, proposed upstream as
 `daybreak#266` — and this taxonomy is its first production caller.
 
 The framework table carries **no history**, which is why ours does: the editor
@@ -250,7 +250,7 @@ rather than from the test, and `/code-review` found all three wrong — one of
 them in the round immediately after it had been "corrected". The test fails if
 Daybreak changes the behaviour; prose does not. That matters more than usual
 here, because the seam is carried ahead of Daybreak
-([`divergences.md`](./divergences.md) Row 22) and the upstream version may not
+([`platform-divergences.md`](./platform-divergences.md) Row 22) and the upstream version may not
 behave identically.
 
 **So: "row withheld" does not mean "slot retired" — it depends what survived.**
@@ -1149,7 +1149,7 @@ removable. Removing is how an Art. 9 note's kept summary goes too.
 
 **This writes Daybreak's table directly**, a stopgap the owner ruled for. The
 placeholder write is `lib/app/slots/wipe.ts`, called from
-`lib/app/slots/delete-note.ts` and from exchange deletion. `divergences.md`
+`lib/app/slots/delete-note.ts` and from exchange deletion. `platform-divergences.md`
 Row 26 is the ledger entry, and
 [`daybreak#286`](https://github.com/human-centric-engineering/daybreak/issues/286)
 asks for the real removal. Delete the function when one lands.
@@ -1348,7 +1348,7 @@ sessions' synopses are settled as an exchange deletion settles them: a draft
 removed, a kept one flagged (t-147).
 
 **Two callers.** The person's own route calls `onConversationsDeleted` once the
-row is gone, so it is immediate (`divergences.md` Row 27,
+row is gone, so it is immediate (`platform-divergences.md` Row 27,
 [`sunrise#919`](https://github.com/human-centric-engineering/sunrise/issues/919)).
 Every other path is caught by `app:deleted-conversation-sweep`, an app job that
 runs every five minutes and finds our turns whose conversation is gone. So after

@@ -9,11 +9,11 @@ Lelañea's colours and typefaces reach the page through **one fork-owned
 stylesheet and one font module**, with no platform layout or page rewritten to
 carry them.
 
-| File                  | Owner                                                 | Does                                                                        |
-| --------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| `app/brand-theme.css` | ours (a Sunrise seam, shipped empty)                  | Declares every token, scoped to `[data-surface='consumer']`                 |
-| `app/fonts.ts`        | ours (new file)                                       | Loads the three families through `next/font/google`                         |
-| `app/layout.tsx`      | Sunrise — [divergence rows 1 and 2](./divergences.md) | Applies the font classes to `<html>`; resolves the theme before first paint |
+| File                  | Owner                                                          | Does                                                        |
+| --------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
+| `app/brand-theme.css` | ours (a Sunrise seam, shipped empty)                           | Declares every token, scoped to `[data-surface='consumer']` |
+| `app/fonts.ts`        | ours (new file)                                                | Loads the three families through `next/font/google`         |
+| `app/layout.tsx`      | Sunrise — [divergence rows 1 and 8](./platform-divergences.md) | Applies the font classes to `<html>`; sets `metadataBase`   |
 
 ## How a page gets branded
 
@@ -122,7 +122,7 @@ accent ink) and `--ease-quick`.
 | `--app-*`                                                 | The thinner frame grounds around the shell's panes (t-179)                                         |
 
 The ground is painted by `components/app/ui/prism-ground.tsx`, mounted once per
-consumer frame — `app/(public)/layout.tsx` ([row 6](./divergences.md)) and the
+consumer frame — `app/(public)/layout.tsx` ([row 6](./platform-divergences.md)) and the
 gate page as `site`, the shell's layout as `app` — and never under `/admin`.
 `<body>` carries `--color-ground`, so the canvas is the ground and the light
 paints over it at `z-index: -1`, behind every frame without the frame needing a
@@ -657,11 +657,11 @@ four pairings rather than trusting the note.
 `<SurfaceSync>` rewrites `data-surface` in a layout effect rather than upstream's
 `useEffect`, so the surface swaps before paint — otherwise a client-side nav
 between the app and `/admin` shows one frame of the wrong palette
-([row 3](./divergences.md)).
+([row 3](./platform-divergences.md)).
 
 The system preference is the **default**; only the toggle persists a choice.
 Nothing is written to `localStorage` until someone uses the toggle, and until
 then the app follows OS theme changes live. That is decision D4. Getting there
 first meant changing two Sunrise files; since Sunrise 0.16.0 (Daybreak 0.9.0)
 the persistence fix is upstream's, and what we still carry is the hook's third
-state, "follow my device" — [row 2](./divergences.md) explains what and why.
+state, "follow my device" — [row 2](./platform-divergences.md) explains what and why.

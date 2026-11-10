@@ -118,7 +118,7 @@ model Org {
   // models, below Daybreak's block as its recipe asks. Prisma relations are
   // two-sided, so a leaf cannot add them without editing this Sunrise model
   // (sunrise#859). On a sync that conflicts here: keep upstream's lines, the
-  // DAYBREAK block AND this one. Ledgered in .context/app/divergences.md.
+  // DAYBREAK block AND this one. Ledgered in .context/app/platform-divergences.md.
   appWaitlistEntries               AppWaitlistEntry[]
   appAcknowledgements              AppAcknowledgement[]
   appKnowledgeDesignations         AppKnowledgeDesignation[]

@@ -17,7 +17,7 @@
  *    is never set upright) are read from the source. Ship the wrong weight and
  *    nothing errors: the browser synthesises it and the page is subtly off.
  *  - **The wiring onto `<html>`** is read from `app/layout.tsx`. That line is a
- *    carried divergence (`.context/app/divergences.md` row 1) and the most
+ *    carried divergence (`.context/app/platform-divergences.md` row 1) and the most
  *    likely thing to be lost in an upstream merge — at which point every page
  *    silently falls back to the browser's default face.
  *
@@ -116,7 +116,8 @@ describe('app/fonts.ts', () => {
     it('points at the ledger row that explains the edit', () => {
       // The comment is what stops a future sync resolving this conflict by
       // taking upstream and silently dropping the brand's typography.
-      expect(LAYOUT_SOURCE).toContain('divergences.md');
+      // The full path and the rows: Daybreak's own ledger has the same file name.
+      expect(LAYOUT_SOURCE).toContain('.context/app/platform-divergences.md, rows 1 and 8');
     });
   });
 });

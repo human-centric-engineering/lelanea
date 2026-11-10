@@ -302,7 +302,7 @@ vi.mock('@/lib/app/llm-providers', () => ({
 }));
 
 /**
- * LELAÑEA divergence — see `.context/app/divergences.md`, row 14.
+ * LELAÑEA divergence — see `.context/app/platform-divergences.md`, row 14.
  *
  * Pin the email-override seam to "overrides nothing", for every test file. Same
  * class as the brand pin below and it arrived the same way: filling

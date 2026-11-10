@@ -175,7 +175,7 @@ vi.mock('@/lib/db/client', () => ({
     verification: {
       findFirst: vi.fn(),
     },
-    // LELAÑEA divergence (.context/app/divergences.md row 14): our filled
+    // LELAÑEA divergence (.context/app/platform-divergences.md row 14): our filled
     // `lib/app/user-created.ts` links a waitlist entry to the new account, and
     // runs on every signup this file drives. No entry for the address is the
     // ordinary case, so the link does nothing; without this it throws and the

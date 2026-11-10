@@ -45,7 +45,7 @@ export function initLeafApp(): Promise<void> {
   // throw: with no hook the route falls back to the pass-through, and the agent's
   // turns would run unrecorded — and bill twice on a retry — with nothing saying
   // so. A pure registration, as this function requires. The seam is carried ahead
-  // of Daybreak — `.context/app/divergences.md` Row 18.
+  // of Daybreak — `.context/app/platform-divergences.md` Row 18.
   registerFacilitationTurnHook(runRecordedTurn);
 
   // f-safety t-61. The voice agent is `public` for the facilitation surface's
@@ -54,7 +54,7 @@ export function initLeafApp(): Promise<void> {
   // Keep the agent off it: that route now answers its slug as an unknown agent
   // and its listing omits it. Before anything that can throw, for the same reason
   // as the hook above. The seam is carried ahead of Sunrise —
-  // `.context/app/divergences.md` Row 21.
+  // `.context/app/platform-divergences.md` Row 21.
   excludeFromConsumerChat(VOICE_AGENT_SLUG);
 
   // f-slots t-70. The authored slot taxonomy — what the app aims to learn about
@@ -62,7 +62,7 @@ export function initLeafApp(): Promise<void> {
   // function that reads it. The framework's boot sync then calls it, stamps
   // `scope = global` and reconciles the result into `framework_slot_definition`;
   // the taxonomy editor calls `syncGlobalSlotDefinitions()` again after an edit.
-  // The seam is carried ahead of Daybreak — `.context/app/divergences.md` Row 22,
+  // The seam is carried ahead of Daybreak — `.context/app/platform-divergences.md` Row 22,
   // proposed upstream as daybreak#266 — and this is its first production caller.
   //
   // A pure registration, as this function requires: the provider is async and

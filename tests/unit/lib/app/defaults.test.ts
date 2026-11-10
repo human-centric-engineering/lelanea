@@ -1227,8 +1227,8 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/eslint.config.mjs',
     risk: 'a stray flat-config block would apply lint rules to every fork',
-    // FILLED BY THIS LEAF. Upstream this row asserts `[]`. Lelañea spreads two
-    // blocks — the boundary that keeps her material readable only as seed input,
+    // FILLED BY THIS LEAF. Upstream this row asserts `[]`. Lelañea spreads three
+    // blocks — the global ignore for `.context/app/planning/`, the boundary that keeps her material readable only as seed input,
     // and the block that lets a leaf test under `tests/**/lib/app/**` import the
     // framework it exercises — so the row is PINNED to those two rather than
     // deleted: deleting it would stop noticing the NEXT block, and a lint block
@@ -1252,7 +1252,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // The root eslint.config.mjs spreads this array last; that spread itself is
     // exercised by every `npm run lint` run.
     assert: () => {
-      expect(appEslintConfig).toHaveLength(2);
+      expect(appEslintConfig).toHaveLength(3);
       expect(appEslintConfig[0]).toMatchObject({
         name: 'lelanea/content-json-boundary',
         ignores: ['lib/app/content/seed-input/**', 'tests/**'],
@@ -1262,6 +1262,13 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         name: 'lelanea/leaf-tests-may-import-framework',
         files: ['tests/**/lib/app/**/*.{ts,tsx}'],
         rules: { 'no-restricted-imports': expect.arrayContaining(['error']) },
+      });
+      // t-190: a GLOBAL ignore (only `name` and `ignores`), so the root config
+      // needs no edit. Pinned exactly: any other key would turn it into a block
+      // that ignores files only for itself, and every planning file would lint.
+      expect(appEslintConfig[2]).toEqual({
+        name: 'lelanea/planning-is-not-source',
+        ignores: ['.context/app/planning/**'],
       });
     },
   },

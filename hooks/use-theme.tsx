@@ -40,7 +40,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 /**
- * LELAÑEA divergence — see `.context/app/divergences.md`, row 2.
+ * LELAÑEA divergence — see `.context/app/platform-divergences.md`, row 2.
  *
  * Sunrise fixed the persistence half of this row in 0.16.0 (#756): the shared
  * `lib/theme.ts` reads storage without writing it, and the no-flash script in

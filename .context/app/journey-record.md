@@ -53,7 +53,7 @@ breaks that contract three ways:
 
 So this is the "element does not fit" case of the scaffolding rule
 ([`building-with-daybreak.md`](./building-with-daybreak.md)). It is ledgered in
-[`divergences.md`](./divergences.md) (Row 29), with
+[`platform-divergences.md`](./platform-divergences.md) (Row 29), with
 [`daybreak#293`](https://github.com/human-centric-engineering/daybreak/issues/293)
 proposing the element it stands in for.
 
