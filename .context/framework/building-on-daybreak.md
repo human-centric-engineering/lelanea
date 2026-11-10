@@ -117,7 +117,8 @@ your hook names (`leaf:`): a name the framework uses replaces its hook.
 **Every other `lib/app/*` file is yours to fill as normal** (`capabilities.ts`,
 `context-contributors.ts`, `env.ts`, `rate-limit.ts`, `public-nav.ts`,
 `protected-nav.ts`, `auth-landing.ts`, `emails.ts`, `csp.ts`, `jobs.ts`,
-`user-created.ts`, …) — Daybreak keeps those empty for you.
+`user-created.ts`, `tenancy-classification.ts`, `frame-ancestors.ts`,
+`frameable-paths.json`, `waitlist-config.ts`, …) — Daybreak keeps those empty for you.
 
 > **Which files are Daybreak's is itself versioned surface.** A file changing hands
 > is a breaking change and is called out in [`CHANGELOG.md`](./CHANGELOG.md) — that
@@ -318,6 +319,13 @@ Keep **your** version in files you own, keep **theirs** in files you don't, and 
 follow-up rather than rewriting a Daybreak or Sunrise file in place. A one-line "keep
 mine" is a cheap merge; a rewritten framework file is not.
 
+**Every edit you carry to a Sunrise or Daybreak file gets a row in your divergence
+ledger, in the same PR** (Daybreak 0.10.0+). Yours is `.context/app/platform-divergences.md`:
+create it on your first such edit, and read it before resolving a conflict. A bridge
+Daybreak fills counts as Daybreak's file, so fill its `leaf-*` hook instead. Daybreak's own
+ledger, `.context/framework/platform-divergences.md`, arrives with Daybreak; don't write to
+it. The row shape is in [`CUSTOMIZATION.md`](../../CUSTOMIZATION.md#the-divergence-ledger).
+
 **`CLAUDE.md`'s `hce-hub:bootstrap` block is Daybreak's** (Daybreak 0.8.0+). Sunrise
 no longer ships one, so Daybreak commits its own, and you inherit it. Left in place it
 points your agents at Daybreak's Hub project: replace it with your own project's block
@@ -343,9 +351,9 @@ so a Daybreak release's migrations **interleave with yours**.
 
 ## Tenancy: every model of yours needs an org decision (Daybreak 0.6.0+)
 
-Sunrise 0.13.0 classifies **every** Prisma model, yours included, as tenant-owned
-(it carries `orgId`), global config, or system. Four always-run tests enforce it,
-and they name your model the moment you add it. Your install stays at
+Sunrise classifies **every** Prisma model, yours included, as tenant-owned (it
+carries `orgId`), system, global config or, since 0.17.0, user-owned. Four always-run
+tests enforce it, and they name your model the moment you add it. Your install stays at
 `TENANCY_MODE=single` (one org, the install org) unless you opt into multi, so
 none of this changes behaviour today. It is what keeps multi-tenancy open to you
 later.
@@ -384,9 +392,44 @@ onDelete: Cascade)`, `@@index([orgId])`. Prisma needs a back-relation line on
    the compound key with `requireOrgId()` from `lib/tenancy/context.ts`, which is
    the install org at `single`.
 
-Never pass a guard by adding your model to Sunrise's `SYSTEM_MODELS` /
-`GLOBAL_CONFIG_MODELS` unless it genuinely is platform config every customer
-shares, and never by deleting an allowlist row.
+**A model that genuinely carries no `orgId` goes in `lib/app/tenancy-classification.ts`**
+(Daybreak 0.10.0+), through `registerAppTenancyClassification({ tier: 'app', … })`: a
+person's rows across orgs as `userOwned`, data every org reads as `globalConfig`,
+tenancy's own bookkeeping as `system`. Don't edit Sunrise's `SYSTEM_MODELS` /
+`GLOBAL_CONFIG_MODELS`: move any model you added there to this seam. The coverage guard
+fails a registration that names a core model or a `system` model carrying `orgId`. Never pass
+a guard by deleting an allowlist row.
+
+## Forms: a failed save goes through `<SaveError>` (Daybreak 0.10.0+)
+
+Sunrise 0.17.0's `npm run check:save-errors` runs in `validate` and CI, and it scans your
+components as well as core's. It fails until:
+
+- **a hand-drawn save-error box moves onto `<SaveError>`**, fed by `useSaveFailure()`,
+  beside the button that was pressed
+- **every `<form>` has `noValidate`**
+- **every `<form>` has `method="post"`** (Sunrise 0.18.0, Daybreak 0.11.0+). Without
+  it, a form submitted before the page has loaded is a GET with every named field in
+  the URL. A form whose fields belong in the URL, such as a search box, takes
+  `{/* form-method-ignore: <why> */}` on the line above it
+
+Before adding `noValidate`, check the form's schema or submit handler holds every limit
+its inputs declare, or that check quietly moves to the server. Daybreak's forms hit two
+traps worth checking for in yours:
+
+- **`required`, `min`, `max` and a whole-number `step` stop being checked.**
+- **A half-typed `datetime-local` reads as `''`**, which a form takes for a cleared field.
+  Core blocks the press but says "Enter a number" ([Sunrise #1184](https://github.com/human-centric-engineering/sunrise/issues/1184)).
+  `SettingsTab` in `components/admin/framework/module-detail/settings-tab.tsx` shows the
+  workaround.
+
+`readSaveError()` shows a validation error's `details` in place of its message. Where your
+service puts the instruction in the message, that loses it: see `headlineOnly()` in
+`components/admin/framework/headline-only.ts`.
+
+A box that isn't a save (a run, a test, an export) keeps its display under the opt-out
+comment. The recipes and both opt-outs are in
+[`.context/ui/form-errors.md`](../ui/form-errors.md).
 
 ## Two tests you are expected to adjust
 

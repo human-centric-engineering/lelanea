@@ -141,7 +141,7 @@ describe('ProposalReview', () => {
 
   it('falls back to a default message when a non-Error is thrown', async () => {
     const user = userEvent.setup();
-    // A non-Error rejection exercises the `err instanceof Error ? … : default` fallback.
+    // A rejection that isn't an API error has no words of its own to show.
     vi.mocked(apiClient.post).mockRejectedValue('kaboom');
     render(<ProposalReview proposal={makeProposal()} />);
 
@@ -149,7 +149,7 @@ describe('ProposalReview', () => {
     const dialog = await screen.findByRole('alertdialog');
     await user.click(within(dialog).getByRole('button', { name: /approve & publish/i }));
 
-    expect(await screen.findByText('Failed to approve the proposal')).toBeInTheDocument();
+    expect(await screen.findByText('Failed to record the decision')).toBeInTheDocument();
   });
 
   it('falls back to a default message when reject throws a non-Error', async () => {
@@ -162,7 +162,7 @@ describe('ProposalReview', () => {
     await user.type(within(dialog).getByRole('textbox'), 'nope');
     await user.click(within(dialog).getByRole('button', { name: /^reject$/i }));
 
-    expect(await screen.findByText('Failed to reject the proposal')).toBeInTheDocument();
+    expect(await screen.findByText('Failed to record the decision')).toBeInTheDocument();
   });
 
   it('surfaces the server error when approve fails (stale decision)', async () => {
@@ -177,8 +177,59 @@ describe('ProposalReview', () => {
     const dialog = await screen.findByRole('alertdialog');
     await user.click(within(dialog).getByRole('button', { name: /approve & publish/i }));
 
-    expect(await screen.findByText(/already been decided/i)).toBeInTheDocument();
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/already been decided/i);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps the service's instruction when the error carries details", async () => {
+    const user = userEvent.setup();
+    const { APIClientError } = await import('@/lib/api/client');
+    vi.mocked(apiClient.post).mockRejectedValue(
+      new APIClientError(
+        'The map changed since this proposal was made — please re-propose',
+        'VALIDATION_ERROR',
+        400,
+        { baseVersion: ['Proposed against version 3, but it is now at 4'] }
+      )
+    );
+    render(<ProposalReview proposal={makeProposal()} />);
+
+    await user.click(screen.getByRole('button', { name: /approve & publish/i }));
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: /approve & publish/i }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/please re-propose/);
+  });
+
+  it('locks the dialog while a decision is in flight', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.post).mockReturnValue(new Promise(() => {}));
+    render(<ProposalReview proposal={makeProposal()} />);
+
+    await user.click(screen.getByRole('button', { name: /approve & publish/i }));
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: /approve & publish/i }));
+
+    expect(within(dialog).getByRole('button', { name: /cancel/i })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  it('clears a refused decision when the dialog is reopened', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.post).mockRejectedValue('kaboom');
+    render(<ProposalReview proposal={makeProposal()} />);
+
+    await user.click(screen.getByRole('button', { name: /approve & publish/i }));
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: /approve & publish/i }));
+    await within(dialog).findByRole('alert');
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    await user.click(screen.getByRole('button', { name: /^reject$/i }));
+    const next = await screen.findByRole('alertdialog');
+    expect(within(next).queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('hides the actions and shows the outcome for a decided proposal', () => {

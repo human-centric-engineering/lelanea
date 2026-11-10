@@ -211,7 +211,21 @@ The global test setup file (`tests/setup.ts`) runs before all tests and configur
    `RATE_LIMIT_BYPASS='true'` (see below — it has a real trap in it)
 2. **Next.js Mocks**: Pre-mocks `next/navigation` and `next/headers` for component testing
 3. **Analytics Mocks**: Mocks analytics hooks to allow component testing without providers
-4. **Cleanup**: Restores all mocks in `afterEach` to prevent test pollution
+4. **Fork-seam pins**: Pins `lib/app/brand`, `emails`, `llm-providers`, `admin-tier`,
+   `user-created` and `erasure` to Sunrise's shipped default, so a fork that fills one
+   does not fail core tests it cannot fix. A test that needs a seam filled mocks it
+   itself. Only the guards that judge a fork's REAL seam read past a pin:
+   `defaults.test.ts` (every seam), `stale-writers.test.ts` (erasure) and
+   `admin-tier-roster.test.ts` (admin-tier), each with
+   `vi.mock('@/lib/app/<seam>', (importOriginal) => importOriginal())`. Without
+   that, the guard reads the pin and passes a fork entry it exists to refuse.
+   A fork's test of its own filled seam, `tests/unit/lib/app/<seam>.test.ts`, may read
+   it too. `defaults.test.ts` fails any other test file that reads past a pin or unmocks one.
+5. **Cleanup**: Restores all mocks in `afterEach` to prevent test pollution
+6. **Effects after async queries**: in a DOM test, every `findBy…`, `waitFor` and user-event
+   call ends with React's pending passive effects run, so an assertion on what they did
+   (`<SaveError>` moving focus, say) doesn't depend on scheduling (`tests/helpers/flush-react-effects.ts`).
+   Work on a timer or an animation frame still needs `waitFor`
 
 **Key setup features**:
 

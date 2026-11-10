@@ -165,7 +165,8 @@ org it owns (`POST /api/v1/orgs/switch` is not mode-gated), so admitting that
 owner would hand them every row the surface reads. An API key never takes the
 arm, and `withAdminAuth`'s scope floor refuses a non-`admin` key before the
 policy is asked. A tier the default policy does not know (`'team'`) admits
-nobody.
+nobody. A fork's named tier is the one exception, and only once the fork has
+registered it (see "Named tiers" below).
 
 **Where the refusal actually happens.** The API is the authority. Admin pages
 are shells over `serverFetch` calls, and each call reaches a guard that asks
@@ -327,9 +328,125 @@ fork calls `closeCoreOrgTierSection('orchestration')` inside
   over a closed core page fails it; core's own items there are hidden by the
   sidebar and not reported.
 
-`lib/auth/admin-tier.ts` imports nothing, so the scaffold can import the
-registrar from it and `proxy.ts` its header name without either pulling the
-fork's scaffold in.
+**Named tiers: a narrower audience than an org admin** (t-999). Some forks
+need people who are not the org's admins to open a few of its pages: an
+agency's designers working in a client's org, say, who should reach the
+client's page designs and nothing else. Org roles stop at `OWNER` / `ADMIN` /
+`MEMBER`, and a policy override cannot do it alone, because `canAdminister`
+sees `scope.tier` and not which page is asking. So the fork registers a
+**named tier** and declares it where it would declare `'org'`:
+
+```ts
+// lib/app/admin-tier.ts
+import { registerAdminTier, registerOrgTierAdminPage } from '@/lib/auth/admin-tier';
+
+export function initAppOrgTierAdminPages(): void {
+  // Who holds it: answer for viewer.orgId, from the fork's own rows.
+  registerAdminTier('page_designs', {
+    holds: async (viewer) => {
+      const { agencyHoldsArea } = await import('@/lib/app/agency-access');
+      return agencyHoldsArea(viewer.orgId, viewer.userId, 'page_designs');
+    },
+    landing: '/admin/designs', // where /admin sends a holder
+  });
+  // Register the tier first, then its pages.
+  registerOrgTierAdminPage('/admin/designs', { tier: 'page_designs' });
+  registerOrgTierAdminPage('/admin/designs/[id]', { tier: 'page_designs' });
+}
+```
+
+| Surface  | Declaration                                                      | Listed in                                              |
+| -------- | ---------------------------------------------------------------- | ------------------------------------------------------ |
+| API      | `withAdminAuth(handler, { tier: 'page_designs', ownership: … })` | `lib/app/admin-tier-routes.ts`, as an `'org'` route is |
+| Page     | `registerOrgTierAdminPage(pattern, { tier: 'page_designs' })`    | the registration is the listing                        |
+| Nav item | `tier: 'page_designs'` on the `NavItem` (`lib/app/admin-nav.ts`) | (none)                                                 |
+
+**Who opens a named-tier surface.** The default policy admits:
+
+- the org's `OWNER`/`ADMIN`, as on an `'org'` surface, without asking `holds()`.
+  This is the owner's ruling on t-999. It means moving a page from `'org'` to a
+  named tier only adds people, and never locks the client's own admins out of
+  it;
+- whoever `holds(viewer)` says holds the tier;
+- a platform admin, as everywhere.
+
+**What a holder does not open.** `holds()` is asked about the tier the surface
+declared, and only for a named one, so a holder opens:
+
+- no `'org'` surface, core's or the fork's;
+- no platform surface;
+- no other named tier's surface, unless they hold that tier too.
+
+Every rule of the `'org'` tier applies as well: the policy admits only at
+`multi`, only a browser session, only acting in an org, and never on a
+resource that names another org. **A tier nobody registered admits nobody,
+org admins included**, so a misspelt tier on a route is a route that stays
+shut.
+
+**`holds()` is the fork's lookup.** It is called only for a session at `multi`
+acting in `viewer.orgId` who is not already an org admin or platform admin.
+It may be async. It is handed a frozen copy of the principal. Load your
+lookup with `await import(…)` inside `holds()`, not a static import at the top
+of `lib/app/admin-tier.ts`: the policy imports that scaffold to read the
+registry, so a static import of a module that imports the guards or the policy
+is an import cycle, and fails at boot if anything in it reads them at module
+scope. A throw, or any
+answer but `true`, is a no, and a throw is logged with the tier. The layout
+asks every tier on a full load (`requestAdminReach()` in
+`lib/auth/admin-page-viewer.ts`, once per request), so for a MEMBER it runs
+once per registered tier per page load. Keep it to one indexed read.
+
+**Which tier a page is in** is decided by the one pattern Next.js serves it by
+(`adminPageTierOf()`): at the first segment where two patterns differ, a
+literal one beats `[x]`. Without that, a holder of `/admin/designs/[id]` would
+be let into an `'org'` page `/admin/designs/settings` beside it, because the
+`[id]` pattern names that URL too.
+
+**What the console shows them.** The layout works out the viewer's reach: the
+tiers the policy admitted them to. It hands that to `<AdminTierGate>` and
+`<AdminSidebar>` with the named pages (`namedTierAdminPages()`). The sidebar
+shows a holder only the items marked with a tier they hold, over a page in a
+tier they hold. `/admin` sends a holder who is not an org admin to their
+first tier's `landing`, in registration order. A tier with no `landing` sends
+them to its first registered page with no `[x]` segment. A landing must be a
+literal page registered for that tier. One that is not is ignored, logged
+once, and fails the roster test, and the default is used instead. Only a
+holder whose tiers have no literal page at all is refused `/admin`, as any
+MEMBER is. A fork that lists the client orgs someone belongs to, as an
+org switcher does, should send a holder to a page their tier opens.
+
+**What the registrar refuses**, so no named tier can widen `'org'`:
+
+- the names `'org'` and `'platform'`, or anything but lower-case letters,
+  digits, `_` and `-` (a letter first, at most 48 characters);
+- a page whose tier is not registered yet;
+- a page already listed for another tier (a page is in one tier);
+- a page in one of `CORE_ADMIN_SECTIONS`, as for every fork page.
+
+Registering a name again replaces its definition, as `registerNavSection()`
+replaces a section, so a hot reload of the scaffold under `next dev` takes the
+new `holds()`. Anything the init registers rolls back with its pages if the
+init throws.
+
+**The roster test covers named tiers.** It fails on:
+
+- a route, or a nav item, that names a tier nobody registered;
+- a core-listed route that declares a named tier, because core's routes are
+  `'org'`;
+- a nav item marked with a named tier over a page of another tier, or marked
+  `'org'` over a named-tier page, which that tier's holders would never see;
+- a landing that is not its own tier's page.
+
+It also holds named-tier routes and pages to every check an `'org'` one meets.
+
+**If you replace `canAdminister`,** a named tier arrives as `scope.tier`, the
+same as `'org'`. Delegate to `DEFAULT_AUTHORIZATION_POLICY.canAdminister`
+for tiers you do not answer yourself, or the named tier admits nobody. That is
+the safe failure.
+
+`lib/auth/admin-tier.ts` imports nothing at runtime (one type compiles away),
+so the scaffold can import the registrar from it and `proxy.ts` its header name
+without either pulling the fork's scaffold in.
 
 ---
 
@@ -344,7 +461,7 @@ count** — three ask `canAdminister`, one asks `canRead`:
 | Chokepoint                             | Face            | What it gates                                                                                                                                                                                |
 | -------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `withAdminAuth` (`lib/auth/guards.ts`) | `canAdminister` | 262 handler wrappings across 190 files, 257 of them under `/api/v1/admin`                                                                                                                    |
-| `app/admin/layout.tsx`                 | `canAdminister` | The whole `/admin` page tree, asked with `tier: 'org'` on a page listed in `ORG_TIER_ADMIN_PAGES` ([Admin tiers](#admin-tiers))                                                              |
+| `app/admin/layout.tsx`                 | `canAdminister` | The whole `/admin` page tree, asked once per tier (`'org'` and each named tier, t-999) and judged by the page's own tier ([Admin tiers](#admin-tiers))                                       |
 | `components/maintenance-wrapper.tsx`   | `canAdminister` | The maintenance-mode bypass — an access decision, not chrome, because getting past that page reaches the whole site                                                                          |
 | `withAuth` (`lib/auth/guards.ts`)      | `canRead`       | 23 handler wrappings. Asked on **every** one of them; all but one declare no `resource` resolver, so it is asked about `{ kind: 'nothing' }`. The exception is `app/api/v1/users/[id]` (GET) |
 
@@ -375,6 +492,44 @@ or not the route named a resource, so **a policy that denies `'nothing'` takes
 down every core `withAuth` route** — the arm exists precisely so "the route
 declared no resource" is answerable without being confused for "the row has no
 owner". Permit `'nothing'` unless you have migrated every route to a resolver.
+
+### Outside the seam by design: the maintenance cron
+
+One admin route answers a credential the policy is never asked about. The
+maintenance tick's `GET` (`app/api/v1/admin/orchestration/maintenance/tick/route.ts`)
+runs the tick for `Authorization: Bearer $CRON_SECRET` before `withAdminAuth`,
+so `canAdminister` never sees that request (#1130). In Sunrise the secret opens
+that one route, and every other credential on it goes through the guard as
+before. A fork that also checks `CRON_SECRET` on its own cron routes has
+widened that: there the same value opens those routes too.
+
+This is a decision, not a gap waiting to close (owner ruling, 2026-10-31):
+
+- **The tick is system work, not an administrative act by a person.** It acts
+  for no one (`lib/auth/subject-context.ts` gives it no subject), the dev
+  ticker runs it with no guard, and each task scopes itself. Who may trigger
+  maintenance is an operational question, like who holds the deploy key.
+- **Safe mode must not stop maintenance.** A fork policy whose registration
+  throws puts the process in safe mode for the rest of its life, where nobody
+  administers anything ([What a failure does](#what-a-failure-does)). Asked
+  through the policy, the cron would stop too: schedules, retries, recovery,
+  and `processPendingErasures`, which owes account erasures on a legal clock.
+- **No userless principal on the seam.** A principal's `credential` is
+  `'session' | 'api-key'`, and fork policies branch on it. A `'cron'` kind with
+  no user behind it would be a breaking change for every one of them.
+- **The check has to come first anyway.** The guard reads the database, and
+  the point of the secret is an idle tick that does not.
+
+A fork that wants its policy to decide who runs the tick sets `CRON_SECRET` to
+an admin API key (`sk_…`). The secret check never matches an `sk_` value, so
+the request goes through the guard, which checks the key and asks the policy.
+This works on Vercel, whose cron can send nothing but `Bearer $CRON_SECRET`;
+unsetting `CRON_SECRET` there leaves the cron no credential at all, and every
+tick gets a `401`. It costs what the secret was added to avoid: the key is
+looked up on every tick, so an idle tick queries the database (#1130). And it
+brings back the outage above, knowingly: in safe mode the policy refuses the
+key, and maintenance stops, erasures included, until the policy is fixed and
+the process restarts.
 
 ### Registering a policy
 
@@ -611,6 +766,10 @@ all. A fork's own files land
 in the roster the moment they exist, and a fork declares its exceptions in
 `appOwnerlessSurfaceExceptions` (`lib/app/ci.ts`) rather than editing the core
 list.
+
+**One admin route is outside the seam on purpose, not yet to be closed:** the
+maintenance tick's `GET` runs for `CRON_SECRET` without asking `canAdminister`.
+See [Outside the seam by design](#outside-the-seam-by-design-the-maintenance-cron).
 
 ---
 
@@ -1168,6 +1327,9 @@ that reads them ([The owner chokepoint](#the-owner-chokepoint), t-801):
     (`UNATTRIBUTED_READ_KINDS`), each the policy's answer for one core model's
     orphans; a fork row carrying one is dropped. A fork model whose owner can be
     missing has its ownerless rows readable by no narrowed caller.
+  - **A read rule where no column decides** (t-985): `owner: { reader }`, for
+    rows read by a space, a team or a grant rather than by one owner. Fork
+    models only. See [A fork's read rule](#a-forks-read-rule).
   - **A throwing init is rolled back** and every fork model is left
     unclassified — unchecked by the data layer, guarded by the fork's routes as
     before, and named by the test. Do not import `@/lib/db` from the seam: it
@@ -1245,6 +1407,87 @@ prisma.aiUserMemory.findMany({ where: { AND: [{ agentId }, { ...session.subjectF
 prisma.aiUserMemory.findMany({ where: { agentId } });
 prisma.aiUserMemory.findMany({ where: { OR: [{ userId: me }, { agentId }] } });
 ```
+
+#### A fork's read rule
+
+Core's personal rows each have one owner, so a filter can prove a read is
+confined and the table above refuses one that is not. A fork's rows can be read
+by a rule instead — Resparkable's by the space's owner, its group's members and
+its grantees (#1145). For those the fork registers the rule, and the layer
+**narrows by it rather than refusing** (§115 ruling, 2026-11-05):
+
+```ts
+registerAppOwnerClassification({
+  tier: 'app',
+  models: {
+    SpaceNote: {
+      kind: 'personal',
+      owner: {
+        reader: ({ userId }) => ({
+          space: {
+            OR: [
+              { ownerUserId: userId },
+              { members: { some: { userId } } },
+              { grants: { some: { granteeUserId: userId, revokedAt: null } } },
+            ],
+          },
+        }),
+      },
+      enforced: true,
+    },
+    // Owned through a ruled parent: inherits the rule.
+    SpaceNoteRevision: {
+      kind: 'personal',
+      owner: { through: { field: 'note', parent: 'SpaceNote' } },
+      enforced: true,
+    },
+  },
+});
+```
+
+The rule is a Prisma `where` for its model, built from the `OwnerReader` (the
+caller's `userId`) alone: pure, no I/O. Relation filters are how it reaches the
+membership tables. For a narrowed caller, on an enforced ruled model or a
+`through` child of one:
+
+| Operation                                              | What the layer does                                                                                                                 |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `findMany`, `count`, `aggregate`, `groupBy`            | The rule is ANDed into the `where`. Never refused.                                                                                  |
+| `findFirst`, `findUnique` (and `OrThrow`)              | The narrowed paths above: the first readable match; a row by key that exists outside the rule is refused.                           |
+| `update`, `delete`                                     | The `where` is narrowed, so a row outside the rule is not written; that miss is refused when the row exists.                        |
+| `upsert`                                               | Refused before it runs when the row exists outside the rule — narrowed, it would create a second row beside it. Otherwise narrowed. |
+| `updateManyAndReturn`                                  | The `where` is narrowed: rows outside the rule are left alone.                                                                      |
+| A to-many `include` / `select` / `_count` of the model | The rule is ANDed into that relation's `where`.                                                                                     |
+| A to-one `include` / `select` of the model             | Refused: it cannot carry a `where`, and no column on the row decides. Read the row on its own.                                      |
+
+**What it costs: narrowing is silent.** A query meant to read every row of a
+ruled model — an org-wide total, an export, a job that runs under a member's
+request — gets only the rows the caller may read, with no error. Wrap a read
+that must see every row in `runAcrossOwners(reason, fn)`, as core's crossings
+are. Refusing instead would have taxed every fork query with restating the rule
+verbatim and refused correct ones; the protection is identical either way.
+
+The rule fails closed. One that throws, returns a non-object, or returns a
+`where` that matches every row by its top-level shape — `{}`, a key left `undefined`
+(`{ ownerUserId: undefined }`, which Prisma drops), an empty `AND` or `NOT` —
+refuses the read as `read-rule-failed`, logged by model (with a thrown error's
+message, which never goes into the refusal) and answered 404 like any refusal.
+That check is a backstop, not a proof: a nested no-op
+(`space: { members: { some: { userId: undefined } } }`) or a rule that admits
+every row some other way (`{ id: { not: '' } }`) is not caught, and a model
+with no owner is `not-personal`.
+
+An `upsert`'s check runs outside the caller's interactive transaction, as a
+miss on a read by key does. Rows the transaction has written and not committed
+are not seen, so an upsert whose rule depends on them (a membership created
+earlier in the same transaction) is refused. Commit the membership first, or
+write the row with `create` / `update`.
+
+A
+ruled model takes no `ownerless` or `alsoVisible` arm, so write an ownerless
+row's readability into the rule itself. A filter never proves the rule, not
+even the rule repeated, so a route's own narrowing is kept and the rule is
+added beside it. Raw SQL is not checked, as for core.
 
 **A refusal throws `OwnerReadRefusedError`, in every environment.** There is no
 log-only mode: that records a leak rather than stopping it. `handleAPIError`

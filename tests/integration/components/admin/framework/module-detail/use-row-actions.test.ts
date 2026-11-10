@@ -4,7 +4,7 @@
  * Unit test — useRowActions (f-ops-views t-4c).
  *
  * The shared per-row action state for the binding tables: the confirm/busy/lock state machine
- * and `run()` (busy tracking, clear-confirm-on-success, error capture).
+ * and `run()` (busy tracking, clear-confirm-on-success, failure reporting).
  *
  * @see components/admin/framework/module-detail/use-row-actions.ts
  */
@@ -21,7 +21,7 @@ describe('useRowActions', () => {
     expect(result.current.locked).toBe(false);
     expect(result.current.confirmingId).toBeNull();
     expect(result.current.busyId).toBeNull();
-    expect(result.current.error).toBeNull();
+    expect(result.current.failure).toBeNull();
   });
 
   it('locks while a confirm is open', () => {
@@ -39,10 +39,10 @@ describe('useRowActions', () => {
     });
     expect(result.current.confirmingId).toBeNull();
     expect(result.current.busyId).toBeNull();
-    expect(result.current.error).toBeNull();
+    expect(result.current.failure).toBeNull();
   });
 
-  it('run() captures the server message and keeps the confirm on failure', async () => {
+  it('run() leads the server message with its context and keeps the confirm', async () => {
     const { result } = renderHook(() => useRowActions());
     act(() => result.current.setConfirmingId('a'));
     await act(async () => {
@@ -51,10 +51,10 @@ describe('useRowActions', () => {
         async () => {
           throw new APIClientError('nope', 'ERR', 400);
         },
-        'fallback'
+        'Failed to unbind agent'
       );
     });
-    expect(result.current.error).toBe('nope');
+    expect(result.current.failure?.message).toBe('Failed to unbind agent: nope');
     expect(result.current.confirmingId).toBe('a');
     expect(result.current.busyId).toBeNull();
   });
@@ -71,11 +71,11 @@ describe('useRowActions', () => {
         'fallback'
       );
     });
-    expect(result.current.error).toBe('fallback');
+    expect(result.current.failure?.message).toBe('fallback. Try again.');
 
     // Opening a confirm on another row clears the stale error.
     act(() => result.current.setConfirmingId('b'));
-    expect(result.current.error).toBeNull();
+    expect(result.current.failure).toBeNull();
 
     // Re-set an error, then cancel — cancel leaves the error alone.
     await act(async () => {
@@ -87,12 +87,12 @@ describe('useRowActions', () => {
         'fallback2'
       );
     });
-    expect(result.current.error).toBe('fallback2');
+    expect(result.current.failure?.message).toBe('fallback2. Try again.');
     act(() => result.current.setConfirmingId(null));
-    expect(result.current.error).toBe('fallback2');
+    expect(result.current.failure?.message).toBe('fallback2. Try again.');
   });
 
-  it('run() falls back to the given message for a non-APIClientError', async () => {
+  it('run() says only its context for a failure the server never worded', async () => {
     const { result } = renderHook(() => useRowActions());
     await act(async () => {
       await result.current.run(
@@ -103,6 +103,6 @@ describe('useRowActions', () => {
         'fallback'
       );
     });
-    expect(result.current.error).toBe('fallback');
+    expect(result.current.failure?.message).toBe('fallback. Try again.');
   });
 });

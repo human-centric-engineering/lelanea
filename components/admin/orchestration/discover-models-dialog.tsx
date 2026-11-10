@@ -67,8 +67,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { SaveError } from '@/components/forms/form-error';
 import { apiClient } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import {
   CONTEXT_LENGTH_LEVELS,
   LATENCY_LEVELS,
@@ -272,7 +275,13 @@ export function DiscoverModelsDialog({
 
   const [reviewRows, setReviewRows] = useState<ReviewRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  // A refused add shows by the pinned footer's buttons, not at the top of
+  // the scrolling list (§124).
+  const submitSave = useSaveFailure({
+    fallback: "Couldn't add the models. Try again.",
+    fields: NO_SERVER_FIELDS,
+  });
+  const { clear: clearSubmit, report: reportSubmit } = submitSave;
   const [result, setResult] = useState<BulkResult | null>(null);
 
   // Reset the dialog whenever it opens — otherwise stale candidates
@@ -286,7 +295,6 @@ export function DiscoverModelsDialog({
     setSearch('');
     setActiveBuckets(new Set());
     setReviewRows([]);
-    setSubmitError(null);
     setResult(null);
     setCandidates(null);
     setDiscoveryError(null);
@@ -420,7 +428,7 @@ export function DiscoverModelsDialog({
   const handleSubmit = useCallback(async () => {
     if (!providerSlug || reviewRows.length === 0) return;
     setSubmitting(true);
-    setSubmitError(null);
+    clearSubmit();
     try {
       const response = await apiClient.post<BulkResult>(
         API.ADMIN.ORCHESTRATION.PROVIDER_MODELS_BULK,
@@ -452,13 +460,11 @@ export function DiscoverModelsDialog({
       // rows appear when the operator closes the dialog.
       router.refresh();
     } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Couldn't add the models — check server logs."
-      );
+      reportSubmit(err);
     } finally {
       setSubmitting(false);
     }
-  }, [providerSlug, reviewRows, onCreated, router]);
+  }, [providerSlug, reviewRows, onCreated, router, clearSubmit, reportSubmit]);
 
   const matchedSelected = useMemo(() => {
     if (!candidates) return [];
@@ -475,8 +481,16 @@ export function DiscoverModelsDialog({
     return providers.find((p) => p.slug === providerSlug)?.name ?? null;
   }, [initialProviderName, providerSlug, providers]);
 
+  // Committed while the add runs; an earlier failure never greets a reopen.
+  const dialog = useCommittedDialog({
+    open,
+    pending: submitting,
+    onClose: () => onOpenChange(false),
+    clear: clearSubmit,
+  });
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={dialog.onOpenChange}>
       <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -526,17 +540,13 @@ export function DiscoverModelsDialog({
           )}
 
           {step === 'review' && (
-            <ReviewStep
-              rows={reviewRows}
-              onUpdate={updateReviewRow}
-              onReset={resetReviewRow}
-              submitError={submitError}
-            />
+            <ReviewStep rows={reviewRows} onUpdate={updateReviewRow} onReset={resetReviewRow} />
           )}
 
           {step === 'result' && result && <ResultStep result={result} />}
         </div>
 
+        {step === 'review' && <SaveError failure={submitSave.failure} />}
         <DialogFooter className="border-t pt-4">
           {step === 'provider' && (
             <>
@@ -568,15 +578,15 @@ export function DiscoverModelsDialog({
           )}
           {step === 'review' && (
             <>
-              <Button variant="ghost" onClick={() => setStep('discovery')}>
+              <Button variant="ghost" onClick={() => setStep('discovery')} {...dialog.cancelProps}>
                 ← Back
               </Button>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              <Button variant="ghost" onClick={() => onOpenChange(false)} {...dialog.cancelProps}>
                 Cancel
               </Button>
               <Button
-                disabled={submitting || reviewRows.length === 0}
-                onClick={() => void handleSubmit()}
+                {...dialog.actionProps({ disabled: reviewRows.length === 0 })}
+                onClick={(e) => dialog.confirm(e, handleSubmit)}
               >
                 {submitting ? (
                   <>
@@ -839,12 +849,10 @@ function ReviewStep({
   rows,
   onUpdate,
   onReset,
-  submitError,
 }: {
   rows: ReviewRow[];
   onUpdate: (modelId: string, patch: Partial<ReviewRow>) => void;
   onReset: (modelId: string) => void;
-  submitError: string | null;
 }): React.ReactElement {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(rows.map((r) => r.modelId)));
 
@@ -859,11 +867,6 @@ function ReviewStep({
 
   return (
     <div className="space-y-3">
-      {submitError && (
-        <div className="rounded-md border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
-          {submitError}
-        </div>
-      )}
       {rows.map((r) => (
         <ReviewCard
           key={r.modelId}

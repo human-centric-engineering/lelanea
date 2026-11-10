@@ -3,12 +3,16 @@
 import { Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { AUTH_LANDING_LABEL, AUTH_LANDING_ROUTE } from '@/lib/auth-landing/route';
+import { SaveError } from '@/components/forms/form-error';
+import { useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { isRecord } from '@/lib/utils';
 
 /**
  * Email Verification Callback Content
@@ -16,6 +20,7 @@ import { AUTH_LANDING_LABEL, AUTH_LANDING_ROUTE } from '@/lib/auth-landing/route
  * Handles the redirect from better-auth's email verification endpoint.
  * Better-auth redirects here after processing the verification token:
  * - On success: no error param, redirect to dashboard
+ * - On an email change (?emailChanged=1): say so and link on, with no redirect
  * - On failure: ?error=invalid_token, show error with resend option
  *
  * This provides a better UX than redirecting to login with no explanation
@@ -26,18 +31,45 @@ function VerifyEmailCallbackContent() {
   const router = useRouter();
 
   const error = searchParams.get('error');
+  const emailChanged = searchParams.get('emailChanged') === '1';
 
   const [email, setEmail] = useState('');
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
-  const [resendError, setResendError] = useState<string | null>(null);
+  const resend = useSaveFailure({
+    fallback: 'Failed to resend verification email. Please try again.',
+  });
 
   // If no error, verification succeeded - redirect to dashboard
   useEffect(() => {
-    if (!error) {
+    if (!error && !emailChanged) {
       router.replace(AUTH_LANDING_ROUTE);
     }
-  }, [error, router]);
+  }, [error, emailChanged, router]);
+
+  // An email change: the click may have signed the user out everywhere, and on
+  // an unverified account it moves the address without verifying it. So no
+  // redirect, and no claim that anything was verified.
+  if (!error && emailChanged) {
+    return (
+      <Card className="mx-auto w-full max-w-md">
+        <CardHeader className="space-y-1 text-center">
+          <div className="mb-4 flex justify-center">
+            <div className="rounded-full bg-green-100 p-3 text-green-600 dark:bg-green-900/20 dark:text-green-400">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl font-bold">Email address changed</CardTitle>
+          <CardDescription>If you&apos;re asked to sign in, use your new address.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild className="w-full">
+            <Link href={AUTH_LANDING_ROUTE}>Continue to {AUTH_LANDING_LABEL}</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // If no error, show loading while redirecting
   if (!error) {
@@ -58,12 +90,12 @@ function VerifyEmailCallbackContent() {
 
   async function handleResend() {
     if (!email) {
-      setResendError('Please enter your email address');
+      resend.show('Please enter your email address');
       return;
     }
 
     setResending(true);
-    setResendError(null);
+    resend.clear();
 
     try {
       const response = await fetch('/api/auth/send-verification-email', {
@@ -73,17 +105,20 @@ function VerifyEmailCallbackContent() {
       });
 
       if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { message?: string };
-        throw new Error(data.message ?? 'Failed to resend verification email');
+        // better-auth's own error body: `{ code, message }`.
+        const data: unknown = await response.json().catch(() => null);
+        resend.show(
+          isRecord(data) && typeof data.message === 'string'
+            ? data.message
+            : 'Failed to resend verification email. Please try again.'
+        );
+        return;
       }
 
       setResent(true);
     } catch (err) {
-      setResendError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to resend verification email. Please try again.'
-      );
+      // A network failure: the browser's own text says nothing useful.
+      resend.report(err);
     } finally {
       setResending(false);
     }
@@ -133,11 +168,7 @@ function VerifyEmailCallbackContent() {
               )}
             </Button>
 
-            {resendError && (
-              <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-                {resendError}
-              </div>
-            )}
+            <SaveError failure={resend.failure} />
           </>
         ) : (
           <div className="space-y-4">

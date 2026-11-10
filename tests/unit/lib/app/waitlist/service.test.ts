@@ -454,6 +454,7 @@ function newAccount(overrides: Partial<UserCreatedContext> = {}): UserCreatedCon
     name: 'Ada',
     signupMethod: 'email',
     viaInvitation: true,
+    invitation: null,
     ...overrides,
   };
 }

@@ -16,6 +16,682 @@ release process.
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-11-09
+
+> **Alpha release.** Twenty-fifth tagged Sunrise release. **MINOR bump**: one
+> new seam and one security fix. A fork can now open some admin pages to
+> people narrower than an org admin, through a named tier it registers, such as
+> an agency given a client's design pages and nothing else. Every form now
+> posts, so a form submitted before the page loaded no longer puts its fields,
+> passwords included, in the URL. Measured against `v0.17.1`: 2 PRs merged, no
+> direct commits, 1 issue closed; the suite is 1,531 files and 31,904
+> tests.
+>
+> ## What a fork has to do
+>
+> **No migration, seed or dependency change.** Beside the version bump, the
+> merge edits the admin layout, sidebar and tier gate, the admin-tier and
+> authorization modules, and every core `<form>`. **Keep your own `version`**
+> in `package.json` and the lockfile if you set one.
+>
+> **A fork that edited `app/admin/layout.tsx` resolves that file by hand.** The
+> layout no longer works out the viewer's tier itself: it asks
+> `requestAdminReach()` once and judges each page with `reachesAdminPage()`.
+> Keep core's version and carry your edit onto it, with a divergence-ledger
+> row.
+>
+> **Your `validate` will flag** every `<form>` without `method="post"`, in your
+> components as in core's. Add it. A form whose fields belong in the URL, such
+> as a search box, takes `{/* form-method-ignore: <why> */}` on the line above
+> it.
+>
+> **Your type-check will flag:**
+>
+> - A layout that renders `<AdminSidebar>` or `<AdminTierGate>` with
+>   `viewerTier`. Pass `reach={await requestAdminReach()}` instead, and
+>   `namedTierPages={namedTierAdminPages()}` beside `orgTierPages`.
+> - A call to `viewerReaches()`, which is gone. Use `reachesTier(reach, tier)`.
+>
+> **Your tests will flag** `tests/unit/lib/app/defaults.test.ts`, if you
+> pinned the `lib/app/admin-tier.ts` row: it gains a `namedAdminTiers()` line.
+> Pin it; don't delete the row.
+>
+> **Changes a build will not catch:** if you replaced `canAdminister`, a named
+> tier now reaches it as `scope.tier`. Nothing changes until a fork registers
+> a tier, but once one does, a policy that answers only `'org'` and
+> `'platform'` decides that tier too. Delegate to
+> `DEFAULT_AUTHORIZATION_POLICY` for the tiers you don't answer.
+>
+> **Dependency alerts accepted for this release:** the same five as 0.17.0.
+> This release takes no dependency change.
+>
+> - `zod` < 4.6.6 (high), under `@vercel/blob`, which still accepts only
+>   `@vercel/oidc` 3.x. That copy reads the Vercel CLI's own config files on
+>   disk, not untrusted input.
+> - `postcss-selector-parser` (moderate), under `@tailwindcss/typography`. It
+>   parses only the app's own CSS, at build time.
+> - `glob` and `minimatch` (moderate), under `react-email`'s command-line tool,
+>   and `minimatch` under `typescript-eslint` too. Neither runs in the app.
+> - `deepmerge` (low), under `@react-email/components`. It merges the
+>   renderer's own options, not user input.
+
+### Added
+
+- **A fork can open some admin pages to people narrower than an org admin
+  (t-999, #1180).** Until now an admin page opened to the platform's admins,
+  or also to the org's OWNER/ADMIN, and nothing in between. So a client's
+  agency could not be given the client's design pages without making them an
+  admin of the whole org. `registerAdminTier(name, { holds, landing? })` in
+  `lib/auth/admin-tier.ts`, called from `initAppOrgTierAdminPages()`,
+  registers a named tier and says who holds it in the entered org. Declare it
+  where you declare `'org'`: `registerOrgTierAdminPage(pattern, { tier })`,
+  `withAdminAuth(handler, { tier })` and `NavItem.tier`. The default policy
+  admits the org's OWNER/ADMIN to a named-tier surface as to an `'org'` one,
+  and the tier's holders to that tier's surfaces only: no `'org'` surface, no
+  platform one, no other tier's. A tier nobody registered admits nobody. The
+  layout now asks the policy once per tier and judges each page by its own
+  tier; `/admin` sends a holder to their tier's `landing`, or else its first
+  page with no `[x]` segment. The roster test
+  checks named tiers as it checks `'org'`. Behaviour-neutral until a fork
+  registers one. **Forks:** if you replace `canAdminister`, a named tier
+  arrives as `scope.tier`; delegate to `DEFAULT_AUTHORIZATION_POLICY` for
+  tiers you do not answer. If you pinned the `lib/app/admin-tier.ts` row in
+  `tests/unit/lib/app/defaults.test.ts`, it gains a `namedAdminTiers()` line.
+  See `.context/auth/authorization.md` ("Named tiers").
+
+### Changed
+
+- **`<AdminSidebar>` and `<AdminTierGate>` take `reach` instead of
+  `viewerTier`, and an optional `namedTierPages` (t-999).** `reach` is what
+  the layout's new `requestAdminReach()` (`lib/auth/admin-page-viewer.ts`)
+  returns: `'platform'`, or the tiers the policy admitted the viewer to.
+  **Forks:** a fork that renders its own admin layout passes
+  `reach={await requestAdminReach()}` where it passed `viewerTier`, and
+  `namedTierPages={namedTierAdminPages()}` beside `orgTierPages`.
+  `adminPageViewerTier()` is unchanged.
+
+### Removed
+
+- **`viewerReaches()` from `lib/auth/admin-tier.ts` (t-999).** Nothing read it
+  once the gate and sidebar moved to `reachesTier()`. A fork that called it
+  uses `reachesTier(reach, tier)` instead.
+
+### Security
+
+- **A form submitted before the page had loaded put its fields in the URL
+  (t-998).** A server-rendered `<form>` with an `onSubmit` and no `method` is a
+  working HTML form until React attaches, so a press on a slow load, with a
+  script blocked, or with JavaScript off was a GET carrying every named field,
+  passwords and reset tokens included. Those URLs reach browser history and the logs of any
+  host, CDN or proxy in front of the site. Every `<form>` now sets
+  `method="post"`, and the sign-in, sign-up, reset, invitation, password,
+  contact and waitlist forms tell someone with no JavaScript that they can't
+  work. **Forks:** `npm run check:save-errors`, part of `validate`, now fails a
+  `<form>` without `method="post"`, so add it to your own forms. A form whose
+  fields belong in the URL, such as a search box, takes
+  `{/* form-method-ignore: <why> */}` on the line above it. See
+  `.context/ui/form-errors.md`.
+
+## [0.17.1] — 2026-11-06
+
+> **Alpha release.** Twenty-fourth tagged Sunrise release. **PATCH bump**: one
+> test-harness fix and no production change. A test that asserted focus
+> straight after an awaited query could fail at random, and one did on `main`
+> at the 0.17.0 cut. Any fork test copied from that pattern carries the same
+> race, so a fork's CI can fail on code nobody touched. Measured against
+> `v0.17.0`: 1 PR merged, no direct commits, no issues closed; the suite is
+> 1,529 files and 31,789 tests.
+>
+> ## What a fork has to do
+>
+> **Merge it.** No migration, seed, dependency or public-surface change. Beside
+> the version bump, the merge edits `tests/setup.ts`, adds
+> `tests/helpers/flush-react-effects.ts` and its test, and adds a note to two
+> docs. **Keep your own `version`** in `package.json` and the lockfile if you
+> set one. **A fork that edited `tests/setup.ts` resolves that file by hand:**
+> keep the new block, including its import from
+> `@testing-library/react/pure`. The main entry registers Testing Library's
+> cleanup on import, which from that file would restore spies before unmount
+> in every DOM test.
+>
+> **Dependency alerts accepted for this release:** the same five as 0.17.0.
+> This release takes no dependency change.
+>
+> - `zod` < 4.6.6 (high), under `@vercel/blob`, which still accepts only
+>   `@vercel/oidc` 3.x. That copy reads the Vercel CLI's own config files on
+>   disk, not untrusted input.
+> - `postcss-selector-parser` (moderate), under `@tailwindcss/typography`. It
+>   parses only the app's own CSS, at build time.
+> - `glob` and `minimatch` (moderate), under `react-email`'s command-line tool,
+>   and `minimatch` under `typescript-eslint` too. Neither runs in the app.
+> - `deepmerge` (low), under `@react-email/components`. It merges the
+>   renderer's own options, not user input.
+
+### Fixed
+
+- **A test can assert what a passive effect did straight after an awaited
+  query (t-995).** `findBy…` resolves on the commit that shows an element, and
+  `<SaveError>` moves focus in a passive effect after that commit, so
+  `expect(alert).toHaveFocus()` could run first and find focus on `<body>`.
+  `tests/setup.ts` now ends every `findBy…`, `waitFor` and user-event call by
+  running React's pending passive effects, so a fork's copied tests of that
+  shape are covered without being edited. **Focus that lands on a timer or an
+  animation frame isn't covered**, such as a field on a hidden tab: a test of
+  that still needs `waitFor`. With React's scheduler slowed by 30ms, 70 focus
+  tests failed before the fix and 1 after, `follows a tab switch that lands
+  after its first look` in `tests/unit/components/forms/save-error.test.tsx`,
+  which is built on exact frame timing. CPU load alone never reproduced the
+  failure, so the slowed scheduler stands in for what CI hit. `<SaveError>`
+  itself is unchanged: **don't move its focus to a layout effect**, which loses
+  focus to a closing dialog's trap (`.context/ui/form-errors.md`).
+
+## [0.17.0] — 2026-11-05
+
+> **Alpha release.** Twenty-third tagged Sunrise release. **MINOR bump**. It
+> adds a pre-launch waitlist a fork switches on (§125): join, confirm, leave,
+> an admin page, invites, and the Art. 15 / 17 wiring. Every form now shows a
+> failed save the same way, beside Save (§124). Evals can judge an agent that
+> works through its tools: graders see each tool call's outcome, and a fork
+> can set up and inspect every case. Forks get new seams for security headers
+> (third-party origins, and framable pages), tenancy classification and read
+> rules in the owner layer. A crashed workflow run now resumes where it had
+> got to, and Vercel Blob reads files back and holds private ones. Measured
+> against `v0.16.0`: 27 PRs merged, no direct commits, 20 issues closed (17
+> fixed here, 3 fixed in earlier releases); the suite is 1,528 files and 31,782 tests.
+>
+> ## What a fork has to do
+>
+> **Six migrations, no seed.** Three only add the waitlist's three new tables
+> and their columns. On an install whose tenancy switch is already on, they
+> also enable and force RLS on those tables, so there is nothing to re-run. The
+> other three change existing tables, adding nullable columns or columns with a
+> constant default, so none rewrites a table:
+> `20261031130000_execution_walk_state` (`ai_workflow_execution`),
+> `20261031170000_running_step_attempt` (`ai_workflow_running_step`) and
+> `20261104120000_waitlist_erasure_receipt` (`data_erasure_receipt`). That last
+> one also makes `subjectUserId` nullable and adds a CHECK, which reads the
+> table once.
+>
+> **Set `CRON_SECRET` if a cron calls the maintenance tick.** Use a random
+> value of at least 32 characters, not an `sk_` key, and revoke the old cron
+> key, so an idle tick stops querying the database. A fork that already sets
+> `CRON_SECRET` for its own cron routes now also lets that value run the tick.
+>
+> **Re-check hooks that trust `viaInvitation`.** A hook that granted anything
+> on it should be checked against accounts created before this release (see
+> Security).
+>
+> **Move what you carry into the new seams, then take core's files:**
+>
+> - Models you added to `SYSTEM_MODELS` or `GLOBAL_CONFIG_MODELS` go in
+>   `lib/app/tenancy-classification.ts`.
+> - A carried `frame-ancestors` seam goes in `lib/app/frame-ancestors.ts` and
+>   `lib/app/frameable-paths.json`. A copy of `nginx.conf`'s
+>   `X-Frame-Options: SAMEORIGIN` should go too.
+> - Script, service and audio origins go in `lib/app/csp.ts`; keep
+>   `appFrameSrc` last in the file. `appScriptSrc` takes no wildcard: an entry
+>   like `https://*.vendor.com` is dropped with only a log warning, and the
+>   browser then blocks the script.
+> - A core edit passing tool outcomes to graders is now core's, so drop it.
+> - A login-page line pointing at your own waitlist can go if you move to
+>   `waitlistConfig` and run `SIGNUP_MODE=invite_only`. Core's notice shows only
+>   then, so on any other mode, keep yours.
+>
+> Edits you keep to Sunrise's files now have one convention, a divergence
+> ledger: see `CUSTOMIZATION.md`.
+>
+> **Your `validate` will flag:** after this merge `check:save-errors` scans your
+> components too. A hand-drawn save-error box fails until it moves onto
+> `<SaveError>`, and every `<form>` fails until it has `noValidate`. Before
+> adding `noValidate`, check the form's schema holds every limit its inputs
+> declare. The opt-out comments are under Added, and the recipes are in
+> `.context/ui/form-errors.md`. It also fails if you deleted or rewrote a core
+> component named in `BOX_EXEMPTIONS`, because that entry no longer matches a
+> box. Remove the entry, and add a divergence-ledger row.
+>
+> **Your type-check will flag:** a hand-built `UserCreatedContext` (add
+> `invitation: null`), and code reading `DataErasureReceipt.subjectUserId`,
+> which is now `string | null`.
+>
+> **Your tests will flag:**
+>
+> - **`tests/unit/lib/app/defaults.test.ts`**, for a seam you fill. Pin your
+>   value; don't delete the row.
+> - **The tenancy coverage guard**, for a registration that names a core model
+>   or a fork `system` model carrying `orgId`.
+> - **A test asserting `StaleSaveNotice`'s amber classes**: it is now red.
+>
+> **Changes a build will not catch:**
+>
+> - **Email-change links minted before you deploy stop working.** better-auth
+>   1.7.16 rejects a change token with no `userId`. An approval link, the first
+>   step, lands on the home page with no message, so the user may wait for a
+>   second email that never comes. A new-address link reads as expired, and
+>   the resend form on that page can't restart a change. Anyone part-way
+>   through starts again from their profile.
+> - **The new-address click no longer signs anyone in.** A click from a browser
+>   with no session revokes every session on the account, the one that started
+>   the change included, and the user signs in again at the new address. A
+>   same-browser click keeps its session. The page now says "Email address
+>   changed", through a new `emailChanged=1` on the link.
+> - **An unverified account gets no session revocation on an email change**,
+>   and its new address stays unverified: better-auth 1.7.16 no longer calls
+>   `afterEmailVerification` for it. This is a known limitation, and it matters
+>   most under `REQUIRE_EMAIL_VERIFICATION=false`. See
+>   `.context/auth/security.md`.
+> - **The image and PDF input switches on Settings** never saved, so one you
+>   turned off is still on. Turn it off again.
+> - **A resumed workflow step re-runs.** A crash-resume now re-runs the steps
+>   that were in flight and no longer skips them, and it continues their retry
+>   count. A step with side effects can repeat them on a resume, so key
+>   per-attempt state on `stepAttemptId`.
+> - **`db:tenancy:role`** now errors on an unknown argument. On Neon, pass
+>   `--plaintext-password`.
+> - **better-auth's admin plugin**, if you use it with custom access control:
+>   add `set-phone`, which `/admin/update-user` now needs to change a phone
+>   number.
+>
+> **Dependencies.** Early November's minor and patch bumps, including
+> better-auth 1.7.18 and Next.js 16.4.5 (see Security). Held back in
+> `.github/dependabot.yml`, as in 0.16.0: undici 8, `@anthropic-ai/sdk` 1.x,
+> OpenTelemetry 3.x, and `@opentelemetry/api` 1.10.
+>
+> **Dependency alerts accepted for this release:**
+>
+> - `zod` < 4.6.6 (high, memory exhaustion on oversized input), under
+>   `@vercel/blob` → `@vercel/oidc` → `@vercel/cli-config`, which pins zod
+>   4.1.11 exactly. The first clean release is `@vercel/oidc` 4.0.6, and
+>   `@vercel/blob` 2.8.2, the latest, accepts only 3.x. That copy only validates the Vercel CLI's own
+>   config files on disk, not untrusted input. Sunrise's own zod is 4.6.7.
+> - `postcss-selector-parser` (moderate), under `@tailwindcss/typography`, which
+>   pins 6.0.10 exactly, as in 0.16.0. It parses only the app's own CSS, at
+>   build time.
+> - `glob` (moderate) and `minimatch` (moderate), under `react-email`, whose
+>   latest needs glob 13. They run in the `email` command-line tool on the
+>   app's own template files, not at runtime. `minimatch` is also under
+>   `typescript-eslint`, dev-only.
+> - `deepmerge` (low, prototype poisoning), under `@react-email/components` →
+>   `@react-email/render` 2.0.6 → `html-to-text` 9. `deepmerge` has no fixed
+>   version, and `@react-email/components` 1.0.12, the latest, pins that render
+>   exactly; render 2.2.0 no longer uses it. It merges the renderer's own
+>   options, not user input.
+
+### Added
+
+- **Eval graders see how each tool call went (#1044)**: `GraderInput.toolCalls`
+  items (new exported type `GraderToolCall`, from
+  `lib/orchestration/evaluations/graders/types.ts`) gain optional `success`,
+  `errorCode` and `resultPreview`, filled from the subject's trace for agent
+  subjects. `resultPreview` is the capability's redacted provenance preview.
+  The stored `subjectMetadata.toolCalls` is unchanged (`{ slug, args }`), and
+  the built-in graders score as before. **Fork sync:** a fork carrying this
+  as a core edit (Know Your Synth) takes core's version and drops its own.
+- **Eval case hooks for agents that act through their tools (#879)**: a
+  new init in the fork seam `lib/app/evaluations.ts`,
+  `initAppEvalCaseHooks()` (ships empty), registers per-agent hooks through
+  `registerEvalCaseHooks(agentSlug, { setup, observe })` in
+  `lib/orchestration/evaluations/case-hooks.ts`. `setup` runs before every
+  case and returns the turn's `contextType`, `contextId`, `entityContext` and
+  `scope` (`runAgentCase` gains `context`), within the chat API's limits;
+  `contextType` and `contextId` come together, and `contextType`
+  `'evaluation'` (exported as `EVALUATION_CONTEXT_TYPE`) is refused.
+  `observe` runs after the turn. `GraderInput` gains `caseMetadata` (any
+  subject whose case has metadata) and `observed`. A throwing hook fails only
+  its case, as `case_setup_failed` or `case_observe_failed`. If the init itself
+  throws, every agent case is refused rather than scored without its setup.
+  `registeredEvalCaseHookAgents()` lists the hooked agents. An agent with no
+  hooks runs as before.
+- **A fork's own read rule in the owner layer (#1145)**: `OwnerPath`
+  (`lib/db/owner-classification.ts`) gains a third shape, `{ reader }`: a pure
+  function from the `OwnerReader` to a Prisma `where`, registered through
+  `registerAppOwnerClassification()` on fork models only, with no `ownerless`
+  or `alsoVisible` beside it. On an enforced ruled model, and on a `through`
+  child of one, the layer narrows a narrowed caller's reads by the rule rather
+  than refusing them. Lists, counts, aggregates, group-bys and to-many
+  relations get it ANDed into their `where`. A read by key, an `update`,
+  `delete` or `upsert` of a row outside the rule is refused;
+  `updateManyAndReturn` is narrowed. A to-one reaching the
+  model is refused. A rule that throws, or answers a `where` that matches every
+  row (`{}`, `{ x: undefined }`, `{ AND: [] }`), refuses with the
+  new `OwnerRefusalReason` `'read-rule-failed'`. Narrowing is silent: a read
+  meant to see every row must run inside `runAcrossOwners(reason, fn)`.
+  `readablePredicate()` takes an optional `operation`, and `narrowsByRule()`
+  is exported. **Fork sync:** a space- or team-scoped model classified
+  `not-personal` for want of an owner can now be `personal` with a rule.
+- **A fork classifies its own models for tenancy (#964), and a user-owned
+  class (#1041)**: new seam `lib/app/tenancy-classification.ts` →
+  `initAppTenancyClassification()` (ships empty), registering through
+  `registerAppTenancyClassification({ tier, system, globalConfig, userOwned })`
+  in `lib/tenancy/classification.ts`, so a fork no longer edits
+  `SYSTEM_MODELS` / `GLOBAL_CONFIG_MODELS`. A fourth class, **user-owned**
+  (`USER_OWNED_MODELS`, empty in core), holds rows a person owns outside any
+  org: no `orgId`, a link to a user, and not under the shared-settings rule.
+  `classifyModels()` returns `userOwned` and `systemWithOrgId`; new readers
+  `allSystemModels()`, `allGlobalConfigModels()`, `allUserOwnedModels()`. The
+  coverage guard fails on a fork registration that names a core model, an
+  `'app'` registration of a framework tier's model, or a fork `system` model
+  carrying `orgId` (which would leave row isolation; the client also warns). **Fork sync:** move
+  any models you added to core's lists into the new seam, then take core's
+  lists as they are.
+- **Letting named sites frame a page (#887)**: two new fork-owned seams.
+  `lib/app/frame-ancestors.ts` → `resolveAppFrameAncestors(request)` (ships
+  answering `[]`) names, per request, the exact `https://` origins allowed to
+  frame that page; `proxy.ts` awaits it for paths under a listed prefix (and
+  only those) and passes the answer to
+  `setSecurityHeaders()`'s new third argument, `{ frameAncestors }` (type
+  `SecurityHeaderOptions`, exported from `@/lib/security`). A non-empty answer
+  replaces `frame-ancestors 'none'` and drops `X-Frame-Options` for that
+  response; a throw, a malformed answer or an invalid origin frames nothing. `lib/app/frameable-paths.json`
+  (ships `[]`) lists the framable path prefixes, which `next.config.js` also
+  leaves out of its static `X-Frame-Options: DENY`. With both empty every response the app sends carries
+  exactly the headers it did before. `nginx.conf` no longer adds its own
+  `X-Frame-Options: SAMEORIGIN`, which contradicted the app's `DENY`; a fork
+  that copied that line into its own proxy config should drop it too.
+- **Third-party scripts, services and audio in the CSP (#841)**: `lib/app/csp.ts`
+  gains `appScriptSrc`, `appConnectSrc` and `appMediaSrc` beside `appFrameSrc`,
+  all shipping empty. Each is held to the same exact-`https://`-origin check as
+  `appFrameSrc` (invalid entries dropped with a warning), except that
+  `appScriptSrc` takes no wildcard, and folded into
+  `getCSPConfig()` and the header for dev and prod. A fork that has filled
+  `appFrameSrc` takes the new exports without a merge conflict; keep
+  `appFrameSrc` last in the file.
+- **Waitlist (§125)**: a new seam,
+  `lib/app/waitlist-config.ts` → `waitlistConfig` (type `WaitlistConfig` in
+  `lib/waitlist/config.ts`), ships `null`: no waitlist, and the new routes
+  answer 404. Filled in, it declares the form's extra fields, named lists, the
+  consent text's version, a `screen()` check and the retention windows
+  (`retention: { removedDays, closedListMonths }`, defaults 90 days and 12
+  months), and turns on
+  `GET`/`POST /api/v1/waitlist`, the `<Waitlist />` and `<WaitlistForm>`
+  components (`components/waitlist/`), and the Art. 15 / 17 and org-export
+  wiring. Two new tenant-owned models, `WaitlistEntry` and `WaitlistListState`
+  (one migration, with their `org_isolation` policies). **On an
+  install whose tenancy switch is already on, the migration also enables and
+  forces RLS on the two new tables**, so there is nothing to re-run after
+  `migrate deploy`. A new
+  per-flow sub-cap `waitlistLimiter` (`RATE_LIMIT_WAITLIST`, 5/hour per IP) and a
+  `TenantContextSource` value, `'public-form'`. A fork filling the seam fails
+  its row in `tests/unit/lib/app/defaults.test.ts`, as expected: pin your
+  value. **Admin (t-976):** an org-tier `/admin/waitlist` page (hidden while
+  the config is empty) over `GET /api/v1/admin/waitlist` (list),
+  `/counts`, `/export` (CSV), `PATCH`/`DELETE /api/v1/admin/waitlist/:id`
+  (remove or restore; erase) and `PATCH /api/v1/admin/waitlist/lists/:key`
+  (open or close); a per-org maintenance job, `waitlistRetention`, appended to
+  the tick's `backgroundTasks`; and `eraseWaitlistEntry()` now also deletes
+  the org's pending invitation for the address. Guide:
+  `.context/waitlist/overview.md`.
+
+- **Waitlist confirmation and leaving (§125 t-977)**: a join now emails the
+  joiner, after the response — a confirmation link to a new or unconfirmed
+  entry, an "already on the list" note to a confirmed one — at most once an
+  hour per entry, and the note at most once in 30 days. New public routes `POST /api/v1/waitlist/confirm` and
+  `POST /api/v1/waitlist/leave`, and the pages their links open
+  (`/waitlist/confirm`, `/waitlist/leave`). Two new email kinds in
+  `EmailPropsMap`, `waitlistConfirm` and `waitlistAlreadyOnList`, overridable
+  in `lib/app/emails.ts`. `WaitlistConfig.retention.unconfirmedDays` (default
+  30, at least 7, the link's lifetime): an unconfirmed entry is deleted by the
+  `waitlistRetention` maintenance task that many days after its window
+  started: its join, its latest confirmation link, or an admin restore (an
+  entry from before this change starts at the migration). At most three
+  confirmation links per entry (`WAITLIST_CONFIRM_MAX_LINKS`), and none to an
+  entry `screen()` flagged. Every link sent stays good until it
+  expires or the address is confirmed; a re-send adds one rather than
+  replacing it. A new tenant-owned model, `WaitlistConfirmToken`, holds the
+  links' hashes and cascades with its entry, so whatever deletes an entry
+  deletes its links. New columns `WaitlistEntry.lastEmailedAt`,
+  `confirmWindowFrom` and `confirmLinksSent`, and a `TenantContextSource` value,
+  `'waitlist-link'`. Leave works with no waitlist config, so dropping the
+  config never strands the links in people's inboxes, and `waitlistRetention`
+  still prunes the rows a dropped config left, on the default windows.
+
+- **Waitlist invites, and linking the new account (§125 t-978)**: two new
+  org-tier admin routes. `POST /api/v1/admin/waitlist/:id/invite` invites one
+  entry (re-sends when its own invitation is pending; `inviteLimiter`).
+  `POST /api/v1/admin/waitlist/invite` invites a wave — the ticked ids, the
+  next N by join date, or N at random, narrowed to a list and/or one answer —
+  at most `WAITLIST_INVITE_WAVE_MAX` (50), reporting every row, under a new
+  per-flow sub-cap `waitlistInviteWaveLimiter` (`RATE_LIMIT_WAITLIST_INVITE_WAVE`,
+  5/hour per admin). Both invite as `USER` into the entry's org through
+  `deliverInvitation()`, and refuse removed, joined, unconfirmed and flagged
+  entries, an address with an account, and another invitation pending for the
+  address. Removing an entry (`PATCH /api/v1/admin/waitlist/:id`,
+  `{ removed: true }`) now also revokes every invitation it was sent; other
+  invitations for the address are left. `InvitationMetadata` gains an
+  optional `waitlistEntryId`, and
+  `RedeemedInvitation` (the user-created seam's `ctx.invitation`) an optional
+  `waitlistEntryId`: a sign-up that redeems a waitlist invitation, by password
+  or OAuth, sets the entry's `userId` and `joinedAt` before the fork's hooks
+  run. `WaitlistConfig.joinPath` (optional, a path on this site, default `/`):
+  under `SIGNUP_MODE=invite_only` with a waitlist config, the login page
+  points there ("Join the waitlist") where it would otherwise say nothing — a
+  fork carrying its own line in `app/(auth)/login/page.tsx` can drop it.
+
+- **Private files and downloads on Vercel Blob** (#1012, #1155): the Vercel
+  Blob provider can now read objects back (`download()`, through the SDK's
+  `get()`) and hold private files. A new optional env var,
+  `BLOB_PRIVATE_READ_WRITE_TOKEN`, names a second store created with Private
+  access, and `upload({ public: false })` writes there instead of throwing. A
+  private upload returns the signed read route's address, and `getSignedUrl()`
+  mints its token as the local provider does, so `privateObjects` and
+  `signedUrls` are on whenever the private store is configured, and
+  `upload_to_storage` works at `TENANCY_MODE=multi` on Vercel. `delete()` and
+  `deletePrefix()` now sweep both stores, except that a Vercel Blob URL goes
+  only to the store its hostname names. `BLOB_READ_WRITE_TOKEN` is unchanged
+  and still the public store. Either token alone makes a provider, and an
+  upload whose store is missing throws: with only the private token, avatar
+  uploads are refused. `VercelBlobProviderConfig.token` is now optional,
+  alongside the new `privateToken`, and `vercelBlobConfigSchema` accepts either
+  or both. Guide: `.context/storage/overview.md`.
+
+- **`CapabilityContext.stepId`, `stepAttempt` and `stepAttemptId`**: the
+  workflow step a capability was dispatched from, which retry of it this is
+  (0 first), and an opaque id for this attempt. Set by the `tool_call` and
+  `agent_call` executors. Key per-attempt state on `stepAttemptId`: the
+  engine mints a new one every time it runs a step's executor (each retry,
+  loop visit, operator retry-step, parallel branch and `orchestrator`
+  delegation), so no two attempts share it. A crash-resume continues the
+  attempt it was interrupted in — same number, same id, and its retry count,
+  so a resumed step no longer gets a fresh set of retries — from the new
+  `AiWorkflowRunningStep.attempt` and `attemptId` columns (one migration)
+  (#1143, t-965).
+- **`<SaveError>`** (`components/forms/form-error.tsx`) and **`readSaveError()`
+  / `applyFieldErrors()`** (`lib/errors/save-error.ts`): the one way a form
+  shows a save the server refused. The form places it beside the Save button
+  that was pressed; it is red, announced, and brought into view and focused on
+  every new failure, or focus goes to the first field the server named. The
+  helper reads both server field-error shapes (`validateRequestBody`'s
+  `{ errors: [{ path, message }] }` and `handleAPIError`'s
+  `Record<path, string[]>`) through a typed server-path → field table. A
+  tabbed form passes `onRevealField(fields)` to bring forward the tab holding
+  a rejected field. The settings page, the event subscription form, the
+  admin forms with a Save button, the admin lists and confirm dialogs (one
+  box above each list; a dialog keeps its failure inside and stays open), and
+  the sign-in and account forms use it. See `.context/ui/form-errors.md`
+  (§124).
+- **`useSaveFailure()`** (`lib/hooks/use-save-failure.ts`): owns a page's
+  failed save. It reads the error, puts field messages on a react-hook-form
+  form, and wraps submit so every press clears the last failure;
+  `NO_SERVER_FIELDS` is its table for a page that places no field messages,
+  and `report(err, context)` leads the message with what it was about (a list
+  row reported above its table). `invalid` is react-hook-form's `onInvalid`
+  (`handleSubmit(onSubmit, save.invalid)`), so a save the schema blocks says
+  how many fields need fixing by Save and focuses the first; `block(problems)`
+  does the same for a plain-state form's own checks. `submit` also blocks a
+  press while a number field holds something the browser can't read (`1,000`),
+  which would otherwise save as blank. **`invalidSave()`** and
+  **`unreadableNumbers()`** (`lib/errors/save-error.ts`) are the same for a
+  form that holds its failure itself (t-964).
+  Also **`isStaleSave()`** (`lib/errors/save-error.ts`), for a page that only
+  needs to know a save was refused as stale (§124).
+- **`apiErrorFromResponse()`** (`lib/api/client.ts`): the `APIClientError`
+  `apiClient` would have thrown for a failed response, for a caller that sends
+  its own `fetch` (a multipart upload, a stream), so its save error reads the
+  same way (§124).
+- **`useCommittedDialog()`** (`lib/hooks/use-committed-dialog.ts`): locks a
+  dialog while its save runs. The action and Cancel are disabled and Escape
+  or an outside click is ignored, so a second click can't send twice and a
+  refusal is never lost; the dialog's failure clears as it opens and closes.
+  Every admin dialog that saves uses it; dialogs that run or test something
+  (re-run an execution, audit models) are out of §124's scope (§124).
+- **`npm run check:save-errors`** (`scripts/ci/check-save-error-boxes.ts`):
+  reports a component that draws its own red box for a failed save instead of
+  using `<SaveError>`. It runs in `npm run validate` and as its own CI step,
+  over every `.tsx` under `components/` and `app/`. **Forks:** your own
+  components are scanned too, so a form of yours with a hand-drawn save error
+  fails `validate` after this merge. Move it onto `<SaveError>` (the recipes
+  are in `.context/ui/form-errors.md`), or, for a box that isn't a save (a
+  run, a test, an export), put `{/* save-error-box-ignore: <why> */}` on the
+  line above it (`// save-error-box-ignore: <why>` inside parentheses, where
+  JSX braces don't parse). Don't add your paths to `BOX_EXEMPTIONS`: that list is
+  Sunrise's own (§124).
+  It also fails a `<form>` without `noValidate`: with a limit on any input
+  (`required`, `max`, `type="email"`), the browser blocks Save with its own
+  bubble before the form's validation runs, so the shared error never shows.
+  **Forks:** each `<form>` of yours fails `validate` until it has
+  `noValidate`. Before adding it, check the form's schema holds every limit
+  its inputs declare (a `type="number"` with no `step` means whole numbers:
+  `.int()`), or the check moves to the server; then pass `save.invalid` to
+  `handleSubmit`. A form that must keep the browser's checks takes
+  `{/* browser-validation-ignore: <why> */}` on the line above it (t-964).
+
+### Changed
+
+- **`DataErasureReceipt` has a subject kind, and `subjectUserId` is nullable
+  (§125 t-975).** New column `subjectKind` (`'account'` | `'waitlist'`,
+  default `'account'`); every existing receipt reads as an account receipt
+  and keeps its id. A `'waitlist'` receipt records a person erased from the
+  waitlist with no account, and names no user (`subjectUserId` null); the
+  CHECK `data_erasure_receipt_subject_kind` holds the pairing (drift probe
+  A13). Code that reads `subjectUserId` off a receipt now gets
+  `string | null`; a query by `subjectUserId` is unchanged. The writer is
+  `eraseWaitlistEntry()` (`lib/waitlist/erase.ts`). The erased-subject
+  readers (`matchErasedSubjects()`, `findErasedSubjects()`,
+  `anyoneErasedSince()` and the run-recipients scans) read account receipts
+  only, so a waitlist receipt makes no recipient writer refuse anything,
+  also for a confirmed entry. A subject access export now also lists the
+  account's waitlist receipts (the linked entry's, and those under its
+  verified address), and leaves `actorUserId` out of every receipt it
+  lists. Guide: `.context/privacy/data-erasure.md`, "Waitlist-only receipts".
+
+- **The user-created seam says which invitation a signup redeemed.**
+  `UserCreatedContext` gains `invitation: { invitedAt, invitedBy, orgId } |
+  null` (`RedeemedInvitation`, `lib/auth/user-created-hooks.ts`), on both the
+  password and the Google path, where the token is consumed before the account
+  exists. `orgId` is the install org when the invitation named none.
+  **Breaking for code that builds a `UserCreatedContext` by hand** (a fork's
+  tests, say): add `invitation: null` (#1136, t-973).
+- **`StaleSaveNotice` is now red and moves into view** — it is the stale
+  variant of `<SaveError>`, with the same props, Reload and Copy my changes.
+  `StaleSaveNoticeProps` is now an alias of `StaleSaveProps` from
+  `components/forms/form-error.tsx`. **Forks:** a page rendering it gets the
+  new look and focus behaviour with no change; a test asserting its amber
+  classes needs updating (§124).
+
+- **The new-address click of an email change no longer signs anyone in.** With
+  better-auth 1.7.16 it mints no session, so a click from a browser with no
+  session now revokes every session on the account, and the user signs in again
+  at the new address. A same-browser click keeps the session it carries. The
+  verification link marks a change with `emailChanged=1`, and
+  `/verify-email/callback` then says the address changed rather than "Email
+  Verified!" (t-994).
+
+### Fixed
+
+- **A second avatar upload failed on Vercel Blob.** The SDK refuses to
+  overwrite an existing blob unless asked, and avatars use one fixed key per
+  user, so every re-upload threw. The provider now
+  overwrites, as S3 and local always have.
+
+- **`db:tenancy:role --create` failed on Neon.** Neon's control plane accepts
+  only the password itself, not the SCRAM-SHA-256 verifier the script sends,
+  so the role was never created. A new `--plaintext-password` flag sends the
+  password as written, on create and on reset; without it the verifier is
+  sent, as before. **On Neon, pass the flag.** It is refused over an
+  unencrypted connection, and the server can then keep the statement,
+  password included (its log, `pg_stat_statements`), which the script warns
+  of. An unknown argument is now an error rather than ignored (#1131, t-972).
+- **At `TENANCY_MODE=multi`, a platform admin could not mint, list or revoke an
+  admin API key.** An `admin` key binds no org (`orgId` NULL), and the
+  `ai_api_key` isolation policy refuses such a row from inside every org, so
+  minting one answered `500` and list and revoke could not see it. The
+  self-service routes now handle a platform key outside the org, under
+  `runAsSystem`, narrowed to the caller's own row
+  (`lib/auth/user-api-keys.ts`); the policy is unchanged, so an org's reads
+  still see no platform key. From a browser session in the default
+  organisation, where platform keys are minted, the list includes the
+  caller's platform keys beside the org's and revoke reaches them; from a
+  customer org, or from any API key, it does neither. Revoke
+  is now one conditional write, so concurrent revokes cannot move the recorded
+  time (#1132, t-971).
+- **An idle maintenance tick still queried the database when its cron used an
+  API key, so a scale-to-zero database never suspended.** Before the idle gate
+  could answer, the proxy's rate limiter looked up the `sk_` key and
+  `resolveApiKey` read it and wrote `lastUsedAt`. The tick's `GET` now also
+  accepts `Authorization: Bearer $CRON_SECRET`, the variable Vercel Cron sends,
+  checked in constant time with no database call; admin API keys still work.
+  **Action for operators:** set `CRON_SECRET` to a random value of at least 32
+  characters (`openssl rand -base64 32`), not an `sk_` key, and revoke the old
+  cron key. An `sk_` value is never matched as the secret: it still works
+  through the admin-key check, so revoking it still stops it, but it queries.
+  The value is read from `process.env`, not the core env schema, so a fork that
+  declares `CRON_SECRET` in `lib/app/env.ts` still boots; **a fork that already
+  sets `CRON_SECRET` for its own cron routes now also lets that value run this
+  tick**. The secret is checked before `withAdminAuth`, so `canAdminister` is
+  not asked about it. That is by design: the tick is system work, and a policy
+  in safe mode must not stop it. A fork that wants its policy to decide sets
+  `CRON_SECRET` to an admin `sk_` key, which the secret check never matches, so
+  the guard decides; that costs the idle tick its queries again (#1130, t-969,
+  t-970).
+- **A workflow run resumed after a crash skipped the step it crashed in.**
+  The engine records a run's current step when the step starts and never
+  moved it on, so the orphan sweep resumed after the step that was in flight:
+  that step, and everything waiting on it, never ran, and a run whose last
+  step was in flight was marked completed without it. The engine now saves
+  where its walk is on `AiWorkflowExecution.walkState` (new nullable column,
+  migration included) and a crash-resume continues from there: it re-runs the
+  steps that were in flight and keeps a route's chosen branch, a parallel
+  branch's successors, a loop's downstream steps and a bounded retry's count
+  and reason. Approval and retry-step resumes are unchanged. Saved multi-turn
+  state is now replayed only into the step that recorded it; a resume used to
+  hand it to the next step to run (t-966).
+- **Changing your password with the wrong current password said it
+  succeeded.** better-auth's client answers a refusal as `{ error }` rather
+  than throwing it, and the password form only read a throw, so it showed
+  "Password changed successfully" while nothing changed. It now shows "Current
+  password is incorrect" under that field (§124).
+- **The org-wide image and PDF input switches on Settings never saved.**
+  `PATCH /api/v1/admin/orchestration/settings` accepted
+  `imageInputGloballyEnabled` and `documentInputGloballyEnabled`, answered
+  200, and dropped both, so turning either off said "Saved" while chat kept
+  accepting uploads. It now writes them. **Forks:** a switch you turned off
+  was never stored, so Settings shows it on and uploads are still allowed. If
+  you meant it off, turn it off again and save after this merge (t-963).
+
+### Security
+
+- **The user-created seam reported a public signup for an invited address as
+  invited.** On the email/password path `viaInvitation` was true whenever an
+  invitation was pending for the address, without a token being presented, so
+  under `SIGNUP_MODE=open` anyone who signed up first with an invited address
+  was reported as invited, and a fork hook acting on it (granting the
+  invitation's roles, say) acted for them. `viaInvitation` and the new
+  `invitation` now come only from signals that prove a token: the acceptance
+  the before hook records, and `accept-invite`'s own context. Such a signup
+  is now verified like any other: it gets its verification email, and its
+  welcome email waits for verification. `accept-invite` also reads the
+  invitation whose token it validated, not an expired one for the same
+  address.
+  **Forks:** a hook that granted anything on `viaInvitation` should be
+  re-checked against accounts created that way before this release (#1136,
+  t-973).
+- **better-auth 1.7.18 and Next.js 16.4.5.** better-auth 1.7.16 fixes, among
+  others, email verification links working for another account and a string
+  `email_verified: "false"` being read as verified. Its fix for revoked sessions
+  staying usable covers secondary storage and named flows; Sunrise revokes rows
+  directly, so its up-to-5-minute cookie-cache window remains. Next.js 16.4.5 carries
+  seven moderate advisories, including cross-user `use cache` disclosure, an
+  SVG optimizer bypass and `HttpOnly` cookie exposure on Edge routes (t-994).
+
 ## [0.16.0] — 2026-10-27
 
 > **Alpha release.** Twenty-second tagged Sunrise release. **MINOR bump**. It
@@ -10146,7 +10822,10 @@ Sunrise safe to fork and to merge upstream releases into.
 
 ---
 
-[Unreleased]: https://github.com/human-centric-engineering/sunrise/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/human-centric-engineering/sunrise/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.17.1...v0.18.0
+[0.17.1]: https://github.com/human-centric-engineering/sunrise/compare/v0.17.0...v0.17.1
+[0.17.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/human-centric-engineering/sunrise/compare/v0.13.0...v0.14.0

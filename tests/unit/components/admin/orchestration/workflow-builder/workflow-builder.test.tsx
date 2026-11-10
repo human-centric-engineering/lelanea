@@ -975,7 +975,9 @@ describe('WorkflowBuilder', () => {
       await waitFor(() => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
       });
-      expect(screen.getByRole('alert').textContent).toContain('Could not save as template');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /^Couldn't save as a template\. Try again\.$/
+      );
     });
   });
 
@@ -1322,7 +1324,7 @@ describe('WorkflowBuilder', () => {
   });
 
   describe('performSave: Error instance branch', () => {
-    it('shows err.message for standard Error (not APIClientError) rejections', async () => {
+    it('shows the fallback for a standard Error (not APIClientError): a thrown bug is not the server talking (§124)', async () => {
       // Exercises the middle branch of the catch ternary:
       //   err instanceof APIClientError → false; err instanceof Error → true
       const user = userEvent.setup();
@@ -1335,7 +1337,7 @@ describe('WorkflowBuilder', () => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
       });
       // The Error's message is used directly (not the generic "Failed to save workflow")
-      expect(screen.getByRole('alert').textContent).toContain('Disk quota exceeded');
+      expect(screen.getByRole('alert').textContent).toContain('Failed to save workflow');
     });
   });
 
@@ -2120,6 +2122,13 @@ describe('WorkflowBuilder', () => {
       await waitFor(() =>
         expect(screen.queryByRole('button', { name: /^publish$/i })).not.toBeInTheDocument()
       );
+      // The closing dialog must not hand focus back to the Publish trigger:
+      // the person lands on the explanation and its Reload (§124). Radix
+      // returns focus on a timer after the dialog unmounts, so let it run.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+      expect(
+        screen.getByText(/This workflow changed since you opened it/i).closest('[role="alert"]')
+      ).toHaveFocus();
     });
 
     it('discards with the loaded version, and shows the reload prompt when refused', async () => {

@@ -163,7 +163,32 @@ setSaved(true);
 schedule(() => setSaved(false), 2500);
 ```
 
+## `useSaveFailure({ fallback, fields?, setError? })`
+
+**File:** `lib/hooks/use-save-failure.ts`
+
+Owns a page's failed save for `<SaveError>`: `report(err, context?)` reads
+what a save threw (and, given a react-hook-form `setError` and a field table,
+puts field messages under their fields; `context` leads the message, for a
+list row reported above its table), `show(message, fields?)` reports a failure the
+page found itself, `clear()` hides it, and `submit(handler)` wraps a form's
+submit so every press clears the last failure first. Each report is a new
+object, so the same message moves into view again. Full rules and recipes:
+[Form save errors](./form-errors.md).
+
+## `useCommittedDialog({ open, pending, onClose, onOpen?, clear? })`
+
+**File:** `lib/hooks/use-committed-dialog.ts`
+
+Locks a dialog while its save runs: `onOpenChange` ignores a close while
+`pending`, `cancelProps` and `actionProps({ disabled? })` disable Cancel and
+the action, and `confirm(e, run)` (the action's `onClick`) calls
+`preventDefault` so an `AlertDialogAction` doesn't close the dialog before the
+save answers. `clear` runs as the dialog opens and as it closes. Recipe: [Form save errors → a
+dialog](./form-errors.md).
+
 ## See also
 
 - [Setup Wizard](../admin/setup-wizard.md) — composes `useLocalStorage` and `useWizard` together
 - [Contextual help](./contextual-help.md)
+- [Form save errors](./form-errors.md) — `useSaveFailure` with `<SaveError>`

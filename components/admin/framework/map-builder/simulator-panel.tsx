@@ -304,6 +304,7 @@ export function SimulatorPanel({
             </Button>
 
             {error && (
+              // save-error-box-ignore: a dry run writes nothing, so its failure is not a save
               <p className="text-destructive text-sm" role="alert">
                 {error}
               </p>

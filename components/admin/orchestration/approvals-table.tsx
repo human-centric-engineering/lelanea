@@ -49,20 +49,19 @@ import { Tip } from '@/components/ui/tooltip';
 import { FieldHelp } from '@/components/ui/field-help';
 import { MarkdownContent } from '@/components/admin/orchestration/markdown-or-raw-view';
 import { StructuredApprovalView } from '@/components/admin/orchestration/approvals/structured-approval-view';
+import { SaveError } from '@/components/forms/form-error';
+import { apiErrorFromResponse } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
 import { parseApiResponse } from '@/lib/api/parse-response';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import { reviewSchemaSchema } from '@/lib/orchestration/review-schema/types';
 import type { ReviewSchema } from '@/lib/orchestration/review-schema/types';
-import { z } from 'zod';
 import type { PaginationMeta } from '@/types/api';
 import type { ExecutionListItem, ExecutionTraceEntry } from '@/types/orchestration';
 
 const STRUCTURED_APPROVAL_WORKFLOW_SLUGS = new Set(['tpl-provider-model-audit']);
-
-const apiErrorBodySchema = z
-  .object({ error: z.object({ message: z.string().optional() }).optional() })
-  .nullable();
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -132,7 +131,8 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
   const [approveTarget, setApproveTarget] = useState<string | null>(null);
   const [approveNotes, setApproveNotes] = useState('');
   const [approveLoading, setApproveLoading] = useState(false);
-  const [approveError, setApproveError] = useState<string | null>(null);
+  const approveSave = useSaveFailure({ fallback: 'Approve failed', fields: NO_SERVER_FIELDS });
+  const { clear: clearApproveSave, report: reportApproveSave } = approveSave;
   // Structured-view-supplied payload; preserved into the confirm dialog so
   // the admin's per-item selection isn't lost when they click Approve.
   const [approvePayload, setApprovePayload] = useState<Record<string, unknown[]> | null>(null);
@@ -141,7 +141,8 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectLoading, setRejectLoading] = useState(false);
-  const [rejectError, setRejectError] = useState<string | null>(null);
+  const rejectSave = useSaveFailure({ fallback: 'Reject failed', fields: NO_SERVER_FIELDS });
+  const { clear: clearRejectSave, report: reportRejectSave } = rejectSave;
 
   // Success message
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -226,7 +227,7 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
   const handleApproveSubmit = useCallback(async () => {
     if (!approveTarget) return;
     setApproveLoading(true);
-    setApproveError(null);
+    clearApproveSave();
 
     try {
       const body: Record<string, unknown> = {};
@@ -239,10 +240,7 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        const errBody = apiErrorBodySchema.safeParse(await res.json().catch(() => null));
-        throw new Error((errBody.success && errBody.data?.error?.message) || 'Approve failed');
-      }
+      if (!res.ok) throw await apiErrorFromResponse(res);
 
       setApprovals((prev) => prev.filter((a) => a.id !== approveTarget));
       setMeta((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
@@ -252,18 +250,25 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
       setExpandedId(null);
       showSuccess('Execution approved. The workflow will resume.');
     } catch (err) {
-      setApproveError(err instanceof Error ? err.message : 'Approve failed');
+      reportApproveSave(err);
     } finally {
       setApproveLoading(false);
     }
-  }, [approveTarget, approveNotes, approvePayload, showSuccess]);
+  }, [
+    approveTarget,
+    approveNotes,
+    approvePayload,
+    showSuccess,
+    clearApproveSave,
+    reportApproveSave,
+  ]);
 
   // ─── Reject ─────────────────────────────────────────────────────────────
 
   const handleRejectSubmit = useCallback(async () => {
     if (!rejectTarget || !rejectReason.trim()) return;
     setRejectLoading(true);
-    setRejectError(null);
+    clearRejectSave();
 
     try {
       const res = await fetch(API.ADMIN.ORCHESTRATION.executionReject(rejectTarget), {
@@ -272,10 +277,7 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: rejectReason.trim() }),
       });
-      if (!res.ok) {
-        const errBody = apiErrorBodySchema.safeParse(await res.json().catch(() => null));
-        throw new Error((errBody.success && errBody.data?.error?.message) || 'Reject failed');
-      }
+      if (!res.ok) throw await apiErrorFromResponse(res);
 
       setApprovals((prev) => prev.filter((a) => a.id !== rejectTarget));
       setMeta((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
@@ -284,11 +286,33 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
       setExpandedId(null);
       showSuccess('Execution rejected.');
     } catch (err) {
-      setRejectError(err instanceof Error ? err.message : 'Reject failed');
+      reportRejectSave(err);
     } finally {
       setRejectLoading(false);
     }
-  }, [rejectTarget, rejectReason, showSuccess]);
+  }, [rejectTarget, rejectReason, showSuccess, clearRejectSave, reportRejectSave]);
+
+  // Each dialog is committed while its decision runs; one row's failure
+  // never shows in the next row's dialog.
+  const approveDialog = useCommittedDialog({
+    open: approveTarget !== null,
+    pending: approveLoading,
+    onClose: () => {
+      setApproveTarget(null);
+      setApproveNotes('');
+      setApprovePayload(null);
+    },
+    clear: clearApproveSave,
+  });
+  const rejectDialog = useCommittedDialog({
+    open: rejectTarget !== null,
+    pending: rejectLoading,
+    onClose: () => {
+      setRejectTarget(null);
+      setRejectReason('');
+    },
+    clear: clearRejectSave,
+  });
 
   // ─── Extract approval prompt from trace ─────────────────────────────────
 
@@ -430,7 +454,6 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
                           onClick={() => {
                             setApproveTarget(item.id);
                             setApproveNotes('');
-                            setApproveError(null);
                           }}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -443,7 +466,6 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
                           onClick={() => {
                             setRejectTarget(item.id);
                             setRejectReason('');
-                            setRejectError(null);
                           }}
                         >
                           <XCircle className="h-3.5 w-3.5" />
@@ -487,12 +509,10 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
                                     setApprovePayload(payload);
                                     setApproveTarget(item.id);
                                     setApproveNotes('');
-                                    setApproveError(null);
                                   }}
                                   onRequestReject={() => {
                                     setRejectTarget(item.id);
                                     setRejectReason('');
-                                    setRejectError(null);
                                   }}
                                   submitting={approveLoading || rejectLoading}
                                 />
@@ -653,17 +673,7 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
       </div>
 
       {/* ─── Approve Dialog ──────────────────────────────────────────────── */}
-      <AlertDialog
-        open={approveTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setApproveTarget(null);
-            setApproveNotes('');
-            setApprovePayload(null);
-            setApproveError(null);
-          }
-        }}
-      >
+      <AlertDialog open={approveTarget !== null} onOpenChange={approveDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Approve execution?</AlertDialogTitle>
@@ -689,15 +699,12 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
               rows={3}
             />
           </div>
-          {approveError && <div className="text-destructive text-sm">{approveError}</div>}
+          <SaveError failure={approveSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={approveLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...approveDialog.cancelProps}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void handleApproveSubmit();
-              }}
-              disabled={approveLoading}
+              {...approveDialog.actionProps()}
+              onClick={(e) => approveDialog.confirm(e, handleApproveSubmit)}
               className="bg-green-600 hover:bg-green-700"
             >
               {approveLoading ? (
@@ -712,16 +719,7 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
       </AlertDialog>
 
       {/* ─── Reject Dialog ───────────────────────────────────────────────── */}
-      <AlertDialog
-        open={rejectTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setRejectTarget(null);
-            setRejectReason('');
-            setRejectError(null);
-          }
-        }}
-      >
+      <AlertDialog open={rejectTarget !== null} onOpenChange={rejectDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reject execution?</AlertDialogTitle>
@@ -747,15 +745,12 @@ export function ApprovalsTable({ initialApprovals, initialMeta }: ApprovalsTable
               rows={3}
             />
           </div>
-          {rejectError && <div className="text-destructive text-sm">{rejectError}</div>}
+          <SaveError failure={rejectSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={rejectLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...rejectDialog.cancelProps}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                void handleRejectSubmit();
-              }}
-              disabled={rejectLoading || !rejectReason.trim()}
+              {...rejectDialog.actionProps({ disabled: !rejectReason.trim() })}
+              onClick={(e) => rejectDialog.confirm(e, handleRejectSubmit)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {rejectLoading ? (

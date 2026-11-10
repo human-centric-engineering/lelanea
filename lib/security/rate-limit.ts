@@ -211,6 +211,34 @@ export const contactLimiter = createRateLimiter({
 });
 
 /**
+ * Rate limiter for waitlist joins (§125)
+ * Limit: 5 joins per hour per IP
+ *
+ * The join form is public and unverified; the cap bounds how many addresses one
+ * caller can put on a list. Its 429 is the same for every address, so it says
+ * nothing about who is on the list.
+ */
+export const waitlistLimiter = createRateLimiter({
+  interval: SECURITY_CONSTANTS.RATE_LIMIT.LIMITS.WAITLIST_INTERVAL,
+  maxRequests: SECURITY_CONSTANTS.RATE_LIMIT.LIMITS.WAITLIST,
+  uniqueTokenPerInterval: SECURITY_CONSTANTS.RATE_LIMIT.MAX_UNIQUE_TOKENS,
+});
+
+/**
+ * Rate limiter for waitlist invite waves (§125 t-978)
+ * Limit: 5 waves per hour per admin
+ *
+ * A wave sends up to `WAITLIST_INVITE_WAVE_MAX` invitations in one request, so
+ * `inviteLimiter` (10 per 15 minutes, one per invitation) is the wrong bound
+ * for it: a wave has its own cap on rows, and this bounds how many waves.
+ */
+export const waitlistInviteWaveLimiter = createRateLimiter({
+  interval: SECURITY_CONSTANTS.RATE_LIMIT.LIMITS.WAITLIST_INVITE_WAVE_INTERVAL,
+  maxRequests: SECURITY_CONSTANTS.RATE_LIMIT.LIMITS.WAITLIST_INVITE_WAVE,
+  uniqueTokenPerInterval: SECURITY_CONSTANTS.RATE_LIMIT.MAX_UNIQUE_TOKENS,
+});
+
+/**
  * Rate limiter for verification email requests
  * Limit: 3 requests per 15 minutes per IP
  *

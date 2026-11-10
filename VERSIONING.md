@@ -96,7 +96,7 @@ covered by the version contract.
   - `lib/app/account-sections.ts` → `initAppAccountSections()` — account-page section registry
   - `lib/app/admin-landing.ts` → `appOrgAdminLandingRoute` — where an org admin lands at `/admin` (checked by `orgAdminLandingProblem()` in `lib/auth/admin-landing.ts`)
   - `lib/app/admin-nav.ts` → `initAppNav()` — admin nav registry (`registerNavSection()`)
-  - `lib/app/admin-tier.ts` → `initAppOrgTierAdminPages()` — the fork's org-tier admin pages, and the core sections it keeps platform-only (primitives: `registerOrgTierAdminPage()` and `closeCoreOrgTierSection()` in `lib/auth/admin-tier.ts`)
+  - `lib/app/admin-tier.ts` → `initAppOrgTierAdminPages()` — the fork's org-tier admin pages, and the core sections it keeps platform-only (primitives: `registerOrgTierAdminPage()` and its `{ tier }` option, `registerAdminTier()` and `closeCoreOrgTierSection()` in `lib/auth/admin-tier.ts`)
   - `lib/app/admin-tier-routes.ts` → `APP_ORG_TIER_ADMIN_ROUTES` — the fork's org-tier admin API routes and wrappers, as `path#NAME`, read by the roster test
   - `lib/app/agent-fields.ts` → `appAgentFields` — extra `AiAgent` config fields
   - `lib/app/api-key-scopes.ts` → `APP_API_KEY_SCOPES` — extra mintable API-key scopes
@@ -109,7 +109,9 @@ covered by the version contract.
   - `lib/app/ci.ts` → `appCoverageExclusions` / `appAlwaysRunTests` / `appOwnerlessSurfaceExceptions` — the fork's own coverage exclusions, whole-tree always-run tests, and files allowed to read an ownerless-capable model outside the access helpers
   - `lib/app/context-contributors.ts` → `initAppContextContributors()` — chat context contributors (primitive: `registerContextContributor()` in `lib/orchestration/chat/context-builder.ts`)
   - `lib/app/credential-paths.ts` → `appCredentialPaths` — route patterns whose dynamic segments are credentials, collapsed to `[param]` in every logged, reported and analytics path (read by `collapseDynamicSegments()` in `lib/logging/redact-path.ts`)
-  - `lib/app/csp.ts` → `appFrameSrc` — extra CSP `frame-src` origins
+  - `lib/app/csp.ts` → `appFrameSrc` / `appScriptSrc` / `appConnectSrc` / `appMediaSrc` — extra CSP `frame-src`, `script-src`, `connect-src` and `media-src` origins
+  - `lib/app/frame-ancestors.ts` → `resolveAppFrameAncestors()` — the sites allowed to frame this request's page, per request (read by `proxy.ts`, applied by `setSecurityHeaders()`)
+  - `lib/app/frameable-paths.json` — path prefixes `next.config.js` leaves out of its blanket `X-Frame-Options: DENY`, so the proxy decides framing for them
   - `lib/app/data-export.ts` → `initAppSubjectSources()` / `collectAppSubjectData()` — Art. 15 export sources
   - `lib/app/db-drift.ts` → `registerAppDriftProbes()` — drift-probe registry (primitives in `lib/db/drift-probes.ts`)
   - `lib/app/emails.ts` → `emailOverrides` — transactional-email template overrides
@@ -117,6 +119,7 @@ covered by the version contract.
   - `lib/app/erasure.ts` → `initAppErasureHooks()` — Art. 17 erasure cleanup hooks and stale-writer declarations (primitives: `registerErasureCleanupHook()` and `registerStaleWriter()` in `lib/privacy/erasure-hooks.ts`)
   - `lib/app/eslint.config.mjs` — the fork's own ESLint tier config, spread into the root config
   - `lib/app/evaluations.ts` → `initAppGraders()` — evaluation grader registry
+  - `lib/app/evaluations.ts` → `initAppEvalCaseHooks()` — per-agent eval case hooks (`registerEvalCaseHooks`)
   - `lib/app/footer.ts` → `footerCopyright` — footer copyright line
   - `lib/app/guard-event-contributors.ts` → `initAppGuardEventContributors()` — output-guard event contributors
   - `lib/app/guard-floor-contributors.ts` → `initAppGuardFloorContributors()` — output-guard floor contributors
@@ -124,6 +127,7 @@ covered by the version contract.
   - `lib/app/knowledge-access-contributors.ts` → `initAppKnowledgeAccessContributors()` — knowledge document access
   - `lib/app/llm-providers.ts` → `registerAppProviderEligibility()` — provider-eligibility seam (primitive: `registerProviderEligibility()`, resolved through `lib/orchestration/llm/provider-eligibility.ts`)
   - `lib/app/mcp-resources.ts` → `initAppMcpResources()` — MCP resource-type registry
+  - `lib/app/tenancy-classification.ts` → `initAppTenancyClassification()` — a fork's own models in the tenancy classification: system, shared settings or user-owned (primitive: `registerAppTenancyClassification()` in `lib/tenancy/classification.ts`)
   - `lib/app/owner-classification.ts` → `initAppOwnerClassification()` — a fork's own models in the owner classification: personal (and enforced by the owner layer) or not (primitive: `registerAppOwnerClassification()` in `lib/db/owner-classification.ts`)
   - `lib/app/org-export.ts` → `initAppOrgSources()` — a fork's own tables in the org export (primitive: `registerAppOrgSources()` in `lib/privacy/org-source-registry.ts`)
   - `lib/app/platform-agents.ts` → `initAppPlatformAgents()` — platform agents every org gets an instance of (primitive: `registerPlatformAgent()` in `lib/orchestration/agents/platform-agents.ts`)
@@ -137,6 +141,7 @@ covered by the version contract.
   - `lib/app/own-modules.ts` → `appOwnModules` — a leaf fork's own `lib/app/` modules, which the seam-coverage guards then skip
   - `lib/app/surface.ts` → `classifySurface()` / `DEFAULT_SURFACE` — per-surface theming classifier
   - `lib/app/user-created.ts` → `initAppUserCreatedHooks()` — post-signup hook registry
+  - `lib/app/waitlist-config.ts` → `waitlistConfig` — whether the app has a waitlist, and its fields, lists, consent version and `screen()` (type: `WaitlistConfig` in `lib/waitlist/config.ts`)
 
   **Daybreak's reserved leaf seams** — the bridges above that Daybreak fills
   (`bootstrap.ts`, `admin-nav.ts`, `data-export.ts`, `brand.ts`, `db-drift.ts`,
@@ -193,7 +198,7 @@ covered by the version contract.
 
 - **Documented public APIs** —
   - `withAuth()`, `withAdminAuth()`, their options (`resource`, `scope`, `ownership`/`RouteOwnership`, and `withAdminAuth`'s `tier`) and the `AuthenticatedSession` they hand a handler — `principal` and `subjectFilter` — from [`lib/auth/guards.ts`](./lib/auth/guards.ts)
-  - admin tiers (§111): `AdminTier`, `ORG_TIER_ADMIN_PAGES`, `ORG_TIER_ADMIN_ROUTES`, `CORE_ADMIN_SECTIONS` and `adminPageTier()` from [`lib/auth/admin-tier.ts`](./lib/auth/admin-tier.ts), `orgTierAdminPages()` from [`lib/auth/org-tier-admin-pages.ts`](./lib/auth/org-tier-admin-pages.ts), `NavItem.tier` in `lib/admin-nav/registry.ts`, and the default policy's answer to `scope.tier: 'org'` — how a surface, a fork's included, places itself in the org tier (see [`.context/auth/authorization.md`](./.context/auth/authorization.md#admin-tiers))
+  - admin tiers (§111): `AdminTier`, `ORG_TIER_ADMIN_PAGES`, `ORG_TIER_ADMIN_ROUTES`, `CORE_ADMIN_SECTIONS` and `adminPageTier()` from [`lib/auth/admin-tier.ts`](./lib/auth/admin-tier.ts), `orgTierAdminPages()` from [`lib/auth/org-tier-admin-pages.ts`](./lib/auth/org-tier-admin-pages.ts), `NavItem.tier` in `lib/admin-nav/registry.ts`, and the default policy's answer to `scope.tier: 'org'` — how a surface, a fork's included, places itself in the org tier; and named tiers (t-999): `registerAdminTier()`, `NamedAdminTierDefinition`, `NamedAdminTier` and `DeclaredAdminTier` from `lib/auth/admin-tier.ts`, and the default policy's answer to a registered named tier (the org's OWNER/ADMIN and the tier's holders, nobody else) (see [`.context/auth/authorization.md`](./.context/auth/authorization.md#admin-tiers))
   - `successResponse()`, `errorResponse()` from `lib/api/responses.ts`
   - `serverFetch()` from `lib/api/server-fetch.ts`
   - `logger` from `lib/logging/`

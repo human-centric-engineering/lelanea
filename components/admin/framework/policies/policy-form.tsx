@@ -8,13 +8,13 @@
  * kind is IMMUTABLE (the API rejects a kind change — it is delete + create), so it is
  * shown read-only and only `payload` / `enabled` are sent. The client assembles the
  * payload for convenience; the server's `assertValidFacilitationPolicy` is the trust
- * boundary and its field errors surface below the form.
+ * boundary and its refusal shows by the form's buttons, through `<SaveError>`.
  *
  * The parent remounts this with a fresh `key` per open, so the `useState` initialisers
  * hydrate cleanly from `policy` (edit) or blank (create) without effect-syncing.
  */
 
-import { useState } from 'react';
+import { useState, type BaseSyntheticEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -36,7 +36,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { apiClient } from '@/lib/api/client';
-import { apiFieldErrors } from '@/components/admin/framework/module-detail/api-field-errors';
+import { SaveError } from '@/components/forms/form-error';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import {
   FACILITATION_POLICY_KINDS,
   type FacilitationPolicyKind,
@@ -71,21 +73,26 @@ export function PolicyFormDialog({ open, onOpenChange, policy, onSaved }: Policy
     policy ? hydratePolicyState(policy.kind, policy.payload) : emptyPolicyState(kind)
   );
   const [enabled, setEnabled] = useState<boolean>(policy?.enabled ?? true);
-  const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const save = useSaveFailure({ fallback: 'Failed to save the policy', fields: NO_SERVER_FIELDS });
+  const dialog = useCommittedDialog({
+    open,
+    pending: submitting,
+    onClose: () => onOpenChange(false),
+    clear: save.clear,
+  });
 
   // Changing the kind (create only) swaps in that kind's blank field set.
   function handleKindChange(next: string) {
     const k = next as FacilitationPolicyKind;
     setKind(k);
     setState(emptyPolicyState(k));
-    setErrors([]);
+    save.clear();
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e?: BaseSyntheticEvent) {
+    e?.preventDefault();
     setSubmitting(true);
-    setErrors([]);
     const payload = payloadFromState(kind, state);
     try {
       if (editing) {
@@ -96,16 +103,16 @@ export function PolicyFormDialog({ open, onOpenChange, policy, onSaved }: Policy
       onSaved();
       onOpenChange(false);
     } catch (err) {
-      setErrors(apiFieldErrors(err, 'Failed to save the policy'));
+      save.report(err);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={dialog.onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <form onSubmit={(e) => void handleSubmit(e)}>
+        <form method="post" noValidate onSubmit={save.submit(handleSubmit)}>
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit policy' : 'New policy'}</DialogTitle>
             <DialogDescription>
@@ -151,25 +158,19 @@ export function PolicyFormDialog({ open, onOpenChange, policy, onSaved }: Policy
               <Label htmlFor="policy-enabled">Enabled</Label>
             </div>
 
-            {errors.length > 0 && (
-              <ul className="text-destructive space-y-1 text-sm" role="alert">
-                {errors.map((msg, i) => (
-                  <li key={i}>{msg}</li>
-                ))}
-              </ul>
-            )}
+            <SaveError failure={save.failure} />
           </div>
 
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={submitting}
+              onClick={() => dialog.onOpenChange(false)}
+              {...dialog.cancelProps}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" {...dialog.actionProps()}>
               {submitting ? 'Saving…' : editing ? 'Save changes' : 'Create policy'}
             </Button>
           </DialogFooter>

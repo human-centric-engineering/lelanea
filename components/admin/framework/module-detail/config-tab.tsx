@@ -14,7 +14,7 @@
  * are shown read-only. A registered module with no parameters shows a short notice.
  */
 
-import { useState } from 'react';
+import { useState, type BaseSyntheticEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FieldHelp } from '@/components/ui/field-help';
-import { apiFieldErrors } from '@/components/admin/framework/module-detail/api-field-errors';
+import { SaveError } from '@/components/forms/form-error';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { saveModuleConfig } from '@/lib/framework/modules/config/client';
 import type { FieldDescriptor } from '@/lib/framework/modules/config/schema-descriptors';
 import type { ModuleConfigFormView } from '@/lib/framework/modules/view';
@@ -76,7 +77,7 @@ export function ConfigTab({ slug, form }: ConfigTabProps) {
     initialValues(form?.descriptors ?? [], form?.values ?? {})
   );
   const [changeSummary, setChangeSummary] = useState('');
-  const [errors, setErrors] = useState<string[]>([]);
+  const save = useSaveFailure({ fallback: 'Failed to save config', fields: NO_SERVER_FIELDS });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -113,11 +114,11 @@ export function ConfigTab({ slug, form }: ConfigTabProps) {
     setSaved(false);
   };
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e?: BaseSyntheticEvent) {
+    e?.preventDefault();
     if (!form) return; // unreachable — the form isn't rendered when `form` is null
     const config: Record<string, unknown> = {};
-    const clientErrors: string[] = [];
+    const problems: Array<{ field: string; message: string }> = [];
 
     for (const d of form.descriptors) {
       const raw = values[d.key];
@@ -129,26 +130,23 @@ export function ConfigTab({ slug, form }: ConfigTabProps) {
       if (s === '') continue; // let the server apply the default / flag a missing required field
       if (d.type === 'number') {
         const n = Number(s);
-        if (Number.isNaN(n)) clientErrors.push(`${d.label}: must be a number`);
+        const problem = numberProblem(d, n);
+        if (problem) problems.push({ field: `cfg-${d.key}`, message: problem });
         else config[d.key] = n;
       } else if (d.type === 'json') {
         try {
           config[d.key] = JSON.parse(s);
         } catch {
-          clientErrors.push(`${d.label}: invalid JSON`);
+          problems.push({ field: `cfg-${d.key}`, message: `${d.label}: invalid JSON.` });
         }
       } else {
         config[d.key] = s; // string | enum
       }
     }
 
-    if (clientErrors.length > 0) {
-      setErrors(clientErrors);
-      return;
-    }
+    if (save.block(problems)) return;
 
     setSaving(true);
-    setErrors([]);
     try {
       await saveModuleConfig(slug, {
         config,
@@ -158,14 +156,19 @@ export function ConfigTab({ slug, form }: ConfigTabProps) {
       setChangeSummary('');
       router.refresh();
     } catch (err) {
-      setErrors(apiFieldErrors(err, 'Failed to save config'));
+      save.report(err);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="max-w-2xl space-y-5">
+    <form
+      method="post"
+      noValidate
+      onSubmit={save.submit(handleSubmit)}
+      className="max-w-2xl space-y-5"
+    >
       {form.descriptors.map((d) => (
         <div key={d.key} className="space-y-1.5">
           <div className="flex items-center gap-1.5">
@@ -190,13 +193,7 @@ export function ConfigTab({ slug, form }: ConfigTabProps) {
         />
       </div>
 
-      {errors.length > 0 && (
-        <ul className="text-destructive space-y-1 text-sm" role="alert">
-          {errors.map((msg, i) => (
-            <li key={i}>{msg}</li>
-          ))}
-        </ul>
-      )}
+      <SaveError failure={save.failure} />
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={saving}>
@@ -206,6 +203,18 @@ export function ConfigTab({ slug, form }: ConfigTabProps) {
       </div>
     </form>
   );
+}
+
+/**
+ * The limits a number field's input declares, held here because the form sets `noValidate`: the
+ * browser no longer checks `min`, `max` or a whole-number `step`. The server re-checks them.
+ */
+function numberProblem(d: FieldDescriptor & { type: 'number' }, n: number): string | null {
+  if (Number.isNaN(n)) return `${d.label}: must be a number.`;
+  if (d.integer && !Number.isInteger(n)) return `${d.label}: must be a whole number.`;
+  if (d.min !== undefined && n < d.min) return `${d.label}: must be at least ${d.min}.`;
+  if (d.max !== undefined && n > d.max) return `${d.label}: must be at most ${d.max}.`;
+  return null;
 }
 
 function renderControl(

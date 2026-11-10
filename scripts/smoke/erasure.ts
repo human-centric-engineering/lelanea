@@ -31,7 +31,11 @@
  */
 
 import { prisma } from '@/lib/db/client';
+import { isRecord } from '@/lib/utils';
 import { eraseUser } from '@/lib/privacy/erase-user';
+import { findErasedSubjects } from '@/lib/privacy/erased-subjects';
+import { eraseWaitlistEntry } from '@/lib/waitlist/erase';
+import { waitlistReceiptsOf } from '@/lib/waitlist/subject';
 import { PLATFORM_ADMIN_ROLE } from '@/lib/auth/roles';
 import { createJourney } from '@/lib/framework/facilitation/journey/create';
 import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
@@ -65,6 +69,8 @@ async function main(): Promise<void> {
   let agentId: string | null = null;
   let auditId: string | null = null;
   let receiptId: string | null = null;
+  const waitlistReceiptIds: string[] = [];
+  let holderUserId: string | null = null;
   let datasetId: string | null = null;
   let costLogId: string | null = null;
   let runId: string | null = null;
@@ -77,6 +83,7 @@ async function main(): Promise<void> {
   let inboundExecutionId: string | null = null;
   let workflowId: string | null = null;
   let subjectContactId: string | null = null;
+  const waitlistIds: string[] = [];
   let strangerContactId: string | null = null;
 
   try {
@@ -308,6 +315,18 @@ async function main(): Promise<void> {
       },
     });
     strangerContactId = strangerContact.id;
+
+    // Waitlist entries (§125): one under the subject's address (no link yet),
+    // one linked to the account under another address, and a stranger's.
+    // Tenant-owned, written in the install org this script runs in.
+    const entry = (email: string, userId: string | null) =>
+      prisma.waitlistEntry.create({
+        data: { email, userId, consentedAt: new Date(), consentVersion: 'smoke' },
+      });
+    const subjectEntry = await entry(subject.email, null);
+    const linkedEntry = await entry(`${PREFIX}-linked@example.com`, subject.id);
+    const strangerEntry = await entry(strangerEmail, null);
+    waitlistIds.push(subjectEntry.id, linkedEntry.id, strangerEntry.id);
     // The rows are stored as the contact route stores them (`emailSchema`:
     // trimmed, lower-cased), which is the form erasure matches on. A fixture
     // address outside that form would fail the delete check for the wrong reason.
@@ -376,6 +395,20 @@ async function main(): Promise<void> {
       'stranger’s contact submission survives (exact match, not ILIKE)'
     );
 
+    // Waitlist entries: by address (verified) and by link deleted; the stranger's kept.
+    check(
+      (await prisma.waitlistEntry.findUnique({ where: { id: subjectEntry.id } })) === null,
+      'subject’s waitlist entry deleted (joined under the verified address)'
+    );
+    check(
+      (await prisma.waitlistEntry.findUnique({ where: { id: linkedEntry.id } })) === null,
+      'waitlist entry linked to the account deleted'
+    );
+    check(
+      (await prisma.waitlistEntry.findUnique({ where: { id: strangerEntry.id } })) !== null,
+      'stranger’s waitlist entry survives (exact match, not ILIKE)'
+    );
+
     // Org config retained, creator de-attributed.
     const agentAfter = await prisma.aiAgent.findUnique({ where: { id: agent.id } });
     check(agentAfter !== null, 'agent retained');
@@ -432,15 +465,141 @@ async function main(): Promise<void> {
       'receipt stores a 64-char sha256 email hash, not the raw email'
     );
     check(receipt?.reason === 'self_service', 'receipt records the reason');
+    check(receipt?.subjectKind === 'account', 'an account erasure writes an account receipt');
+
+    // A waitlist-only person (§125 t-975): no account, a confirmed entry,
+    // erased through the leave link's writer.
+    const leaverEmail = `${PREFIX}-leaver-${stamp}@example.com`;
+    const leaver = await prisma.waitlistEntry.create({
+      data: {
+        email: leaverEmail,
+        consentedAt: new Date(),
+        consentVersion: 'smoke',
+        confirmedAt: new Date(),
+      },
+    });
+    waitlistIds.push(leaver.id);
+    const left = await eraseWaitlistEntry({
+      entryId: leaver.id,
+      actorUserId: null,
+      reason: 'self_service',
+    });
+    if (left) waitlistReceiptIds.push(left.receiptId);
+    check(left !== null, 'waitlist erasure returns its receipt');
+    check(
+      (await prisma.waitlistEntry.findUnique({ where: { id: leaver.id } })) === null,
+      'waitlist erasure deletes the entry'
+    );
+    const waitlistReceipt = left
+      ? await prisma.dataErasureReceipt.findUnique({ where: { id: left.receiptId } })
+      : null;
+    check(
+      waitlistReceipt?.subjectKind === 'waitlist' && waitlistReceipt.subjectUserId === null,
+      'waitlist receipt is of kind waitlist and names no account'
+    );
+    check(
+      isRecord(waitlistReceipt?.metadata) && waitlistReceipt.metadata.orgId === INSTALL_ORG_ID,
+      'waitlist receipt records the org whose list it was'
+    );
+    check(
+      (await eraseWaitlistEntry({
+        entryId: leaver.id,
+        actorUserId: null,
+        reason: 'self_service',
+      })) === null,
+      'erasing an entry already erased writes no second receipt'
+    );
+    // A linked entry's receipt is found for its live account through the
+    // JSON path the subject export asks by — unverified, so the link alone.
+    const holder = await prisma.user.create({
+      data: {
+        name: `${PREFIX} holder`,
+        email: `${PREFIX}-holder-${stamp}@example.com`,
+        emailVerified: false,
+      },
+    });
+    holderUserId = holder.id;
+    const held = await prisma.waitlistEntry.create({
+      data: {
+        email: `${PREFIX}-held-${stamp}@example.com`,
+        userId: holder.id,
+        consentedAt: new Date(),
+        consentVersion: 'smoke',
+      },
+    });
+    waitlistIds.push(held.id);
+    const heldReceipt = await eraseWaitlistEntry({
+      entryId: held.id,
+      actorUserId: null,
+      reason: 'admin_action',
+    });
+    if (heldReceipt) waitlistReceiptIds.push(heldReceipt.receiptId);
+    const found = await prisma.dataErasureReceipt.findMany({
+      where: waitlistReceiptsOf({
+        userId: holder.id,
+        email: holder.email,
+        emailVerified: false,
+      }),
+      select: { id: true, subjectUserId: true },
+    });
+    check(
+      found.length === 1 &&
+        found[0].id === heldReceipt?.receiptId &&
+        found[0].subjectUserId === null,
+      "a linked entry's receipt is found for its account by linkedUserId, and names none"
+    );
+    check(
+      (
+        await prisma.dataErasureReceipt.findMany({
+          where: waitlistReceiptsOf({
+            userId: holder.id,
+            email: leaverEmail,
+            emailVerified: false,
+          }),
+          select: { id: true },
+        })
+      ).every((r) => r.id !== left?.receiptId),
+      'an unverified account does not get the receipt filed under an address it has not proved'
+    );
+
+    // The recipient writers do not refuse the address (decided in t-975).
+    const refused = await prisma.$transaction((tx) =>
+      findErasedSubjects(tx, { addresses: [leaverEmail] })
+    );
+    check(
+      refused.addresses.length === 0,
+      'a confirmed waitlist erasure is not refused by the writers'
+    );
+    // The CHECK holds the kind and the id together.
+    const rejects = async (data: { subjectKind: string; subjectUserId: string | null }) => {
+      try {
+        const row = await prisma.dataErasureReceipt.create({ data: { ...data, reason: 'smoke' } });
+        waitlistReceiptIds.push(row.id);
+        return false;
+      } catch (err) {
+        // The CHECK, not any failure: a create that fails for another reason
+        // would pass a bare catch.
+        return String(err).includes('data_erasure_receipt_subject_kind');
+      }
+    };
+    check(
+      await rejects({ subjectKind: 'waitlist', subjectUserId: subject.id }),
+      'CHECK rejects a waitlist receipt naming an account'
+    );
+    check(
+      await rejects({ subjectKind: 'account', subjectUserId: null }),
+      'CHECK rejects an account receipt naming none'
+    );
 
     console.log('\n✓ smoke:erasure passed');
   } finally {
     // Self-clean by tracked id. The user + its cascade children may already be
     // gone (erased); deleteMany is a no-op then. All FKs here are Cascade/SetNull,
     // so order can't cause constraint violations.
-    if (receiptId)
+    const receiptIds = [receiptId, ...waitlistReceiptIds].filter((id): id is string => id !== null);
+    if (receiptIds.length > 0)
       await prisma.dataErasureReceipt
-        .deleteMany({ where: { id: receiptId } })
+        .deleteMany({ where: { id: { in: receiptIds } } })
         .catch(() => undefined);
     const contactIds = [subjectContactId, strangerContactId].filter(
       (id): id is string => id !== null
@@ -448,6 +607,10 @@ async function main(): Promise<void> {
     if (contactIds.length > 0)
       await prisma.contactSubmission
         .deleteMany({ where: { id: { in: contactIds } } })
+        .catch(() => undefined);
+    if (waitlistIds.length > 0)
+      await prisma.waitlistEntry
+        .deleteMany({ where: { id: { in: waitlistIds } } })
         .catch(() => undefined);
     if (auditId)
       await prisma.aiAdminAuditLog.deleteMany({ where: { id: auditId } }).catch(() => undefined);
@@ -469,6 +632,8 @@ async function main(): Promise<void> {
       await prisma.userJourney.deleteMany({ where: { id: journeyId } }).catch(() => undefined);
     if (subjectUserId)
       await prisma.user.deleteMany({ where: { id: subjectUserId } }).catch(() => undefined);
+    if (holderUserId)
+      await prisma.user.deleteMany({ where: { id: holderUserId } }).catch(() => undefined);
     if (runId)
       await prisma.aiEvaluationRun.deleteMany({ where: { id: runId } }).catch(() => undefined);
     if (datasetId)

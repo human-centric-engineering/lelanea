@@ -30,7 +30,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { FieldHelp } from '@/components/ui/field-help';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 
 const chunksResponseSchema = z.object({
   success: z.boolean(),
@@ -47,18 +51,12 @@ const chunksResponseSchema = z.object({
   error: z.object({ message: z.string() }).optional(),
 });
 
-const enrichResponseSchema = z.object({
-  success: z.boolean(),
-  data: z
-    .object({
-      chunksProcessed: z.number().optional(),
-      chunksFailed: z.number().optional(),
-      chunksSkipped: z.number().optional(),
-      costUsd: z.number().optional(),
-      model: z.string().optional(),
-    })
-    .optional(),
-  error: z.object({ message: z.string() }).optional(),
+const enrichResultSchema = z.object({
+  chunksProcessed: z.number().optional(),
+  chunksFailed: z.number().optional(),
+  chunksSkipped: z.number().optional(),
+  costUsd: z.number().optional(),
+  model: z.string().optional(),
 });
 
 interface KeywordRow {
@@ -89,7 +87,12 @@ export function DocumentKeywordsModal({
   const [confirmEnrich, setConfirmEnrich] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichResult, setEnrichResult] = useState<string | null>(null);
-  const [enrichError, setEnrichError] = useState<string | null>(null);
+  const enrichFailure = useSaveFailure({
+    fallback: 'Could not enrich the keywords. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+  const clearEnrichFailure = enrichFailure.clear;
+  const reportEnrichFailure = enrichFailure.report;
 
   const fetchKeywords = useCallback(async () => {
     if (!documentId) return;
@@ -132,6 +135,12 @@ export function DocumentKeywordsModal({
     }
   }, [documentId]);
 
+  // Switching document while open starts clean too: one document's failed
+  // enrich never shows on the next (the dialog hook clears on open and close).
+  useEffect(() => {
+    clearEnrichFailure();
+  }, [documentId, clearEnrichFailure]);
+
   useEffect(() => {
     if (open && documentId) {
       void fetchKeywords();
@@ -142,7 +151,6 @@ export function DocumentKeywordsModal({
       setFilter('');
       setConfirmEnrich(false);
       setEnrichResult(null);
-      setEnrichError(null);
     }
   }, [open, documentId, fetchKeywords]);
 
@@ -155,20 +163,17 @@ export function DocumentKeywordsModal({
   const handleEnrich = useCallback(async () => {
     if (!documentId) return;
     setEnriching(true);
-    setEnrichError(null);
+    clearEnrichFailure();
     setEnrichResult(null);
     try {
-      const res = await fetch(API.ADMIN.ORCHESTRATION.knowledgeDocumentEnrichKeywords(documentId), {
-        method: 'POST',
-      });
-      const body = enrichResponseSchema.parse(await res.json().catch(() => ({})));
-      if (!res.ok || !body.success) {
-        setEnrichError(body.error?.message ?? `Enrich failed (${res.status})`);
-        return;
-      }
-      const processed = body.data?.chunksProcessed ?? 0;
-      const failed = body.data?.chunksFailed ?? 0;
-      const cost = body.data?.costUsd ?? 0;
+      const data = enrichResultSchema.parse(
+        await apiClient.post<unknown>(
+          API.ADMIN.ORCHESTRATION.knowledgeDocumentEnrichKeywords(documentId)
+        )
+      );
+      const processed = data.chunksProcessed ?? 0;
+      const failed = data.chunksFailed ?? 0;
+      const cost = data.costUsd ?? 0;
       const parts = [`Enriched ${processed} chunk${processed === 1 ? '' : 's'}`];
       if (failed > 0) parts.push(`${failed} failed`);
       parts.push(`~$${cost.toFixed(4)}`);
@@ -177,15 +182,24 @@ export function DocumentKeywordsModal({
       await fetchKeywords();
       onEnriched?.();
     } catch (err) {
-      setEnrichError(err instanceof Error ? err.message : 'Enrich failed');
+      reportEnrichFailure(err);
     } finally {
       setEnriching(false);
       setConfirmEnrich(false);
     }
-  }, [documentId, fetchKeywords, onEnriched]);
+  }, [documentId, fetchKeywords, onEnriched, clearEnrichFailure, reportEnrichFailure]);
+
+  // Committed while the enrich runs: Escape waits for it. Opening starts
+  // clean, so one document's failed enrich never shows on the next.
+  const dialog = useCommittedDialog({
+    open,
+    pending: enriching,
+    onClose: () => onOpenChange(false),
+    clear: clearEnrichFailure,
+  });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={dialog.onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -233,7 +247,6 @@ export function DocumentKeywordsModal({
           </div>
 
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
-          {enrichError ? <p className="text-destructive text-sm">{enrichError}</p> : null}
           {enrichResult ? <p className="text-sm text-emerald-600">{enrichResult}</p> : null}
 
           {loading ? (
@@ -277,6 +290,8 @@ export function DocumentKeywordsModal({
           )}
         </div>
 
+        <SaveError failure={enrichFailure.failure} />
+
         <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
           {confirmEnrich ? (
             <span className="flex flex-1 items-center justify-between gap-2">
@@ -288,18 +303,22 @@ export function DocumentKeywordsModal({
                   variant="ghost"
                   size="sm"
                   onClick={() => setConfirmEnrich(false)}
-                  disabled={enriching}
+                  {...dialog.cancelProps}
                 >
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => void handleEnrich()} disabled={enriching}>
+                <Button
+                  size="sm"
+                  {...dialog.actionProps()}
+                  onClick={(e) => dialog.confirm(e, handleEnrich)}
+                >
                   {enriching ? 'Enriching…' : 'Yes, overwrite'}
                 </Button>
               </span>
             </span>
           ) : (
             <>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              <Button variant="ghost" onClick={() => onOpenChange(false)} {...dialog.cancelProps}>
                 Close
               </Button>
               <Button onClick={() => setConfirmEnrich(true)} disabled={enriching}>

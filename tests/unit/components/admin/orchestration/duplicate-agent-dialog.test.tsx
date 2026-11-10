@@ -144,6 +144,40 @@ describe('DuplicateAgentDialog', () => {
 
   // ── Happy path ────────────────────────────────────────────────────────────
 
+  it.each([
+    ['Escape', async (user: ReturnType<typeof userEvent.setup>) => user.keyboard('{Escape}')],
+    [
+      'Cancel',
+      async (user: ReturnType<typeof userEvent.setup>) =>
+        user.click(screen.getByRole('button', { name: /^cancel$/i })),
+    ],
+  ])('closes on %s when nothing is in flight', async (_, leave) => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DuplicateAgentDialog source={SOURCE_AGENT} onOpenChange={onOpenChange} />);
+
+    await leave(user);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('refuses a malformed slug by its button, without sending it', async () => {
+    const { apiClient } = await import('@/lib/api/client');
+    const user = userEvent.setup();
+    render(<DuplicateAgentDialog source={SOURCE_AGENT} onOpenChange={vi.fn()} />);
+
+    const slugInput = screen.getByLabelText(/new slug/i);
+    await user.clear(slugInput);
+    await user.type(slugInput, 'Not A Slug!');
+    const dupBtn = screen.getByRole('button', { name: /^duplicate$/i });
+    await user.click(dupBtn);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/slug must be lowercase alphanumeric/i);
+    expect(alert.nextElementSibling).toContainElement(dupBtn);
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
   it('POSTs to clone endpoint with name and slug, navigates to new agent', async () => {
     // Arrange
     const { apiClient } = await import('@/lib/api/client');
@@ -198,5 +232,24 @@ describe('DuplicateAgentDialog', () => {
 
     // Assert: router was NOT called
     expect(mockPush).not.toHaveBeenCalled(); // test-review:accept no_arg_called — error-path guard: function must not be called;
+  });
+
+  it('is committed to a duplicate in flight: no second request, no Cancel, no Escape', async () => {
+    const { apiClient } = await import('@/lib/api/client');
+    vi.mocked(apiClient.post).mockReturnValue(new Promise(() => {}));
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DuplicateAgentDialog source={SOURCE_AGENT} onOpenChange={onOpenChange} />);
+
+    await user.click(screen.getByRole('button', { name: /^duplicate$/i }));
+
+    const pending = screen.getByRole('button', { name: 'Duplicating…' });
+    expect(pending).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await user.click(pending);
+    await user.keyboard('{Escape}');
+
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled(); // test-review:accept no_arg_called — the in-flight dialog must not ask to close;
   });
 });

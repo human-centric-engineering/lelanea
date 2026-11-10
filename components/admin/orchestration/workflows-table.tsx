@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { SaveError } from '@/components/forms/form-error';
 import {
   Table,
   TableBody,
@@ -65,8 +66,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { parsePaginationMeta } from '@/lib/validations/common';
 import type { PaginationMeta } from '@/types/api';
@@ -95,7 +98,17 @@ export function WorkflowsTable({
   const [isLoading, setIsLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(initialError ?? null);
   const [deleteTarget, setDeleteTarget] = useState<AiWorkflowListItem | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A refused delete: shown inside its dialog, which stays open (§124).
+  const deleteSave = useSaveFailure({
+    fallback: 'Delete failed. Try again in a moment.',
+    fields: NO_SERVER_FIELDS,
+  });
+  // A refused row toggle or duplicate: shown in the box above the table,
+  // naming the workflow, since the box can be far from its row.
+  const rowSave = useSaveFailure({ fallback: 'Try again.', fields: NO_SERVER_FIELDS });
+  const { clear: clearDeleteSave, report: reportDeleteSave } = deleteSave;
+  const { clear: clearRowSave, show: showRowSave, report: reportRowSave } = rowSave;
+  const [deleting, setDeleting] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -185,6 +198,7 @@ export function WorkflowsTable({
 
   const handleToggleStatus = useCallback(
     async (workflow: AiWorkflowListItem, nextActive: boolean) => {
+      clearRowSave();
       setWorkflows((prev) =>
         prev.map((w) => (w.id === workflow.id ? { ...w, isActive: nextActive } : w))
       );
@@ -196,37 +210,39 @@ export function WorkflowsTable({
         setWorkflows((prev) =>
           prev.map((w) => (w.id === workflow.id ? { ...w, isActive: workflow.isActive } : w))
         );
-        setListError(
-          err instanceof APIClientError
-            ? `Couldn't update "${workflow.name}": ${err.message}`
-            : `Couldn't update "${workflow.name}". Try again.`
-        );
+        reportRowSave(err, `Couldn't update "${workflow.name}"`);
       }
     },
-    []
+    [clearRowSave, reportRowSave]
   );
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
-    setIsLoading(true);
-    setDeleteError(null);
+    setDeleting(true);
+    clearDeleteSave();
     try {
       await apiClient.delete(API.ADMIN.ORCHESTRATION.workflowById(deleteTarget.id));
       setDeleteTarget(null);
       void fetchWorkflows(meta.page);
     } catch (err) {
-      setDeleteError(
-        err instanceof APIClientError ? err.message : 'Delete failed. Try again in a moment.'
-      );
+      reportDeleteSave(err);
     } finally {
-      setIsLoading(false);
+      setDeleting(false);
     }
-  }, [deleteTarget, fetchWorkflows, meta.page]);
+  }, [deleteTarget, fetchWorkflows, meta.page, clearDeleteSave, reportDeleteSave]);
+
+  // Committed while the delete runs: Escape and outside clicks wait for it.
+  const deleteDialog = useCommittedDialog({
+    open: !!deleteTarget,
+    pending: deleting,
+    onClose: () => setDeleteTarget(null),
+    clear: clearDeleteSave,
+  });
 
   const handleDuplicate = useCallback(
     async (workflow: AiWorkflowListItem) => {
       setIsLoading(true);
-      setListError(null);
+      clearRowSave();
       try {
         // Fetch the full workflow to get its definition. Definition is now
         // sourced from the in-progress draft (preferred) or the published
@@ -242,7 +258,8 @@ export function WorkflowsTable({
 
         const sourceDefinition = full.draftDefinition ?? full.publishedVersion?.snapshot;
         if (!sourceDefinition) {
-          throw new Error(`Workflow "${workflow.name}" has no definition to duplicate.`);
+          showRowSave(`Workflow "${workflow.name}" has no definition to duplicate.`);
+          return;
         }
 
         const created = await apiClient.post<{ id: string }>(API.ADMIN.ORCHESTRATION.WORKFLOWS, {
@@ -262,16 +279,12 @@ export function WorkflowsTable({
         });
         router.push(`/admin/orchestration/workflows/${created.id}`);
       } catch (err) {
-        setListError(
-          err instanceof APIClientError
-            ? `Couldn't duplicate "${workflow.name}": ${err.message}`
-            : `Couldn't duplicate "${workflow.name}". Try again.`
-        );
+        reportRowSave(err, `Couldn't duplicate "${workflow.name}"`);
       } finally {
         setIsLoading(false);
       }
     },
-    [router]
+    [router, clearRowSave, reportRowSave, showRowSave]
   );
 
   // Group rows by category before applying the user's sort: bespoke
@@ -344,6 +357,7 @@ export function WorkflowsTable({
           {listError}
         </div>
       )}
+      <SaveError failure={rowSave.failure} />
 
       <div className="rounded-md border">
         <Table>
@@ -553,7 +567,7 @@ export function WorkflowsTable({
         </div>
       </div>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={deleteDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete workflow</AlertDialogTitle>
@@ -563,15 +577,16 @@ export function WorkflowsTable({
               are preserved. You can reactivate it by flipping its status switch back on.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {deleteError && <p className="text-destructive text-sm">{deleteError}</p>}
+          <SaveError failure={deleteSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...deleteDialog.cancelProps}>Cancel</AlertDialogCancel>
+            {/* Closes only on success, so a refusal can be read inside it (§124). */}
             <AlertDialogAction
-              onClick={() => void handleDelete()}
+              {...deleteDialog.actionProps()}
+              onClick={(e) => deleteDialog.confirm(e, handleDelete)}
               className="bg-red-600 hover:bg-red-700"
-              disabled={isLoading}
             >
-              {isLoading ? 'Deleting…' : 'Delete'}
+              {deleting ? 'Deleting…' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

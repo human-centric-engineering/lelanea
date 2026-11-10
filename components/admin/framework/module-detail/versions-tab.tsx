@@ -26,7 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import type { ModuleVersionSummary } from '@/lib/framework/modules/view';
 
 /** ISO string → deterministic UTC `YYYY-MM-DD HH:MM` (hydration-safe; see modules-table). */
@@ -44,7 +46,7 @@ export function VersionsTab({ slug, versions, currentVersion }: VersionsTabProps
   const router = useRouter();
   const [confirming, setConfirming] = useState<number | null>(null);
   const [restoring, setRestoring] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const save = useSaveFailure({ fallback: 'Failed to restore version', fields: NO_SERVER_FIELDS });
 
   if (versions.length === 0) {
     return <p className="text-muted-foreground text-sm">No config has been saved yet.</p>;
@@ -52,7 +54,7 @@ export function VersionsTab({ slug, versions, currentVersion }: VersionsTabProps
 
   async function restore(version: number) {
     setRestoring(version);
-    setError(null);
+    save.clear();
     try {
       await apiClient.post(
         `/api/v1/admin/framework/modules/${encodeURIComponent(slug)}/versions/${version}/restore`
@@ -60,7 +62,7 @@ export function VersionsTab({ slug, versions, currentVersion }: VersionsTabProps
       setConfirming(null);
       router.refresh();
     } catch (err) {
-      setError(err instanceof APIClientError ? err.message : 'Failed to restore version');
+      save.report(err, `Failed to restore v${version}`);
     } finally {
       setRestoring(null);
     }
@@ -68,11 +70,7 @@ export function VersionsTab({ slug, versions, currentVersion }: VersionsTabProps
 
   return (
     <div className="space-y-4">
-      {error && (
-        <p className="text-destructive text-sm" role="alert">
-          {error}
-        </p>
-      )}
+      <SaveError failure={save.failure} />
 
       <div className="rounded-md border">
         <Table>
@@ -127,7 +125,7 @@ export function VersionsTab({ slug, versions, currentVersion }: VersionsTabProps
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          setError(null);
+                          save.clear();
                           setConfirming(v.version);
                         }}
                         disabled={restoring !== null}

@@ -8,8 +8,9 @@
  * override the new agent's `name` and `slug`. On success, navigates
  * to the new agent's edit page.
  *
- * Failures render inline; raw API error text is only shown when it came from
- * our own APIClientError envelope.
+ * A failure shows above the dialog's buttons and the dialog stays open (§124);
+ * raw API error text is only shown when it came from our own APIClientError
+ * envelope.
  */
 
 import type { AiAgent } from '@/types/orchestration';
@@ -27,8 +28,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
 import { API } from '@/lib/api/endpoints';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { slugSchema } from '@/lib/validations/common';
 
 export interface DuplicateAgentDialogProps {
@@ -41,7 +45,10 @@ export function DuplicateAgentDialog({ source, onOpenChange }: DuplicateAgentDia
   const router = useRouter();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const save = useSaveFailure({
+    fallback: 'Could not duplicate agent. Try again in a moment.',
+    fields: NO_SERVER_FIELDS,
+  });
   const [submitting, setSubmitting] = useState(false);
 
   // Reset inputs each time a new source is selected.
@@ -49,23 +56,30 @@ export function DuplicateAgentDialog({ source, onOpenChange }: DuplicateAgentDia
     if (source) {
       setName(`${source.name} (copy)`);
       setSlug(`${source.slug}-copy`.slice(0, 100));
-      setError(null);
     }
   }, [source]);
+
+  // Committed while the duplicate runs; an earlier failure never greets a reopen.
+  const dialog = useCommittedDialog({
+    open: !!source,
+    pending: submitting,
+    onClose: () => onOpenChange(false),
+    clear: save.clear,
+  });
 
   async function handleSubmit() {
     if (!source) return;
     if (!name.trim() || !slug.trim()) {
-      setError('Name and slug are required.');
+      save.show('Name and slug are required.');
       return;
     }
     const slugResult = slugSchema.safeParse(slug.trim());
     if (!slugResult.success) {
-      setError('Slug must be lowercase alphanumeric with single hyphens (e.g. my-agent-copy).');
+      save.show('Slug must be lowercase alphanumeric with single hyphens (e.g. my-agent-copy).');
       return;
     }
     setSubmitting(true);
-    setError(null);
+    save.clear();
     try {
       const created = await apiClient.post<AiAgent>(API.ADMIN.ORCHESTRATION.agentClone(source.id), {
         body: { name: name.trim(), slug: slug.trim() },
@@ -74,18 +88,14 @@ export function DuplicateAgentDialog({ source, onOpenChange }: DuplicateAgentDia
       onOpenChange(false);
       router.push(`/admin/orchestration/agents/${created.id}`);
     } catch (err) {
-      setError(
-        err instanceof APIClientError
-          ? err.message
-          : 'Could not duplicate agent. Try again in a moment.'
-      );
+      save.report(err);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Dialog open={!!source} onOpenChange={onOpenChange}>
+    <Dialog open={!!source} onOpenChange={dialog.onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Duplicate agent</DialogTitle>
@@ -114,16 +124,16 @@ export function DuplicateAgentDialog({ source, onOpenChange }: DuplicateAgentDia
               disabled={submitting}
             />
           </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
 
+        <SaveError failure={save.failure} />
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} {...dialog.cancelProps}>
             Cancel
           </Button>
           <Button
-            onClick={() => void handleSubmit()}
-            disabled={submitting || !name.trim() || !slug.trim()}
+            {...dialog.actionProps({ disabled: !name.trim() || !slug.trim() })}
+            onClick={(e) => dialog.confirm(e, handleSubmit)}
           >
             {submitting ? 'Duplicating…' : 'Duplicate'}
           </Button>

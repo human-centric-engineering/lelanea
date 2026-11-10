@@ -10,13 +10,15 @@
  * Rollback is delegated to the parent (`onRollback`) — the version service creates a
  * NEW version copying the target and pins it (history is never rewound), and the parent
  * reloads the canvas from that new snapshot. On success the list re-fetches so the new
- * live version appears; a rollback error surfaces inline.
+ * live version appears; a refused rollback shows through `<SaveError>`, and the dialog stays open.
  *
  * The list loads once each time the dialog opens (a single request, not per-row).
  */
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { headlineOnly } from '@/components/admin/framework/headline-only';
+import { SaveError } from '@/components/forms/form-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,6 +31,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { apiClient, APIClientError } from '@/lib/api/client';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { logger } from '@/lib/logging';
 
 /** The version-row fields the history renders (the API returns the full row incl. the
@@ -71,6 +75,18 @@ export function VersionHistory({ slug, open, onOpenChange, onRollback }: Version
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<number | null>(null);
   const [rolling, setRolling] = useState<number | null>(null);
+  // The fallback can't say the rollback failed: it covers a lost answer, and a reload that failed
+  // after the rollback committed. Trying again then would mint a second version.
+  const save = useSaveFailure({
+    fallback: "Couldn't confirm the rollback. Reload the page to see the live version.",
+    fields: NO_SERVER_FIELDS,
+  });
+  const dialog = useCommittedDialog({
+    open,
+    pending: rolling !== null,
+    onClose: () => onOpenChange(false),
+    clear: save.clear,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,24 +117,25 @@ export function VersionHistory({ slug, open, onOpenChange, onRollback }: Version
 
   async function rollback(version: number) {
     setRolling(version);
-    setError(null);
+    save.clear();
     try {
       await onRollback(version);
       setConfirming(null);
       // A rollback minted a new live version — refresh the list so it appears on top.
       await load();
     } catch (err) {
-      // The parent rethrows the publish/rollback error (an APIClientError, or any Error
-      // from the canvas reload) — surface its message rather than a generic fallback.
-      const message = err instanceof Error ? err.message : 'Failed to roll back';
-      setError(message);
+      // The parent rethrows the rollback's error, or the canvas reload's after it.
+      save.report(headlineOnly(err));
+      // The outcome may be unknown, so show what is live and leave nothing armed to click again.
+      setConfirming(null);
+      void load();
     } finally {
       setRolling(null);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={dialog.onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Version history</DialogTitle>
@@ -129,6 +146,7 @@ export function VersionHistory({ slug, open, onOpenChange, onRollback }: Version
             {error}
           </p>
         )}
+        <SaveError failure={save.failure} />
 
         {loading ? (
           <p className="text-muted-foreground py-6 text-center text-sm">Loading versions…</p>
@@ -191,7 +209,7 @@ export function VersionHistory({ slug, open, onOpenChange, onRollback }: Version
                             variant="outline"
                             data-testid={`map-rollback-${v.version}`}
                             onClick={() => {
-                              setError(null);
+                              save.clear();
                               setConfirming(v.version);
                             }}
                             disabled={rolling !== null}

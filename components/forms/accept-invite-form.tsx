@@ -14,11 +14,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
-import { FormError } from '@/components/forms/form-error';
+import { FormError, SaveError } from '@/components/forms/form-error';
+import { NoScriptNotice } from '@/components/forms/no-script-notice';
 import { PasswordStrength } from '@/components/forms/password-strength';
 import { OAuthButtons } from '@/components/forms/oauth-buttons';
 import { AUTH_LANDING_ROUTE } from '@/lib/auth-landing/route';
 import { useTimeout } from '@/lib/hooks/use-timeout';
+import { useSaveFailure } from '@/lib/hooks/use-save-failure';
+
+/** Server path → the field that shows it: every field here renders its message. */
+// No `email`: its input is read-only (the invitation's address), so a message
+// about it goes by the button, where it can be read, not under a field no one
+// can fix.
+const SERVER_FIELDS: Partial<Record<string, keyof AcceptInvitationInput>> = {
+  password: 'password',
+  confirmPassword: 'confirmPassword',
+};
 
 /**
  * Invitation validation status
@@ -79,7 +90,9 @@ export function AcceptInviteForm() {
 
   const [invitationStatus, setInvitationStatus] = useState<InvitationStatus>('loading');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(
+  // Why the invitation can't be used, or the OAuth sign-in that failed: what
+  // the page found as it loaded. A failed activation is `save` below.
+  const [loadError, setLoadError] = useState<string | null>(
     // Parse OAuth error from URL if present
     oauthError ? parseOAuthError(oauthError) : null
   );
@@ -96,6 +109,7 @@ export function AcceptInviteForm() {
     handleSubmit,
     watch,
     setValue,
+    setError,
     formState: { errors },
   } = useForm<AcceptInvitationInput>({
     resolver: zodResolver(acceptInvitationSchema),
@@ -108,6 +122,12 @@ export function AcceptInviteForm() {
     },
   });
 
+  const save = useSaveFailure({
+    fallback: 'Failed to accept invitation. Please try again.',
+    fields: SERVER_FIELDS,
+    setError,
+  });
+
   // Watch password field for strength meter
   const password = watch('password');
 
@@ -116,7 +136,7 @@ export function AcceptInviteForm() {
     async function fetchInvitation() {
       if (!token || !emailFromUrl) {
         setInvitationStatus('invalid');
-        setError('Invalid invitation link');
+        setLoadError('Invalid invitation link');
         return;
       }
 
@@ -132,26 +152,26 @@ export function AcceptInviteForm() {
         setInvitationStatus('valid');
         // Don't clear error if it came from OAuth redirect (preserve URL error)
         if (!oauthError) {
-          setError(null);
+          setLoadError(null);
         }
       } catch (err) {
         if (err instanceof APIClientError) {
           // Check error code for specific handling
           if (err.code === 'INVITATION_EXPIRED') {
             setInvitationStatus('expired');
-            setError(
+            setLoadError(
               'This invitation has expired. Please contact your administrator for a new invitation.'
             );
           } else if (err.code === 'NOT_FOUND') {
             setInvitationStatus('invalid');
-            setError('Invitation not found. Please check your email for the correct link.');
+            setLoadError('Invitation not found. Please check your email for the correct link.');
           } else {
             setInvitationStatus('invalid');
-            setError(err.message || 'Failed to load invitation details');
+            setLoadError(err.message || 'Failed to load invitation details');
           }
         } else {
           setInvitationStatus('invalid');
-          setError('Failed to load invitation details');
+          setLoadError('Failed to load invitation details');
         }
       }
     }
@@ -172,7 +192,8 @@ export function AcceptInviteForm() {
   const onSubmit = async (data: AcceptInvitationInput) => {
     try {
       setIsLoading(true);
-      setError(null);
+      // A new attempt answers an earlier OAuth failure.
+      setLoadError(null);
 
       // Submit to accept-invite endpoint (creates user, verifies email, sets role)
       await apiClient.post('/api/auth/accept-invite', {
@@ -210,12 +231,7 @@ export function AcceptInviteForm() {
       }, 1500);
     } catch (err) {
       setIsLoading(false);
-
-      if (err instanceof APIClientError) {
-        setError(err.message || 'Failed to accept invitation. Please try again.');
-      } else {
-        setError('An unexpected error occurred. Please try again.');
-      }
+      save.report(err);
     }
   };
 
@@ -223,6 +239,8 @@ export function AcceptInviteForm() {
   if (invitationStatus === 'loading') {
     return (
       <div className="space-y-4">
+        {/* The form only appears once the invitation has loaded, so never without JavaScript. */}
+        <NoScriptNotice />
         <div className="bg-muted h-10 w-full animate-pulse rounded-md" />
         <div className="bg-muted h-10 w-full animate-pulse rounded-md" />
         <div className="bg-muted h-10 w-full animate-pulse rounded-md" />
@@ -259,7 +277,7 @@ export function AcceptInviteForm() {
         <div className="bg-destructive/10 text-destructive rounded-md p-4 text-sm">
           <p className="font-medium">Invalid Invitation</p>
           <p className="mt-2">
-            {error ||
+            {loadError ||
               'This invitation link is invalid. Please check your email for the correct invitation link.'}
           </p>
         </div>
@@ -294,7 +312,12 @@ export function AcceptInviteForm() {
           />
 
           {/* Password Form Section */}
-          <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-4">
+          <form
+            method="post"
+            noValidate
+            onSubmit={save.submit(handleSubmit(onSubmit, save.invalid))}
+            className="space-y-4"
+          >
             {/* Hidden Token Field */}
             <input type="hidden" {...register('token')} />
 
@@ -358,12 +381,9 @@ export function AcceptInviteForm() {
               <FormError message={errors.confirmPassword?.message} />
             </div>
 
-            {/* Error Message */}
-            {error && (
-              <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-                {error}
-              </div>
-            )}
+            {/* A failed activation, beside Activate Account */}
+            <SaveError failure={save.failure} />
+            {!save.failure && loadError && <FormError message={loadError} />}
 
             {/* Submit Button */}
             <Button type="submit" className="w-full" disabled={isLoading || success}>

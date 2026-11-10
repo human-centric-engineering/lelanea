@@ -314,6 +314,8 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
       'apiLimiter',
       'passwordResetLimiter',
       'contactLimiter',
+      'waitlistLimiter',
+      'waitlistInviteWaveLimiter',
       'verificationEmailLimiter',
       'adminLimiter',
       'orchestrationAdminLimiter',
@@ -416,10 +418,10 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
   // ───────────────────────────────────────────────────────────────────────
   {
     file: 'lib/auth/pending-signup.ts',
-    holders: ['pendingSignupState', 'invitationAcceptedState'],
+    holders: ['pendingSignupState', 'invitationAcceptedState', 'redeemedInvitationState'],
     posture: 'async-local',
     keyedBy: "better-auth's own per-request state",
-    why: 'Carries the membership — and so the org id — a signup will write, and whether it redeemed an invitation, between three better-auth hooks on one request; the handles are module-level, the payload is per request, which is the same shape as `invitedSignupContext` beside it.',
+    why: 'Carries the membership — and so the org id — a signup will write, and whether it redeemed an invitation and which one (#1136), between three better-auth hooks on one request; the handles are module-level, the payload is per request, which is the same shape as `invitedSignupContext` beside it.',
   },
   {
     file: 'lib/auth/signup-mode.ts',
@@ -475,15 +477,30 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
   },
   {
     file: 'lib/auth/admin-tier.ts',
-    holders: ['appPages', 'appPagesView', 'closedSections', 'closedSectionsView'],
+    holders: [
+      'appPages',
+      'appPagesView',
+      'appPageTiers',
+      'appPageTiersView',
+      'namedTiers',
+      'namedTiersView',
+      'closedSections',
+      'closedSectionsView',
+    ],
     posture: 'no-tenant-data',
-    why: 'Admin page patterns a fork lists as org-tier from code (t-817), the core sections it closes to org admins for the whole install (t-929), and a frozen copy of each rebuilt when it changes.',
+    why: 'Admin page patterns a fork lists as org-tier from code (t-817), the named tiers it registers and the pages it declares for each (t-999), the core sections it closes to org admins for the whole install (t-929), and a frozen copy of each rebuilt when it changes. A named tier holds the fork’s holds() function, which looks up who holds it per request; it stores nobody’s answer.',
   },
   {
     file: 'lib/auth/org-tier-admin-pages.ts',
     holders: ['appInit', 'combined'],
     posture: 'no-tenant-data',
     why: 'The one-shot latch on the fork’s org-tier page init (t-817), and core’s and the fork’s page patterns combined once.',
+  },
+  {
+    file: 'lib/auth/admin-landing.ts',
+    holders: ['loggedLandingProblems'],
+    posture: 'no-tenant-data',
+    why: 'Which named-tier landings the fork configured wrongly have already been logged (t-999), as tier and path pairs from code, so each is said once per process.',
   },
   {
     file: 'lib/auth/config.ts',
@@ -589,6 +606,19 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     why: 'Step executors by step type, all registered from code.',
   },
   {
+    file: 'lib/orchestration/engine/orchestration-engine.ts',
+    holders: ['walkPositions'],
+    posture: 'row-keyed',
+    keyedBy: "the run's live ExecutionContext object",
+    why: "A WeakMap from a run's live ExecutionContext to that run's walk position (step ids, counts) so its checkpoint can save it (t-966). The key is an object only that run holds, so no run in another org can be handed the entry, and it is collected with the run.",
+  },
+  {
+    file: 'lib/orchestration/evaluations/case-hooks.ts',
+    holders: ['hooksByAgent', 'initFailure', 'appInit'],
+    posture: 'no-tenant-data',
+    why: "Eval case hooks by agent slug, all registered from the fork's code, and the fork init's failure message once it has thrown; a hook's own state lives in its tables, not here.",
+  },
+  {
     file: 'lib/orchestration/evaluations/graders/registry.ts',
     holders: ['registry', 'appInit'],
     posture: 'no-tenant-data',
@@ -647,6 +677,12 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     holders: ['appResolver', 'registrationFailed', 'appInit'],
     posture: 'global-config',
     why: "The fork's one credential resolver and its init gate, registered from code. It holds no credential: a resolver is asked per call, in the caller's org context, and what it returns is cached by the provider manager under the credential's identity (§120 t-744).",
+  },
+  {
+    file: 'lib/orchestration/maintenance/cron-secret.ts',
+    holders: ['warned'],
+    posture: 'no-tenant-data',
+    why: 'Whether this process has already logged that a set CRON_SECRET is unusable (#1130). The secret is install configuration, not an org value, and the flag holds no part of it.',
   },
   {
     file: 'lib/orchestration/maintenance/app-jobs.ts',
@@ -751,6 +787,13 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     why: 'A monotonic counter for correlating Redis calls in the logs.',
   },
   {
+    file: 'lib/security/headers.ts',
+    holders: ['warnedOrigins'],
+    posture: 'shared-by-decision',
+    keyedBy: 'directive plus the rejected origin string',
+    why: "Invalid origins already logged, so a bad value in a fork's stored frame-ancestors data warns once per process instead of on every request. One org's value can be in it, but it is never returned to any caller: sharing it only means two orgs storing the same invalid origin get one warning between them. Revisit if anything starts reading it for more than that.",
+  },
+  {
     file: 'lib/security/safe-dispatcher.ts',
     holders: ['defaultDispatcher'],
     posture: 'no-tenant-data',
@@ -769,10 +812,22 @@ export const PROCESS_STATE: readonly ProcessStateDeclaration[] = [
     why: 'A WeakMap from a Prisma client object to the tenant-owned model roster derived from its runtime data model, so the derivation happens once per client.',
   },
   {
+    file: 'lib/tenancy/classification.ts',
+    holders: ['appRegistrations', 'clashedModels', 'appInit', 'exemptionsWarned'],
+    posture: 'no-tenant-data',
+    why: "A fork's tenancy classification of its own MODELS (t-983) — which class each is in, which tier said so, which clashed — registered from code and the same for every org, plus a warn-once latch; no row data.",
+  },
+  {
     file: 'lib/tenancy/resolver.ts',
     holders: ['resolver'],
     posture: 'no-tenant-data',
     why: "A fork's request-to-org resolver — the seam that DECIDES an org per request, holding no org itself.",
+  },
+  {
+    file: 'lib/waitlist/config.ts',
+    holders: ['cache'],
+    posture: 'no-tenant-data',
+    why: "The fork's waitlist config, validated once: a constant from code, the same for every org.",
   },
 ];
 

@@ -60,10 +60,16 @@ model SeedHistory {
   @@map("seed_history")
 }
 
-/// Append-only receipt of a completed right-to-erasure (account deletion).
+/// Append-only receipt of a completed right-to-erasure.
 ///
-/// Written inside the same transaction as `prisma.user.delete` by
-/// `lib/privacy/erase-user.ts`, so a receipt exists iff the user was erased.
+/// Two kinds of subject (`subjectKind`):
+///   - `account` — written inside the same transaction as `prisma.user.delete`
+///     by `lib/privacy/erase-user.ts`, so an account receipt exists iff the
+///     user was erased. `subjectUserId` is set.
+///   - `waitlist` — a person on the waitlist with no account, erased by the
+///     leave link or an admin (§125, `lib/waitlist/erase.ts`). `subjectUserId`
+///     is null: there is no account, and a linked entry's account is alive.
+///   The CHECK `data_erasure_receipt_subject_kind` holds the pairing.
 /// Demonstrates GDPR Art. 5(2) accountability without re-introducing the
 /// subject's PII: the user id is opaque (the row is gone) and the email is
 /// stored only as a SHA-256 hash for correlating a later "did you erase me?"
@@ -71,7 +77,9 @@ model SeedHistory {
 /// including the actor if they are later erased too.
 model DataErasureReceipt {
   id               String   @id @default(cuid())
-  subjectUserId    String // id of the erased user (no FK — the user row is gone)
+  /// "account" | "waitlist". Receipts written before §125 are accounts.
+  subjectKind      String   @default("account")
+  subjectUserId    String? // id of the erased user (no FK — the user row is gone); null for a waitlist receipt
   subjectEmailHash String? // sha256(lowercased email); for correlation, not reversible
   actorUserId      String? // who initiated the erasure (self or an admin)
   reason           String // "self_service" | "admin_action"
@@ -83,4 +91,125 @@ model DataErasureReceipt {
   @@index([subjectEmailHash])
   @@index([erasedAt])
   @@map("data_erasure_receipt")
+}
+
+/// One person on a pre-launch waitlist (§125). Off until a fork fills
+/// `lib/app/waitlist-config.ts`; with it empty nothing writes here.
+///
+/// Tenant-owned: an entry is one org's (anonymous joins land in the install
+/// org). The address is whatever the joiner typed — nothing proves they own it
+/// until `confirmedAt` is set — so subject access and erasure match it only
+/// once an account has verified the same address (`lib/waitlist/subject.ts`).
+///
+/// `removedAt`, never `deletedAt`: removing someone keeps the row so a re-join
+/// stays removed; only erasure deletes it.
+model WaitlistEntry {
+  id      String  @id @default(cuid())
+  /// Trimmed and lower-cased on write; matched exactly, never `mode: 'insensitive'` (#766).
+  email   String
+  name    String?
+  /// The list key: 'default' unless the fork's config declares others.
+  list    String  @default("default")
+  /// The fork-declared answers, validated on write against the config's fields.
+  details Json    @default("{}")
+
+  // Provenance of the join.
+  source       String  @default("form") // "form" | "api" | "import", or a fork's own
+  locale       String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  referrerHost String?
+
+  /// When the joiner submitted the form under its notice. Server-set; a repeat never moves it.
+  consentedAt    DateTime
+  /// The version of the consent text the fork declared at that moment.
+  consentVersion String
+
+  /// Set by the config's `screen()`: kept, but held back from bulk invites and counts.
+  flaggedReason     String?
+  /// Set when the joiner confirms through the emailed link (t-977).
+  confirmedAt       DateTime?
+  /// When this entry was last sent a waitlist email (the confirmation link, or
+  /// the already-on-the-list note). Caps both at one an hour per entry, and the
+  /// note at one in 30 days, so the form cannot flood an inbox from our sender.
+  lastEmailedAt     DateTime?
+  /// Where an unconfirmed entry's retention window starts: its join, the latest
+  /// confirmation link sent, or an admin restore (t-977).
+  confirmWindowFrom DateTime  @default(now())
+  /// Confirmation links sent to this entry. Capped, so a stranger resubmitting
+  /// an address nobody confirms cannot mail it, or keep it, indefinitely.
+  confirmLinksSent  Int       @default(0)
+
+  removedAt         DateTime?
+  rejoinRequestedAt DateTime?
+  rejoinRequests    Int       @default(0)
+
+  invitedAt DateTime?
+  joinedAt  DateTime?
+
+  /// The account this entry became. Personal data, so it goes with the account.
+  userId String?
+  user   User?   @relation("WaitlistEntryUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  /// Its outstanding confirmation links, deleted with it by the cascade.
+  confirmTokens WaitlistConfirmToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, list, email])
+  @@index([orgId])
+  @@index([orgId, list, createdAt])
+  @@index([email])
+  @@index([userId])
+  @@map("waitlist_entry")
+}
+
+/// One confirmation link sent to a waitlist entry (§125 t-977): the SHA-256 of
+/// the token in the email, never the token. Single use, seven days; every link
+/// sent stays good until it expires or the entry is confirmed. Its own table,
+/// not `Verification`, so the cascade deletes it with its entry on every path
+/// — leave, admin erase, retention, account and org erasure — with no code
+/// having to remember to. Tenant-owned like its entry.
+model WaitlistConfirmToken {
+  id        String        @id @default(cuid())
+  entryId   String
+  entry     WaitlistEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([entryId, expiresAt])
+  @@index([orgId])
+  @@map("waitlist_confirm_token")
+}
+
+/// Whether one org's list is taking joins (§125). A list with no row is in the
+/// state the fork's config starts it in; once an admin opens or closes it, this
+/// row wins, so a redeploy never re-opens a list an admin closed.
+model WaitlistListState {
+  id   String  @id @default(cuid())
+  list String
+  open Boolean
+
+  /// Who last opened or closed it, and when. Retained when they are erased.
+  changedById String?
+  changedBy   User?    @relation("WaitlistListStateChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+  changedAt   DateTime @default(now())
+
+  orgId String?
+  org   Org?    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, list])
+  @@index([orgId])
+  @@index([changedById])
+  @@map("waitlist_list_state")
 }

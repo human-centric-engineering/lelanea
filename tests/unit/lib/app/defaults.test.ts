@@ -182,7 +182,9 @@ import { footerCopyright } from '@/lib/app/footer';
 import { APP_API_KEY_SCOPES } from '@/lib/app/api-key-scopes';
 import { listValidApiKeyScopes, CORE_API_KEY_SCOPES } from '@/lib/auth/api-key-scopes';
 import appEslintConfig from '@/lib/app/eslint.config.mjs';
-import { appFrameSrc } from '@/lib/app/csp';
+import { appConnectSrc, appFrameSrc, appMediaSrc, appScriptSrc } from '@/lib/app/csp';
+import { resolveAppFrameAncestors } from '@/lib/app/frame-ancestors';
+import appFrameablePaths from '@/lib/app/frameable-paths.json';
 import {
   appCoverageExclusions,
   appAlwaysRunTests,
@@ -243,6 +245,10 @@ import {
   __resetGraderRegistryForTests,
 } from '@/lib/orchestration/evaluations/graders/registry';
 import {
+  registeredEvalCaseHookAgents,
+  __resetEvalCaseHooksForTests,
+} from '@/lib/orchestration/evaluations/case-hooks';
+import {
   CORE_PLATFORM_AGENTS,
   getPlatformAgent,
   listPlatformAgents,
@@ -260,6 +266,7 @@ import { appOrgAdminLandingRoute } from '@/lib/app/admin-landing';
 import { orgAdminLanding } from '@/lib/auth/admin-landing';
 import {
   getAppOrgTierAdminPages,
+  namedAdminTiers,
   orgTierAdminPages,
   __resetAppOrgTierAdminPagesForTests,
   closedCoreOrgTierSections,
@@ -269,11 +276,23 @@ import {
   __resetAppOwnerClassificationForTests,
 } from '@/lib/db/owner-classification';
 import {
+  appTenancyClassifications,
+  __resetAppTenancyClassificationForTests,
+} from '@/lib/tenancy/classification';
+import {
   DEFAULT_AUTHORIZATION_POLICY,
   getAuthorizationPolicy,
   hasAppAuthorizationPolicy,
   __resetAuthorizationPolicyForTests,
 } from '@/lib/auth/authorization';
+
+// tests/setup.ts pins these three seams for every file (#1125, #1139). This
+// file asserts what Sunrise really ships, so it puts the real scaffolds back:
+// their rows below read them through the registries' own lazy wiring, which a
+// per-row `importActual` would bypass.
+vi.mock('@/lib/app/admin-tier', (importOriginal) => importOriginal());
+vi.mock('@/lib/app/user-created', (importOriginal) => importOriginal());
+vi.mock('@/lib/app/erasure', (importOriginal) => importOriginal());
 
 /**
  * One row per `lib/app/*` seam.
@@ -294,8 +313,10 @@ interface SeamDefault {
  * Seam files deliberately absent from the table below, with the reason. The
  * drift guard at the bottom of this file allows exactly these two.
  */
-/** This file's own repo-relative path — the one place importActual is allowed. */
+/** This file's own repo-relative path: it reads every pinned seam's real scaffold. */
 const THIS_FILE = path.join('tests', 'unit', 'lib', 'app', 'defaults.test.ts');
+/** Where the suite-wide seam pins are defined. */
+const SETUP_FILE = path.join('tests', 'setup.ts');
 
 const UNASSERTED_SEAMS = new Set([
   // Asserted behaviourally instead — see tests/unit/lib/db/drift-probes.test.ts.
@@ -621,6 +642,18 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(Object.keys(seam.emailOverrides).sort()).toEqual(['invitation', 'welcome']);
       expect(seam.emailOverrides.welcome).toBe(WelcomeEmail);
       expect(seam.emailOverrides.invitation).toBe(InvitationEmail);
+    },
+  },
+  {
+    seam: 'lib/app/waitlist-config.ts',
+    risk: 'a stray config would open a public join form, an admin page and a table of strangers’ addresses on every install',
+    assert: async () => {
+      // `importActual`, NOT a plain import: tests/setup.ts pins this seam to
+      // `null` for every other file, so a plain import would assert the pin.
+      const seam = await vi.importActual<typeof import('@/lib/app/waitlist-config')>(
+        '@/lib/app/waitlist-config'
+      );
+      expect(seam.waitlistConfig).toBeNull();
     },
   },
   {
@@ -1021,6 +1054,15 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     },
   },
   {
+    seam: 'lib/app/tenancy-classification.ts',
+    risk: 'a stray classification would take a model out of the coverage guard’s question on every install, put routes writing it under the shared-settings rule, or — as system on a model with orgId — leave its rows out of row isolation',
+    assert: () => {
+      __resetAppTenancyClassificationForTests();
+      // The read triggers the lazy init, so this exercises the REAL file.
+      expect(appTenancyClassifications().size).toBe(0);
+    },
+  },
+  {
     seam: 'lib/app/bootstrap.ts',
     // PINNED (Daybreak fills this bridge): it boots the framework tier and runs
     // the module sync. Both are isolated in try/catch inside the seam, so the
@@ -1312,6 +1354,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         name: 'Ada',
         signupMethod: 'email',
         viaInvitation: true,
+        invitation: null,
       });
 
       expect(findUnique).toHaveBeenCalledTimes(1);
@@ -1405,7 +1448,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   },
   {
     seam: 'lib/app/evaluations.ts',
-    risk: 'a stray grader would appear in every install\u2019s metric picker \u2014 and, on a slug core already uses, would silently rescore every run',
+    risk: 'a stray grader would appear in every install\u2019s metric picker \u2014 and, on a slug core already uses, would silently rescore every run; a stray case hook would run setup and observe around every eval case of that agent',
     assert: () => {
       // The registry module is driven directly, so core's barrel has not
       // side-effect-registered anything: whatever listGraders() returns here
@@ -1413,6 +1456,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       // the REAL file.
       __resetGraderRegistryForTests();
       expect(listGraders()).toEqual([]);
+      // The file's second init, initAppEvalCaseHooks(), the same way.
+      __resetEvalCaseHooksForTests();
+      expect(registeredEvalCaseHookAgents()).toEqual([]);
     },
   },
   {
@@ -1431,6 +1477,9 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     risk: 'a stray pattern would open that admin page to every org OWNER/ADMIN on every install — the page only, since its API routes declare their own tier, but a page core meant for platform admins alone; a stray closeCoreOrgTierSection() would shut orchestration to every org admin on every install',
     assert: () => {
       __resetAppOrgTierAdminPagesForTests();
+      // No named tier (t-999): a stray one would open every fork route that
+      // declares its name to whoever its holds() admits, on every install.
+      expect(namedAdminTiers()).toEqual([]);
       // The read triggers the lazy init, so this exercises the REAL seam.
       expect(getAppOrgTierAdminPages()).toEqual([]);
       // …and the roster the layout reads and hands the gate is exactly core's.
@@ -1613,12 +1662,32 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   },
   {
     seam: 'lib/app/csp.ts',
-    risk: 'a stray origin would widen the iframe policy on every install',
-    // PINNED, not deleted (`HB2`). §14 t-119 fills this with ONE origin: the
-    // privacy-enhanced YouTube player the resources drawer's video lightbox
-    // embeds. These values are spliced straight into a response header, so
-    // anything beyond that one origin is a security change, not a cosmetic one.
-    assert: () => expect(appFrameSrc).toEqual(['https://www.youtube-nocookie.com']),
+    risk: 'a stray origin would widen the iframe, script, connect or media policy on every install — a script origin runs third-party code with the app’s privileges',
+    // PINNED, not deleted (`HB2`). §14 t-119 fills `appFrameSrc` with ONE
+    // origin: the privacy-enhanced YouTube player the resources drawer's video
+    // lightbox embeds. The other three ship empty and stay so. These values
+    // are spliced straight into a response header, so anything beyond that one
+    // origin is a security change, not a cosmetic one.
+    assert: () => {
+      expect(appFrameSrc).toEqual(['https://www.youtube-nocookie.com']);
+      expect(appScriptSrc).toEqual([]);
+      expect(appConnectSrc).toEqual([]);
+      expect(appMediaSrc).toEqual([]);
+    },
+  },
+  {
+    seam: 'lib/app/frame-ancestors.ts',
+    risk: 'a stray answer would let the named sites frame pages on every install — the clickjacking protection every response carries, switched off',
+    assert: async () => {
+      for (const url of ['https://app.example.com/', 'https://app.example.com/embed/widget-1']) {
+        expect(await resolveAppFrameAncestors(new Request(url))).toEqual([]);
+      }
+    },
+  },
+  {
+    seam: 'lib/app/frameable-paths.json',
+    risk: 'a stray prefix would take those paths out of next.config.js’s blanket X-Frame-Options: DENY on every install, leaving the proxy as their only framing header',
+    assert: () => expect(appFrameablePaths).toEqual([]),
   },
   {
     // PINNED (Daybreak fills this bridge). Upstream ships all three lists empty
@@ -1773,18 +1842,29 @@ describe('lib/app/ seams ship empty', () => {
     await assert();
   });
 
+  // The guards that judge a fork's REAL seam read it past the pin, and only
+  // they may (#1125, #1139). tests/setup.ts defines the pins, so it reads the
+  // real module too: the brand pin derives its keys from it.
+  const ROSTER = path.join('tests', 'unit', 'scripts', 'ci', 'admin-tier-roster.test.ts');
+  const STALE = path.join('tests', 'unit', 'lib', 'privacy', 'stale-writers.test.ts');
   it.each([
-    ['brand', 'brand'],
-    ['emails', 'email-override'],
-  ])('nothing but this file escapes the suite-wide %s-seam pin', (seam, label) => {
+    ['brand', 'brand', []],
+    ['emails', 'email-override', []],
+    ['waitlist-config', 'waitlist-config', []],
+    ['llm-providers', 'provider-eligibility', []],
+    ['admin-tier', 'org-tier admin', [ROSTER]],
+    ['user-created', 'user-created', []],
+    ['erasure', 'erasure', [STALE]],
+  ])('nothing but its readers escapes the suite-wide %s-seam pin', (seam, label, readers) => {
     // tests/setup.ts mocks `@/lib/app/brand` to null for EVERY test file, so
     // that no core test can read a fork's brand and fail for a reason the fork
     // cannot fix (#660/#661). That guarantee holds across all ~1095 test files
     // by construction, but only while nothing escapes the mock.
     //
-    // `vi.importActual` is legitimate here and nowhere else: it is what makes
-    // the brand row above assert the REAL scaffold rather than the mock, which
-    // is what keeps "seams ship empty" able to fail in a fork.
+    // `vi.importActual` is legitimate here: it is what makes the brand row
+    // above assert the REAL scaffold rather than the mock, which is what keeps
+    // "seams ship empty" able to fail in a fork. Elsewhere, only a guard that
+    // judges a fork's real seam may read past its pin, and it is listed.
     //
     // `vi.doUnmock` is never right. It REMOVES the pin instead of restoring it,
     // so every later case in that file sees the real seam. That is not
@@ -1801,11 +1881,29 @@ describe('lib/app/ seams ship empty', () => {
     // instance per round. vitest exposes exactly `unmock` and `doUnmock` for
     // removing a mock, so anchoring on `(?:do)?unmock` is exhaustive over the API
     // rather than over the spellings someone happened to think of.
-    // The emails pin (#895) is the same shape and the same hazard, so both
-    // seams share the guard.
+    // The emails pin (#895) is the same shape and the same hazard, and so are
+    // the later pins, so every seam setup.ts pins shares the guard.
+    //
+    // A `vi.mock(seam, (importOriginal) => importOriginal())` restores the real
+    // seam just as `importActual` does, so it is matched too. Only the files
+    // listed as a seam's readers may do either, and the seam's own test: a fork
+    // that fills `lib/app/erasure.ts` tests its hook in
+    // `tests/unit/lib/app/erasure.test.ts` (or `erasure.<aspect>.test.ts`), and
+    // that file has to read the real seam. Sunrise ships none for these seams.
+    const ownTest = new RegExp(
+      '^' +
+        path.join('tests', 'unit', 'lib', 'app', seam).replaceAll('\\', '\\\\') +
+        String.raw`(\.[\w-]+)?\.test\.tsx?$`
+    );
     const seamPath = String.raw`['"\`]@/lib/app/` + seam + String.raw`['"\`]`;
     const unmockRe = new RegExp(String.raw`\bvi\s*\.\s*(?:do)?[Uu]nmock\s*\(\s*` + seamPath);
     const actualRe = new RegExp(String.raw`importActual[\s\S]{0,80}?` + seamPath);
+    const restoreRe = new RegExp(
+      String.raw`\bvi\s*\.\s*(?:do)?[Mm]ock\s*\(\s*` +
+        seamPath +
+        String.raw`[\s\S]{0,120}?importOriginal`
+    );
+    const mayRead = new Set([THIS_FILE, SETUP_FILE, ...readers]);
 
     const offenders: string[] = [];
     const walk = (dir: string): void => {
@@ -1821,7 +1919,11 @@ describe('lib/app/ seams ship empty', () => {
         if (unmockRe.test(src)) {
           offenders.push(`${rel}: unmocks the pin instead of restoring it`);
         }
-        if (actualRe.test(src) && rel !== THIS_FILE) {
+        if (
+          (actualRe.test(src) || restoreRe.test(src)) &&
+          !mayRead.has(rel) &&
+          !ownTest.test(rel)
+        ) {
           offenders.push(`${rel}: reads the real seam past the pin`);
         }
       }
@@ -1833,7 +1935,7 @@ describe('lib/app/ seams ship empty', () => {
       `These test files escape the ${label}-seam pin in tests/setup.ts. A fork that ` +
         `fills lib/app/${seam}.ts would see its own values here and fail a core test ` +
         'it cannot fix — the exact class #660 is about. Re-doMock the pinned values ' +
-        'instead of unmocking, and leave importActual to this file.'
+        'instead of unmocking, and leave reading the real seam to the guards that judge it.'
     ).toEqual([]);
   });
 

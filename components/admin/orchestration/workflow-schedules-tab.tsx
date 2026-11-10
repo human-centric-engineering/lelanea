@@ -35,7 +35,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { apiClient, APIClientError } from '@/lib/api/client';
+import { SaveError } from '@/components/forms/form-error';
+import { apiClient } from '@/lib/api/client';
+import { isStaleSave } from '@/lib/errors/save-error';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { useCommittedDialog } from '@/lib/hooks/use-committed-dialog';
 import { StaleSaveNotice } from '@/components/admin/orchestration/stale-save-notice';
 import { API } from '@/lib/api/endpoints';
 
@@ -80,7 +84,8 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // A toggle refused because the schedule changed since the tab loaded it.
-  const [stale, setStale] = useState(false);
+  // Counts refusals, so each one remounts the notice and brings it into view (§124).
+  const [stale, setStale] = useState(0);
   // Schedules with a toggle in flight: a second click before the list reloads
   // would carry the version from before the first, and be refused.
   const [toggling, setToggling] = useState<ReadonlySet<string>>(new Set());
@@ -92,15 +97,29 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
   const [createInput, setCreateInput] = useState('');
   const [createEnabled, setCreateEnabled] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const createSave = useSaveFailure({
+    fallback: 'Could not create the schedule. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
 
   // Delete dialog state
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const deleteSave = useSaveFailure({
+    fallback: 'Could not delete the schedule. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
+
+  // A row toggle refused for any reason but staleness: shown above the list (§124).
+  const rowSave = useSaveFailure({
+    fallback: 'Could not update the schedule. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
 
   const fetchSchedules = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setStale(false);
+    setStale(0);
     try {
       const body = await apiClient.get<{ schedules: Schedule[] }>(
         API.ADMIN.ORCHESTRATION.workflowSchedules(workflowId)
@@ -119,11 +138,11 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
 
   const handleCreate = async () => {
     setCreating(true);
-    setCreateError(null);
+    createSave.clear();
     try {
       // Validate cron expression client-side before hitting the API
       if (!isValidCronExpression(createCron)) {
-        setCreateError(
+        createSave.show(
           'Invalid cron expression. Use 5-field format: minute hour day-of-month month day-of-week'
         );
         setCreating(false);
@@ -135,13 +154,13 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
         try {
           const raw: unknown = JSON.parse(createInput);
           if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-            setCreateError('Input template must be a JSON object');
+            createSave.show('Input template must be a JSON object');
             setCreating(false);
             return;
           }
           inputTemplate = raw as Record<string, unknown>;
         } catch {
-          setCreateError('Input template must be valid JSON');
+          createSave.show('Input template must be valid JSON');
           setCreating(false);
           return;
         }
@@ -163,13 +182,14 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
       setCreateEnabled(true);
       void fetchSchedules();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create schedule');
+      createSave.report(err);
     } finally {
       setCreating(false);
     }
   };
 
   const handleToggle = async (schedule: Schedule) => {
+    rowSave.clear();
     setToggling((prev) => new Set(prev).add(schedule.id));
     try {
       await apiClient.patch(API.ADMIN.ORCHESTRATION.workflowScheduleById(workflowId, schedule.id), {
@@ -179,11 +199,11 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
       // Awaited, so the switch stays disabled until the row's new version is in.
       await fetchSchedules();
     } catch (err) {
-      if (err instanceof APIClientError && err.code === 'STALE_RECORD') {
-        setStale(true);
+      if (isStaleSave(err)) {
+        setStale((n) => n + 1);
         return;
       }
-      // Otherwise silent — the UI still shows the old state
+      rowSave.report(err, `Couldn't update "${schedule.name}"`);
     } finally {
       setToggling((prev) => {
         const next = new Set(prev);
@@ -195,15 +215,35 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    deleteSave.clear();
+    setDeleting(true);
     try {
       await apiClient.delete(
         API.ADMIN.ORCHESTRATION.workflowScheduleById(workflowId, deleteTarget.id)
       );
-      void fetchSchedules();
-    } finally {
       setDeleteTarget(null);
+      void fetchSchedules();
+    } catch (err) {
+      // The dialog stays open with the refusal inside it (§124).
+      deleteSave.report(err);
+    } finally {
+      setDeleting(false);
     }
   };
+
+  // Each dialog is committed while its save runs, so its failure is shown in it.
+  const createDialog = useCommittedDialog({
+    open: showCreate,
+    pending: creating,
+    onClose: () => setShowCreate(false),
+    clear: createSave.clear,
+  });
+  const deleteDialog = useCommittedDialog({
+    open: !!deleteTarget,
+    pending: deleting,
+    onClose: () => setDeleteTarget(null),
+    clear: deleteSave.clear,
+  });
 
   if (loading) {
     return (
@@ -234,7 +274,10 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
           {error}
         </div>
       )}
-      {stale && <StaleSaveNotice what="That schedule" onReload={() => void fetchSchedules()} />}
+      {stale > 0 && (
+        <StaleSaveNotice key={stale} what="That schedule" onReload={() => void fetchSchedules()} />
+      )}
+      <SaveError failure={rowSave.failure} />
 
       {schedules.length === 0 ? (
         <div className="rounded-md border p-6 text-center text-sm">
@@ -289,7 +332,7 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
       )}
 
       {/* Create dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={createDialog.onOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New schedule</DialogTitle>
@@ -340,15 +383,19 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
                 onCheckedChange={setCreateEnabled}
               />
             </div>
-            {createError && <p className="text-destructive text-xs">{createError}</p>}
           </div>
+          <SaveError failure={createSave.failure} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreate(false)}
+              {...createDialog.cancelProps}
+            >
               Cancel
             </Button>
             <Button
-              onClick={() => void handleCreate()}
-              disabled={creating || !createName || !createCron}
+              {...createDialog.actionProps({ disabled: !createName || !createCron })}
+              onClick={(e) => createDialog.confirm(e, handleCreate)}
             >
               {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Create
@@ -358,7 +405,7 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
       </Dialog>
 
       {/* Delete confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={deleteDialog.onOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete schedule?</AlertDialogTitle>
@@ -367,10 +414,13 @@ export function WorkflowSchedulesTab({ workflowId }: WorkflowSchedulesTabProps) 
               action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <SaveError failure={deleteSave.failure} />
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel {...deleteDialog.cancelProps}>Cancel</AlertDialogCancel>
+            {/* Closes only on success, so a refusal can be read inside it (§124). */}
             <AlertDialogAction
-              onClick={() => void handleDelete()}
+              {...deleteDialog.actionProps()}
+              onClick={(e) => deleteDialog.confirm(e, handleDelete)}
               className="bg-red-600 hover:bg-red-700"
             >
               Delete
