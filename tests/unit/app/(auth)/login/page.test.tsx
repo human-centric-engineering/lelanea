@@ -44,6 +44,11 @@ vi.mock('@/lib/auth/signup-mode', () => ({
   isInviteOnly: vi.fn(() => false),
 }));
 
+// LELAÑEA divergence (row 15): the page also renders our own closed-door
+// notice under invite_only. Stubbed here so this file judges the platform's
+// page as it ships; ours is tested in tests/unit/app/login-invite-only.test.tsx.
+vi.mock('@/components/app/site/invite-only-notice', () => ({ InviteOnlyNotice: () => null }));
+
 /**
  * Test Suite: Login Page
  *

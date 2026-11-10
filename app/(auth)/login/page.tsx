@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoginForm } from '@/components/forms/login-form';
-// LELAÑEA divergence (row 15): what to say when signup is closed. Upstream has
-// no seam for it — see the notice's docblock and the divergence ledger.
+import { WaitlistLoginNotice } from '@/components/waitlist/waitlist-login-notice';
+// LELAÑEA divergence (row 15): what to say when signup is closed. Upstream's
+// notice speaks only for its own waitlist, which we do not use — see the
+// notice's docblock and the divergence ledger.
 import { InviteOnlyNotice } from '@/components/app/site/invite-only-notice';
 import { BRAND } from '@/lib/brand';
 import { isInviteOnly } from '@/lib/auth/signup-mode';
@@ -42,6 +44,8 @@ export default function LoginPage() {
             </Link>
           </div>
         )}
+        {/* Under invite_only, the way in is the waitlist, when the app has one. */}
+        {isInviteOnly() && <WaitlistLoginNotice />}
         {isInviteOnly() && <InviteOnlyNotice />}
 
         {/* Password Reset Link */}
