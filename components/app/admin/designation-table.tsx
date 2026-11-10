@@ -231,6 +231,10 @@ export function DesignationTable({
     fields: NO_SERVER_FIELDS,
   });
   const { clear: clearRowSave, show: showRowSave, report: reportRowSave } = rowSave;
+  // Which row the box speaks for. Rows save independently and at once, so one
+  // row's save starting must not wipe another row's failure: only a retry of
+  // the row that failed, or a fresh page, clears it.
+  const failedRowRef = useRef<string | null>(null);
   /** The document whose licensing note is being edited, and the draft text. */
   const [licensingDraft, setLicensingDraft] = useState<{ id: string; text: string } | null>(null);
   /**
@@ -307,6 +311,9 @@ export function DesignationTable({
 
       setIsLoading(true);
       setLoadError(null);
+      // A row's failure names a row that a new page or search may not show.
+      clearRowSave();
+      failedRowRef.current = null;
       try {
         const params = new URLSearchParams({ page: String(page), limit: String(meta.limit) });
         // Trimmed before the truthiness test: `q` is `.trim().min(1)` server-side,
@@ -355,7 +362,7 @@ export function DesignationTable({
         if (requestSeqRef.current === seq) setIsLoading(false);
       }
     },
-    [meta.limit]
+    [meta.limit, clearRowSave]
   );
 
   /**
@@ -441,7 +448,10 @@ export function DesignationTable({
       }
     ): Promise<boolean> => {
       setSavingIds((ids) => new Set(ids).add(documentId));
-      clearRowSave();
+      if (failedRowRef.current === documentId) {
+        clearRowSave();
+        failedRowRef.current = null;
+      }
       try {
         const response = await fetch(`${DESIGNATION_ADMIN_ENDPOINT}/${documentId}`, {
           method: 'PATCH',
@@ -458,6 +468,7 @@ export function DesignationTable({
           };
         }>(response);
         if (!parsed.success) {
+          failedRowRef.current = documentId;
           showRowSave(`Couldn't save "${documentName}": ${parsed.error.message}`);
           return false;
         }
@@ -478,6 +489,7 @@ export function DesignationTable({
         );
         return true;
       } catch (caught) {
+        failedRowRef.current = documentId;
         reportRowSave(caught, `Couldn't save "${documentName}"`);
         return false;
       } finally {

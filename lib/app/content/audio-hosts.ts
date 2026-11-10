@@ -45,7 +45,10 @@ export interface AudioPlayer {
  * The origins, besides the page's own, that the web app may play audio from:
  * the `media-src` this app adds to the CSP. **Empty today**: no audio host is
  * chosen yet. `lib/app/csp.ts` spreads this list into `appMediaSrc`, so an
- * origin added here is allowed by the policy too, and the two cannot drift.
+ * origin added here is allowed by the policy too. **Exact origins only**: the
+ * CSP would accept a wildcard (`https://*.cdn.com`), but {@link canPlayInPage}
+ * compares origins exactly, so a wildcard here would allow files the card then
+ * refuses to play.
  *
  * The API still serves a player for a file on any origin: a native client has
  * no CSP. The web card asks {@link canPlayInPage} and shows a link instead of

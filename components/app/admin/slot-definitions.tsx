@@ -49,6 +49,8 @@ import {
 } from '@/components/ui/select';
 import { parseApiResponse } from '@/lib/api/parse-response';
 import { unreadableNumbers } from '@/lib/errors/save-error';
+import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { SaveError } from '@/components/forms/form-error';
 import {
   SLOT_DEFINITIONS_ENDPOINT,
   SLOT_TAXONOMY_EXPORT_ENDPOINT,
@@ -58,7 +60,7 @@ import {
   slotDefinitionEndpoint,
   slotDefinitionHistoryEndpoint,
 } from '@/lib/app/slots/endpoint';
-import { MAX_DESCRIPTION_LENGTH } from '@/lib/app/slots/validation';
+import { MAX_DESCRIPTION_LENGTH, slotDefinitionUpdateSchema } from '@/lib/app/slots/validation';
 import type { SlotUploadMode } from '@/lib/app/slots/validation';
 import type {
   SlotDefinitionRow,
@@ -249,15 +251,14 @@ function toPayload(draft: DraftFields) {
 }
 
 /**
- * The route's rule for `priorityWeight` (`lib/app/slots/validation.ts`), held on
+ * The route's rule for `priorityWeight`, read from its own schema and held on
  * Save too: the form sets `noValidate`, so the input's `min`/`max` no longer
- * stop a press. Same words as the route's, so either says the same thing.
+ * stop a press. A blank input is refused first, since `Number('')` is 0.
  */
 function checkPriority(value: string): string | null {
-  const n = Number(value);
-  if (value.trim() === '' || !Number.isInteger(n)) return 'A priority weight is a whole number.';
-  if (n < 0 || n > 100) return 'A priority weight is between 0 and 100.';
-  return null;
+  if (value.trim() === '') return 'Enter how early this is asked for, from 0 to 100.';
+  const parsed = slotDefinitionUpdateSchema.shape.priorityWeight.safeParse(Number(value));
+  return parsed.success ? null : (parsed.error.issues[0]?.message ?? 'Check this number.');
 }
 
 function FieldRow({
@@ -941,7 +942,12 @@ export function SlotDefinitionsPanel({
 }) {
   const [definitions, setDefinitions] = useState<DefinitionJson[]>(initialView.definitions);
   const [groups, setGroups] = useState<string[]>(initialView.groups);
-  const [error, setError] = useState<string | null>(null);
+  // Every refusal on the panel, a save's or the form's own check, by the one
+  // box that brings itself into view (§124): the forms sit far down the page.
+  const save = useSaveFailure({
+    fallback: 'That did not save. Try again.',
+    fields: NO_SERVER_FIELDS,
+  });
   const [notice, setNotice] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -960,13 +966,13 @@ export function SlotDefinitionsPanel({
   }
 
   function report(message: string) {
-    setError(message);
+    save.show(message);
     setNotice(null);
     setWarning(null);
   }
 
   function landed(message: string, sync: SlotSyncOutcome) {
-    setError(null);
+    save.clear();
     setNotice(message);
     setWarning(syncWarning(sync));
   }
@@ -1010,17 +1016,13 @@ export function SlotDefinitionsPanel({
 
   return (
     <div className="space-y-6">
-      {error && (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      )}
+      <SaveError failure={save.failure} />
       {warning && (
         <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">
           {warning}
         </p>
       )}
-      {notice && !error && <p className="text-muted-foreground text-sm">{notice}</p>}
+      {notice && !save.failure && <p className="text-muted-foreground text-sm">{notice}</p>}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

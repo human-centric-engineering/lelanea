@@ -217,7 +217,7 @@ describe('rewording a slot', () => {
   it.each([
     ['150', 'A priority weight is between 0 and 100.'],
     ['2.5', 'A priority weight is a whole number.'],
-    ['', 'A priority weight is a whole number.'],
+    ['', 'Enter how early this is asked for, from 0 to 100.'],
   ])(
     'holds the route’s priority rule itself: %j is refused before anything is sent',
     async (typed, message) => {

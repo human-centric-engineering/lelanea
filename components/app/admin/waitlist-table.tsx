@@ -329,6 +329,8 @@ export function WaitlistTable({
 
       setIsLoading(true);
       setLoadError(null);
+      // A row's failure names a row that a new page or search may not show.
+      clearRowSave();
       try {
         const params = new URLSearchParams({ page: String(page), limit: String(meta.limit) });
         if (term) params.set('q', term);
@@ -379,7 +381,7 @@ export function WaitlistTable({
         if (requestSeqRef.current === seq) setIsLoading(false);
       }
     },
-    [meta.limit]
+    [meta.limit, clearRowSave]
   );
 
   // Assigned in an effect, not during render: writing a ref while rendering is what
@@ -512,9 +514,10 @@ export function WaitlistTable({
         );
         await fetchPage(meta.page, appliedSearch, appliedFilters);
       } catch (err) {
-        // The row may have moved (a 409 says so): say why, and show it as it stands.
-        reportRowSave(err, `The invitation to ${email} was not sent`);
+        // The row may have moved (a 409 says so): show it as it stands, and only
+        // THEN say why, because `fetchPage` clears a row's failure on its way in.
         await fetchPage(meta.page, appliedSearch, appliedFilters);
+        reportRowSave(err, `The invitation to ${email} was not sent`);
       } finally {
         setMutatingId(null);
       }

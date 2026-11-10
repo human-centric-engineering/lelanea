@@ -384,6 +384,26 @@ describe('WaitlistTable', () => {
       expect(alert.textContent).toMatch(/was not removed: Expected a yes or no\.$/);
       expect(alert.textContent).not.toMatch(/field/);
     });
+
+    it('drops a row’s failure once a new page is showing, since that row may not be on it', async () => {
+      const user = userEvent.setup();
+      patch.mockRejectedValue(new Error('network'));
+      const meta = { page: 1, limit: 25, total: 60, totalPages: 3 };
+      fetchMock.mockResolvedValue(
+        listResponse([entry({ id: 'entry-2', email: 'bo@example.com' })], { ...meta, page: 2 })
+      );
+      render(<WaitlistTable initialEntries={[entry()]} initialMeta={meta} />);
+
+      await user.click(screen.getByRole('button', { name: /Remove/ }));
+      await user.click(screen.getByRole('button', { name: 'Remove from waitlist' }));
+      expect((await screen.findByRole('alert')).textContent).toMatch(
+        /ada@example.com was not removed/
+      );
+
+      await user.click(screen.getByRole('button', { name: /Next/ }));
+
+      await waitFor(() => expect(screen.queryByText(/ada@example.com was not removed/)).toBeNull());
+    });
   });
 
   describe('a removed entry', () => {

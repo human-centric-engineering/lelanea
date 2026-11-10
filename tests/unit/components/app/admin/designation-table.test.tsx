@@ -393,6 +393,56 @@ describe('saving a designation', () => {
     // And the row still shows what the server last confirmed.
     expect(within(rowFor('The long way round')).getByText('Yes')).toBeTruthy();
   });
+
+  it('keeps one row’s failure on screen while another row saves', async () => {
+    // Rows save independently. A's failure must not be wiped because B's save
+    // started: A's select has gone back to what was stored, and without the
+    // box nothing would say A did not land.
+    const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'The designation vocabulary is not seeded.' },
+        }),
+      })
+      .mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: {
+            designation: {
+              purpose: 'voice',
+              sensitivity: 'public',
+              licensing: null,
+              quotable: false,
+            },
+          },
+        }),
+      });
+    render(
+      <DesignationTable
+        initialDocuments={[
+          doc({ id: 'a', name: 'A method note' }),
+          doc({ id: 'b', name: 'A talk' }),
+        ]}
+        initialMeta={{ ...META, total: 2 }}
+      />
+    );
+
+    await user.click(screen.getByLabelText('Purpose of A method note'));
+    await user.click(await screen.findByRole('option', { name: 'Voice' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('A method note');
+
+    await user.click(screen.getByLabelText('Purpose of A talk'));
+    await user.click(await screen.findByRole('option', { name: 'Voice' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    expect(screen.getByRole('alert').textContent).toContain('A method note');
+  });
 });
 
 describe('the empty state', () => {
