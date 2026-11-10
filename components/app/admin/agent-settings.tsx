@@ -589,9 +589,11 @@ function BudgetRow({
             </Button>
           )}
         </div>
-        <div className="mt-1">
-          <SaveError failure={save.failure} />
-        </div>
+        {save.failure && (
+          <div className="mt-1">
+            <SaveError failure={save.failure} />
+          </div>
+        )}
       </td>
     </tr>
   );

@@ -48,8 +48,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { parseApiResponse } from '@/lib/api/parse-response';
-import { unreadableNumbers } from '@/lib/errors/save-error';
-import { NO_SERVER_FIELDS, useSaveFailure } from '@/lib/hooks/use-save-failure';
+import { unreadableNumbers, type SaveFailure } from '@/lib/errors/save-error';
+import { useSaveFailure } from '@/lib/hooks/use-save-failure';
 import { SaveError } from '@/components/forms/form-error';
 import {
   SLOT_DEFINITIONS_ENDPOINT,
@@ -398,7 +398,7 @@ function DefinitionForm({
   definition: DefinitionJson;
   groups: string[];
   onSaved: (definition: DefinitionJson, sync: SlotSyncOutcome, changed: string[]) => void;
-  onError: (message: string) => void;
+  onError: (message: string, fields?: SaveFailure['fields']) => void;
 }) {
   /**
    * The row this draft was made from — **not** the live `definition` prop.
@@ -449,7 +449,7 @@ function DefinitionForm({
         // `noValidate` means the browser no longer stops a number it cannot read
         // ("1e"), which it reports as '' and `toPayload` would send as 0.
         const unreadable = unreadableNumbers(event.currentTarget);
-        if (unreadable) return onError(unreadable.message);
+        if (unreadable) return onError(unreadable.message, unreadable.fields);
         const priorityProblem = checkPriority(draft.priorityWeight);
         if (priorityProblem) return onError(priorityProblem);
         void save();
@@ -515,7 +515,7 @@ function AddDefinitionForm({
 }: {
   groups: string[];
   onAdded: (definition: DefinitionJson, sync: SlotSyncOutcome) => void;
-  onError: (message: string) => void;
+  onError: (message: string, fields?: SaveFailure['fields']) => void;
 }) {
   const [slug, setSlug] = useState('');
   const [draft, setDraft] = useState<DraftFields>({
@@ -551,7 +551,7 @@ function AddDefinitionForm({
         // `noValidate` means the browser no longer stops a number it cannot read
         // ("1e"), which it reports as '' and `toPayload` would send as 0.
         const unreadable = unreadableNumbers(event.currentTarget);
-        if (unreadable) return onError(unreadable.message);
+        if (unreadable) return onError(unreadable.message, unreadable.fields);
         const priorityProblem = checkPriority(draft.priorityWeight);
         if (priorityProblem) return onError(priorityProblem);
         void add();
@@ -731,7 +731,7 @@ function UploadPanel({
   onError,
 }: {
   onApplied: (plan: SlotUploadPlan, sync: SlotSyncOutcome) => void;
-  onError: (message: string) => void;
+  onError: (message: string, fields?: SaveFailure['fields']) => void;
 }) {
   const [text, setText] = useState('');
   const [mode, setMode] = useState<SlotUploadMode>('merge');
@@ -944,10 +944,7 @@ export function SlotDefinitionsPanel({
   const [groups, setGroups] = useState<string[]>(initialView.groups);
   // Every refusal on the panel, a save's or the form's own check, by the one
   // box that brings itself into view (§124): the forms sit far down the page.
-  const save = useSaveFailure({
-    fallback: 'That did not save. Try again.',
-    fields: NO_SERVER_FIELDS,
-  });
+  const save = useSaveFailure({ fallback: 'That did not save. Try again.' });
   const [notice, setNotice] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -965,8 +962,9 @@ export function SlotDefinitionsPanel({
     );
   }
 
-  function report(message: string) {
-    save.show(message);
+  function report(message: string, fields?: SaveFailure['fields']) {
+    // Fields named here are focused, by the input's `id`, instead of the box.
+    save.show(message, fields);
     setNotice(null);
     setWarning(null);
   }

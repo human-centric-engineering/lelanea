@@ -1665,7 +1665,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     risk: 'a stray origin would widen the iframe, script, connect or media policy on every install — a script origin runs third-party code with the app’s privileges',
     // PINNED, not deleted (`HB2`). §14 t-119 fills `appFrameSrc` with ONE
     // origin: the privacy-enhanced YouTube player the resources drawer's video
-    // lightbox embeds. The other three ship empty and stay so. These values
+    // lightbox embeds. Script and connect ship empty. Media is
+    // `lib/app/content/audio-hosts.ts`'s AUDIO_MEDIA_ORIGINS, empty until an
+    // audio host is chosen: adding one there fails this row, so re-pin it here
+    // with that origin, never delete the assertion. These values
     // are spliced straight into a response header, so anything beyond that one
     // origin is a security change, not a cosmetic one.
     assert: () => {
