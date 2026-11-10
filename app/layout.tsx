@@ -14,7 +14,7 @@ import { SurfaceSync } from '@/components/surface-sync';
 import { DEFAULT_SURFACE } from '@/lib/app/surface';
 import { BRAND } from '@/lib/brand';
 import { resolveMetadataBase } from '@/lib/site/metadata-base';
-// LELAÑEA divergence — see .context/app/platform-divergences.md, rows 1 and 2.
+// LELAÑEA divergence — see .context/app/platform-divergences.md, rows 1 and 8.
 import { brandFontVariables } from '@/app/fonts';
 
 // Root metadata, driven entirely by the BRAND seam (#519). The `template`

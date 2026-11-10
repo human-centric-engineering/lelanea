@@ -9,11 +9,11 @@ Lelañea's colours and typefaces reach the page through **one fork-owned
 stylesheet and one font module**, with no platform layout or page rewritten to
 carry them.
 
-| File                  | Owner                                                          | Does                                                                        |
-| --------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `app/brand-theme.css` | ours (a Sunrise seam, shipped empty)                           | Declares every token, scoped to `[data-surface='consumer']`                 |
-| `app/fonts.ts`        | ours (new file)                                                | Loads the three families through `next/font/google`                         |
-| `app/layout.tsx`      | Sunrise — [divergence rows 1 and 2](./platform-divergences.md) | Applies the font classes to `<html>`; resolves the theme before first paint |
+| File                  | Owner                                                          | Does                                                        |
+| --------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
+| `app/brand-theme.css` | ours (a Sunrise seam, shipped empty)                           | Declares every token, scoped to `[data-surface='consumer']` |
+| `app/fonts.ts`        | ours (new file)                                                | Loads the three families through `next/font/google`         |
+| `app/layout.tsx`      | Sunrise — [divergence rows 1 and 8](./platform-divergences.md) | Applies the font classes to `<html>`; sets `metadataBase`   |
 
 ## How a page gets branded
 
