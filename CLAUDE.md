@@ -203,7 +203,7 @@
 > | Absent from both                                                 | ours                                       | nothing — fix it here |
 >
 > A third blob for `HEAD` that differs from both usually means we already carry a
-> fix; check `.context/app/divergences.md` before writing the issue, and say so
+> fix; check `.context/app/platform-divergences.md` before writing the issue, and say so
 > in it.
 >
 > **Downstream divergence does not transfer ownership.** _"Daybreak carries its

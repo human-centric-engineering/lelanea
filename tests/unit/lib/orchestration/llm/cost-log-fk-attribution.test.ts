@@ -308,7 +308,7 @@ const ALLOWED_CALL_SITES: readonly string[] = [
   // on a hard hit, billed to the person. No agent (the routing default model,
   // not an agent), no conversation (the turn has not opened one yet). `userId`
   // is guarded because the pre-signup path calls it with none. A fork edit to a
-  // Sunrise-owned roster, same class as sunrise#799; .context/app/divergences.md
+  // Sunrise-owned roster, same class as sunrise#799; .context/app/platform-divergences.md
   // Row 20.
   'lib/app/safety/context-check.ts | agentId=— | conversationId=— | workflowExecutionId=— | userId=spread((input.userId ? { userId: input.userId } : {}))',
   // LELAÑEA — a member's voice note (f-conversation t-67): one transcription

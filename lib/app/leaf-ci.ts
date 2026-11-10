@@ -75,7 +75,7 @@ export const leafCoverageExclusions: AppCoverageExclusion[] = [
  * breaks each one is precisely the branch a scoped run would not have chosen.
  *
  * The first four lived in `scripts/ci/scoped-tests.ts` until Daybreak 0.3.0 — a
- * Sunrise-owned file, carried as Row 4 of `.context/app/divergences.md`. The
+ * Sunrise-owned file, carried as Row 4 of `.context/app/platform-divergences.md`. The
  * seam arriving is what retired that row; the entries and their reasons did not
  * change.
  */

@@ -743,7 +743,7 @@ client has no CSP), but the web drawer offers one only where the page may play
 it (`canPlayInPage`: its own origin, or `AUDIO_MEDIA_ORIGINS`, empty today) and
 shows a card that opens the link otherwise. When her audio host is chosen, its
 origin goes into `AUDIO_MEDIA_ORIGINS` and into the policy, through that seam or
-a fork fix recorded in `divergences.md`, and the two must name the same
+a fork fix recorded in `platform-divergences.md`, and the two must name the same
 origins.
 
 **A video plays in the page, from a host that can play it (t-119).** Where her

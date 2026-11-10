@@ -217,7 +217,7 @@ describe('reserved fork tiers', () => {
     //    So this is the one case in the file a fork cannot answer through the
     //    seam provided, and every leaf with a model of its own meets it. Filed
     //    as sunrise#764 (blobs identical on sunrise/main and daybreak/main,
-    //    so Daybreak could not fix it) — see `.context/app/divergences.md` row 12.
+    //    so Daybreak could not fix it) — see `.context/app/platform-divergences.md` row 12.
     // 2. Pinning keeps the row doing real work here: a model or enum landing in
     //    this file without anyone deciding on it still fails, and so does one
     //    that skipped the Art. 15 accounting `leaf-data-export.ts` owes it.

@@ -12,7 +12,7 @@
  *
  * `layout-metadata.test.ts` (Sunrise's) checks a page's static title for a
  * doubled brand. This page exports `generateMetadata` instead, so that row skips
- * it (`.context/app/divergences.md` row 24), and the title case here replaces it.
+ * it (`.context/app/platform-divergences.md` row 24), and the title case here replaces it.
  *
  * @see app/(public)/page.tsx
  */

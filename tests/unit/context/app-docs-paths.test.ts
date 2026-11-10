@@ -16,7 +16,7 @@
  * markdown reaches it through none either — so a scoped run would skip it on
  * exactly the two branches that break it. That is the condition
  * `scripts/ci/scoped-tests.ts` describes for appending, and this is the third
- * leaf entry (see `.context/app/divergences.md` row 4).
+ * leaf entry (see `.context/app/platform-divergences.md` row 4).
  *
  * `.test.ts`, deliberately, and not `.tsx`: `validateAlwaysRun` rejects a
  * `.test.tsx` path outright and aborts the runner — `sunrise#763`.
@@ -57,7 +57,7 @@ function stripFences(source: string): string {
  * slash marking a directory.
  *
  * `js` is deliberately NOT in the extension list. Adding it would newly flag
- * `divergences.md`'s `next/dist/lib/metadata/resolvers/resolve-url.js`, which
+ * `platform-divergences.md`'s `next/dist/lib/metadata/resolvers/resolve-url.js`, which
  * is a `node_modules` path — a real thing to name and not a claim about this
  * tree.
  */
@@ -112,11 +112,11 @@ interface Exemption {
 }
 
 const NOT_IN_THIS_TREE: Record<string, Exemption> = {
-  // `divergences.md` records the two public pages the fork DELETED. Naming a
+  // `platform-divergences.md` records the two public pages the fork DELETED. Naming a
   // removed file is the entry's whole content; it is not a claim the file is
   // there.
-  'app/(public)/about/page.tsx': { reason: 'named by divergences.md as deleted' },
-  'app/(public)/contact/page.tsx': { reason: 'named by divergences.md as deleted' },
+  'app/(public)/about/page.tsx': { reason: 'named by platform-divergences.md as deleted' },
+  'app/(public)/contact/page.tsx': { reason: 'named by platform-divergences.md as deleted' },
   // A separate checkout (`~/code/dev-proxy`).
   'dev-proxy/apps.json': { reason: 'lives in the dev-proxy repo', outsideTree: true },
 };

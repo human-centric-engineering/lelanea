@@ -777,7 +777,7 @@ enum AppJourneyNotesPending {
 /// planning). `framework_journey_event` is insert-only by contract, and this
 /// record is not: a draft is replaced, a kept entry is edited, and §12 says
 /// anything in it can be removed, which must remove the words rather than
-/// append a tombstone beside them. Ledgered in `.context/app/divergences.md`
+/// append a tombstone beside them. Ledgered in `.context/app/platform-divergences.md`
 /// (Row 29), with daybreak#293 proposing the element this stands in for.
 ///
 /// **Only `lib/app/journey-record/` reads or writes it.**

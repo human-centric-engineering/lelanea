@@ -808,7 +808,7 @@ it was flipped.
 nothing, so a stranger who typed `/signup` landed on "Welcome back" with no
 form and no reason. `components/app/site/invite-only-notice.tsx` — "Accounts
 are by invitation for now. Join the waitlist to hear when we open." — is mounted
-by one line in the login page ([divergence row 15](./divergences.md),
+by one line in the login page ([divergence row 15](./platform-divergences.md),
 `sunrise#796`). The header's **Log in** link stays: closing signup is the fix,
 and the link is a real door for the invited (owner ruling, 16 September 2026).
 

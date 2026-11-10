@@ -86,7 +86,7 @@ function Panel({
  *
  * `useTheme` publishes `choice` for exactly this, and `clearTheme` for the way
  * back. Both are Lelañea additions to a Sunrise file — `.context/app/
- * divergences.md` row 2 — and both were forced by this panel: t-11 first
+ * platform-divergences.md` row 2 — and both were forced by this panel: t-11 first
  * reached for the stored value by reading `localStorage` here, which put this
  * file's idea of the storage key in a second place with only a test holding the
  * two together. That duplication is gone.

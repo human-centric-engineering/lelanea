@@ -48,7 +48,7 @@ reaches its elements through Daybreak's public API, called from our own files:
 
 If a feature needs something Daybreak does not expose, that is an issue on
 `daybreak` (after the ownership check in the banner), not an edit. The rows in
-`divergences.md` are the existing exceptions, each with a deletion trigger. A
+`platform-divergences.md` are the existing exceptions, each with a deletion trigger. A
 new one needs the owner's explicit ruling, and it is never the recommended
 option.
 
@@ -66,7 +66,7 @@ it.
   an app page, when the module's config schema would give them a form, versions
   and a place on the module's page.
 - **Treating a gap as a reason to build around Daybreak.** Carrying a seam
-  ahead of Daybreak (`divergences.md`) is a last resort the owner rules on, not
+  ahead of Daybreak (`platform-divergences.md`) is a last resort the owner rules on, not
   the first answer to "Daybreak's page does not show our thing".
 - **An app-only admin page for module content.** If it belongs to a module, it
   lives in that module's area.

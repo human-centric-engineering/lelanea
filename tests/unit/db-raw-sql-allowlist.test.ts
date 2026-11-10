@@ -97,7 +97,7 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
   },
   // LELAÑEA — the meter (§08 t-56). A leaf edit to a test Daybreak carries from
   // Sunrise, for the reason the DAYBREAK block below gives: no seam (Sunrise
-  // #799). Ledger: .context/app/divergences.md Row 19.
+  // #799). Ledger: .context/app/platform-divergences.md Row 19.
   {
     file: 'lib/app/agent/metering.ts',
     calls: 3,

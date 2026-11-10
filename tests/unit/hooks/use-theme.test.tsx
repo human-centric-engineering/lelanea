@@ -4,7 +4,7 @@
  * Unit Tests: `hooks/use-theme.tsx` — the system preference is a DEFAULT, not a choice
  *
  * This file exists because of a carried divergence
- * (`.context/app/divergences.md` row 2). Upstream Sunrise wrote the resolved
+ * (`.context/app/platform-divergences.md` row 2). Upstream Sunrise wrote the resolved
  * system preference straight back into `localStorage` on first paint, so from
  * the second visit onward "hasn't chosen yet" and "chose light" were the same
  * stored state — and switching the OS to dark afterwards did nothing, forever.

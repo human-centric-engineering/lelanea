@@ -303,7 +303,7 @@ describe('metadata is driven by the BRAND seam, not hardcoded', () => {
 
     const page: { metadata?: Metadata; generateMetadata?: unknown } =
       await import('@/app/(public)/page');
-    // DIVERGENCE (Lelañea, `.context/app/divergences.md` row 24): a page that
+    // DIVERGENCE (Lelañea, `.context/app/platform-divergences.md` row 24): a page that
     // builds its metadata per request exports `generateMetadata` instead, and has
     // no static title for this row to read. Its own tests must cover it.
     if (page.metadata === undefined && typeof page.generateMetadata === 'function') return;

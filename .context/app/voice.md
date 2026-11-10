@@ -1702,7 +1702,7 @@ Sunrise-owned components and rendering them above the table:
 **Importing beats copying, and the reason is not tidiness.** Both files are
 Sunrise's. Imported, the platform's parsers, its 50 MB / ten-file limits, its PDF
 flow and every future improvement merge through, and this leaf carries no row in
-[`divergences.md`](./divergences.md). Copied or adapted, we would own a file
+[`platform-divergences.md`](./platform-divergences.md). Copied or adapted, we would own a file
 forever and re-solve it on every sync (`sunrise.divergences`); editing the
 platform's copy so it fits one leaf is what `HB7` exists to stop. If it ever
 genuinely cannot be reused without a change, that change is a **generic seam

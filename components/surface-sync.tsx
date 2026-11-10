@@ -27,7 +27,7 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
  * header, so an admin moving between the app and `/admin` gets a full frame of
  * oyster white over the admin's white, and charcoal on the way back.
  *
- * LELAÑEA divergence — see `.context/app/divergences.md`, row 3. The swap to a
+ * LELAÑEA divergence — see `.context/app/platform-divergences.md`, row 3. The swap to a
  * guarded layout-effect is the remedy upstream's own comment named for exactly
  * this case; the guard avoids React's "useLayoutEffect does nothing on the
  * server" warning during SSR.

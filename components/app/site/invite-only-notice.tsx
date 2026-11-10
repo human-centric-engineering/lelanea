@@ -13,7 +13,7 @@ import { WAITLIST_ANCHOR } from '@/lib/site/config';
  * door we mean people to use.
  *
  * Mounted from Sunrise's `app/(auth)/login/page.tsx` — a one-line divergence
- * (`.context/app/divergences.md`, row 15). Since Sunrise 0.17.0 the page has
+ * (`.context/app/platform-divergences.md`, row 15). Since Sunrise 0.17.0 the page has
  * its own notice, but it speaks only for Sunrise's waitlist (`waitlistConfig`),
  * which we do not fill, so it renders nothing here. If we ever fill that
  * config, delete this line from the page rather than show both. The copy and

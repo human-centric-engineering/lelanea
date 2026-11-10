@@ -259,7 +259,7 @@ file cannot store anything a crisis turn would refuse to serve.
 ### How the locale reaches the hook
 
 The facilitation route passes the request's `headers` on the turn object
-(Row 18 in [`divergences.md`](./divergences.md)). The hook does not read
+(Row 18 in [`platform-divergences.md`](./platform-divergences.md)). The hook does not read
 `next/headers` itself: it is registered from the boot graph, which may be
 bundled apart from the route's request scope — the same reason the route hands
 it `after()`.

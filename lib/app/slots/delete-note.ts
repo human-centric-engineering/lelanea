@@ -11,7 +11,7 @@
  * from here — the thing that module exists to prevent.
  *
  * The owner ruled for it explicitly (3 Oct 2026, journal on `f-memory`): one
- * marked function, a row in `.context/app/divergences.md`, and a Daybreak issue
+ * marked function, a row in `.context/app/platform-divergences.md`, and a Daybreak issue
  * asking for a per-value removal, with this as the reference. **Delete this
  * function and call Daybreak's when one lands.** It is the same arrangement as
  * `readPreviousVersions()` in `notes.ts`, and the ruling covers this write
@@ -139,7 +139,7 @@ export async function deleteNote(input: NoteRemoval): Promise<RemovedNote> {
   const removedAt = new Date();
   const count = await executeTransaction(async (tx) => {
     // STOPGAP — direct write to Daybreak's `framework_slot_value`. Owner ruling,
-    // 3 Oct 2026; divergence row in `.context/app/divergences.md`. Replace with
+    // 3 Oct 2026; divergence row in `.context/app/platform-divergences.md`. Replace with
     // Daybreak's per-value removal when it ships.
     const written = await tx.slotValue.updateMany({
       where: {

@@ -1,7 +1,7 @@
 /**
  * Consumer chat exclusions — the carried seam on Sunrise's consumer chat routes.
  *
- * f-safety t-61 (`.context/app/divergences.md` Row 21). A fork registers agent
+ * f-safety t-61 (`.context/app/platform-divergences.md` Row 21). A fork registers agent
  * slugs the consumer routes must not serve; Lelañea registers its guide's, because
  * a turn through `POST /api/v1/chat/stream` skips the app's turn hook — no crisis
  * check, no ceiling, no record.

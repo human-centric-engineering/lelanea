@@ -4,7 +4,7 @@
  * Sunrise's `DELETE /api/v1/chat/conversations/:id` carries one Lelañea line:
  * once the conversation is deleted, it calls `onConversationsDeleted` so what
  * our turns left behind goes at once rather than at the next sweep. That line
- * is a divergence (`.context/app/divergences.md`), and a sync that resolves
+ * is a divergence (`.context/app/platform-divergences.md`), and a sync that resolves
  * the route by taking upstream would drop it with nothing else failing. This
  * test is what fails.
  *

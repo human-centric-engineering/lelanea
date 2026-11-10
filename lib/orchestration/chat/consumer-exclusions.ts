@@ -2,7 +2,7 @@
  * Consumer chat exclusions — a seam a fork fills to keep a named agent off the
  * general consumer chat route.
  *
- * **Carried by Lelañea ahead of Sunrise** (`.context/app/divergences.md`,
+ * **Carried by Lelañea ahead of Sunrise** (`.context/app/platform-divergences.md`,
  * Row 21). The consumer routes — `POST /api/v1/chat/stream` and
  * `GET /api/v1/chat/agents` — serve every active agent whose visibility admits
  * it. A fork that serves an agent through a surface of its own (one that runs
