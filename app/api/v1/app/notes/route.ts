@@ -1,5 +1,5 @@
 /**
- * Lelañea's notes — what Lelañea holds about me, and my correction to one
+ * Lelanea's notes — what Lelanea holds about me, and my correction to one
  * (f-slots t-73).
  *
  * - `GET /api/v1/app/notes` — every current reading about the signed-in person,
@@ -33,7 +33,7 @@
  * 409 whose message the panel prints verbatim.
  *
  * @see lib/app/slots/notes.ts
- * @see .context/app/slots.md — "Lelañea's notes"
+ * @see .context/app/slots.md — "Lelanea's notes"
  */
 
 import type { NextRequest } from 'next/server';

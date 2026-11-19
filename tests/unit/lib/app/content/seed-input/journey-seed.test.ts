@@ -26,6 +26,7 @@ import {
 } from '@/lib/app/content/seed-input/journey-seed';
 import { toJourneyStructure, type JourneyStructure } from '@/lib/app/content/journey-view';
 import { seededJourneyRows } from '@/tests/helpers/app/content-stores';
+import { renameAppName } from '@/tests/helpers/app-name-rename';
 
 function served(): JourneyStructure {
   const rows = seededJourneyRows();
@@ -218,6 +219,8 @@ describe('the data migration', () => {
   // seed as JSON. This keeps the two from disagreeing: edit the file or the
   // builder, and this fails until the migration is regenerated (or, once
   // shipped, a follow-up migration moves the rows that need it).
+  // The migration is frozen and still names the app "Lelañea": compared
+  // through `20261119100000_app_name_lelanea`, which renames it.
   it('writes exactly what the seed builds today', () => {
     const sql = readFileSync(
       path.join(
@@ -243,7 +246,7 @@ describe('the data migration', () => {
       expect(perOrgKeys).toContain(`UPDATE "${table}" SET "slug" = "id";`);
     }
     const toSlug = <T extends { id: string }>({ id, ...row }: T) => ({ slug: id, ...row });
-    const written = JSON.parse(match![1]) as {
+    const written = JSON.parse(renameAppName(match![1])) as {
       journey: { id: string };
       tiers: { id: string }[];
       modules: { id: string }[];

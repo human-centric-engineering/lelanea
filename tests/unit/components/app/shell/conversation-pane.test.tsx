@@ -148,7 +148,7 @@ async function renderLoaded(width: 'large' | 'small' | 'medium' = 'large') {
 const box = () => screen.getByRole('textbox', { name: CONVERSATION_COPY.composerLabel });
 /** The reply's words alone — the bubble, not the account row under it (t-66). */
 const replyWords = () =>
-  screen.getByRole('article', { name: 'Lelañea said' }).querySelector('p')?.textContent;
+  screen.getByRole('article', { name: 'Lelanea said' }).querySelector('p')?.textContent;
 const latestTurn = () => seat.turns[seat.turns.length - 1];
 
 describe('sending', () => {
@@ -191,7 +191,7 @@ describe('sending', () => {
       latestTurn().push('content', { delta: 'I am. ' });
     });
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
-    expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy();
+    expect(screen.getByRole('article', { name: 'Lelanea said' })).toBeTruthy();
   });
 
   it('changes the thinking row\u2019s label at the first-words deadline rather than adding a frame', async () => {
@@ -266,7 +266,7 @@ describe('sending', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: CONVERSATION_COPY.send })).toBeTruthy()
     );
-    expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy();
+    expect(screen.getByRole('article', { name: 'Lelanea said' })).toBeTruthy();
   });
 
   it('tells the person when a turn ends without a reply, in her register, and the words are back in the box', async () => {
@@ -509,7 +509,7 @@ describe('when the agent can\u2019t answer (t-65)', () => {
     const alert = screen.getByRole('alert');
     for (const service of soft.services) expect(alert.textContent).toContain(service.contact);
     expect(alert.textContent).not.toContain('still in the box');
-    const reply = screen.getByRole('article', { name: 'Lelañea said' });
+    const reply = screen.getByRole('article', { name: 'Lelanea said' });
     expect(alert.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -597,7 +597,7 @@ describe('a soft crisis frame whose resource did not parse', () => {
       expect(screen.getByRole('button', { name: CONVERSATION_COPY.send })).toBeTruthy()
     );
     const alert = screen.getByRole('alert');
-    const reply = screen.getByRole('article', { name: 'Lelañea said' });
+    const reply = screen.getByRole('article', { name: 'Lelanea said' });
     expect(alert.textContent).toContain('Samaritans, 116 123');
     // The resource comes first, whatever the reply then says.
     expect(alert.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -751,7 +751,7 @@ describe('the account under a reply (t-66)', () => {
       latestTurn().close();
     });
     // Folded into the transcript, still typing: no row yet.
-    await waitFor(() => expect(screen.getByRole('article', { name: 'Lelañea said' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('article', { name: 'Lelanea said' })).toBeTruthy());
     expect(screen.queryByRole('button', { name: /Nothing was written/ })).toBeNull();
     await waitFor(() => expect(replyWords()).toBe('A reply of several words, paced.'), {
       timeout: 4000,
@@ -797,7 +797,7 @@ describe('reading back', () => {
     ];
     await renderLoaded();
     expect(screen.getByRole('article', { name: 'You said' }).textContent).toBe('Earlier');
-    expect(screen.getByRole('article', { name: 'Lelañea said' }).textContent).toBe('Yes, earlier.');
+    expect(screen.getByRole('article', { name: 'Lelanea said' }).textContent).toBe('Yes, earlier.');
   });
 
   it('says so, inside the transcript, when there is nothing yet', async () => {
@@ -882,7 +882,7 @@ describe('the split view keeps a conversation beside the work', () => {
     expect(transcript).not.toBeNull();
     expect(transcript?.textContent).toContain(CONVERSATION_COPY.empty);
     // And the composer is still there.
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message Lelanea' })).toBeTruthy();
   });
 
   it('uses the same composer card, just narrower', () => {
@@ -901,7 +901,7 @@ describe('the split view keeps a conversation beside the work', () => {
     expect(send.className).toContain('rounded-full');
     expect(send.className).toContain('bg-[var(--color-primary)]');
     // Multi-line, not a single-line input.
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' }).className).toContain(
+    expect(screen.getByRole('textbox', { name: 'Message Lelanea' }).className).toContain(
       'min-h-[60px]'
     );
   });
@@ -977,7 +977,7 @@ describe('the strip', () => {
     fireEvent.pointerUp(handle, { clientX: 200, pointerId: 1 });
 
     const strip = screen.getByRole('button', { name: 'Open the conversation' });
-    expect(strip.textContent).toContain('Ask Lelañea');
+    expect(strip.textContent).toContain('Ask Lelanea');
   });
 });
 

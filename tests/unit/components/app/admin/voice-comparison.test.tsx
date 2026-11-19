@@ -84,7 +84,7 @@ function detail(overrides: Partial<VoiceComparisonDetail> = {}): VoiceComparison
         label: 'FIXTURE ARM A · v1.0',
         agentSlug: 'lelanea-guide',
         fingerprintVersion: '1.0',
-        systemPrompt: '[Persona]\nYou are Lelañea.\n\nVoice fingerprint: core v1.0',
+        systemPrompt: '[Persona]\nYou are Lelanea.\n\nVoice fingerprint: core v1.0',
       },
       {
         columnId: `${COMPARISON_ID}:bare`,

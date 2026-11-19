@@ -22,14 +22,14 @@
  *
  * That file holds the platform's brand-bearing surfaces, and its footer table
  * asserts a copyright line contains the legal entity and **not** the product
- * name (#363). Lelañea's line names the product by the owner's ruling (t-171)
- * — `© 2026 Lelañea™ · Built by HCE Studio` — so adding this footer there would
+ * name (#363). Lelanea's line names the product by the owner's ruling (t-171)
+ * — `© 2026 Lelanea™ · Built by HCE Studio` — so adding this footer there would
  * mean weakening an assertion that is correct for every other fork.
  *
  * ## The fixture is deliberately not our own brand
  *
  * "Acme" is used precisely because it is nothing like the real values. Filling
- * the seam with `Lelañea` would let a HARDCODED name pass every assertion
+ * the seam with `Lelanea` would let a HARDCODED name pass every assertion
  * below, which is the one failure this file exists to catch. That the real
  * values are the ones we intend is a separate question, and it is pinned by the
  * `lib/app/leaf-brand.ts` row in `tests/unit/lib/app/defaults.test.ts`.
@@ -64,7 +64,7 @@ describe('SiteFooter legal line', () => {
     expect(legal).toHaveTextContent(`${FORK.name}™`);
     // A literal in the component would survive the assertion above only if it
     // happened to be "Acme". This is what makes it mean something.
-    expect(legal.textContent).not.toContain('Lelañea');
+    expect(legal.textContent).not.toContain('Lelanea');
   });
 
   it('puts the © before the trademarked name and the studio credit last (t-171)', () => {
@@ -88,7 +88,7 @@ describe('SiteFooter legal line', () => {
   it('does not reinstate the personal name or the placeholder year from the design file', () => {
     render(<SiteFooter />);
 
-    // The prototype's own line is `Lelañea™ · © [YEAR] Lelañea Fulton`.
+    // The prototype's own line is `Lelanea™ · © [YEAR] Lelañea Fulton`.
     const text = screen.getByText(/©/).textContent ?? '';
     expect(text).not.toContain('Fulton');
     expect(text).not.toContain('[YEAR]');

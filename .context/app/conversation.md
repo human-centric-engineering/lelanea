@@ -658,7 +658,7 @@ neither of them is layout; both say so at their declaration.
   That makes a note appear beside the words that produced it, inside the same
   turn, which is the whole of §3.3's pairing.
 - **`insert` / `onInserted`** — a prop on `Composer`, fed from the provider's
-  `ask`. "Ask Lelañea about this" on a note puts its question in the box, through
+  `ask`. "Ask Lelanea about this" on a note puts its question in the box, through
   the **same `insertAtCaret` the microphone uses**: where those words land,
   whether focus is taken, and what happens to a box already holding something
   all cost review rounds to settle, and a second path would get one of them

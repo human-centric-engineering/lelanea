@@ -19,7 +19,7 @@ import { logger } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 
 /**
- * One of Lelañea's notes, with the two things a person can do about it (t-73).
+ * One of Lelanea's notes, with the two things a person can do about it (t-73).
  *
  * ## Everything on the card is a claim the agent is making, and it says so
  *
@@ -42,7 +42,7 @@ import { cn } from '@/lib/utils';
  * it — a retired slot (the agent is no longer asking) and an Art. 9 slot (the reading
  * was never stored, so there is nothing to correct and a correction would put
  * it at rest) both come back false, with the route refusing the same two
- * cases if anything reached it anyway. **Ask Lelañea about this is offered on every
+ * cases if anything reached it anyway. **Ask Lelanea about this is offered on every
  * card**, including those, because it is the door that still works: `HB10` —
  * the guard ships with its remedy.
  *
@@ -112,7 +112,7 @@ export interface NoteCardProps {
  * the record rather than a view of it — which is the thing §3.19 is about.
  *
  * Adjectival rather than a clause: the meta line already opens with who made
- * the reading, so "Lelañea inferred it · Lelañea is not certain" says the name
+ * the reading, so "Lelanea inferred it · Lelanea is not certain" says the name
  * twice in nine words. A capitalised fragment reads as the second of three
  * facts, which is what it is.
  */
@@ -249,19 +249,19 @@ export function formatWhen(iso: string): string {
  *
  * ## A summary was kept, and it says so (t-80)
  *
- * It used to say Lelañea "kept no record of what you said", which was untrue:
+ * It used to say Lelanea "kept no record of what you said", which was untrue:
  * masking at capture covers the reading only, and the reasoning note is stored
  * as written — a paraphrase of what was said. The owner's ruling was to show
  * that paraphrase rather than hide it, so this line points at it instead of
  * denying it exists.
  */
-export const WITHHELD_WORDS = 'Lelañea kept a summary of this rather than your exact words.';
+export const WITHHELD_WORDS = 'Lelanea kept a summary of this rather than your exact words.';
 
 /**
  * Where that summary is — the card only. The list row shows {@link WITHHELD_WORDS}
  * alone, because the fold this names exists only once the card is open.
  */
-export const WITHHELD_POINTER = 'It is under “How Lelañea came to this”.';
+export const WITHHELD_POINTER = 'It is under “How Lelanea came to this”.';
 
 /**
  * What a removed note says in place of itself — `when` is the moment it was
@@ -275,7 +275,7 @@ export function removedWords(when: string): string {
  * The second line on a removed note: what the AI knows now. It is the marker
  * `lib/app/slots/removed.ts` writes, in the reader's terms.
  */
-export const REMOVED_POINTER = 'Lelañea knows a note was removed here, but not what it said.';
+export const REMOVED_POINTER = 'Lelanea knows a note was removed here, but not what it said.';
 
 /**
  * What the confirmation says before anything happens. It names the one thing a
@@ -285,7 +285,7 @@ export const REMOVED_POINTER = 'Lelañea knows a note was removed here, but not 
  * (t-127); see {@link removeConfirm}.
  */
 export const REMOVE_CONFIRM =
-  'This removes the note and every earlier version of it. Lelañea will know a note was removed here, but not what it said.';
+  'This removes the note and every earlier version of it. Lelanea will know a note was removed here, but not what it said.';
 
 /** Said after {@link REMOVE_CONFIRM} when the note came from talking, but no exchange is on record. */
 export const REMOVE_CONFIRM_CONVERSATION = 'The conversation it came from is not changed.';
@@ -307,15 +307,15 @@ export function removeConfirm(note: Pick<Note, 'exchanges' | 'conversationId'>):
  * is deleted until they confirm.
  */
 export const EXCHANGE_OFFER =
-  'What you said that this note came from is still in your conversation with Lelañea.';
+  'What you said that this note came from is still in your conversation with Lelanea.';
 
 /** What deleting the exchange does, said before it happens. */
 export const EXCHANGE_CONFIRM =
-  'This deletes what you said there and Lelañea’s replies, from the conversation and from everything Lelañea keeps. Anything else Lelañea noted from those words is removed too. This can’t be undone.';
+  'This deletes what you said there and Lelanea’s replies, from the conversation and from everything Lelanea keeps. Anything else Lelanea noted from those words is removed too. This can’t be undone.';
 
 /** The slug as the card's tag — `life_work` → `life work`. The list row shows the same. */
 export function noteTag(note: Note): string {
-  // A removed note whose heading Lelañea made up was moved to an opaque slug
+  // A removed note whose heading Lelanea made up was moved to an opaque slug
   // (`delete-note.ts`), and the random part of it means nothing to anyone.
   // Both, not the prefix alone: `removed_` is not reserved, so a live heading
   // like `removed_from_my_job` keeps its own words (`/code-review` round 2).
@@ -352,7 +352,7 @@ export function askText(note: Note): string {
  * ## Why these three left the reading's own column
  *
  * They were one muted sentence running the full width of the card under the
- * note — *"Lelañea inferred it · Not certain (6 of 10) · 21 September at
+ * note — *"Lelanea inferred it · Not certain (6 of 10) · 21 September at
  * 13:23"* — which is three unrelated facts joined by interpuncts because there
  * was nowhere else to put them, and it pushed every card's real content into a
  * measure that ran right across the surface. The owner's note; the fix is the
@@ -393,7 +393,7 @@ function Aside({ note }: { note: Note }) {
  * ## One component, because two of them side by side have to agree
  *
  * The card carries two things that are *about* the note rather than part of
- * it: how Lelañea came to the reading, and what had been written before it.
+ * it: how Lelanea came to the reading, and what had been written before it.
  * They were built differently — one a bordered box, the other a washed inset
  * with a coloured edge, open always — and stacked they read as two unrelated
  * kinds of object at two different widths. The owner's note, and it was the
@@ -416,7 +416,7 @@ function Aside({ note }: { note: Note }) {
  * The marker is ours: `list-none` kills the native triangle, which sits on the
  * text baseline and cannot be positioned.
  *
- * ## "How Lelañea came to this" is plain text, not a panel (t-79)
+ * ## "How Lelanea came to this" is plain text, not a panel (t-79)
  *
  * `plain` drops the lozenge: the summary is a line of muted text with its
  * chevron, and opening it shows the detail beside a left rule and nothing
@@ -549,7 +549,7 @@ function PreviousReading({ previous, older }: { previous: NoteHistory; older: nu
         {previous.removed
           ? 'A note you removed. Nothing of it is kept.'
           : previous.withheld
-            ? 'Something Lelañea noted without keeping your exact words.'
+            ? 'Something Lelanea noted without keeping your exact words.'
             : previous.value}
       </p>
       {/*
@@ -899,7 +899,7 @@ export function NoteCard({
 
             {note.previous ? <PreviousReading previous={note.previous} older={older} /> : null}
 
-            <Disclosure plain summary="How Lelañea came to this">
+            <Disclosure plain summary="How Lelanea came to this">
               <p>{note.reasoningNote}</p>
               {note.asking ? (
                 /*
@@ -909,7 +909,7 @@ export function NoteCard({
               */
                 <p>
                   <span className="text-[var(--color-heading)]">
-                    What Lelañea was looking for:{' '}
+                    What Lelanea was looking for:{' '}
                   </span>
                   “{note.asking}”
                 </p>
@@ -952,8 +952,8 @@ export function NoteCard({
             )}
           />
           <p className="text-muted-foreground mt-2 text-[12.5px] leading-[1.6]">
-            What Lelañea wrote is kept either way — your words go in beside it as the current
-            reading, and Lelañea’s stays underneath.
+            What Lelanea wrote is kept either way — your words go in beside it as the current
+            reading, and Lelanea’s stays underneath.
           </p>
           {refusal ? (
             <Banner tone="error" className="mt-2.5" lead="Not saved.">
@@ -1009,7 +1009,7 @@ export function NoteCard({
             </Button>
           ) : null}
           <Button size="sm" variant="ghost" className={PILL} onClick={() => onAsk(askText(note))}>
-            Ask Lelañea about this
+            Ask Lelanea about this
           </Button>
           {note.removable && !confirmingRemoval ? (
             <Button

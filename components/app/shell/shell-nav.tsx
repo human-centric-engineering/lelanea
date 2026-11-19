@@ -98,7 +98,7 @@ export function initialsFor(name: string, email: string): string {
  * | the collapse control, at the top | both      | above 900px          | yes      |
  * | a press on the menu's dead space | both      | above 900px          | yes      |
  * | a press out in the panes         | closes    | above 900px          | no       |
- * | Ask Lelañea opening / parking    | both      | `medium` + workspace | no       |
+ * | Ask Lelanea opening / parking    | both      | `medium` + workspace | no       |
  * | crossing 1100px inward           | closes    | —                    | no       |
  * | a conversation open at `medium`  | closes    | `medium` + workspace | no       |
  *
@@ -109,7 +109,7 @@ export function initialsFor(name: string, email: string): string {
  *
  * None of the first three fire while a drawer is open: a press inside an
  * `aria-modal` dialog must not reach the shell it is covering. And the Ask
- * Lelañea row is width-conditional because its whole reason is crowding — see
+ * Lelanea row is width-conditional because its whole reason is crowding — see
  * `setChatSlim` for the geometry that decides where the two actually compete.
  * The last row is the same rule held when no verb ran — arriving in that
  * geometry, or the menu expanding by itself inside it (t-83).
@@ -406,12 +406,12 @@ export function ShellNav({ user }: ShellNavProps) {
           ) : null}
           <Link
             href="/"
-            aria-label="Lelañea, back to the site"
+            aria-label="Lelanea, back to the site"
             className="flex min-w-0 flex-none items-center gap-2.5 no-underline hover:no-underline"
           >
             <LotusMark size={30} />
             {slim ? null : (
-              <span className="brand-display text-[22px] whitespace-nowrap">Lelañea</span>
+              <span className="brand-display text-[22px] whitespace-nowrap">Lelanea</span>
             )}
           </Link>
 

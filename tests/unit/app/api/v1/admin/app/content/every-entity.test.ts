@@ -615,7 +615,7 @@ describe('resources', () => {
   it('adds, edits, restores and removes a key’s words, but never the default’s', async () => {
     const words = {
       quote: 'Welcome, {{first_name}}.',
-      paragraphs: ['Welcome to Lelañea.'],
+      paragraphs: ['Welcome to Lelanea.'],
       source: { collection: 'foundational_documents', id: 'the_initiation' },
     };
     const added = await call(
@@ -644,7 +644,7 @@ describe('resources', () => {
       save(
         req('PUT', '/resources/words/journey', {
           ...words,
-          paragraphs: ['Welcome to Lelañea.', 'Welcome, {{first_name}}.'],
+          paragraphs: ['Welcome to Lelanea.', 'Welcome, {{first_name}}.'],
           revision: 1,
         }),
         item('resources', 'words', 'journey')

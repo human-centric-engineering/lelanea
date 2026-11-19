@@ -1213,7 +1213,7 @@ coming back unscored — two walls of text look exactly like a scored comparison
 
 ## The surface
 
-`/admin/app/voice` — **Voice** in the Lelañea admin section. The set is called
+`/admin/app/voice` — **Voice** in the Lelanea admin section. The set is called
 _the voice test set_ on screen: "golden set" is the term in this document, in the
 content file and in the schema, and it stays there, but it is jargon on an
 operator page. One button queues a comparison, a dialog shows the questions and
@@ -1430,7 +1430,7 @@ does; join the read layer on position instead of key and one does.
 # Training material: what a document is for
 
 The knowledge base holds two different kinds of thing wearing the same file
-extension. Some of it is what Lelañea **knows** — a method note, a framework, a
+extension. Some of it is what Lelanea **knows** — a method note, a framework, a
 reference she would happily have read back to someone verbatim. Some of it only
 shows how she **sounds** — a Substack post, a talk transcript, a voice note.
 
@@ -1592,11 +1592,11 @@ touch.
 
 Routes: `GET /api/v1/admin/app/knowledge/designations` and
 `GET`/`PATCH .../designations/:documentId`. Page: `/admin/app/knowledge`
-("Training material" in the Lelañea admin section).
+("Training material" in the Lelanea admin section).
 
 ## The surface
 
-`/admin/app/knowledge` — **Training material** in the Lelañea admin section —
+`/admin/app/knowledge` — **Training material** in the Lelanea admin section —
 is one page doing two things. At the top she **adds** material; under it she says
 what each document is **for**, with its purpose, sensitivity, licensing note and
 an **Agent may quote** column showing the consequence of the answer on the same

@@ -831,7 +831,7 @@ describe('app/brand-theme.css', () => {
 
     it('does not force casing on the eyebrow', () => {
       // §6.10 says eyebrows MAY be lowercase; forcing it would strip the capital
-      // from Lelañea's name wherever an eyebrow carries it.
+      // from Lelanea's name wherever an eyebrow carries it.
       expect(ruleFor(`${LIGHT_SCOPE} .brand-eyebrow`).body).not.toMatch(/text-transform/);
     });
   });

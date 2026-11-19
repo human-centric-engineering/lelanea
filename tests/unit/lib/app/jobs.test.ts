@@ -5,7 +5,7 @@
  *
  * FORK NOTE — this reads the real `lib/app/jobs.ts`, not a mock. It has to: the
  * job's `run` is the thing under test, so a mock would assert the mock. It is
- * Lelañea's seam and Lelañea's test. A fork of Lelañea that changes
+ * Lelanea's seam and Lelanea's test. A fork of Lelanea that changes
  * `initAppJobs()` updates the jobs this finds by name and what each `run` is
  * expected to call.
  */

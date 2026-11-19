@@ -220,7 +220,7 @@ describe('slotCorrectionSchema', () => {
     expect(MAX_MINTED_SLUG_LENGTH).toBe(advertised.properties.slotSlug.maxLength);
   });
 
-  it('accepts a slug Lelañea coined that the taxonomy rule would refuse', () => {
+  it('accepts a slug Lelanea coined that the taxonomy rule would refuse', () => {
     // Capitals and a hyphen: legal for `fill_slot`, illegal for an admin. A
     // note under one of these offered "That's not right" and then refused every
     // save until this schema stopped borrowing the taxonomy's rule.

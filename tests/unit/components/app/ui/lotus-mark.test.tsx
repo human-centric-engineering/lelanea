@@ -77,12 +77,12 @@ describe('LotusMark — what it is', () => {
 
   it('adds nothing to the name of the link it sits in', () => {
     const { getByRole } = render(
-      <a href="#home" aria-label="Lelañea, home">
+      <a href="#home" aria-label="Lelanea, home">
         <LotusMark />
       </a>
     );
     expect(getByRole('link').textContent).toBe('');
-    expect(getByRole('link', { name: 'Lelañea, home' })).toBeTruthy();
+    expect(getByRole('link', { name: 'Lelanea, home' })).toBeTruthy();
   });
 
   it('is the flat flower alone where it is asked for no light', () => {

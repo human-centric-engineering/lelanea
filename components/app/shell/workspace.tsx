@@ -165,7 +165,7 @@ export function Workspace({ children }: { children: React.ReactNode }) {
         */}
         <Link
           href="/app"
-          title="Return to the main conversation with Lelañea"
+          title="Return to the main conversation with Lelanea"
           aria-label="Return to the conversation"
           className={cn(
             'text-foreground flex h-[34px] flex-none items-center gap-2 rounded-full',

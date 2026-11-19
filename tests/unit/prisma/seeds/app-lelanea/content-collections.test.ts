@@ -158,7 +158,7 @@ describe('016-journey-structure', () => {
     await run(journeyUnit);
 
     expect(db.tables.appJourney).toEqual([
-      expect.objectContaining({ slug: 'Lelañea', version: '1.0', locale: 'en-US' }),
+      expect.objectContaining({ slug: 'Lelanea', version: '1.0', locale: 'en-US' }),
     ]);
     expect(db.tables.appJourneyTier.map((row) => row.slug)).toEqual([
       'onboarding',
@@ -173,7 +173,7 @@ describe('016-journey-structure', () => {
     // Each tier and module points at the journey's generated id, and keeps its name.
     const journey = db.tables.appJourney[0];
     for (const row of [...db.tables.appJourneyTier, ...db.tables.appJourneyModule]) {
-      expect(row).toMatchObject({ journeyId: journey.id, journeySlug: 'Lelañea' });
+      expect(row).toMatchObject({ journeyId: journey.id, journeySlug: 'Lelanea' });
     }
   });
 

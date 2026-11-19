@@ -5,7 +5,7 @@
  * fixture never reaches (f-slots t-79).
  *
  * The panel test proves the controls drive the URL. What it cannot produce is
- * a record with no notes under Lelañea's own headings, or a `group` in the URL
+ * a record with no notes under Lelanea's own headings, or a `group` in the URL
  * that no option offers — a stale link, or one typed by hand. The select must
  * still show what the URL says rather than silently claiming "Every heading".
  *
@@ -64,11 +64,11 @@ describe('NotesControls', () => {
     expect(optionLabels().at(-1)).toBe('Development · 0');
   });
 
-  it('shows Lelañea’s own headings as chosen when the URL asks and none exist', () => {
+  it('shows Lelanea’s own headings as chosen when the URL asks and none exist', () => {
     renderControls({ group: '_own' });
 
     expect(groupPicker().value).toBe('_own');
-    expect(optionLabels().at(-1)).toBe('Lelañea’s own headings · 0');
+    expect(optionLabels().at(-1)).toBe('Lelanea’s own headings · 0');
   });
 
   it('hands back null for "Every heading", and a sort it recognises', async () => {

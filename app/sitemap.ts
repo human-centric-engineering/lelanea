@@ -15,7 +15,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   // Public pages - add new public pages here.
   //
-  // Lelañea (t-5, extended t-6; divergence row 11): the starter's /about and
+  // Lelanea (t-5, extended t-6; divergence row 11): the starter's /about and
   // /contact are gone with the pages themselves, and the routes the site
   // actually has took their place.
   //

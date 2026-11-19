@@ -33,9 +33,9 @@
  * the seed itself just set from one constant.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this pins Lelañea's agents
+ * FORK NOTE — this pins Lelanea's agents
  * ---------------------------------------------------------------------------
- * A fork without Lelañea's agents should delete this file with the seed.
+ * A fork without Lelanea's agents should delete this file with the seed.
  *
  * @see prisma/seeds/app-lelanea/005-agent-models.ts
  */

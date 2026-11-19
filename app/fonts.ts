@@ -1,5 +1,5 @@
 /**
- * Lelañea's three typefaces (leaf-owned).
+ * Lelanea's three typefaces (leaf-owned).
  *
  * `next/font/google` self-hosts each family at build time and hands back a
  * `variable` class that declares one CSS custom property. `app/layout.tsx` puts

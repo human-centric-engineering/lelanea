@@ -66,4 +66,4 @@ export const appAuthLandingRoute: string | null = '/app';
  * verify-email notice — so the product's name is what belongs here, and it
  * collides with nothing. Owner ruling, 10 September 2026.
  */
-export const appAuthLandingLabel: string | null = 'Lelañea';
+export const appAuthLandingLabel: string | null = 'Lelanea';

@@ -1,13 +1,13 @@
 ---
 name: app-emails
-description: Lelañea's own auth emails — which platform templates are replaced through the seam, which are deliberately not, and the rules the replacements follow.
+description: Lelanea's own auth emails — which platform templates are replaced through the seam, which are deliberately not, and the rules the replacements follow.
 ---
 
 # Emails
 
 The platform sends five auth emails (`lib/email/registry.ts`: `welcome`,
 `verifyEmail`, `resetPassword`, `invitation`, `changeEmailApproval`) and lets a
-leaf swap any of them through `lib/app/emails.ts`. Lelañea swaps two.
+leaf swap any of them through `lib/app/emails.ts`. Lelanea swaps two.
 
 | Kind                  | Template                               | Why                                                                                                                     |
 | --------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -59,7 +59,7 @@ ground, the reason-for-receipt and the legal line. Templates put words in
 
 Her words are never paraphrased in the build ([`content.md`](./content.md)). So
 the greeting is `the_initiation`'s `welcome` section, "Welcome,
-{{first_name}}." through "Welcome to Lelañea.", read from the database by
+{{first_name}}." through "Welcome to Lelanea.", read from the database by
 section key, exactly as the landing page reads its excerpts. It is rendered one
 beat per `<Text>` because the document's `renderStyle: 'cadence'` says so. The
 key is stored on the blocks, so a beat inserted above it cannot shift the email
@@ -103,7 +103,7 @@ shipped. Her words are for the welcome that follows acceptance.
 
 `lib/email/client.ts` builds the sender from `EMAIL_FROM` and
 `EMAIL_FROM_NAME`. The name is optional to the platform and not to us: without
-it the client shows a bare address. `.env.example` carries Lelañea's values;
+it the client shows a bare address. `.env.example` carries Lelanea's values;
 the deployed environment has to match, and the address has to be on a domain
 verified in Resend. Nothing in code can check that.
 
@@ -115,7 +115,7 @@ verified in Resend. Nothing in code can check that.
   the seam to carry subjects, which is an upstream ask, not a leaf edit.
 - **The verify email arrives first** when verification is required, and it is
   the platform's chrome. If that inconsistency is worth closing, it is the
-  "three security emails in Lelañea's chrome" follow-up, not this doc's rule.
+  "three security emails in Lelanea's chrome" follow-up, not this doc's rule.
 
 ## See also
 

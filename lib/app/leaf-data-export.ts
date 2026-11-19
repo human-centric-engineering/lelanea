@@ -1,11 +1,11 @@
 /**
- * Leaf-app subject-data export seam (GDPR Art. 15) — FILLED by Lelañea.
+ * Leaf-app subject-data export seam (GDPR Art. 15) — FILLED by Lelanea.
  *
  * A leaf app (a fork of Daybreak) fills `collectLeafSubjectData()` with its own
  * `app_*` tables holding data about a person. Daybreak ships it empty: this is
  * the leaf's export seam, reserved so a leaf's collectors merge cleanly on
  * upgrade — the subject-access analogue of `lib/app/leaf-bootstrap.ts`,
- * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`. Lelañea declares
+ * `lib/app/leaf-admin-nav.ts` and `lib/app/leaf-db-drift.ts`. Lelanea declares
  * `AppWaitlistEntry`, `AppAcknowledgement`, `AppUserBudget`, `AppTurn`, `AppSafetyEvent`, `AppMemoryEmbedding` and `AppJourneyEntry` here; the guidance below is
  * upstream's and still applies to every table added after them.
  *
@@ -84,7 +84,7 @@ export function initLeafSubjectSources(): void {
         section: 'waitlist',
         disposition: 'export',
         description:
-          'Your waitlist entry — the email address you gave, and anything you told us about where you heard about Lelañea and what you would want to achieve.',
+          'Your waitlist entry — the email address you gave, and anything you told us about where you heard about Lelanea and what you would want to achieve.',
       },
       {
         model: 'AppAcknowledgement',
@@ -216,12 +216,12 @@ export function initLeafSubjectSources(): void {
         // to which version is `AppAcknowledgement`, a source above, not this.
         model: 'AppDocumentCollection',
         reason:
-          'The name, version and language of Lelañea\u2019s foundational documents. It is the same for everyone and holds no information about any person.',
+          'The name, version and language of Lelanea\u2019s foundational documents. It is the same for everyone and holds no information about any person.',
       },
       {
         model: 'AppFoundationalDocument',
         reason:
-          'Lelañea\u2019s foundational documents as the app currently shows them: the welcome, the pieces about Lelañea, the Disclaimer and the Terms of Use. They are the same for everyone and hold no information about any person. Which versions you agreed to is returned separately in this bundle.',
+          'Lelanea\u2019s foundational documents as the app currently shows them: the welcome, the pieces about Lelanea, the Disclaimer and the Terms of Use. They are the same for everyone and hold no information about any person. Which versions you agreed to is returned separately in this bundle.',
       },
       {
         // Retains `editorId`, so the reason says so, for the same reason as
@@ -236,7 +236,7 @@ export function initLeafSubjectSources(): void {
         // nothing here records who read or answered what. The six revision tables keep an editing admin's id, and say so.
         model: 'AppJourney',
         reason:
-          'The name, version and language of the Lelañea journey. It is the same for everyone and holds no information about any person.',
+          'The name, version and language of the Lelanea journey. It is the same for everyone and holds no information about any person.',
       },
       {
         model: 'AppJourneyTier',
@@ -361,7 +361,7 @@ export function initLeafSubjectSources(): void {
 }
 
 /**
- * Collect Lelañea's own data about one subject.
+ * Collect Lelanea's own data about one subject.
  *
  * Seven sections: `waitlist`, `acknowledgements`, `budget`, `turns`, `safety`, `memory` and `journeyRecord`. Each is returned whether or
  * not the subject has a row — an empty array, never an omitted key. A declared

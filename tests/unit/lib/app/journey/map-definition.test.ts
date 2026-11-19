@@ -11,7 +11,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real roster and journey seed, not a fixture
  * ---------------------------------------------------------------------------
- * The counts and keys below are Lelañea's five tiers and seventeen modules. A
+ * The counts and keys below are Lelanea's five tiers and seventeen modules. A
  * fork with a different journey pins its own; a fork with no `content/` has no
  * map to publish and should delete this file with `map-definition.ts`.
  *

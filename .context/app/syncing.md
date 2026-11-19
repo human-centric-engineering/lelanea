@@ -1,6 +1,6 @@
 ---
 name: syncing
-description: How Lelañea pulls a Daybreak release, and the three traps that make it go wrong.
+description: How Lelanea pulls a Daybreak release, and the three traps that make it go wrong.
 parent: README.md
 ---
 

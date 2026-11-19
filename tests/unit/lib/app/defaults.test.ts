@@ -47,7 +47,7 @@
  * Daybreak banner in CLAUDE.md.
  *
  * ---------------------------------------------------------------------------
- * LELAÑEA — the leaf seams this fork has filled, pinned rather than deleted
+ * LELANEA — the leaf seams this fork has filled, pinned rather than deleted
  * ---------------------------------------------------------------------------
  * `leaf-bootstrap.ts` (the seventeen journey modules, the facilitation turn
  * hook and the agent's consumer-chat exclusion), `leaf-erasure.ts` (the
@@ -56,7 +56,7 @@
  * export), `leaf-owner-classification.ts` (every user-linked model),
  * `leaf-capability-seed-pairs.ts` (our seeded capabilities and the seeds the
  * strict mock cannot run), `leaf-admin-nav.ts` (the
- * "Lelañea" sidebar section), `context-contributors.ts` (her voice block) and
+ * "Lelanea" sidebar section), `context-contributors.ts` (her voice block) and
  * `csp.ts` (the YouTube player's origin) assert the FILLED value. `knowledge-access-contributors.ts` is filled too but
  * its row still asserts only that its init returns cleanly — the resolver
  * exports no way to read its registry back, and adding one would be an edit to a
@@ -79,7 +79,7 @@ import path from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
 /**
- * LELAÑEA — the leaf's filled seams reach Prisma, so the client is stubbed.
+ * LELANEA — the leaf's filled seams reach Prisma, so the client is stubbed.
  *
  * `leaf-bootstrap.ts` and `leaf-data-export.ts` both import
  * `lib/app/waitlist/service.ts` (and the latter `lib/app/gateway/acknowledgements.ts`),
@@ -530,7 +530,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       initAppNav();
       expect(getRegisteredNavSections().map((section) => section.title)).toEqual([
         'Framework',
-        'Lelañea',
+        'Lelanea',
       ]);
     },
   },
@@ -547,7 +547,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       initLeafAdminNav();
       const sections = getRegisteredNavSections();
       expect(sections).toHaveLength(1);
-      expect(sections[0]?.title).toBe('Lelañea');
+      expect(sections[0]?.title).toBe('Lelanea');
       expect(sections[0]?.items?.map((item) => item.href)).toEqual([
         '/admin/app/waitlist',
         '/admin/app/knowledge',
@@ -591,7 +591,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         '/admin',
       ]);
       expect(protectedNavItems?.map((item) => item.label)).toEqual([
-        'Lelañea',
+        'Lelanea',
         'Profile',
         'Settings',
         'Admin',
@@ -613,7 +613,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     risk: 'a stray value would send every install somewhere else after login',
     assert: () => {
       expect(appAuthLandingRoute).toBe('/app');
-      expect(appAuthLandingLabel).toBe('Lelañea');
+      expect(appAuthLandingLabel).toBe('Lelanea');
       // The label names the PRODUCT, not a view. "Your journey" is a nav item
       // pointing at `/app/journey`, so using it here made one phrase mean two
       // destinations. Owner ruling, 10 September 2026.
@@ -626,7 +626,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => expect(footerCopyright).toBeNull(),
   },
   {
-    // PINNED, not deleted (`HB2`). §06 t-41 fills this seam with Lelañea's
+    // PINNED, not deleted (`HB2`). §06 t-41 fills this seam with Lelanea's
     // welcome and invitation. Upstream this row asserts the seam overrides
     // NOTHING; here it asserts it overrides EXACTLY those two, so a third
     // template swapped without a decision — or one of these two silently
@@ -893,7 +893,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // agrees with a constant it derives from anyway.
     assert: () => {
       const frameworkModels = modelsInSchemaFiles((file) => file.startsWith('framework-'));
-      // LELAÑEA: the bridge accounts for BOTH tiers — it calls the framework's
+      // LELANEA: the bridge accounts for BOTH tiers — it calls the framework's
       // declaration and then the leaf's. Upstream this row compares against the
       // framework models alone; a leaf that filled `leaf-data-export.ts` has to
       // add its own schema file to the expected side rather than loosening the
@@ -939,7 +939,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         ...getAppOrgSources().map((entry) => entry.model),
         ...getAppExcludedOrgSources().map((entry) => entry.model),
       ].sort();
-      // LELAÑEA — pinned, not deleted (`HB2`): the bridge reaches our filled
+      // LELANEA — pinned, not deleted (`HB2`): the bridge reaches our filled
       // `leaf-org-export.ts`, so the registry holds the framework's models AND
       // every one of ours, and nothing else.
       const appModels = modelsInSchemaFiles((file) => file === 'app.prisma');
@@ -950,7 +950,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/leaf-org-export.ts',
     // PINNED, not deleted (`HB2`). Daybreak 0.6.0 (t-112) filled the org export
-    // with every Lelañea table; the 0.9.0 sync (t-174) moved them here from
+    // with every Lelanea table; the 0.9.0 sync (t-174) moved them here from
     // `leafOrgSources()`. Every leaf table carries `orgId`, so every one is a
     // source, none is excluded, and nothing else is ours. A table added without
     // a decision fails here, derived from `app.prisma` on disk.
@@ -987,7 +987,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       __resetAppOwnerClassificationForTests();
       // The read triggers the lazy init, so this exercises the REAL file.
       const classified = appOwnerClassifications();
-      // LELAÑEA — pinned, not deleted (`HB2`): the framework's eleven, then
+      // LELANEA — pinned, not deleted (`HB2`): the framework's eleven, then
       // ours from `leaf-owner-classification.ts` (row below), by name.
       expect(Object.keys(classified).sort()).toEqual(
         [
@@ -1014,7 +1014,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     seam: 'lib/app/leaf-owner-classification.ts',
     risk: 'a stray classification would switch the data layer’s owner check on for a leaf model nobody decided was private, or pre-classify one nobody looked at, silencing the coverage guard for it',
     // PINNED, not deleted (`HB2`). The Daybreak 0.9.0 sync (t-174) classified
-    // every Lelañea model that links to a person: eight personal, twelve
+    // every Lelanea model that links to a person: eight personal, twelve
     // authored content whose user column is the admin. None enforced — turning
     // the data layer's owner check on for one of ours is its own reviewed change.
     assert: () => {
@@ -1212,7 +1212,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/env.ts',
     risk: 'a stray key would make an unset env var fail boot on every install',
-    // FILLED BY THIS LEAF. Upstream this row asserts `{}`. Lelañea declares one
+    // FILLED BY THIS LEAF. Upstream this row asserts `{}`. Lelanea declares one
     // key, the temporary tint picker's flag (f-prism t-180), which is optional
     // and parses an unset environment to `false`, so the risk this row guards —
     // an unset var failing boot — still cannot happen; nor can a malformed one,
@@ -1227,7 +1227,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   {
     seam: 'lib/app/eslint.config.mjs',
     risk: 'a stray flat-config block would apply lint rules to every fork',
-    // FILLED BY THIS LEAF. Upstream this row asserts `[]`. Lelañea spreads three
+    // FILLED BY THIS LEAF. Upstream this row asserts `[]`. Lelanea spreads three
     // blocks — the global ignore for `.context/app/planning/`, the boundary that keeps her material readable only as seed input,
     // and the block that lets a leaf test under `tests/**/lib/app/**` import the
     // framework it exercises — so the row is PINNED to those two rather than
@@ -1300,7 +1300,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: () => {
       __resetErasureCleanupHooksForTests();
       // getErasureCleanupHooks() triggers the lazy init, so this exercises the REAL seam.
-      // LELAÑEA — pinned, not deleted (`HB2`): the framework's hook, then ours
+      // LELANEA — pinned, not deleted (`HB2`): the framework's hook, then ours
       // from `leaf-erasure.ts` (row below).
       expect(getErasureCleanupHooks().map((hook) => hook.name)).toEqual([
         'framework:module-workflow-binding-templates',
@@ -1522,7 +1522,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
   },
   {
     seam: 'lib/app/reserved-tiers.ts',
-    // PINNED (Lelañea is a LEAF on Daybreak, which is itself a framework-layer
+    // PINNED (Lelanea is a LEAF on Daybreak, which is itself a framework-layer
     // fork of Sunrise), so this checkout occupies tiers at both levels:
     // `lib/framework` + `.context/framework` are Daybreak's, inherited full of
     // its code and docs; `.context/app` is ours.
@@ -1535,7 +1535,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // that the tiers we have NOT filled keep guarding. `components/framework` is
     // the one still free, and it is Daybreak's — an entry for it appearing here
     // would mean we had occupied a tier we do not own.
-    risk: 'a stray entry would switch OFF the guard that keeps a reserved tier empty — for Lelañea that means silently permitting core or Daybreak to occupy leaf surface, and permitting us to occupy a tier we do not own',
+    risk: 'a stray entry would switch OFF the guard that keeps a reserved tier empty — for Lelanea that means silently permitting core or Daybreak to occupy leaf surface, and permitting us to occupy a tier we do not own',
     assert: () =>
       expect(occupiedTiers).toEqual([
         'lib/framework',
@@ -1567,7 +1567,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // PINNED (Daybreak fills this bridge, Sunrise #1013): its one entry is the framework boot
     // seed, which reconciles through the app client (lib/framework/capabilities/seed-parity.ts
     // says why). Anything else here would switch the parity checks off for another seed.
-    // LELAÑEA — pinned, not deleted (`HB2`): the bridge spreads ours from
+    // LELANEA — pinned, not deleted (`HB2`): the bridge spreads ours from
     // `leaf-capability-seed-pairs.ts` (row below) beside the framework's entry.
     assert: () => {
       expect(APP_CAPABILITY_PAIRS).toEqual([...LEAF_CAPABILITY_PAIRS]);
@@ -1629,10 +1629,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // need to care, if we cleared a value back to `null`.
     assert: async () => {
       const seam = await vi.importActual<typeof import('@/lib/app/brand')>('@/lib/app/brand');
-      expect(seam.appBrandName).toBe('Lelañea');
+      expect(seam.appBrandName).toBe('Lelanea');
       expect(seam.appBrandLegalName).toBe('All Too Human Ltd');
       expect(seam.appBrandDescription).toBe(
-        'Lelañea — an application built on the Daybreak framework.'
+        'Lelanea — an application built on the Daybreak framework.'
       );
     },
   },
@@ -1640,7 +1640,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     seam: 'lib/app/leaf-brand.ts',
     risk: 'a stray value would rebrand every surface — page titles, both footers’ copyright line, the root meta description and every transactional email — and the legal-entity field is a legal-attribution surface, not a cosmetic one',
     // FILLED BY THIS LEAF. Upstream this row asserts all three are `null`,
-    // because in Daybreak the seam is reserved-empty for its forks. Lelañea IS
+    // because in Daybreak the seam is reserved-empty for its forks. Lelanea IS
     // that fork, so the row is PINNED to our values rather than deleted:
     // deleting it would switch the guard off for the one seam most likely to be
     // edited by accident, and the risk line above is why that matters — this is
@@ -1660,10 +1660,10 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     assert: async () => {
       const seam =
         await vi.importActual<typeof import('@/lib/app/leaf-brand')>('@/lib/app/leaf-brand');
-      expect(seam.leafBrandName).toBe('Lelañea');
+      expect(seam.leafBrandName).toBe('Lelanea');
       expect(seam.leafBrandLegalName).toBe('All Too Human Ltd');
       expect(seam.leafBrandDescription).toBe(
-        'Lelañea — an application built on the Daybreak framework.'
+        'Lelanea — an application built on the Daybreak framework.'
       );
     },
   },
@@ -1721,7 +1721,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
       expect(appCoverageExclusions.map((entry) => entry.pattern)).toEqual([
         'scripts/boundary/check.ts',
         'scripts/release/changelog-check.ts',
-        // LELAÑEA's one, spread after them from `leaf-ci.ts` (§10 t-64) —
+        // LELANEA's one, spread after them from `leaf-ci.ts` (§10 t-64) —
         // pinned here too, so the spread cannot be dropped unnoticed.
         'scripts/app/smoke-!(*-assertions).ts',
       ]);
@@ -1729,7 +1729,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         // Daybreak's two, declared in the bridge itself.
         'tests/unit/prisma/framework-boot-seed.test.ts',
         'tests/unit/scripts/release/changelog-structure.test.ts',
-        // LELAÑEA's own, spread after them from `leaf-ci.ts`. Pinned here as
+        // LELANEA's own, spread after them from `leaf-ci.ts`. Pinned here as
         // well as on the row below because this row is what proves the bridge
         // actually REACHES the leaf seam — the leaf row alone would still pass
         // if the spread were dropped, and every scoped run would then silently
@@ -1759,7 +1759,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
         'lib/framework/facilitation/evaluation/turns.ts',
         'lib/framework/modules/workflow-bindings/dispatch.ts',
         'lib/framework/privacy/export-sources.ts',
-        // LELAÑEA's own, spread after them from `leaf-ci.ts` — pinned here too,
+        // LELANEA's own, spread after them from `leaf-ci.ts` — pinned here too,
         // for the same reason as the always-run tests above (§08 t-54, t-56;
         // f-onboarding t-122; f-memory t-127, t-128, t-129, t-130).
         'lib/app/agent/turn-record.ts',
@@ -1789,7 +1789,7 @@ const SEAM_DEFAULTS: SeamDefault[] = [
     // entries in the file a leaf is invited to edit.
     seam: 'lib/app/leaf-ci.ts',
     risk: "a value here is Daybreak occupying the surface it reserves for a leaf, so the leaf's own entries would collide with it on every upgrade — the conflict Sunrise #759 removed one tier up, re-created one tier down",
-    // PINNED (Lelañea fills this seam) — `HB2`. Daybreak keeps it empty; we do
+    // PINNED (Lelanea fills this seam) — `HB2`. Daybreak keeps it empty; we do
     // not. Pinned by value rather than deleted, so a SECOND entry on any of the
     // three lists still fails here: a stray coverage exclusion would switch the
     // per-file 80% floor off for that path and nothing else would notice; the

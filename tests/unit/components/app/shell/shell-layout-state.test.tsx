@@ -151,7 +151,7 @@ describe('the Escape chain', () => {
 
     await userEvent.keyboard('{Escape}');
     expect(strip()).toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message Lelanea' })).toBeTruthy();
   });
 
   it('does not un-fold a folded conversation on a tablet either', async () => {
@@ -285,7 +285,7 @@ describe('the auto-slim fires on crossing, not on every resize', () => {
   });
 });
 
-describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPETE', () => {
+describe('Ask Lelanea and the left menu are mutually exclusive WHERE THEY COMPETE', () => {
   // The owner's reason was that the two crowd the screen, and that is a
   // statement about one geometry: at `medium` with the workspace open, the menu
   // and the conversation are both columns in the flow and every pixel either
@@ -338,7 +338,7 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
       window.dispatchEvent(new Event('resize'));
     });
     expect(slimNow()).toBe('true');
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message Lelanea' })).toBeTruthy();
   });
 
   it('does NOT hand a 234px menu back to a 1000px tablet', async () => {
@@ -386,7 +386,7 @@ describe('Ask Lelañea and the left menu are mutually exclusive WHERE THEY COMPE
     await userEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
 
     expect(strip()).toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message Lelanea' })).toBeTruthy();
   });
 
   it('does NOT collapse the menu when the conversation is opened at large', async () => {

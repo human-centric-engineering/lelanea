@@ -7,7 +7,7 @@
  *
  * §3.9 has the app welcome first and orient second. So the Initiation comes
  * first, read with the person's name, and then the reads that orient: the
- * heart behind Lelañea, the mission, the creator, the lineage. After them the
+ * heart behind Lelanea, the mission, the creator, the lineage. After them the
  * sequence continues to the discovery questions (t-104); until those land it
  * ends in the empty shell, which is the conversation.
  *

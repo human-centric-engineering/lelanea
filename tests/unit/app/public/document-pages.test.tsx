@@ -128,22 +128,23 @@ describe('the authored public pages', () => {
   });
 
   it('never renders the brand name twice in a resolved title', () => {
-    // The group layout's template is `%s - Lelañea`, so a page titled "Lelañea"
-    // resolves to "Lelañea - Lelañea" in the tab and in search results. Only
-    // `/lelanea` needs the `{ absolute }` escape; the rest read correctly.
+    // The group layout's template is `%s - Lelanea`, so the page about her,
+    // titled "Lelañea", would resolve to "Lelañea - Lelanea" in the tab and in
+    // search results. Only `/lelanea` needs the `{ absolute }` escape; the rest
+    // read correctly.
     for (const [route, , meta] of PAGES) {
       const title = meta.title;
 
       let resolved: string;
       if (typeof title === 'string') {
-        resolved = `${title} - Lelañea`;
+        resolved = `${title} - Lelanea`;
       } else if (title && typeof title === 'object' && 'absolute' in title) {
         resolved = String(title.absolute);
       } else {
         throw new Error(`${route} has a title shape this check does not model`);
       }
 
-      expect(resolved.split('Lelañea').length - 1, `${route} resolves to "${resolved}"`).toBeLessThanOrEqual(1);
+      expect(resolved.split('Lelanea').length - 1, `${route} resolves to "${resolved}"`).toBeLessThanOrEqual(1);
     }
   });
 });
@@ -193,9 +194,9 @@ describe('/lelanea', () => {
   it('renders all three documents, each as its own section', async () => {
     render(await LelaneaPage());
 
-    expect(screen.getByRole('heading', { level: 1, name: 'The Heart Behind Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'The Heart Behind Lelanea' })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'About the Creator' })).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 2, name: 'The Lineage of Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'The Lineage of Lelanea' })).toBeTruthy();
   });
 
   it("names the teachers she credits, which a chip row could not have carried", async () => {
@@ -243,7 +244,7 @@ describe('/lelanea', () => {
     const { container } = render(await LelaneaPage());
 
     expect(container.querySelector('[class*="coda"]')).toBeNull();
-    expect(screen.getByRole('heading', { level: 2, name: 'The Lineage of Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'The Lineage of Lelanea' })).toBeTruthy();
   });
 
   // The stand-in shown while there is no portrait is pinned in
@@ -252,11 +253,11 @@ describe('/lelanea', () => {
 });
 
 describe('/data', () => {
-  it('lists the seven things Lelañea is not, with the emphasis intact', async () => {
+  it('lists the seven things Lelanea is not, with the emphasis intact', async () => {
     render(await DataPage());
 
     const items = screen.getAllByRole('listitem');
-    const isNot = items.filter((item) => item.textContent?.startsWith('Lelañea is not'));
+    const isNot = items.filter((item) => item.textContent?.startsWith('Lelanea is not'));
 
     expect(isNot).toHaveLength(7);
     // `**not**` reaches the DOM as a `<strong>`, not as literal asterisks. The
@@ -285,7 +286,7 @@ describe('/data', () => {
 
     const items = screen.getAllByRole('listitem').map((item) => item.textContent ?? '');
 
-    // It is on the page — just not as an eighth thing Lelañea is not.
+    // It is on the page — just not as an eighth thing Lelanea is not.
     expect(document.body.textContent).toContain('Although some concepts discussed within the app');
     expect(items.some((item) => item.startsWith('Although some concepts'))).toBe(false);
   });

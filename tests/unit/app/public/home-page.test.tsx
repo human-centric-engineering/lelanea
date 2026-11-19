@@ -58,7 +58,7 @@ describe('home page metadata', () => {
   it('keeps an absolute title, so the group template cannot double the brand', async () => {
     const metadata = await generateMetadata();
 
-    expect(metadata.title).toEqual({ absolute: 'Lelañea — an invitation into conscious living' });
+    expect(metadata.title).toEqual({ absolute: 'Lelanea — an invitation into conscious living' });
     expect(metadata.alternates?.canonical).toBe('/');
   });
 

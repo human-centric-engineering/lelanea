@@ -6,10 +6,10 @@ import { clearInvalidSession } from '@/lib/auth/clear-session';
 import { getServerSession } from '@/lib/auth/utils';
 
 /** The tab carries the nav item's own words; the layout's `%s` template does the rest. */
-export const metadata: Metadata = { title: 'Lelañea’s notes' };
+export const metadata: Metadata = { title: 'Lelanea’s notes' };
 
 /**
- * What Lelañea has written down about you (f-slots t-73).
+ * What Lelanea has written down about you (f-slots t-73).
  *
  * ## It guards its own session, and it is the reason the rule exists
  *
@@ -36,8 +36,8 @@ export default async function NotesPage() {
   return (
     <View
       column
-      eyebrow="lelañea’s notes"
-      title="What Lelañea has written down about you"
+      eyebrow="lelanea’s notes"
+      title="What Lelanea has written down about you"
       lede={NOTES_LEDE}
       note={NOTES_NOTE}
     >

@@ -195,7 +195,7 @@ back into the app.
 
 | Mirrored (category `onboarding` or `about`)                                                                | Never mirrored (category `legal`)                |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `the_initiation`, `the_heart_behind_lelanea`, `the_mission`, `about_the_creator`, `the_lineage_of_lelanea` | `disclaimer` ("The Lelañea App"), `terms_of_use` |
+| `the_initiation`, `the_heart_behind_lelanea`, `the_mission`, `about_the_creator`, `the_lineage_of_lelanea` | `disclaimer` ("The Lelanea App"), `terms_of_use` |
 
 **One reconcile does all of it:** `reconcileKnowledgeMirror()` in
 `lib/app/content/knowledge-mirror.ts`. Each mirrored document becomes one
@@ -588,7 +588,7 @@ as written, clamped into `h2`–`h6`. Every heading in the seven documents is le
 2 today, so the clamp has no live input — it is there so a deeper outline
 degrades rather than emitting a second `h1`. A numbered clause renders its
 `number` as a prefix inside the heading, with a real space, so a copied heading
-reads `1. About Lelañea`.
+reads `1. About Lelanea`.
 
 **Cadence.** `the_initiation` carries `renderStyle: "cadence"` and a `renderNote`
 saying not to merge its beats into flowing prose. Each beat is already its own
@@ -812,7 +812,7 @@ a document, resolves; ids are unique within each list.
 
 ## Editing her content in the admin
 
-`/admin/app/content` (t-91, the "Content" item in the Lelañea nav) edits the four
+`/admin/app/content` (t-91, the "Content" item in the Lelanea nav) edits the four
 collections above without a deploy: documents, journey text, discovery questions
 and resources. Every field the seeds write can be viewed and edited, each item's
 revisions are listed and any can be restored (as a new revision, never a

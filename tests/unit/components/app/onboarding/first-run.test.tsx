@@ -10,7 +10,7 @@
  * mocked; what a recorded beat does to the ledger is
  * `tests/unit/lib/app/onboarding/first-run-store.test.ts`.
  *
- * FORK NOTE — the greeting assertions read Lelañea's `the_initiation`
+ * FORK NOTE — the greeting assertions read Lelanea's `the_initiation`
  * ("Welcome, {{first_name}}."). A fork with its own welcome rewrites those.
  *
  * @see components/app/onboarding/first-run-view.tsx
@@ -96,7 +96,7 @@ describe('the reads, in sequence', () => {
 
     await user.click(screen.getByRole('button', { name: FIRST_RUN_COPY.continue }));
     expect(
-      screen.getByRole('heading', { level: 1, name: 'The Heart Behind Lelañea' })
+      screen.getByRole('heading', { level: 1, name: 'The Heart Behind Lelanea' })
     ).toHaveFocus();
 
     await user.click(screen.getByRole('button', { name: FIRST_RUN_COPY.skip }));
@@ -109,7 +109,7 @@ describe('the reads, in sequence', () => {
 
     await user.click(screen.getByRole('button', { name: FIRST_RUN_COPY.skip }));
     expect(
-      screen.getByRole('heading', { level: 1, name: 'The Lineage of Lelañea' })
+      screen.getByRole('heading', { level: 1, name: 'The Lineage of Lelanea' })
     ).toBeInTheDocument();
 
     expect(recorded()).toEqual([

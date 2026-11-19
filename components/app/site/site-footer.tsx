@@ -32,7 +32,7 @@ import styles from '@/components/app/site/site.module.css';
  * attribution string. There is no paragraph slot, and the disclaimer is the
  * reason the footer exists at all.
  *
- * ## The line reads "© 2026 Lelañea™ · Built by HCE Studio" (owner, t-171)
+ * ## The line reads "© 2026 Lelanea™ · Built by HCE Studio" (owner, t-171)
  *
  * The prototype printed "© [YEAR] Lelañea Fulton"; t-5 replaced the holder with
  * the legal entity from `leafBrandLegalName`. The owner ruled on 22 October
@@ -56,7 +56,7 @@ import styles from '@/components/app/site/site.module.css';
  * suite covers only its own side.
  *
  * The seam is handed the trademarked product name as the holder, so its
- * default is "© 2026 Lelañea™", a fork's string still replaces that half
+ * default is "© 2026 Lelanea™", a fork's string still replaces that half
  * verbatim, and `false` still removes it. `STUDIO_CREDIT` is then appended to
  * whatever the seam yields — the owner's ruling covers the credit as well as
  * the name, so it is ours to print, not the seam's to replace. When the seam yields nothing the whole paragraph
@@ -169,7 +169,7 @@ export function SiteFooter() {
         out in full on `/data`, and in its document context on `/disclaimer`.
       */}
       <p className={styles.footNote}>
-        Lelañea is an educational and contemplative application. It is not a medical application,
+        Lelanea is an educational and contemplative application. It is not a medical application,
         not a mental health application, not psychotherapy, not counseling, and not a crisis
         service. If you are at immediate risk, contact your local emergency services now — and see{' '}
         <Link href={`/data#${CRISIS_ANCHOR}`}>what to do in a crisis</Link>.

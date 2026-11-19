@@ -43,7 +43,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this runs the real `lib/app/content` seam, it does not assert on it
  * ---------------------------------------------------------------------------
- * The refusal cases come from Lelañea's authored golden set, and every other
+ * The refusal cases come from Lelanea's authored golden set, and every other
  * step reads the voice agent, its seats and its allowlist. The script is about a
  * fork-owned artefact from end to end, not a platform contract. In a fork
  * without that content the import fails at load, which is the right failure.

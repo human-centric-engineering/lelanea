@@ -34,7 +34,7 @@ import type { CeilingFigures } from '@/lib/app/conversation/events';
 
 export const CONVERSATION_COPY = {
   /** The composer's accessible name. */
-  composerLabel: 'Message Lelañea',
+  composerLabel: 'Message Lelanea',
   placeholder: 'What would you like to talk about today?',
   hint: 'shift + return for a new line',
   send: 'Send',
@@ -66,7 +66,7 @@ export const CONVERSATION_COPY = {
   stillThinking: 'still thinking — this is taking a little longer than usual',
 
   /** The transcript with nothing in it yet. */
-  empty: 'This is where you and Lelañea talk. Say whatever is on your mind.',
+  empty: 'This is where you and Lelanea talk. Say whatever is on your mind.',
   /** While the transcript is being read back. */
   loading: 'Finding where you left off…',
   /** The transcript could not be read; the composer still works. */
@@ -76,7 +76,7 @@ export const CONVERSATION_COPY = {
   /** Accessible name of the whole transcript region. */
   transcriptLabel: 'The conversation so far',
   /** Accessible name of the agent's mark beside a reply. */
-  herMark: 'Lelañea',
+  herMark: 'Lelanea',
 
   /** Accessible name of the row a turn ends on without a reply. */
   endingLabel: 'The turn ended',
@@ -99,7 +99,7 @@ export const CONVERSATION_COPY = {
   banner: {
     paused:
       'Conversations are paused for now, on purpose. Everything you can read here still works.',
-    unavailable: 'Lelañea may not be able to answer just now — you can still try.',
+    unavailable: 'Lelanea may not be able to answer just now — you can still try.',
   },
 
   /** Accessible name of the crisis resource row. Its words are authored (safety.md). */

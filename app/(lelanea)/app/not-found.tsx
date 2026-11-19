@@ -57,7 +57,7 @@ import { cn } from '@/lib/utils';
  *
  * ## Two things it is worse at than a full-page 404, both accepted
  *
- * **The tab says only "Lelañea".** Next resolves no `metadata` export from a
+ * **The tab says only "Lelanea".** Next resolves no `metadata` export from a
  * `not-found` file — the docs' metadata section covers `global-not-found.js`
  * alone — so this inherits the layout's `default` title while every real
  * destination exports its own. t-9 recorded tab-indistinguishability as a
@@ -84,7 +84,7 @@ export default function ShellNotFound() {
       lede="The link may be old, or the address mistyped."
     >
       <p className="text-muted-foreground text-sm leading-relaxed">
-        Everything Lelañea offers is in the nav on the left.{' '}
+        Everything Lelanea offers is in the nav on the left.{' '}
         <Link
           href="/app"
           className={cn(

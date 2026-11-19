@@ -63,7 +63,7 @@ describe('ProtectedFooter', () => {
     expect(screen.queryByText(/©/)).not.toBeInTheDocument();
     // Cookie Preferences is not fork-overridable and must survive.
     expect(screen.getByRole('button', { name: 'Cookie Preferences' })).toBeInTheDocument();
-    // LELAÑEA divergence (t-5): upstream also asserts a "Help & Support" link
+    // LELANEA divergence (t-5): upstream also asserts a "Help & Support" link
     // here. It pointed at `/contact`, which f-public deleted, so this fork
     // renders no such link — nothing rather than a dead one (D3). The
     // load-bearing half of this case is the Cookie Preferences control above,

@@ -1,5 +1,5 @@
 /**
- * Dev only: give one account a realistic record in Lelañea's notes, so the
+ * Dev only: give one account a realistic record in Lelanea's notes, so the
  * notes page has something to look at (f-slots t-73, t-79).
  *
  * Rows are written straight to `framework_slot_value` in the shape Daybreak's
@@ -19,7 +19,7 @@
  *
  * What it covers: every visible group, a note corrected by the person (two
  * versions), one revised twice (three versions — "1 older reading as well"),
- * two Art. 9 notes, two of Lelañea's own headings, and one HIDDEN
+ * two Art. 9 notes, two of Lelanea's own headings, and one HIDDEN
  * development-stage note that must never appear on the page.
  *
  * Idempotent by replacement: it deletes this account's slot values first, then
@@ -78,7 +78,7 @@ const SEEDS: Seed[] = [
     value: 'You want things named plainly. Softening reads to you as being managed.',
     confidence: 9,
     sourceType: 'direct',
-    reasoningNote: 'You asked Lelañea outright to stop cushioning things.',
+    reasoningNote: 'You asked Lelanea outright to stop cushioning things.',
   },
   {
     slug: 'disposition',
@@ -205,7 +205,7 @@ const SEEDS: Seed[] = [
     value: 'Evenings are yours; weekends are mostly spoken for until the new flat is sorted.',
     confidence: 7,
     sourceType: 'direct',
-    reasoningNote: 'You said this when Lelañea asked when you had time to think.',
+    reasoningNote: 'You said this when Lelanea asked when you had time to think.',
   },
   {
     slug: 'development_stage',
@@ -306,7 +306,7 @@ async function main(): Promise<void> {
   const heads = new Set(SEEDS.map((seed) => seed.slug)).size;
   process.stdout.write(
     `Removed ${removed.count} old values; wrote ${SEEDS.length} versions across ${heads} notes for ${email} ` +
-      `(1 hidden, 2 Art. 9, 2 of Lelañea's own headings).\n`
+      `(1 hidden, 2 Art. 9, 2 of Lelanea's own headings).\n`
   );
 }
 

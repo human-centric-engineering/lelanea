@@ -2,7 +2,7 @@
   "content": {
     "id": "onboarding_discovery_questions",
     "title": "Discovery Questions",
-    "chartTitle": "‘Lelañea’ Coach App Discovery Onboarding Questions",
+    "chartTitle": "‘Lelanea’ Coach App Discovery Onboarding Questions",
     "module": "module_00_onboarding",
     "phase": 8,
     "sourceFile": "Lelanea_Coach_App_Discovery_Onboarding_Questions.docx",
@@ -231,7 +231,7 @@
     },
     {
       "scope": "q26",
-      "note": "Refers to “this Inner Work App” rather than to Lelañea by name. Left as written; worth confirming."
+      "note": "Refers to “this Inner Work App” rather than to Lelanea by name. Left as written; worth confirming."
     },
     {
       "scope": "set",

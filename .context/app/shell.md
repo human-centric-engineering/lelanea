@@ -48,7 +48,7 @@ the account view links out to them.
 
 **Seams §04 filled**, both pinned in `tests/unit/lib/app/defaults.test.ts`:
 `lib/app/protected-routes.ts` (`['/app']`, or the edge never bounces signed-out
-visitors) and `lib/app/auth-landing.ts` (`'/app'` + the label `Lelañea`, which
+visitors) and `lib/app/auth-landing.ts` (`'/app'` + the label `Lelanea`, which
 login, OAuth, signup, invite, verify and the header brand link all follow).
 
 ## Three widths
@@ -140,7 +140,7 @@ under it stays open. See [the account menu](#the-account-menu).
 | the collapse control, at the top | both      | above 900px          | yes                       |
 | a press on the menu's dead space | both      | above 900px          | yes                       |
 | a press out in the panes         | closes    | above 900px          | no                        |
-| Ask Lelañea opening / parking    | both      | `medium` + workspace | no                        |
+| Ask Lelanea opening / parking    | both      | `medium` + workspace | no                        |
 | crossing 1100px inward           | closes    | —                    | no                        |
 | a conversation open at `medium`  | closes    | `medium` + workspace | no                        |
 
@@ -156,7 +156,7 @@ without that guard dismissing the map by clicking its scrim also collapsed the
 menu behind it. A press inside an `aria-modal` dialog must not reach the shell it
 is covering.
 
-**Ask Lelañea and the menu are mutually exclusive where they compete**, and that
+**Ask Lelanea and the menu are mutually exclusive where they compete**, and that
 rule lives in `use-shell-layout.tsx` rather than in the two components — two
 components each reaching for the other's setter is one rule written twice, and
 the second copy is the one that rots.
@@ -299,7 +299,7 @@ muted suffix beside a link that is already correct, not the page's heading.
 
 ### The sixth destination, and when a view is NOT a person-thing
 
-`SHELL_NAV` carried the prototype's five until t-73 added **Lelañea's notes**
+`SHELL_NAV` carried the prototype's five until t-73 added **Lelanea's notes**
 (`/app/notes`). The 15 September ruling sends everything about the person into
 the account menu, and this looked like one of those — it is the most personal
 surface in the app. It is not, and the distinction is worth keeping:
@@ -312,7 +312,7 @@ visible and says the pairing should provoke curiosity about what has been
 recorded and why. A note appearing inside the turn that wrote it is the whole
 demonstration of that, and it is witnessed only by somebody sitting on the
 destination while they talk — which nobody does from inside a popover. Owner
-ruling, 21 September 2026. See [`slots.md`](./slots.md#lelañeas-notes--the-member-surface-t-73).
+ruling, 21 September 2026. See [`slots.md`](./slots.md#lelaneas-notes--the-member-surface-t-73).
 
 Two counts move with it and are worth grepping when the next one lands:
 `shell-nav.test.tsx` asserts the number of links at 64px (derived from
@@ -698,7 +698,7 @@ reads as data rather than as copy.
 
 ## Known gaps
 
-- **The 404's tab reads only "Lelañea."** Next resolves no `metadata` export from
+- **The 404's tab reads only "Lelanea."** Next resolves no `metadata` export from
   a `not-found` file, and `global-not-found.js` bypasses the layout the boundary
   exists to keep.
 - **The nav can contradict the 404.** `/app/journey/typo` still marks "Your

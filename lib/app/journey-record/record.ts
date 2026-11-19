@@ -759,7 +759,7 @@ export async function exportJourneyRecordMarkdown(
   const header = [
     '# Your journey',
     '',
-    'Everything you have kept in your journey record with Lelañea.',
+    'Everything you have kept in your journey record with Lelanea.',
   ];
   if (kept.length === 0) header.push('', 'Nothing has been kept yet.');
   const markdown =

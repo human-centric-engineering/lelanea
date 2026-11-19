@@ -30,7 +30,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this runs the real `lib/app/content` seam, it does not assert on it
  * ---------------------------------------------------------------------------
- * `getVoiceGoldenSet()` reads Lelañea's authored prompts, so this script is
+ * `getVoiceGoldenSet()` reads Lelanea's authored prompts, so this script is
  * about a fork-owned artefact from end to end, not a platform contract. In a
  * fork with its own `content/` the accessor does not exist and the import fails
  * at load — which is the right failure, because there is nothing here to run.

@@ -1,5 +1,5 @@
 /**
- * Prisma's database null, for Lelañea's services (f-content-seeds t-91).
+ * Prisma's database null, for Lelanea's services (f-content-seeds t-91).
  *
  * A nullable `Json` column cannot be cleared by writing `null` through the
  * client: there `null` is refused at the type level, and `undefined` on an

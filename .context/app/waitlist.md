@@ -31,7 +31,7 @@ And the read surface, which landed a task later (t-8):
 
 | Piece                                           | What it is                                                |
 | ----------------------------------------------- | --------------------------------------------------------- |
-| `lib/app/leaf-admin-nav.ts`                     | The "Lelañea" admin sidebar section, pointing at the list |
+| `lib/app/leaf-admin-nav.ts`                     | The "Lelanea" admin sidebar section, pointing at the list |
 | `lib/app/waitlist/admin.ts`                     | The search clause, the two queries, and the CSV           |
 | `app/api/v1/admin/app/waitlist/route.ts`        | `GET` — the paginated list, behind `withAdminAuth`        |
 | `app/api/v1/admin/app/waitlist/export/route.ts` | `GET` — the CSV attachment, sub-capped at 10/min          |
@@ -127,7 +127,7 @@ to be true whether or not one went out, because the response cannot say.
 ### The confirmation email
 
 `lib/app/waitlist/confirmation.ts` sends
-`components/app/emails/waitlist-confirmation.tsx` — Lelañea's chrome
+`components/app/emails/waitlist-confirmation.tsx` — Lelanea's chrome
 ([`emails.md`](./emails.md)), "you are on the list", the three beats the landing
 page's "An invitation" card shows (`the_initiation`'s `invitation` section, by key),
 and the build's plain lines: we will write when we open, there is no date, this
@@ -220,7 +220,7 @@ indistinguishable from a row that was never written (`HB9`) — including to
 whoever wrote it, and including in review — so until t-8 landed, the only
 evidence the public form worked was its own tests.
 
-`/admin/app/waitlist` is the list, reached from a **"Lelañea"** section in the
+`/admin/app/waitlist` is the list, reached from a **"Lelanea"** section in the
 admin sidebar registered by `lib/app/leaf-admin-nav.ts`. The page server-renders
 the first page **through the API** rather than querying Prisma, which is the
 platform's convention for an admin page and the API-first rule in `CLAUDE.md`: a

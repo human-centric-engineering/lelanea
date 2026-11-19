@@ -8,7 +8,7 @@ import styles from '@/app/(public)/document-page.module.css';
 export const metadata: Metadata = {
   title: 'Disclosures',
   description:
-    'What Lelañea is, what it is not, and the disclosures that go with it — in full, as written.',
+    'What Lelanea is, what it is not, and the disclosures that go with it — in full, as written.',
   alternates: { canonical: '/disclaimer' },
 };
 

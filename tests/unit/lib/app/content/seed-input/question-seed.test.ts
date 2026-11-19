@@ -21,6 +21,7 @@ import {
 } from '@/lib/app/content/seed-input/question-seed';
 import { toQuestionSet } from '@/lib/app/content/question-view';
 import { seededQuestionRows } from '@/tests/helpers/app/content-stores';
+import { renameAppName } from '@/tests/helpers/app-name-rename';
 
 function served() {
   const rows = seededQuestionRows();
@@ -145,6 +146,8 @@ const ADDED_SINCE = {
 } as const;
 
 describe('the data migration', () => {
+  // The migration is frozen and still names the app "Lelañea": compared
+  // through `20261119100000_app_name_lelanea`, which renames it.
   it('writes exactly what the seed builds today, less the columns added since at their defaults', () => {
     const match = /\$t87questions\$([\s\S]*?)\$t87questions\$/.exec(
       readFileSync(MIGRATION, 'utf8')
@@ -167,7 +170,7 @@ describe('the data migration', () => {
     for (const table of ['app_question_set', 'app_discovery_question']) {
       expect(perOrgKeys).toContain(`UPDATE "${table}" SET "slug" = "id";`);
     }
-    const written = JSON.parse(match![1]) as {
+    const written = JSON.parse(renameAppName(match![1])) as {
       set: { id: string; moduleId: string };
       questions: { id: string }[];
     };

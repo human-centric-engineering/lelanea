@@ -1,5 +1,5 @@
 /**
- * Leaf-app admin-nav registration — Lelañea's own sidebar section.
+ * Leaf-app admin-nav registration — Lelanea's own sidebar section.
  *
  * A leaf app (a fork of Daybreak) fills `initLeafAdminNav()` with its own
  * `registerNavSection()` calls to add admin sidebar sections — the client-nav
@@ -74,7 +74,7 @@
  * change them at all without a surface: `/admin/app/content` (t-91) is where
  * they are edited, exported and imported.
  *
- * ## The section title is "Lelañea", and it is load-bearing
+ * ## The section title is "Lelanea", and it is load-bearing
  *
  * The registry keys sections by `title` and dedupes on it, so the title must not
  * collide with a core section ("Overview", "Management", "AI Orchestration",
@@ -111,7 +111,7 @@ import { CONTENT_ADMIN_PAGE } from '@/lib/app/content/admin/endpoint';
 
 export function initLeafAdminNav(): void {
   registerNavSection({
-    title: 'Lelañea',
+    title: 'Lelanea',
     items: [
       {
         href: WAITLIST_ADMIN_PAGE,

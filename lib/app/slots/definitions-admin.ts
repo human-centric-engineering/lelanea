@@ -831,7 +831,7 @@ export async function exportTaxonomyFile(now: Date): Promise<SlotTaxonomyFile> {
   const file = {
     taxonomy: {
       id: TAXONOMY_FILE_ID,
-      title: 'Lelañea slot taxonomy',
+      title: 'Lelanea slot taxonomy',
       version: TAXONOMY_FILE_VERSION,
       locale: 'en-GB',
       provenance: {

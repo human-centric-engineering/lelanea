@@ -14,7 +14,7 @@
  * two properties that make it safe to re-run.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads Lelañea's own crisis material
+ * FORK NOTE — this reads Lelanea's own crisis material
  * ---------------------------------------------------------------------------
  * Upstream there is no `lelanea_crisis_resources.json`, so this file fails at
  * import. That is the seam being unfilled, not a defect.

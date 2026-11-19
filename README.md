@@ -1,13 +1,13 @@
-# Lelañea
+# Lelanea
 
-**Lelañea** is an application built on the
+**Lelanea** is an application built on the
 [Daybreak](https://github.com/human-centric-engineering/daybreak) framework,
 which is itself built on the
 [Sunrise](https://github.com/human-centric-engineering/sunrise) platform.
 
 > **Three tiers.** Sunrise is the platform (auth, API conventions, orchestration,
 > security middleware). Daybreak is the framework on top of it (modules,
-> facilitation maps, journeys, slots, guidance). Lelañea is the leaf — this repo,
+> facilitation maps, journeys, slots, guidance). Lelanea is the leaf — this repo,
 > the product. Both tiers above are **upgradable dependencies**: we consume them,
 > we don't edit them.
 >
@@ -23,7 +23,7 @@ npm run db:seed
 npm run dev                    # binds :3014 (pinned in .env.development)
 ```
 
-Then open **https://lelanea.test** — Lelañea is registered in the dev-proxy
+Then open **https://lelanea.test** — Lelanea is registered in the dev-proxy
 (`~/code/dev-proxy`, slug `lelanea`), which serves that hostname to
 `127.0.0.1:3014`. Use the proxied hostname rather than `localhost:3014`: both
 reach the same server, but only the hostname matches `BETTER_AUTH_URL`, and auth
@@ -32,11 +32,11 @@ callbacks are checked against it. See
 
 Brand identity is **not** an environment variable — `NEXT_PUBLIC_APP_NAME` and
 friends were removed in Sunrise 0.11.0 because they are inlined at build time and
-never reached a container build. Lelañea's name lives in `lib/app/leaf-brand.ts`.
+never reached a container build. Lelanea's name lives in `lib/app/leaf-brand.ts`.
 
 ## Built with Daybreak, not beside it
 
-Daybreak is the scaffolding Lelañea is built from, not an upstream to work
+Daybreak is the scaffolding Lelanea is built from, not an upstream to work
 around. Its modules, module config, data slots, agent seats, capabilities,
 knowledge scopes, facilitation maps and journeys are integral parts of this app.
 Build each feature out of them, and keep content that belongs to a module in

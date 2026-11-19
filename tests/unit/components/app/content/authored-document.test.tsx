@@ -300,7 +300,7 @@ describe('headings', () => {
     const headings = Array.from(container.querySelectorAll('article > h2'));
 
     expect(headings).toHaveLength(doc.blocks.filter((b) => b.type === 'heading').length);
-    expect(headings[0].textContent).toBe('1. About Lelañea');
+    expect(headings[0].textContent).toBe('1. About Lelanea');
     expect(headings[1].textContent).toBe('2. Eligibility');
   });
 
@@ -309,7 +309,7 @@ describe('headings', () => {
     const h1s = Array.from(container.querySelectorAll('h1'));
 
     expect(h1s).toHaveLength(1);
-    expect(h1s[0].textContent).toBe('Lelañea™');
+    expect(h1s[0].textContent).toBe('Lelanea™');
   });
 
   it('clamps an authored level into the h2–h6 range', () => {
@@ -575,7 +575,7 @@ describe('what the renderer does not handle, pinned so a change is visible', () 
 describe('document chrome', () => {
   it.each([
     ['the_initiation', 'welcome'],
-    ['the_mission', 'about lelañea'],
+    ['the_mission', 'about lelanea'],
     ['terms_of_use', 'important disclosures'],
   ])('labels the eyebrow for %s', (id, label) => {
     const { container } = render(<AuthoredDocument document={load(id)} />);

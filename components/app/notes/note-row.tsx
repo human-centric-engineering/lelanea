@@ -19,14 +19,14 @@ import { cn } from '@/lib/utils';
  *
  * ## The full reading, one line of details, and no buttons (owner ruling)
  *
- * The reading is never truncated: a list that clipped what Lelañea wrote would
+ * The reading is never truncated: a list that clipped what Lelanea wrote would
  * make the reader open every row to find out what it said, which is the card's
  * cost without the card. The details line is the three facts a reader scans
  * by — which heading (when the page is sorted by recency, where no section says
  * so), the tag, how sure, and when. How it was known is left to the card.
  *
  * **The whole row is the control**, and it opens the full card in place, so
- * correcting a note and "Ask Lelañea about this" stay one click away. A row
+ * correcting a note and "Ask Lelanea about this" stay one click away. A row
  * with its own buttons would be a small card, and the page would then have two
  * places to do each thing.
  *

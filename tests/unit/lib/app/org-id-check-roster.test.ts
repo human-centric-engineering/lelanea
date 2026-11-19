@@ -12,7 +12,7 @@
  * Always-run (`lib/app/leaf-ci.ts`): the roster comes from the generated
  * client, and a branch that adds a model reaches this through no module graph.
  *
- * FORK NOTE: this reads Lelañea's own `lib/app/leaf-db-drift.ts` on purpose,
+ * FORK NOTE: this reads Lelanea's own `lib/app/leaf-db-drift.ts` on purpose,
  * with no mock, because the list in it is what is being checked. It is ours,
  * not Daybreak's or Sunrise's, so no sync changes what it measures. A failure
  * means an `app_*` model with `orgId` and the list disagree: add the table to

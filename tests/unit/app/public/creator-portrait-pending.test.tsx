@@ -30,7 +30,7 @@ describe('/lelanea without a portrait', () => {
     // The arch holds the site's water, which is decorative (`alt=""`) and so
     // has no `img` role. What must not happen is an image that claims to be
     // her, or one with an empty or placeholder `src`.
-    expect(screen.queryByRole('img', { name: /Lelañea/ })).toBeNull();
+    expect(screen.queryByRole('img', { name: /Lelanea/ })).toBeNull();
     expect(screen.getByText(/portrait of Lelañea Fulton will appear here/i)).toBeTruthy();
   });
 });

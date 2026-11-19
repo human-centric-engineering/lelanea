@@ -19,7 +19,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * Every case here is about Lelañea's authored core, not a platform contract. A
+ * Every case here is about Lelanea's authored core, not a platform contract. A
  * fork that replaces `content/` with its own material has no
  * `lelanea_voice_fingerprint.json` and should expect the whole file to fail.
  *

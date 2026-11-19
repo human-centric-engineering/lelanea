@@ -16,7 +16,7 @@ interface ThemeContextValue {
   /**
    * The stored EXPLICIT choice, or `null` while the device is being followed.
    *
-   * LELAÑEA divergence (row 2). D4 gives the app three states and the platform
+   * LELANEA divergence (row 2). D4 gives the app three states and the platform
    * published two: `theme` alone cannot distinguish "chose light" from
    * "following a device that is currently light". A settings page that renders
    * a choice therefore had no way to be honest, and t-11 worked around it by
@@ -30,7 +30,7 @@ interface ThemeContextValue {
   /**
    * Forget the stored choice and follow the device again.
    *
-   * LELAÑEA divergence (row 2). Without it D4's default is reachable only by
+   * LELANEA divergence (row 2). Without it D4's default is reachable only by
    * clearing site data by hand: `setTheme` is the platform's only writer and it
    * exclusively persists.
    */
@@ -40,7 +40,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 /**
- * LELAÑEA divergence — see `.context/app/platform-divergences.md`, row 2.
+ * LELANEA divergence — see `.context/app/platform-divergences.md`, row 2.
  *
  * Sunrise fixed the persistence half of this row in 0.16.0 (#756): the shared
  * `lib/theme.ts` reads storage without writing it, and the no-flash script in
@@ -167,7 +167,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
-   * LELAÑEA divergence (row 2): the way back to D4's default.
+   * LELANEA divergence (row 2): the way back to D4's default.
    *
    * Symmetric with `setTheme` in the part that matters — the ref is cleared
    * BEFORE the write and regardless of whether it succeeds, so a browser that

@@ -402,7 +402,7 @@ prototype's `renderJourney`.
   (while any are left) and discard. A kept synopsis lists the notes kept with
   it. That list is not headed "confirmed": a keep whose re-read could not run
   leaves its notes listed but unconfirmed, and the wire does not tell the two
-  apart. An own entry can be edited, removed, or kept from Lelañea.
+  apart. An own entry can be edited, removed, or kept from Lelanea.
 - **Notes still owed say so, and can be finished.** A kept synopsis whose
   keep could not settle its notes carries `notesPending` on the wire, so the
   stop says the notes are not yet confirmed on every read, not only straight

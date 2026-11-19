@@ -14,7 +14,7 @@ import { SurfaceSync } from '@/components/surface-sync';
 import { DEFAULT_SURFACE } from '@/lib/app/surface';
 import { BRAND } from '@/lib/brand';
 import { resolveMetadataBase } from '@/lib/site/metadata-base';
-// LELAÑEA divergence — see .context/app/platform-divergences.md, rows 1 and 8.
+// LELANEA divergence — see .context/app/platform-divergences.md, rows 1 and 8.
 import { brandFontVariables } from '@/app/fonts';
 
 // Root metadata, driven entirely by the BRAND seam (#519). The `template`
@@ -23,7 +23,7 @@ import { brandFontVariables } from '@/app/fonts';
 // double-branding. Previously this hardcoded "- Next.js Starter" and the
 // starter blurb, which every fork inherited on any un-templated page.
 export const metadata: Metadata = {
-  // LELAÑEA divergence (row 8): without `metadataBase`, Next resolves a
+  // LELANEA divergence (row 8): without `metadataBase`, Next resolves a
   // relative `og:image` against `VERCEL_URL` → `VERCEL_PROJECT_PRODUCTION_URL`
   // → `http://localhost:3000`. This app deploys via Docker, so none of the
   // Vercel variables exist and every shared link would have unfurled against
@@ -53,7 +53,7 @@ export default async function RootLayout({
   const surface = headersList.get('x-surface') ?? DEFAULT_SURFACE;
 
   return (
-    // LELAÑEA divergence (row 1): the three `next/font` variable classes are
+    // LELANEA divergence (row 1): the three `next/font` variable classes are
     // declared on <html> so body-portaled overlays inherit them too. They are
     // only MAPPED onto the font tokens for the consumer surface, in
     // app/brand-theme.css, so /admin still renders in the platform's fonts.

@@ -1,5 +1,5 @@
 /**
- * App knowledge access-contributor registrations — FILLED by Lelañea.
+ * App knowledge access-contributor registrations — FILLED by Lelanea.
  *
  * **Fork-owned scaffold** — Sunrise ships this empty and does NOT change it
  * after release, so your edits here merge cleanly on upgrade (the stable
@@ -20,7 +20,7 @@
  * `invalidateAgentAccess(agentId)` for the affected agents (the same contract
  * direct grants follow) so the cached decision is re-composed.
  *
- * ## What Lelañea registers, and why it is here rather than in a tag grant
+ * ## What Lelanea registers, and why it is here rather than in a tag grant
  *
  * One contributor: Lelañea Fulton's designated corpus, for the corpus agents only
  * (§05 t-25).

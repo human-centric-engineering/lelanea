@@ -150,7 +150,7 @@ describe('search', () => {
 });
 
 describe('group filter', () => {
-  it('keeps one group, and Lelañea’s own headings as `_own`', () => {
+  it('keeps one group, and Lelanea’s own headings as `_own`', () => {
     expect(slugs(queryNotes(record, { group: 'the_person' }).notes)).toEqual([
       'the_person_disposition',
     ]);

@@ -9,7 +9,7 @@
  * regenerated.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads Lelañea's own authored material
+ * FORK NOTE — this reads Lelanea's own authored material
  * ---------------------------------------------------------------------------
  * Upstream there is no `lelanea_voice_overlays.json` and no overlay table, so
  * this file fails at import. That is the seam being unfilled, not a defect.
@@ -25,6 +25,7 @@ import {
 } from '@/lib/app/content/seed-input/voice-overlay-seed';
 import { VOICE_OVERLAY_SET_ID } from '@/lib/app/content/voice-overlay-store';
 import { isLeaningSituation } from '@/lib/app/voice/leanings-select';
+import { renameAppName } from '@/tests/helpers/app-name-rename';
 
 const MIGRATION = 'prisma/migrations/20260929100100_app_voice_overlays_data/migration.sql';
 const REGISTER_MIGRATION =
@@ -148,6 +149,8 @@ describe('the data migration', () => {
   // the seed as JSON. This keeps the two from disagreeing: edit the file or
   // the builder, and this fails until the migration is regenerated (or, once
   // shipped, a follow-up migration moves the rows that need it).
+  // The migration is frozen and still names the app "Lelañea": compared
+  // through `20261119100000_app_name_lelanea`, which renames it.
   it('writes exactly what the seed builds today', () => {
     const match = /\$t88overlays\$([\s\S]*?)\$t88overlays\$/.exec(migrationSql());
 
@@ -155,7 +158,7 @@ describe('the data migration', () => {
     // The t-88 migration wrote the set's name into `id`; t-114 carried it into
     // `slug` (and gave the row a generated id). So what the seed builds today
     // is the embedded JSON with that one key moved, and nothing else changed.
-    const embedded = JSON.parse(match![1]) as {
+    const embedded = JSON.parse(renameAppName(match![1])) as {
       set: Record<string, unknown> & { id: string };
       overlays: unknown[];
     };
@@ -214,7 +217,7 @@ describe('the registers’ data migration (f-registers t-125)', () => {
     const match = /\$t125overlays\$([\s\S]*?)\$t125overlays\$/.exec(sql());
 
     expect(match, 'the migration no longer embeds the register overlays').not.toBeNull();
-    const embedded = JSON.parse(match![1]) as { overlays: unknown[] };
+    const embedded = JSON.parse(renameAppName(match![1])) as { overlays: unknown[] };
     const seeded = buildVoiceOverlaySeed().overlays.filter((o) =>
       REGISTER_SITUATIONS.includes(o.situation)
     );

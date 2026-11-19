@@ -44,7 +44,7 @@ const { regenerateSynopsis } = await import('@/lib/app/journey-record/synopsis/r
 const { MAX_SYNOPSIS_REGENERATIONS } = await import('@/lib/app/journey-record/entry');
 const { NotFoundError } = await import('@/lib/api/errors');
 
-const AGENT = { id: 'agent-synopsis', systemPrompt: 'You are Lelañea.' };
+const AGENT = { id: 'agent-synopsis', systemPrompt: 'You are Lelanea.' };
 const LINES = [
   { role: 'user', content: 'My father ran the shop.' },
   { role: 'assistant', content: 'What did that ask of you?' },

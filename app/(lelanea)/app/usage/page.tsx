@@ -35,7 +35,7 @@ export const metadata: Metadata = { title: 'Usage and billing' };
  *
  * ## What this page no longer says
  *
- * The placeholder it replaces said "Lelañea is not calling a model for you yet,
+ * The placeholder it replaces said "Lelanea is not calling a model for you yet,
  * so there is nothing to meter" — untrue since §10 — and promised "a budget you
  * set", which belongs to the commercial phase and is not being built. Both are
  * gone rather than softened; a placeholder that has become false is worse than

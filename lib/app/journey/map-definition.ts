@@ -2,7 +2,7 @@
  * The recommended spine, as a facilitation map.
  *
  * The sixteen numbered modules are ordered and the order carries meaning — it
- * is the sequence Lelañea recommends — but it is a spine, not a track: jumping
+ * is the sequence Lelanea recommends — but it is a spine, not a track: jumping
  * anywhere is a first-class action and nothing locks. Daybreak holds that
  * shape as a published `FacilitationGraph` version, authored in the database.
  * This module builds the definition that seed publishes, from the code roster
@@ -46,7 +46,7 @@ import {
   type MapNode,
 } from '@/lib/framework/facilitation/map/schema';
 
-/** The one map Lelañea publishes. Journeys and the map API key on it. */
+/** The one map Lelanea publishes. Journeys and the map API key on it. */
 export const JOURNEY_MAP_SLUG = 'lelanea-journey';
 
 /**

@@ -370,7 +370,7 @@ export interface ResourcesSelection {
 const FIXED_TITLES: Readonly<Record<FixedResourceKey, string>> = {
   journey: 'The journey',
   situations: 'Life situations',
-  default: 'Lelañea',
+  default: 'Lelanea',
 };
 
 function isFixedKey(key: string): key is FixedResourceKey {

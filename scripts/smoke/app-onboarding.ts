@@ -5,7 +5,7 @@
  * The unit tests mock Prisma and every framework call, so they prove this code
  * calls the right functions in the right order. What they cannot prove is the
  * wiring those calls rely on: that `createJourney` writes a row on the
- * published Lelañea map, that the engine really accepts an `enter` of the
+ * published Lelanea map, that the engine really accepts an `enter` of the
  * `onboarding` node on that map (availability is computed from the stored
  * graph, the module rows and their liveness), that a second call writes
  * nothing, and that `recordNodeProgress` then accepts a once-only beat. That
@@ -36,7 +36,7 @@
  *
  * FORK NOTE — this runs the real `lib/app/leaf-bootstrap` seam (`initLeafApp()`),
  * because the map projection checks each node against the module registry it
- * fills. It asserts Lelañea's map, its `onboarding` node and its gate; a fork
+ * fills. It asserts Lelanea's map, its `onboarding` node and its gate; a fork
  * with a different journey, or none, should replace this script rather than
  * pin ours.
  *

@@ -60,7 +60,7 @@ function Reading({ note, caveat }: { note: ListedNote; caveat: boolean }) {
         {note.detail.label}
       </span>
       <span className="text-muted-foreground text-[13px] leading-[1.55]">
-        {note.detail.reading ?? 'Lelañea kept a summary of this rather than your exact words.'}
+        {note.detail.reading ?? 'Lelanea kept a summary of this rather than your exact words.'}
         {note.detail.version !== note.ref.version
           ? caveat
             ? ' This note has changed since, so keeping leaves it alone.'
@@ -92,11 +92,11 @@ export function NoteTicks({ notes, unticked, onToggle, disabled }: NoteTicksProp
     <fieldset className="mt-4 flex flex-col gap-2" aria-labelledby={headingId}>
       <div className="flex items-center gap-1.5">
         <span id={headingId} className="text-[12.5px] text-[var(--color-heading)]">
-          Notes Lelañea made in this session
+          Notes Lelanea made in this session
         </span>
         <FieldHelp title="What keeping does to these notes">
           Keeping this account confirms each note still ticked, as something you agree with. If you
-          change the account first, Lelañea reads your version against each ticked note and corrects
+          change the account first, Lelanea reads your version against each ticked note and corrects
           any it now gets wrong. Untick a note to leave it exactly as it is.
         </FieldHelp>
       </div>

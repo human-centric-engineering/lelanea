@@ -363,7 +363,7 @@ describe('the eleven leanings', () => {
       true
     );
     expect((stop(questions, 'Toward Guidance-led') as HTMLInputElement).disabled).toBe(false);
-    expect(within(questions).getByText('Lelañea keeps this from going all the way.')).toBeTruthy();
+    expect(within(questions).getByText('Lelanea keeps this from going all the way.')).toBeTruthy();
   });
 
   it('locks a locked dial whole, and says so', () => {

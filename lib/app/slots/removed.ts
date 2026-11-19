@@ -63,7 +63,7 @@ export const REMOVED_VALUE_JSON = { removed: true } as const;
  * The reasoning line a removed version holds. The original was a paraphrase of
  * what was said, so it goes with the words.
  */
-export const REMOVED_REASONING = 'The person removed this note in Lelañea’s notes.';
+export const REMOVED_REASONING = 'The person removed this note in Lelanea’s notes.';
 
 /**
  * The lowest confidence the scale has. Nothing reads a removed version's

@@ -52,7 +52,7 @@ concurrency:
 # it in repo settings (Settings → Secrets and variables → Actions → Variables)
 # rather than editing this file, so the change survives every upstream sync.
 #
-# Economics knob 3 — repo variable `CI_DOCKER` (Lelañea, carried until
+# Economics knob 3 — repo variable `CI_DOCKER` (Lelanea, carried until
 # sunrise#802 lands — see .context/app/platform-divergences.md row 16):
 # Unset (default): the `docker` job runs under its own gating. `"off"`: the job
 # is skipped everywhere — for a fork that deploys by some other means and never
@@ -765,7 +765,7 @@ jobs:
     # the push touched code at all (a docs-only push skips it — `code == 'true'`
     # gates both branches of the condition below).
     #
-    # Lelañea (sunrise#802, platform-divergences.md row 16): `CI_DOCKER` is the fork's
+    # Lelanea (sunrise#802, platform-divergences.md row 16): `CI_DOCKER` is the fork's
     # off-switch — see "Economics knob 3" at the top of this file.
     if: >-
       vars.CI_DOCKER != 'off' &&

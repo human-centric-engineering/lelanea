@@ -64,14 +64,14 @@ const HEADING_TYPE = 'brand-display text-[var(--color-heading)]';
  *
  * Exported because the designed pages label their opening section the same way
  * and must not disagree with the document header on what a category is called.
- * The prototype's own eyebrows — "the heart behind lelañea", "the mission" —
+ * The prototype's own eyebrows — "the heart behind lelanea", "the mission" —
  * could not be kept: each document is titled after the section it fills, so the
  * prototype's label and the authored title say the same words twice in two
  * sizes. The category is the one label that adds something.
  */
 export const CATEGORY_LABEL: Record<FoundationalDocumentDetail['category'], string> = {
   onboarding: 'welcome',
-  about: 'about lelañea',
+  about: 'about lelanea',
   legal: 'important disclosures',
 };
 
@@ -246,7 +246,7 @@ function groupByEmphasis(tokens: InlineToken[]): { bold: boolean; tokens: Inline
  * Authored text as React children.
  *
  * Exported for a page that renders authored strings OUTSIDE a block — `/data`
- * sets the seven "Lelañea is **not** a…" lines as list rows with an icon
+ * sets the seven "Lelanea is **not** a…" lines as list rows with an icon
  * beside each, a shape no block type produces. Reaching for
  * `text.replaceAll('**', '')` there was the first version and it is the bug
  * this export exists to prevent: it strips the emphasis the author put on the
@@ -313,7 +313,7 @@ export function InlineText({ text }: { text: string }): React.ReactNode {
  * (t-171).
  *
  * Her writing turns on short single-sentence paragraphs set between long ones
- * — "Lelañea is not a finished system." / "May it encourage curiosity." — and
+ * — "Lelanea is not a finished system." / "May it encourage curiosity." — and
  * she wrote them as paragraphs of their own on purpose. With `beats` on, a
  * page can set those apart typographically, so the rhythm she wrote is the
  * rhythm a reader sees. Fourteen words takes every turn in the public

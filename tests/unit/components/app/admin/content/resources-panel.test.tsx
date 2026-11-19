@@ -219,7 +219,7 @@ describe('the library', () => {
 
     const title = screen.getByLabelText('Title');
     await user.clear(title);
-    await user.type(title, 'The Lelañea Library');
+    await user.type(title, 'The Lelanea Library');
 
     const version = screen.getByLabelText('Version');
     await user.clear(version);
@@ -244,7 +244,7 @@ describe('the library', () => {
     expect(sent().url).toBe(contentItemEndpoint('resources', 'collection', 'lelanea_resources'));
     expect(sent().method).toBe('PUT');
     expect(sent().body).toEqual({
-      title: 'The Lelañea Library',
+      title: 'The Lelanea Library',
       version: '1.1',
       locale: 'en-GB',
       provenance: {

@@ -2,7 +2,7 @@
  * The turn seam in Daybreak's facilitation route — at rest, and wired (§08 t-54;
  * `signal` and `keepAlive` §08 t-55).
  *
- * Lelañea carries a seam in a file Daybreak owns (`.context/app/platform-divergences.md`,
+ * Lelanea carries a seam in a file Daybreak owns (`.context/app/platform-divergences.md`,
  * Row 18). `B19` asks three things of it, demonstrated rather than asserted:
  * generic, ledgered, and **behaviour-neutral at rest**. The last is this file's
  * first half: with the hook at its shipped pass-through, the route calls
@@ -16,7 +16,7 @@
  * a shipped seam with no caller is an integration nobody owns (`fp1`). A hook
  * registered through the real registry proves the route hands it the turn,
  * merges what it returns into `streamChat`, and turns a refusal into a status
- * code before any stream is opened. That `initLeafApp()` registers Lelañea's —
+ * code before any stream is opened. That `initLeafApp()` registers Lelanea's —
  * `runRecordedTurn`, by identity — is pinned in
  * `tests/unit/lib/app/defaults.test.ts`.
  *

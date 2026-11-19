@@ -131,7 +131,7 @@ function LoadFailed({ endpoint }: { endpoint: string }) {
  *
  * `/admin/**` is the `admin` surface (`lib/app/surface.ts`), which the brand
  * theme deliberately does not reach — so this page keeps Sunrise's admin chrome
- * and carries no Lelañea styling of its own.
+ * and carries no Lelanea styling of its own.
  */
 export default async function VoiceComparisonPage() {
   const [{ comparisons, loadError }, preflight, goldenSet, overlays, goldenSetEditor] =

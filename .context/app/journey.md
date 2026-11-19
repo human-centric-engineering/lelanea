@@ -8,7 +8,7 @@ description: The seventeen modules as the framework sees them, the published map
 Fifteen of the sixteen numbered modules have a title and nothing else, and the
 product description says the skeleton must be visible and navigable without
 pretending to be finished. This is where Daybreak's primitives first carry
-Lelañea: every module is a real place in the framework's module registry with
+Lelanea: every module is a real place in the framework's module registry with
 an empty interior, and the recommended order is a published facilitation map
 whose edges are advisory — jumping anywhere is first-class, and nothing locks.
 
@@ -46,7 +46,7 @@ embeddings read the registered name, so they say what the drawer says.
 **`framework_module.name` is Daybreak's, not Lelañea Fulton's.** The framework copies the
 definition's name into that column once, when the row is created, and after
 that an operator may override it in Daybreak's admin. It is the framework's
-display label and nothing of Lelañea's reads it. One consequence: if a new
+display label and nothing of Lelanea's reads it. One consequence: if a new
 environment's very first boot cannot read the rows, the slug-spelled names are
 what that column is created with, and they stay until an operator renames them. The admin editor
 (t-91) does not write it: the module title field says the title is hers and that
@@ -156,7 +156,7 @@ which is what makes the seed's deep-equal against a stored version meaningful.
    the map from the `app_journey` row.
 
 **The trigger to reclassify the row as operator-owned is the first edit
-Lelañea makes in the map editor.** From then on the seed must create-if-absent
+Lelanea makes in the map editor.** From then on the seed must create-if-absent
 and never publish over an existing version, and the roster stops being the
 source of the graph's shape. Until then, an edit in the editor is
 overwritten on the next seed run — by design, and the seed's header says so.

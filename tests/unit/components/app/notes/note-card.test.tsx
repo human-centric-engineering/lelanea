@@ -203,7 +203,7 @@ describe('a note that was removed', () => {
     // None of the value or reasoning text the fixture still carries.
     expect(screen.queryByText('Work is going badly.')).toBeNull();
     expect(screen.queryByText('Said plainly.')).toBeNull();
-    expect(screen.queryByText(/What Lelañea was looking for/)).toBeNull();
+    expect(screen.queryByText(/What Lelanea was looking for/)).toBeNull();
   });
 });
 
@@ -265,7 +265,7 @@ describe('a note whose earlier version was removed', () => {
 });
 
 describe('the tag on a removed note', () => {
-  it('names a heading Lelañea made up as a removed note, not by its random slug', () => {
+  it('names a heading Lelanea made up as a removed note, not by its random slug', () => {
     expect(
       noteTag(note({ removed: true, slotSlug: 'removed_3f2a9c0d1e4b4f6a8b7c6d5e4f3a2b1c' }))
     ).toBe('removed note');
@@ -409,7 +409,7 @@ describe('deleting the exchange a removed note came from (t-127)', () => {
         error: {
           code: 'CONFLICT',
           message:
-            'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
+            'Lelanea is still answering that. Try again in a moment, once the reply has finished.',
           details: { reason: 'still_answering' },
         },
       },

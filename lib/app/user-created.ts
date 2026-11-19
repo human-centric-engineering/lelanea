@@ -27,7 +27,7 @@
 import { registerWaitlistLinkHook } from '@/lib/app/waitlist/service';
 
 /**
- * Lelañea's one (t-46): the waitlist entry whose address matches the new
+ * Lelanea's one (t-46): the waitlist entry whose address matches the new
  * account becomes that account. Upstream ships this empty; the row in
  * `tests/unit/lib/app/defaults.test.ts` is PINNED to this registration rather
  * than deleted, so a stray second one still fails there (`HB2`).

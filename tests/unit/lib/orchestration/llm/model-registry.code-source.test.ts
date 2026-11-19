@@ -1,12 +1,12 @@
 /**
  * `registerModels(infos, { source: 'code' })` — exact figures a fork registers
- * from code, which a matrix hydrate must not overwrite (Lelañea divergence
+ * from code, which a matrix hydrate must not overwrite (Lelanea divergence
  * row 30).
  *
  * Since Sunrise 0.14.0 every entry `registerModels` creates is matrix-owned, so
  * the next hydrate replaces its price and context with the row's, zero
  * included. That is right for an operator's row and wrong for a fork's exact
- * rate: Lelañea's pinned model was repriced at $0 within a minute of boot. The
+ * rate: Lelanea's pinned model was repriced at $0 within a minute of boot. The
  * option gives a code registration the standing the static map and OpenRouter
  * already have. Without it, nothing changes — the first case proves it.
  */

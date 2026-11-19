@@ -84,7 +84,7 @@ describe('ProtectedNav', () => {
     const { ProtectedNav } = await import('@/components/layouts/protected-nav');
     render(React.createElement(ProtectedNav));
 
-    expect(screen.getByRole('link', { name: /lelañea/i })).toHaveAttribute('href', '/app');
+    expect(screen.getByRole('link', { name: /lelanea/i })).toHaveAttribute('href', '/app');
     expect(screen.getByRole('link', { name: /profile/i })).toHaveAttribute('href', '/profile');
     expect(screen.getByRole('link', { name: /settings/i })).toHaveAttribute('href', '/settings');
     // The reason the seam was filled: the header must not offer a way out of

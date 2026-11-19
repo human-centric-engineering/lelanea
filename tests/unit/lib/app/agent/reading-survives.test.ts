@@ -19,7 +19,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/leaf-bootstrap` seam
  * ---------------------------------------------------------------------------
- * `initLeafApp()` registers Lelañea's modules so the journey map projects for
+ * `initLeafApp()` registers Lelanea's modules so the journey map projects for
  * real. A fork with a different journey, or none, changes what that route
  * answers here; pin its own routes and statuses in `ALL_OK`.
  */

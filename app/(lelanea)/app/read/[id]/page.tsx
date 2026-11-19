@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 /**
- * One of the reads — the heart behind Lelañea, the mission, the creator, the
+ * One of the reads — the heart behind Lelanea, the mission, the creator, the
  * lineage — in the workspace, beside the conversation (t-103).
  *
  * The first run offers each once; this is where they stay. The resources

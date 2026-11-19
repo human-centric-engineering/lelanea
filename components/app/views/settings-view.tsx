@@ -85,7 +85,7 @@ function Panel({
  * midday, sees Light marked as theirs, and finds it dark at sunset.
  *
  * `useTheme` publishes `choice` for exactly this, and `clearTheme` for the way
- * back. Both are Lelañea additions to a Sunrise file, divergence row 2 in
+ * back. Both are Lelanea additions to a Sunrise file, divergence row 2 in
  * `.context/app/platform-divergences.md`, and both were forced by this panel: t-11 first
  * reached for the stored value by reading `localStorage` here, which put this
  * file's idea of the storage key in a second place with only a test holding the
@@ -256,7 +256,7 @@ function LeaningDial({ initial, describedBy }: { initial: LeaningDialView; descr
         </p>
       ) : dial.min > -2 || dial.max < 2 ? (
         <p className="text-muted-foreground mt-2 text-[12.5px]">
-          Lelañea keeps this from going all the way.
+          Lelanea keeps this from going all the way.
         </p>
       ) : null}
       {save.failure ? (

@@ -509,7 +509,7 @@ function csvCell(value: string): string {
  * part of this file that matters.
  *
  * **A leading BOM.** Excel on Windows reads a CSV without one as the system
- * codepage, which turns "Lelañea" into mojibake. The product's own name has a ñ
+ * codepage, which turns "Lelañea" into mojibake. The creator's own name has a ñ
  * in it and so will many of the names on this list; `charset=utf-8` on the
  * response does not reach a file opened from disk, and the BOM does.
  *

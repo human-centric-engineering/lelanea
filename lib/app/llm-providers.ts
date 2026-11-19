@@ -129,7 +129,7 @@ export function registerAppProviderEligibility(): void | Promise<void> {
   // everywhere, which is Sunrise's single-tenant behaviour and what the seam
   // defaults test goes on asserting of this file.
   //
-  // What Lelañea uses this seam for is its TIMING, not its purpose, and that is
+  // What Lelanea uses this seam for is its TIMING, not its purpose, and that is
   // worth saying out loud. The voice agent is pinned to a dated model id (§8.2)
   // that Sunrise's static price map does not know, and our matrix row is
   // null-cost on purpose — so without this its turns are costed at $0, even

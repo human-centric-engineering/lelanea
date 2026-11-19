@@ -922,7 +922,7 @@ from use, so a constant that needs a deploy to change is the wrong shape. Sunris
 has per-agent, global and per-turn caps and no per-user concept, so the store is
 ours.
 
-**Change them at `/admin/app/agent`** (Lelañea → Deadlines & budgets).
+**Change them at `/admin/app/agent`** (Lelanea → Deadlines & budgets).
 
 | Setting                         | Stored in                             | Enforced by                                      |
 | ------------------------------- | ------------------------------------- | ------------------------------------------------ |

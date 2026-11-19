@@ -20,7 +20,7 @@ import { BRAND } from '@/lib/brand';
  * `the_initiation` is the authored welcome statement (`surface:
  * first_run_welcome`), and the product's rule is that her words are never
  * reworded in the build. So the greeting here is its opening run — the beats
- * from "Welcome, {{first_name}}." to "Welcome to Lelañea." — the document's
+ * from "Welcome, {{first_name}}." to "Welcome to Lelanea." — the document's
  * `welcome` section, read from the database by key exactly as the landing page
  * reads its own excerpts, and rendered one beat per line because the document's
  * `renderStyle: 'cadence'` says so. Seventy beats would make an email nobody
@@ -58,7 +58,7 @@ import { BRAND } from '@/lib/brand';
  * so the two greetings cannot disagree.
  */
 
-/** The section of `the_initiation` the greeting is: "Welcome, …" through "Welcome to Lelañea." */
+/** The section of `the_initiation` the greeting is: "Welcome, …" through "Welcome to Lelanea." */
 export const WELCOME_SECTION = 'welcome';
 
 export interface WelcomeEmailProps {

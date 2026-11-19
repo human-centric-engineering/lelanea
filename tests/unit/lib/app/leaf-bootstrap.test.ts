@@ -14,7 +14,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this runs the real `leaf-bootstrap` seam
  * ---------------------------------------------------------------------------
- * The seventeen modules and their titles are Lelañea's. A fork that registers
+ * The seventeen modules and their titles are Lelanea's. A fork that registers
  * its modules from a different source keeps the three properties — every slug
  * before any read, names from the rows, a complete registry when the read
  * fails — and pins its own names.

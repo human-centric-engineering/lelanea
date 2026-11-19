@@ -1,5 +1,5 @@
 /**
- * Lelañea's notes, as the person they are about reads them — and corrects one
+ * Lelanea's notes, as the person they are about reads them — and corrects one
  * (f-slots t-73; product description §3.3, §3.12, §3.19, §12).
  *
  * t-72 made the agent write what it learns. Until this module there was nowhere to
@@ -84,7 +84,7 @@
  * the marker written for the AI, and it never reaches the person.
  *
  * @see lib/app/slots/notes-view.ts — the wire shape
- * @see .context/app/slots.md — "Lelañea's notes"
+ * @see .context/app/slots.md — "Lelanea's notes"
  */
 
 import { z } from 'zod';
@@ -116,7 +116,7 @@ const WITHHELD = redactedString('special_category');
  * it was not the agent's reading. `sourceType` already says so; this says it in the
  * place the panel actually prints.
  */
-export const CORRECTION_NOTE = 'The person corrected this themselves, in Lelañea’s notes.';
+export const CORRECTION_NOTE = 'The person corrected this themselves, in Lelanea’s notes.';
 
 /**
  * A correction is stored at full confidence. `confidence` is "how sure the
@@ -444,7 +444,7 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
 
   if (definition && !definition.isActive) {
     throw new ConflictError(
-      'Lelañea is no longer asking about this, so a correction to it would never be read.',
+      'Lelanea is no longer asking about this, so a correction to it would never be read.',
       {
         reason: 'no_longer_asked',
       }
@@ -464,12 +464,12 @@ export async function correctNote(input: NoteCorrection): Promise<CorrectedNote>
     ours?.sensitivity === SLOT_SENSITIVITY.special_category;
   if (isSpecialCategory) {
     // Printed verbatim by the panel, so it follows the panel's register:
-    // Lelañea by name, never "she" or "her" (`.context/app/slots.md`).
+    // Lelanea by name, never "she" or "her" (`.context/app/slots.md`).
     throw new ConflictError(
       // Says nothing about what is stored: this refusal is by classification,
       // so it also reaches a note captured before its slot was marked, whose
       // words were kept (`/code-review`, t-80).
-      'Notes on this subject can’t be corrected here. Ask Lelañea about it instead, in your own words.',
+      'Notes on this subject can’t be corrected here. Ask Lelanea about it instead, in your own words.',
       { reason: 'kept_out_of_the_record' }
     );
   }

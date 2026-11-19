@@ -24,8 +24,8 @@
  *
  * **What a fork should expect.** Upstream, both seams are empty:
  * `initLeafErasureHooks()` registers no erasure hook and `collectLeafSubjectData()` returns `{}`, so
- * every case here would fail against a vanilla Daybreak. This file is Lelañea's
- * and exists only because Lelañea filled them; a fork inheriting it should
+ * every case here would fail against a vanilla Daybreak. This file is Lelanea's
+ * and exists only because Lelanea filled them; a fork inheriting it should
  * expect to rewrite it around its own tables rather than to pin ours.
  *
  * @see lib/app/leaf-data-export.ts · lib/app/leaf-erasure.ts

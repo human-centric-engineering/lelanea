@@ -7,7 +7,7 @@ import styles from '@/app/(public)/document-page.module.css';
 
 export const metadata: Metadata = {
   title: 'Terms of Use',
-  description: 'The terms that govern your use of Lelañea.',
+  description: 'The terms that govern your use of Lelanea.',
   alternates: { canonical: '/terms' },
 };
 
@@ -36,7 +36,7 @@ export const dynamic = 'force-dynamic';
  * anything this page does, so it cannot be forgotten here.
  *
  * Three further review notes on this document are NOT closed by this task and
- * are none of its business: clause 12 refers to a Lelañea privacy policy that
+ * are none of its business: clause 12 refers to a Lelanea privacy policy that
  * does not exist yet (see `/privacy`, which says so), clause 17 leaves the
  * governing jurisdiction unnamed, and clause 10 cross-references the lineage
  * document without linking it. All three need her or a lawyer, not a page.

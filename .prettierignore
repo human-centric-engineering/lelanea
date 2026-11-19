@@ -50,7 +50,7 @@ coverage
 # Format is owned by the tool, so Prettier should not gate `npm run validate` on it.
 .claude/settings.local.json
 
-# Authored planning material (leaf-owned, Lelañea).
+# Authored planning material (leaf-owned, Lelanea).
 # The product description, the approved prototype (`design/lelanea.html`), and
 # the exported `Lelanea_Design_System` kit are source inputs the build works
 # from, not source the build maintains — the bundle README states they are

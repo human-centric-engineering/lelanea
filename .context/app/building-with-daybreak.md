@@ -1,10 +1,10 @@
-# Building with Daybreak: its elements are what Lelañea is made of
+# Building with Daybreak: its elements are what Lelanea is made of
 
 **Owner ruling, 25 September 2026.** Daybreak is not an upstream to route
-around. It is the scaffolding Lelañea is built from. Its elements (modules,
+around. It is the scaffolding Lelanea is built from. Its elements (modules,
 module config, data slots, agent seats, capabilities, knowledge scopes,
 facilitation maps, journeys, guidance) are integral parts of this app, and a
-feature is built out of them, following the ethos Daybreak sets. Lelañea
+feature is built out of them, following the ethos Daybreak sets. Lelanea
 supplies the content, the voice and the product. Daybreak supplies the shape it
 takes.
 

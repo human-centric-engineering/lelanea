@@ -24,7 +24,7 @@ import { registerGuardEventContributor } from '@/lib/orchestration/chat/guard-ev
 import { MISUSE_RECORD_CONTRIBUTOR, recordGuardDetection } from '@/lib/app/safety/misuse';
 
 /**
- * Lelañea registers one observer: a guard flagging a message on one of the
+ * Lelanea registers one observer: a guard flagging a message on one of the
  * agent's seats is written to the safety record (f-safety t-60,
  * `lib/app/safety/misuse.ts`). Daybreak's escalation observer, which notifies and
  * audits, is registered by the framework separately. Pinned in

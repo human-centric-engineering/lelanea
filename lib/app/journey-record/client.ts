@@ -51,10 +51,10 @@ const REASON_WORDS: Readonly<Record<string, string>> = {
     'This changed since the page loaded, perhaps in another tab. The page now shows the latest version.',
   busy: 'This is still being saved. Try again in a moment.',
   still_answering:
-    'Lelañea is still answering in this session. Try again once the reply has finished.',
+    'Lelanea is still answering in this session. Try again once the reply has finished.',
   regenerating: 'Another draft is already being written. Try again in a moment.',
   no_more_drafts: 'There are no more drafts to ask for. Change this one yourself instead.',
-  paused: 'Lelañea is paused just now, so no new draft can be written.',
+  paused: 'Lelanea is paused just now, so no new draft can be written.',
   ceiling_reached: 'You have reached this month’s limit, so no new draft can be written.',
   no_agent: 'Nothing is set up to write drafts just now.',
 };
@@ -109,7 +109,7 @@ export async function writeOwnEntry(entry: OwnEntryWords, options: Options = {})
   await send(JOURNEY_RECORD_ENDPOINT, 'POST', entry, options);
 }
 
-/** Change an own entry's words, or whether Lelañea may read it. */
+/** Change an own entry's words, or whether Lelanea may read it. */
 export async function changeOwnEntry(
   id: string,
   change: Partial<OwnEntryWords>,
@@ -158,7 +158,7 @@ export async function regenerateSynopsis(
 export const SESSIONS_ENDPOINT = '/api/v1/app/sessions';
 
 /**
- * Delete a whole session: what was said in it, Lelañea's replies, the notes it
+ * Delete a whole session: what was said in it, Lelanea's replies, the notes it
  * wrote, the recaps of it, and its draft (t-154). `removeAccount` takes a kept
  * account with it; without it, the kept account stays and is marked as written
  * from a conversation since deleted.

@@ -18,7 +18,7 @@
  * whenever the roster, the builder, or the slug rule changes (`hashInputs`).
  * The map carries no titles, so an edit to her words (`app_journey_*`, t-87)
  * never re-publishes it. Nobody has edited this map in Daybreak's map editor;
- * the day Lelañea does, that edit is what this seed would overwrite on its next
+ * the day Lelanea does, that edit is what this seed would overwrite on its next
  * run. **That first edit is the trigger to reclassify the row as
  * operator-owned**: at that point this seed should create the map only when
  * absent and never publish over an existing version, and the roster stops

@@ -42,7 +42,7 @@ import { endingForCode } from '@/lib/app/agent/endings';
 export const GENERATION_PAUSED_FLAG = 'LELANEA_GENERATION_PAUSED';
 
 export const GENERATION_PAUSED_FLAG_DESCRIPTION =
-  'Incident switch. When enabled, every conversation turn with Lelañea is refused before any model call, with a plain "paused" ending; everything readable keeps working. Turn it off to resume.';
+  'Incident switch. When enabled, every conversation turn with Lelanea is refused before any model call, with a plain "paused" ending; everything readable keeps working. Turn it off to resume.';
 
 /** How far back a turn's outcome still says something about now. */
 export const RECENT_OUTCOME_MS = 5 * 60_000;

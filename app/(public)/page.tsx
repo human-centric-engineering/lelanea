@@ -32,10 +32,10 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata(): Promise<Metadata> {
   const philosophy = await requireDocument('the_heart_behind_lelanea');
   return {
-    // The group layout's template appends " - Lelañea", which would read
-    // "Lelañea - Lelañea" on the one page whose title is the name. `absolute`
+    // The group layout's template appends " - Lelanea", which would read
+    // "Lelanea - Lelanea" on the one page whose title is the name. `absolute`
     // opts this page out of the template rather than the whole group.
-    title: { absolute: 'Lelañea — an invitation into conscious living' },
+    title: { absolute: 'Lelanea — an invitation into conscious living' },
     description: plainText(selectSectionText(philosophy, 'purpose').join(' ')),
     alternates: { canonical: '/' },
   };

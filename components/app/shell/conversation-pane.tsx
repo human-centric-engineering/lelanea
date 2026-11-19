@@ -114,7 +114,7 @@ export function ConversationPane() {
   const reducedMotion = useReducedMotion();
   // The cross-pane channels, all explained on the provider: a turn that
   // captured tells the notes panel to re-read, any finished turn tells the
-  // topbar's spend meter to, and "Ask Lelañea about this" on a note puts its
+  // topbar's spend meter to, and "Ask Lelanea about this" on a note puts its
   // question in the box here. None is layout, and all live there because the
   // panes are siblings (see `modulePlace`).
   const conversation = useConversation({
@@ -304,7 +304,7 @@ export function ConversationPane() {
           <>
             <Link
               href="/app"
-              title="Return to the main conversation with Lelañea"
+              title="Return to the main conversation with Lelanea"
               className={cn(
                 'flex min-w-0 flex-none items-center gap-1.5 px-2 py-1',
                 ICON_RADIUS,
@@ -404,7 +404,7 @@ const Strip = React.forwardRef<HTMLButtonElement, { onOpen: () => void }>(functi
       )}
     >
       <span className="text-[11.5px] tracking-[0.24em] uppercase [writing-mode:vertical-rl]">
-        Ask Lelañea
+        Ask Lelanea
       </span>
       <span aria-hidden="true" className="mt-auto flex flex-col gap-1">
         <i className="block h-1 w-1 rounded-full bg-current opacity-50" />

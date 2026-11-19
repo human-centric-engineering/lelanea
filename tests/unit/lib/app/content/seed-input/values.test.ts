@@ -12,7 +12,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * The counts below are Lelañea's authored material. A fork replacing `content/`
+ * The counts below are Lelanea's authored material. A fork replacing `content/`
  * should repoint them at its own files and keep the cases — what is being
  * asserted (the files parse, and release-2 content stays out of the served
  * module's import graph) holds for any content.

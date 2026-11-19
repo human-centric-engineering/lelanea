@@ -74,7 +74,7 @@
  * tier, not an empty reservation. Sunrise ships files there (this one included)
  * and the test has never asserted it empty.
  */
-// LELAÑEA — a leaf app on Daybreak, which is itself a framework-layer fork of
+// LELANEA — a leaf app on Daybreak, which is itself a framework-layer fork of
 // Sunrise. So this checkout occupies tiers at BOTH levels, and the list is the
 // union of the two:
 //

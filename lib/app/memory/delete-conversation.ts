@@ -32,7 +32,7 @@
  *
  * So there are two callers. The person's own delete runs it at once: the
  * Sunrise route calls {@link onConversationsDeleted} once the row is gone, a
- * Lelañea edit to a Sunrise file (divergence row in
+ * Lelanea edit to a Sunrise file (divergence row in
  * `.context/app/platform-divergences.md`), asked for upstream as a seam every path would
  * call. Every other path is caught by the sweep, an app job on the maintenance
  * tick (`lib/app/jobs.ts`).

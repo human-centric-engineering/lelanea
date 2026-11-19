@@ -43,7 +43,7 @@ export const STEP_COPY: Record<
 > = {
   disclaimer: {
     title: 'First, what this is — and what it is not.',
-    statement: 'You understand what Lelañea is and is not.',
+    statement: 'You understand what Lelanea is and is not.',
     action: 'I have read the disclaimer',
     record: 'Disclaimer acknowledged',
     readAgain: '/disclaimer',
@@ -57,7 +57,7 @@ export const STEP_COPY: Record<
   },
   age_18: {
     title: 'And one thing to confirm.',
-    statement: 'Lelañea is for adults.',
+    statement: 'Lelanea is for adults.',
     action: 'I am eighteen or over',
     record: 'Age confirmed',
     readAgain: null,
@@ -71,7 +71,7 @@ export const STEP_COPY: Record<
  * eighteen the app stops" is later work, so it is not promised here.
  */
 export const AGE_STEP_BODY = [
-  'The work Lelañea invites is a grown-up\u2019s work \u2014 slow, honest, and yours to carry \u2014 and the terms of use ask that you are eighteen or over before you take it on.',
+  'The work Lelanea invites is a grown-up\u2019s work \u2014 slow, honest, and yours to carry \u2014 and the terms of use ask that you are eighteen or over before you take it on.',
   'Confirming this is kept beside the two acknowledgements, with the date. After it, you begin: the conversation, the map, and the first room. Everything you have agreed to here can be read back from this page whenever you want it.',
 ];
 

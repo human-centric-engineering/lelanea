@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-> ## ⚠️ This is Lelañea — a leaf app on Daybreak. Read this first.
+> ## ⚠️ This is Lelanea — a leaf app on Daybreak. Read this first.
 >
-> This repository is **Lelañea**, an application built **on** the Daybreak
+> This repository is **Lelanea**, an application built **on** the Daybreak
 > framework (`human-centric-engineering/daybreak`), which is itself built on the
-> Sunrise platform (`human-centric-engineering/sunrise`). Lelañea was cut from
+> Sunrise platform (`human-centric-engineering/sunrise`). Lelanea was cut from
 > Daybreak `daybreak-v0.2.0` and is currently synced to **`daybreak-v0.11.0`**
 > (Sunrise 0.18.0).
 >
@@ -25,12 +25,12 @@
 > — read it before your first change. [`CUSTOMIZATION.md`](./CUSTOMIZATION.md)
 > describes the platform underneath and still applies.
 >
-> ### Daybreak is the scaffolding: build Lelañea out of its elements
+> ### Daybreak is the scaffolding: build Lelanea out of its elements
 >
 > Owner ruling, 25 Sept 2026. Daybreak is not an upstream to route around; it is
 > what this app is made of. Its **modules, module config, data slots, agent
 > seats, capabilities, knowledge scopes, facilitation maps and journeys** are
-> integral parts of Lelañea, used the way Daybreak's ethos dictates. Before
+> integral parts of Lelanea, used the way Daybreak's ethos dictates. Before
 > designing a feature, name the Daybreak element each part of it is. **Content
 > that belongs to a module is owned by that module and visible in its area**
 > (Framework → Modules → the module): that is what modules are for. A parallel
@@ -48,10 +48,10 @@
 > ```
 > Sunrise      the platform   — auth, API conventions, orchestration, security middleware
 >   └── Daybreak   the framework  — modules, facilitation maps, journeys, slots, guidance
->         └── Lelañea    the leaf   — this repo, our product
+>         └── Lelanea    the leaf   — this repo, our product
 > ```
 >
-> **Lelañea-owned (edit these freely):**
+> **Lelanea-owned (edit these freely):**
 >
 > - The eleven `lib/app/leaf-*.ts` seams — `leaf-bootstrap.ts`, `leaf-admin-nav.ts`,
 >   `leaf-db-drift.ts`, `leaf-data-export.ts`, `leaf-org-export.ts`, `leaf-brand.ts`,
@@ -105,7 +105,7 @@
 >   security / rate-limit middleware (`proxy.ts`, `lib/security/**`)
 > - `lib/sunrise-version.ts`, `VERSIONING.md`, `CHANGELOG.md`, `CUSTOMIZATION.md`,
 >   and `.context/**` **except `.context/framework/` and `.context/app/`**
-> - This `CLAUDE.md` **below the banner** — keep Lelañea-specific instructions in
+> - This `CLAUDE.md` **below the banner** — keep Lelanea-specific instructions in
 >   this banner or in [`.context/app/`](./.context/app/), so upstream edits merge cleanly
 > - If you genuinely must change platform behaviour and no seam exists, keep the
 >   edit minimal, cite the upstream issue at the site, and add a follow-up rather
@@ -117,7 +117,7 @@
 >
 > | Constant                              | Is                    | We set it                 |
 > | ------------------------------------- | --------------------- | ------------------------- |
-> | `package.json` → `lib/app-version.ts` | **Lelañea's** version | yes                       |
+> | `package.json` → `lib/app-version.ts` | **Lelanea's** version | yes                       |
 > | `lib/daybreak-version.ts`             | the framework version | never — it merges through |
 > | `lib/sunrise-version.ts`              | the platform version  | never — it merges through |
 >
@@ -225,6 +225,16 @@
 > `daybreak#237` → already open as `sunrise#702` (Daybreak had diverged, but the
 > defect was in Sunrise's copy too).
 >
+> ### The app is Lelanea; the person is Lelañea
+>
+> Owner ruling, 19 Nov 2026. The product, and the AI that speaks in it, is
+> **Lelanea** with a plain n: "Lelanea's notes", "Lelanea's replies". The
+> person keeps the ñ: **Lelañea Fulton**, and "Lelañea" wherever the words are
+> about her (her writing, her videos, audio and articles, her voice and the
+> bounds she keeps on it, what she believes).
+> Code markers are `LELANEA`. Existing databases were moved by
+> `20261119100000_app_name_lelanea`.
+>
 > ### Resources are videos, audio and articles — never "films" or "readings"
 >
 > In every string, comment, test name, doc, prompt and tool description. The
@@ -259,7 +269,7 @@ package.json.version` parity case is **removed**, with the reasoning recorded
 >   reaches the seam, and without it the spread could be dropped while the seam's
 >   own row still passed. Update them whenever the seam they pin changes.
 >
-> ### The section immediately below this banner is also Lelañea's
+> ### The section immediately below this banner is also Lelanea's
 >
 > It is emitted by the Hub (`get_project_bootstrap`) and points at the process
 > HCE actually works to, which is served from the Hub rather than copied here.

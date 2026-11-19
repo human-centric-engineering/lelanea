@@ -23,6 +23,7 @@ import {
   readFoundationalDocumentsFile,
 } from '@/lib/app/content/seed-input/foundational-seed';
 import type { DocumentBlock } from '@/lib/app/content/schemas';
+import { renameAppName } from '@/tests/helpers/app-name-rename';
 
 const blocks: DocumentBlock[] = [
   { type: 'heading', text: 'A heading', level: 2 },
@@ -105,6 +106,8 @@ describe('the data migration', () => {
   // seed as JSON. This keeps the two from disagreeing: edit the key map or the
   // file, and this fails until the migration is regenerated (or, once shipped,
   // a follow-up migration moves the rows that need it).
+  // The migration is frozen and still names the app "Lelañea": compared
+  // through `20261119100000_app_name_lelanea`, which renames it.
   it('writes exactly what the seed builds today', () => {
     const sql = readFileSync(
       path.join(
@@ -116,6 +119,6 @@ describe('the data migration', () => {
     const match = /\$t86\$([\s\S]*?)\$t86\$/.exec(sql);
 
     expect(match, 'the migration no longer embeds the seed JSON').not.toBeNull();
-    expect(JSON.parse(match![1])).toEqual(buildFoundationalSeed());
+    expect(JSON.parse(renameAppName(match![1]))).toEqual(buildFoundationalSeed());
   });
 });

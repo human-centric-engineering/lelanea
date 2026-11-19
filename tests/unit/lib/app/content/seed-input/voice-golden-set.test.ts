@@ -34,7 +34,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * Every case here is about Lelañea's authored set, not a platform contract. A
+ * Every case here is about Lelanea's authored set, not a platform contract. A
  * fork with its own `content/` has no `lelanea_voice_golden_set.json` and should
  * expect the whole file to fail. Rewrite it against your own set rather than
  * deleting it; if your fork ships none, delete the file and the schema together.

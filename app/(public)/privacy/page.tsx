@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     title: `Privacy Policy - ${BRAND.name}`,
     description,
   },
-  // LELAÑEA (t-6, divergence row 10). Withheld from search while the body is
+  // LELANEA (t-6, divergence row 10). Withheld from search while the body is
   // the starter's template. `/terms` and `/disclaimer` carry her real words and
   // are indexable; this one would put "This is a placeholder privacy policy"
   // into search results as lelanea.com's privacy policy. Remove this line with
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
  *
  * Phase 3.5: Landing Page & Marketing
  *
- * ## Lelañea: kept, and labelled (t-6, decision D8, divergence row 10)
+ * ## Lelanea: kept, and labelled (t-6, decision D8, divergence row 10)
  *
  * D8 rules that Sunrise's generic page STAYS and is linked as interim, rather
  * than being deleted or replaced with something we wrote. Deleting it would
@@ -56,9 +56,9 @@ export default function PrivacyPolicyPage() {
       <div className="mx-auto max-w-3xl">
         <h1 className="mb-8 text-4xl font-bold tracking-tight">Privacy Policy</h1>
 
-        {/* LELAÑEA (t-6, divergence row 10) — the interim notice D8 requires. */}
+        {/* LELANEA (t-6, divergence row 10) — the interim notice D8 requires. */}
         <div className="mb-10 rounded-md border border-[var(--color-status-yellow)] bg-[var(--color-status-yellow-bg)] p-5 text-sm leading-relaxed">
-          <strong className="font-medium">This is an interim policy.</strong> Lelañea&rsquo;s own
+          <strong className="font-medium">This is an interim policy.</strong> Lelanea&rsquo;s own
           privacy policy is being written and will replace the template below. In the meantime,{' '}
           <Link href="/data" className="underline underline-offset-4">
             Your data

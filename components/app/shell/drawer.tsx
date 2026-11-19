@@ -82,7 +82,7 @@ function drawers(resources: ResourcesLoad): DrawerSpec[] {
       id: 'map',
       eyebrow: 'where you can go',
       title: 'Your map',
-      lede: 'Sixteen modules. Work through them in sequence, or ask Lelañea which one fits what you are bringing.',
+      lede: 'Sixteen modules. Work through them in sequence, or ask Lelanea which one fits what you are bringing.',
       tone: 'var(--color-secondary-ink)',
       body: <MapDrawerBody />,
     },

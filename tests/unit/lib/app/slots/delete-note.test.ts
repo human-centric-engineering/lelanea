@@ -1,5 +1,5 @@
 /**
- * Removing one of Lelañea's notes: what goes, what stays, and who can reach it
+ * Removing one of Lelanea's notes: what goes, what stays, and who can reach it
  * (f-memory t-78).
  *
  * ## The assertions that fail when the behaviour is wrong (`fp6`)
@@ -274,7 +274,7 @@ describe('removing a note', () => {
   });
 });
 
-describe('a heading Lelañea made up (`/code-review`, t-78)', () => {
+describe('a heading Lelanea made up (`/code-review`, t-78)', () => {
   // No definition in either tier: the AI coined it from what was said.
   const MINTED = 'leaving_my_husband';
 

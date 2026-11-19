@@ -147,7 +147,7 @@ describe('selectSectionText', () => {
   it('flattens paragraphs into strings, in order, keeping the bold markers', async () => {
     const lines = selectSectionText(await disclaimer(), 'is_not');
 
-    expect(lines[0]).toBe('Lelañea is **not** a medical application.');
+    expect(lines[0]).toBe('Lelanea is **not** a medical application.');
     // `/data` renders these through `InlineText`, which turns `**not**` into a
     // `<strong>`. Stripping here would flatten the one word the page exists for.
     expect(lines[0]).toContain('**not**');
@@ -186,15 +186,15 @@ describe('selectSectionText', () => {
  */
 describe('the keys the surfaces select by', () => {
   it("/data's 'it is not' column is exactly the seven items, and the qualifier is apart", async () => {
-    // The section is eight paragraphs under its heading: seven "Lelañea is
+    // The section is eight paragraphs under its heading: seven "Lelanea is
     // **not** a…" lines and a qualifier. Rendering all eight as rows read as an
-    // eighth thing Lelañea is not. Both counts are pinned.
+    // eighth thing Lelanea is not. Both counts are pinned.
     const document = await disclaimer();
     const items = selectSectionText(document, 'is_not');
     const context = selectSectionText(document, 'is_not_context');
 
     expect(items).toHaveLength(7);
-    expect(items.every((line) => line.startsWith('Lelañea is **not** '))).toBe(true);
+    expect(items.every((line) => line.startsWith('Lelanea is **not** '))).toBe(true);
     expect(context).toHaveLength(1);
     expect(context[0]).toMatch(/^Although some concepts/);
   });
@@ -206,9 +206,9 @@ describe('the keys the surfaces select by', () => {
     const purpose = selectSectionText(document, 'purpose');
 
     expect(purpose).toHaveLength(3);
-    expect(purpose.every((line) => !line.startsWith('Lelañea is not'))).toBe(true);
+    expect(purpose.every((line) => !line.startsWith('Lelanea is not'))).toBe(true);
     expect(selectSectionText(document, 'purpose_limits')).toEqual([
-      'Lelañea is not intended to provide healthcare, mental healthcare, psychotherapy, or crisis intervention.',
+      'Lelanea is not intended to provide healthcare, mental healthcare, psychotherapy, or crisis intervention.',
     ]);
   });
 
@@ -227,7 +227,7 @@ describe('the keys the surfaces select by', () => {
 
     const commitment = selectSectionText(await disclaimer(), 'commitment');
     expect(commitment).toEqual([
-      'Lelañea was created with deep respect for both contemplative wisdom and modern healthcare.',
+      'Lelanea was created with deep respect for both contemplative wisdom and modern healthcare.',
       expect.stringContaining('not to replace licensed professionals'),
     ]);
   });
@@ -236,7 +236,7 @@ describe('the keys the surfaces select by', () => {
     const philosophy = await requireDocument('the_heart_behind_lelanea');
 
     expect(selectSectionText(philosophy, 'invitation')).toEqual([
-      'Lelañea was created as an invitation into conscious living.',
+      'Lelanea was created as an invitation into conscious living.',
     ]);
     expect(selectSectionText(philosophy, 'purpose')[0]).toContain(
       'remembering who they are beneath conditioning'
@@ -252,6 +252,6 @@ describe('the keys the surfaces select by', () => {
 
     expect(welcome).toHaveLength(7);
     expect(welcome[0]).toBe('Welcome, {{first_name}}.');
-    expect(welcome.at(-1)).toBe('Welcome to Lelañea.');
+    expect(welcome.at(-1)).toBe('Welcome to Lelanea.');
   });
 });

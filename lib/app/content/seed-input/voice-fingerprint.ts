@@ -50,7 +50,7 @@ function voiceFingerprintFile(): VoiceFingerprintFile {
  * run because the core has no editable surface yet.
  *
  * Read the `provenance` block before putting this in front of anyone. The six
- * files under `content/` are Lelañea's own documents; this one was drafted from
+ * files under `content/` are Lelanea's own documents; this one was drafted from
  * them in her register and is a proposal until she has signed it off.
  */
 export function getVoiceFingerprint(): VoiceFingerprintCore {

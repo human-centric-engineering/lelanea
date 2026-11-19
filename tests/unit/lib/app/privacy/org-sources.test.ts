@@ -1,5 +1,5 @@
 /**
- * Lelañea's org-export sources (t-112): which rows each one reads.
+ * Lelanea's org-export sources (t-112): which rows each one reads.
  *
  * `LEAF_ORG_SOURCES` (`lib/app/leaf-org-export.ts`) declares all 38 app tables
  * as the org's data. What the defaults test does not see is what each source's
@@ -13,7 +13,7 @@
  *
  * FORK NOTE — this reads the real `lib/app/leaf-org-export.ts`, not a mock.
  * It has to: the seam's own sources are the thing under test, so a mock would
- * assert the mock. It is Lelañea's seam and Lelañea's test; a fork of Lelañea
+ * assert the mock. It is Lelanea's seam and Lelanea's test; a fork of Lelanea
  * that changes `LEAF_ORG_SOURCES` updates the count of 38 and the model named
  * in the single-source cases here.
  */

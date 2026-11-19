@@ -1,7 +1,7 @@
 /**
  * Unit Tests: authored-content placeholders
  *
- * Lelañea's copy carries three merge fields and no more. Two of them are
+ * Lelanea's copy carries three merge fields and no more. Two of them are
  * unfilled launch blockers the author flagged herself (`[Month Day, Year]` and
  * `[Support Email]` in the Terms of Use); one is a personalisation the app
  * substitutes (`{{first_name}}`, twice, in the welcome statement).
@@ -18,7 +18,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * `KNOWN_PLACEHOLDERS` is Lelañea's set, pinned deliberately. A fork with its own
+ * `KNOWN_PLACEHOLDERS` is Lelanea's set, pinned deliberately. A fork with its own
  * copy should replace that constant with its own merge fields and keep every
  * case: the assertion "the prose contains exactly the placeholders something
  * substitutes, and no others" is what stops a literal `[Support Email]` reaching

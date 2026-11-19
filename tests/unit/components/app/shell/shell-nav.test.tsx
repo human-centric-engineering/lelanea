@@ -117,7 +117,7 @@ describe('ShellNav — which destination reads as current', () => {
 
   it('does not mark a sibling that merely shares a prefix', () => {
     // `/app/share` vs a hypothetical `/app/shared`: a bare `startsWith` with no
-    // separator would light "Share with Lelañea" on both.
+    // separator would light "Share with Lelanea" on both.
     renderAt('/app/shared-thing');
     expect(currentItems()).toEqual([]);
   });
@@ -154,7 +154,7 @@ describe('ShellNav — which destination reads as current', () => {
       'Workspace',
       'Your journey',
       'Life situations',
-      'Share with Lelañea',
+      'Share with Lelanea',
     ]) {
       expect(screen.getByRole('link', { name: new RegExp(label) })).toBeTruthy();
     }
@@ -200,7 +200,7 @@ describe('ShellNav — slim mode', () => {
 
   it('starts labelled', () => {
     renderAt('/app');
-    expect(screen.getByText('Lelañea')).toBeTruthy();
+    expect(screen.getByText('Lelanea')).toBeTruthy();
     expect(toggle().getAttribute('aria-label')).toBe('Collapse the menu');
   });
 
@@ -210,7 +210,7 @@ describe('ShellNav — slim mode', () => {
 
     // The wordmark and the visible labels go; the accessible names must not,
     // or a screen-reader user loses the nav entirely at 64px.
-    expect(screen.queryByText('Lelañea')).toBeNull();
+    expect(screen.queryByText('Lelanea')).toBeNull();
     expect(screen.getByRole('link', { name: 'Life situations' })).toBeTruthy();
     // Six destinations and the wordmark — which keeps its own `aria-label`
     // when its text is hidden, so it stays a link. The account footer is a
@@ -220,7 +220,7 @@ describe('ShellNav — slim mode', () => {
     // to be edited by hand when t-73 added the notes, and a literal here fails
     // in a way that says nothing about what changed.
     expect(screen.getAllByRole('link')).toHaveLength(SHELL_NAV.filter(isNavItem).length + 1);
-    const wordmark = screen.getByRole('link', { name: 'Lelañea, back to the site' });
+    const wordmark = screen.getByRole('link', { name: 'Lelanea, back to the site' });
     // The mark drawn in light (t-183) adds nothing to that name.
     expect(wordmark.querySelector('img[src="/dot-lotus-mark.svg"]')).toHaveAttribute(
       'aria-hidden',
@@ -286,7 +286,7 @@ describe('ShellNav — slim mode', () => {
     expect(toggle().getAttribute('aria-label')).toBe('Expand the menu');
 
     await userEvent.click(toggle());
-    expect(screen.getByText('Lelañea')).toBeTruthy();
+    expect(screen.getByText('Lelanea')).toBeTruthy();
   });
 
   it('remembers the choice for this browser', async () => {
@@ -634,7 +634,7 @@ describe('ShellNav — the drawer is out of reach while it is shut', () => {
     renderAt('/app', 'small');
 
     expect(screen.getByRole('link', { name: /Life situations/ })).toBeTruthy();
-    expect(screen.getByText('Lelañea')).toBeTruthy();
+    expect(screen.getByText('Lelanea')).toBeTruthy();
   });
 
   it('still offers the collapse control above 900px, and no close button', () => {

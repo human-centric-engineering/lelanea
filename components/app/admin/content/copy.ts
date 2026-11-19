@@ -24,10 +24,10 @@ export const COLLECTION_COPY: Readonly<
     description: 'The foundational documents, block by block.',
     areas: [
       { name: 'The Initiation', description: 'The welcome statement, read at onboarding.' },
-      { name: 'The Heart Behind Lelañea', description: 'The intent and mission.' },
+      { name: 'The Heart Behind Lelanea', description: 'The intent and mission.' },
       { name: 'The Mission', description: 'In the About section.' },
       { name: 'About the Creator', description: 'In the About section.' },
-      { name: 'The Lineage of Lelañea', description: 'In the About section.' },
+      { name: 'The Lineage of Lelanea', description: 'In the About section.' },
       { name: 'Disclaimer', description: 'What it is, what it is not, and important disclosures.' },
       { name: 'Terms of Use', description: 'The terms a client accepts.' },
     ],

@@ -13,7 +13,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real journey seed, not a hand-written fixture
  * ---------------------------------------------------------------------------
- * The slugs, titles and parts asserted below are Lelañea's journey, read from
+ * The slugs, titles and parts asserted below are Lelanea's journey, read from
  * the real structure file so the page and the content cannot drift apart. A
  * fork with a different journey pins its own; a fork with no `content/` has no
  * module pages and should delete this file with the route.

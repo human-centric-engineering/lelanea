@@ -1,5 +1,5 @@
 /**
- * Leaf-app database drift-probe registration — Lelañea's Prisma-unmodelled objects.
+ * Leaf-app database drift-probe registration — Lelanea's Prisma-unmodelled objects.
  *
  * Called by `lib/app/db-drift.ts`'s `registerAppDriftProbes()` after the
  * framework probes are registered, and run by `npm run db:drift-check` (CI, and

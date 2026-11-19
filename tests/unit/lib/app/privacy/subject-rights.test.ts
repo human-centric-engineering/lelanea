@@ -1,5 +1,5 @@
 /**
- * One person, both of Lelañea's tables, both rights — end to end through the
+ * One person, both of Lelanea's tables, both rights — end to end through the
  * REAL seams (§06 t-17's done-when).
  *
  * `waitlist/privacy.test.ts` and `gateway/privacy.test.ts` each prove their

@@ -69,7 +69,7 @@ export interface WaitlistConfirmationEmailProps {
  *
  * Deliberately narrow. `name` is free text from an anonymous form, and the
  * address it goes to is unverified — so anything reflected here is
- * attacker-chosen text at the top of a message from Lelañea's real sender, to a
+ * attacker-chosen text at the top of a message from Lelanea's real sender, to a
  * person who may never have typed it. A URL as a "name" would arrive as a
  * clickable link. React escapes HTML; it cannot un-link what a mail client
  * auto-links. Nothing that fails this is a first name anyone is owed a

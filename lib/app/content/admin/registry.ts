@@ -448,6 +448,8 @@ export function entityHandlers(collection: string, segment: string): EntityHandl
 /**
  * An id or key in a path: anything a stored one could be, and nothing else.
  * Letters are Unicode letters, because the journey row's id is the app's name,
- * `Lelañea`; an ASCII-only pattern turned every journey save into a 404.
+ * which carried a ñ until 19 Nov 2026 (`Lelañea`); an ASCII-only pattern turned
+ * every journey save into a 404, and a database that has not run
+ * `20261119100000_app_name_lelanea` still holds that id.
  */
 export const CONTENT_ID_PATTERN = /^[\p{L}\p{N}_-]{1,80}$/u;

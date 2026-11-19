@@ -23,7 +23,7 @@ import { CORPUS_AGENT_SLUG_PREFIX } from '@/lib/app/voice/designation';
 /** Hers, so the corpus rules that bind her agents bind this one too. */
 export const SYNOPSIS_AGENT_SLUG = `${CORPUS_AGENT_SLUG_PREFIX}synopsis`;
 
-export const SYNOPSIS_AGENT_NAME = 'Lelañea — session synopsis';
+export const SYNOPSIS_AGENT_NAME = 'Lelanea — session synopsis';
 
 export const SYNOPSIS_AGENT_DESCRIPTION =
   'Writes the draft account of a session when it closes, for the person to keep, change or discard. Called once per session; nobody talks to it.';

@@ -1,6 +1,6 @@
 /* app/brand-theme.css
  *
- * Lelañea's palette and type, scoped to the `consumer` surface.
+ * Lelanea's palette and type, scoped to the `consumer` surface.
  *
  * Sunrise ships this file empty; it is a fork-owned seam, so what we put here
  * merges cleanly on every upgrade and no platform layout or page is edited to
@@ -407,7 +407,7 @@
 
   /* ---- Radii (§6.4) -----------------------------------------------------
    * These restate Tailwind's own scale, so `rounded-md` / `rounded-lg` /
-   * `rounded-xl` come out at Lelañea's radii on consumer pages with no markup
+   * `rounded-xl` come out at Lelanea's radii on consumer pages with no markup
    * change. Pills use `rounded-full`; `--radius-pill` exists for `var()` use.
    */
   --radius-sm: 8px;
@@ -801,7 +801,7 @@
 
 /* Eyebrow — tracked out at 0.14em. Casing is deliberately NOT forced: §6.10
  * says eyebrows MAY be lowercase, and `text-transform: lowercase` would strip
- * the capital from Lelañea's name wherever an eyebrow carries it. Write the
+ * the capital from Lelanea's name wherever an eyebrow carries it. Write the
  * label lowercase; the class supplies the tracking. */
 [data-surface='consumer'] .brand-eyebrow {
   /* rem, not px: this file refuses to pin `font-size` on <html> precisely so a

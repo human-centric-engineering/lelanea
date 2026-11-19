@@ -17,7 +17,7 @@ import bandStyles from '@/components/app/site/bands.module.css';
 export const metadata: Metadata = {
   title: 'Your data',
   description:
-    'An honest account of what Lelañea is, what it is not, and how your words are handled.',
+    'An honest account of what Lelanea is, what it is not, and how your words are handled.',
   alternates: { canonical: '/data' },
 };
 
@@ -124,8 +124,8 @@ const SECTION = {
  * The cross beside each "it is not" line.
  *
  * `aria-hidden`, because it repeats what the sentence says in words — every one
- * of these lines begins "Lelañea is not". A screen reader announcing "cross,
- * Lelañea is not a medical application" says the negation twice, and WCAG 1.4.1
+ * of these lines begins "Lelanea is not". A screen reader announcing "cross,
+ * Lelanea is not a medical application" says the negation twice, and WCAG 1.4.1
  * is satisfied by the text rather than by the colour either way.
  */
 function CrossIcon() {
@@ -167,7 +167,7 @@ function CrossIcon() {
  * ## The prototype's re-cut lists did not survive reconciliation
  *
  * The design ships two hand-written arrays. `ISNOT_LIST`'s seven items match
- * the seven authored "Lelañea is **not** a…" paragraphs one for one and are
+ * the seven authored "Lelanea is **not** a…" paragraphs one for one and are
  * taken from them directly. `IS_LIST`'s five are a re-cut of a single authored
  * sentence — "designed to support self-awareness, conscious living, values
  * clarification, reflective inquiry, meditation, personal growth, and
@@ -187,7 +187,7 @@ function CrossIcon() {
 export default async function DataPage() {
   const disclaimer = await requireDocument('disclaimer');
 
-  // "The Purpose of Lelañea" closes on a NEGATION — "Lelañea is not intended to
+  // "The Purpose of Lelanea" closes on a NEGATION — "Lelanea is not intended to
   // provide healthcare, mental healthcare, psychotherapy, or crisis
   // intervention." Rendered in the left column, that sentence sat under a green
   // tick and the words "it is designed to support", which is the opposite of
@@ -204,9 +204,9 @@ export default async function DataPage() {
   // above it.
   const coachingHeading = selectSectionHeading(disclaimer, SECTION.coaching);
 
-  // The seven "Lelañea is **not** a…" lines, and separately the paragraph that
+  // The seven "Lelanea is **not** a…" lines, and separately the paragraph that
   // qualifies them. Rendering the qualifier as a list row put it beside a red
-  // cross, reading as an eighth thing Lelañea is not, so it has its own key.
+  // cross, reading as an eighth thing Lelanea is not, so it has its own key.
   const isNot = selectSectionText(disclaimer, SECTION.isNot);
   const isNotNote = selectSectionText(disclaimer, SECTION.isNotContext);
 

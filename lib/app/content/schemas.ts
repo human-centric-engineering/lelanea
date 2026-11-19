@@ -1,5 +1,5 @@
 /**
- * Zod schemas for Lelañea's authored content.
+ * Zod schemas for Lelanea's authored content.
  *
  * Six of the nine files under `content/` are Lelañea Fulton's own words,
  * transcribed and corrected only for typography. They are **not** a draft for
@@ -528,14 +528,14 @@ export const discoveryQuestionsFileSchema = discoveryQuestionsFileBase.superRefi
 // ============================================================================
 //
 // The seventh file, and the only one that is NOT a transcription. The six
-// beside it are Lelañea's own documents, corrected for typography and nothing
+// beside it are Lelanea's own documents, corrected for typography and nothing
 // else. This one was DRAFTED from them, in her register, and carries its own
 // provenance saying so — `awaitingSignOffFrom` is a required field precisely so
 // the file cannot quietly pretend to be the other kind.
 //
 // It lives here rather than as a TypeScript constant because it is her authored
 // words: `.context/app/planning/README.md` says the content files govern
-// "anything authored by Lelanea, which is never paraphrased in the build", and a
+// "anything authored by Lelañea, which is never paraphrased in the build", and a
 // parallel authoring path for her voice is exactly what that rule exists to
 // prevent.
 

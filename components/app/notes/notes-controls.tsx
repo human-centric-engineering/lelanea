@@ -93,7 +93,7 @@ export function NotesControls(props: NotesControlsProps) {
     <div className="flex flex-col gap-2.5">
       <div role="search" className="flex flex-col gap-2">
         <label htmlFor={searchId} className="sr-only">
-          Search Lelañea’s notes
+          Search Lelanea’s notes
         </label>
         <div className="relative">
           <Search
@@ -108,7 +108,7 @@ export function NotesControls(props: NotesControlsProps) {
             value={props.draft}
             maxLength={NOTES_SEARCH_MAX}
             autoComplete="off"
-            placeholder="Search what Lelañea has noted"
+            placeholder="Search what Lelanea has noted"
             onChange={(event) => props.onDraft(event.currentTarget.value)}
             className={cn(FIELD, 'placeholder:text-muted-foreground w-full py-2 pr-4 pl-9')}
           />

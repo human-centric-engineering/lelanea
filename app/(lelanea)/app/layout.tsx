@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     template: `%s - ${BRAND.name}`,
     default: BRAND.name,
   },
-  description: 'Your journey with Lelañea',
+  description: 'Your journey with Lelanea',
 };
 
 /**

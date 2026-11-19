@@ -1,6 +1,6 @@
 /**
  * App context-contributor registrations (prompt-context loaders) — FILLED by
- * Lelañea.
+ * Lelanea.
  *
  * **Fork-owned scaffold** — Sunrise ships this empty and does NOT change it
  * after release, so your edits here merge cleanly on upgrade (the stable
@@ -12,7 +12,7 @@
  * loader)` calls to inject your own `LOCKED CONTEXT` block per turn for a
  * given `contextType`, without editing the core `buildContext` switch.
  *
- * ## What Lelañea registers
+ * ## What Lelanea registers
  *
  * Lelañea Fulton's voice block — the register a moment calls for, plus real
  * passages of her own writing, each labelled by origin so the model can tell her

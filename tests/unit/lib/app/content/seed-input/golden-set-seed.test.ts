@@ -12,7 +12,7 @@
  * two honest.
  *
  * ---------------------------------------------------------------------------
- * FORK NOTE — this reads Lelañea's own authored material
+ * FORK NOTE — this reads Lelanea's own authored material
  * ---------------------------------------------------------------------------
  * Upstream there is no golden set and no pointer table, so this file fails at
  * import. That is the seam being unfilled, not a defect.
@@ -25,6 +25,7 @@ import { buildGoldenSetSeed } from '@/lib/app/content/seed-input/golden-set-seed
 import { getVoiceGoldenSet } from '@/lib/app/content/seed-input/voice-golden-set';
 import { goldenSetDatasetId } from '@/lib/app/voice/golden-set';
 import { INSTALL_ORG_ID } from '@/lib/tenancy/constants';
+import { renameAppName } from '@/tests/helpers/app-name-rename';
 
 const MIGRATION = 'prisma/migrations/20260929100400_app_voice_golden_set_data/migration.sql';
 
@@ -73,11 +74,13 @@ describe('what the seed builds', () => {
 });
 
 describe('the data migration', () => {
+  // The migration is frozen and still names the app "Lelañea": compared
+  // through `20261119100000_app_name_lelanea`, which renames it.
   it('writes exactly what the seed builds today', () => {
     const match = /\$t88gs\$([\s\S]*?)\$t88gs\$/.exec(migrationSql());
 
     expect(match, 'the migration no longer embeds the golden-set seed JSON').not.toBeNull();
-    expect(JSON.parse(match![1])).toEqual(buildGoldenSetSeed());
+    expect(JSON.parse(renameAppName(match![1]))).toEqual(buildGoldenSetSeed());
   });
 
   it('records the same changed fields the service records', async () => {
