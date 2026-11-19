@@ -113,8 +113,6 @@ export const CHANNEL_URL = {
   site: 'https://www.lelaneafulton.com/',
   instagram: 'https://www.instagram.com/lelanea/',
   youtube: 'https://www.youtube.com/@lelaneafulton',
-  spotify: 'https://open.spotify.com/show/2uzw0r6lQAbFxveAqnyGrQ',
-  applePodcasts: 'https://podcasts.apple.com/us/podcast/integrating-consciousness/id1799753903',
   podcastOnYouTube: 'https://www.youtube.com/playlist?list=PLCl6VwDKqbGUxHb8F0MT6tTxzk4HFX5ta',
   ayaOnYouTube: 'https://www.youtube.com/playlist?list=PLCl6VwDKqbGWOASZWVxXG-EXSfexIgfr1',
   substack: 'https://lelanea.substack.com/',
@@ -134,7 +132,7 @@ export type ChannelIcon = 'site' | 'gather';
  * `icon`, never both: a mark always wins, so an icon beside it would be dead
  * data. Skool has no mark, so it keeps its glyph.
  */
-export type ServiceMark = 'spotify' | 'applePodcasts' | 'youtube' | 'substack' | 'instagram';
+export type ServiceMark = 'youtube' | 'substack' | 'instagram';
 
 /**
  * Where the site says she can be found — the footer's row. `null` means "no
@@ -157,12 +155,6 @@ export const SITE_LINKS: ReadonlyArray<{
   },
   { label: 'Instagram', href: CHANNEL_URL.instagram, mark: 'instagram' },
   { label: 'YouTube', href: CHANNEL_URL.youtube, mark: 'youtube' },
-  { label: 'Spotify', href: CHANNEL_URL.spotify, mark: 'spotify' },
-  {
-    label: 'Apple Podcasts',
-    href: CHANNEL_URL.applePodcasts,
-    mark: 'applePodcasts',
-  },
   { label: 'Substack', href: CHANNEL_URL.substack, mark: 'substack' },
   { label: 'Skool', href: CHANNEL_URL.skool, icon: 'gather' },
 ];
@@ -196,11 +188,7 @@ export const SITE_CHANNELS: ReadonlyArray<{
       // cropped away by the card's landscape frame.
       position: '50% 22%',
     },
-    links: [
-      { label: 'Spotify', href: CHANNEL_URL.spotify, mark: 'spotify' },
-      { label: 'Apple Podcasts', href: CHANNEL_URL.applePodcasts, mark: 'applePodcasts' },
-      { label: 'YouTube', href: CHANNEL_URL.podcastOnYouTube, mark: 'youtube' },
-    ],
+    links: [{ label: 'YouTube', href: CHANNEL_URL.podcastOnYouTube, mark: 'youtube' }],
   },
   {
     name: 'Conversations with Aya',

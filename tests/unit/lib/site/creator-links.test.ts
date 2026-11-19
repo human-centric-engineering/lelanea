@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { CREATOR_LINKS, SITE_LINKS } from '@/lib/site/config';
+import { CREATOR_LINKS, SITE_CHANNELS, SITE_LINKS } from '@/lib/site/config';
 
 describe('CREATOR_LINKS', () => {
   it('lists her site and three channels, in that order', () => {
@@ -34,6 +34,20 @@ describe('CREATOR_LINKS', () => {
       '@lelaneafulton',
       'lelanea.substack.com',
     ]);
+  });
+
+  // Owner, 19 Nov 2026: she is not continuing the podcast on Spotify or Apple
+  // Podcasts, so nothing on the site leads there.
+  it('links to neither Spotify nor Apple Podcasts, anywhere', () => {
+    const hrefs = [
+      ...SITE_LINKS.map((link) => link.href),
+      ...SITE_CHANNELS.flatMap((channel) => channel.links.map((link) => link.href)),
+    ];
+    expect(hrefs.filter((href) => /spotify\.com|podcasts\.apple\.com/.test(href ?? ''))).toEqual(
+      []
+    );
+    const podcast = SITE_CHANNELS.find((channel) => channel.name === 'The podcast');
+    expect(podcast?.links.map((link) => link.label)).toEqual(['YouTube']);
   });
 
   it('carries a mark or an icon on every link, never both', () => {
