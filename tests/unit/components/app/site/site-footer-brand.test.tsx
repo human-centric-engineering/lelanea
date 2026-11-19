@@ -23,7 +23,7 @@
  * That file holds the platform's brand-bearing surfaces, and its footer table
  * asserts a copyright line contains the legal entity and **not** the product
  * name (#363). Lelanea's line names the product by the owner's ruling (t-171)
- * — `© 2026 Lelanea™ · Built by HCE Studio` — so adding this footer there would
+ * — `© 2026 Lelanea · Built by HCE Studio` — so adding this footer there would
  * mean weakening an assertion that is correct for every other fork.
  *
  * ## The fixture is deliberately not our own brand
@@ -61,20 +61,22 @@ describe('SiteFooter legal line', () => {
 
     const legal = screen.getByText(/©/);
 
-    expect(legal).toHaveTextContent(`${FORK.name}™`);
+    expect(legal).toHaveTextContent(`${FORK.name}`);
+    // Not yet a registered trademark (owner, 19 Nov 2026).
+    expect(legal.textContent).not.toContain('™');
     // A literal in the component would survive the assertion above only if it
     // happened to be "Acme". This is what makes it mean something.
     expect(legal.textContent).not.toContain('Lelanea');
   });
 
-  it('puts the © before the trademarked name and the studio credit last (t-171)', () => {
+  it('puts the © before the product name and the studio credit last (t-171)', () => {
     render(<SiteFooter />);
 
     const text = screen.getByText(/©/).textContent ?? '';
 
     // Order carries the claim, so it is asserted whole rather than as a set
     // of contains-checks that a reordered line would also satisfy.
-    expect(text).toMatch(new RegExp(`^© \\d{4} ${FORK.name}™ · Built by HCE Studio$`));
+    expect(text).toMatch(new RegExp(`^© \\d{4} ${FORK.name} · Built by HCE Studio$`));
   });
 
   it('no longer prints the legal entity on the public footer (owner, t-171)', () => {
@@ -93,5 +95,14 @@ describe('SiteFooter legal line', () => {
     expect(text).not.toContain('Fulton');
     expect(text).not.toContain('[YEAR]');
     expect(text).toMatch(/© \d{4} /);
+  });
+
+  it('links only "HCE Studio" to the studio\'s site (owner, 19 Nov 2026)', () => {
+    render(<SiteFooter />);
+
+    const link = screen.getByRole('link', { name: 'HCE Studio' });
+    expect(link).toHaveAttribute('href', 'https://hce.studio');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link.closest('p')?.textContent).toMatch(/· Built by HCE Studio$/);
   });
 });

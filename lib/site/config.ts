@@ -247,7 +247,7 @@ export const CREATOR_LINKS: ReadonlyArray<{
 
 /** The public pages, in the order the header and footer list them. */
 export const SITE_NAV = [
-  { href: '/lelanea', label: 'Lelañea' },
+  { href: '/lelanea', label: 'Lelanea' },
   { href: '/mission', label: 'The mission' },
   { href: '/data', label: 'Your data' },
 ] as const;

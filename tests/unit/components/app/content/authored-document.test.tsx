@@ -309,7 +309,7 @@ describe('headings', () => {
     const h1s = Array.from(container.querySelectorAll('h1'));
 
     expect(h1s).toHaveLength(1);
-    expect(h1s[0].textContent).toBe('Lelanea™');
+    expect(h1s[0].textContent).toBe('Lelanea');
   });
 
   it('clamps an authored level into the h2–h6 range', () => {

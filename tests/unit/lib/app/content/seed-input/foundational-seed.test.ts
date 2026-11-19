@@ -107,7 +107,9 @@ describe('the data migration', () => {
   // file, and this fails until the migration is regenerated (or, once shipped,
   // a follow-up migration moves the rows that need it).
   // The migration is frozen and still names the app "Lelañea": compared
-  // through `20261119100000_app_name_lelanea`, which renames it.
+  // through `20261119100000_app_name_lelanea`, which renames it, and then
+  // `20261119200000_app_name_no_trademark`, which drops the ™ from the Terms
+  // of Use title.
   it('writes exactly what the seed builds today', () => {
     const sql = readFileSync(
       path.join(
@@ -119,6 +121,7 @@ describe('the data migration', () => {
     const match = /\$t86\$([\s\S]*?)\$t86\$/.exec(sql);
 
     expect(match, 'the migration no longer embeds the seed JSON').not.toBeNull();
-    expect(JSON.parse(renameAppName(match![1]))).toEqual(buildFoundationalSeed());
+    const migrated = renameAppName(match![1]).replace('"title":"Lelanea™"', '"title":"Lelanea"');
+    expect(JSON.parse(migrated)).toEqual(buildFoundationalSeed());
   });
 });

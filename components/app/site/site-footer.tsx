@@ -32,12 +32,14 @@ import styles from '@/components/app/site/site.module.css';
  * attribution string. There is no paragraph slot, and the disclaimer is the
  * reason the footer exists at all.
  *
- * ## The line reads "© 2026 Lelanea™ · Built by HCE Studio" (owner, t-171)
+ * ## The line reads "© 2026 Lelanea · Built by HCE Studio" (owner, t-171)
  *
  * The prototype printed "© [YEAR] Lelañea Fulton"; t-5 replaced the holder with
  * the legal entity from `leafBrandLegalName`. The owner ruled on 22 October
- * 2026 that the public footer names the product after the ©, with the trademark
- * on it, followed by the studio's credit. The legal entity stays in the brand
+ * 2026 that the public footer names the product after the ©, followed by the
+ * studio's credit. It carried a ™ until 19 November 2026, when the owner had it
+ * removed: the name is not yet a registered trademark. "HCE Studio" links to
+ * the studio's site, styled as the line's own text with an underline on hover. The legal entity stays in the brand
  * seam for the surfaces that do carry it, and is no longer printed here.
  *
  * That is why this footer is not in `tests/unit/brand-fork-surfaces.test.tsx`'s
@@ -55,9 +57,9 @@ import styles from '@/components/app/site/site.module.css';
  * existed to close, and no test would have caught it: the protected footer's
  * suite covers only its own side.
  *
- * The seam is handed the trademarked product name as the holder, so its
- * default is "© 2026 Lelanea™", a fork's string still replaces that half
- * verbatim, and `false` still removes it. `STUDIO_CREDIT` is then appended to
+ * The seam is handed the product name as the holder, so its
+ * default is "© 2026 Lelanea", a fork's string still replaces that half
+ * verbatim, and `false` still removes it. The studio's credit is then appended to
  * whatever the seam yields — the owner's ruling covers the credit as well as
  * the name, so it is ours to print, not the seam's to replace. When the seam yields nothing the whole paragraph
  * goes, credit included: `false` is the white-label setting, and a bare studio
@@ -65,13 +67,13 @@ import styles from '@/components/app/site/site.module.css';
  *
  * @see .context/app/planning/design/lelanea.html — `footer.site-foot`
  */
-/** The studio's credit, closing the legal line (owner, t-171). */
-export const STUDIO_CREDIT = 'Built by HCE Studio';
+/** Where "HCE Studio", in the credit closing the legal line, links to (owner, 19 Nov 2026). */
+export const STUDIO_URL = 'https://hce.studio';
 
 export function SiteFooter() {
   const { openPreferences } = useConsent();
   const year = new Date().getFullYear();
-  const copyright = resolveFooterCopyright(year, `${BRAND.name}™`);
+  const copyright = resolveFooterCopyright(year, BRAND.name);
 
   // D3: nothing rather than a dead link. A destination with no URL yet is not
   // rendered at all — not disabled, not `#`.
@@ -179,7 +181,10 @@ export function SiteFooter() {
           place to change it from. */}
       {copyright && (
         <p className={styles.footLegal}>
-          {copyright} · {STUDIO_CREDIT}
+          {copyright} · Built by{' '}
+          <a href={STUDIO_URL} rel="noopener noreferrer" target="_blank">
+            HCE Studio
+          </a>
         </p>
       )}
     </footer>

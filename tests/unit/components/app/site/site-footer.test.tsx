@@ -184,8 +184,6 @@ describe('SiteFooter', () => {
       // Population first — the rest of the footer is there.
       expect(screen.getByRole('button', { name: 'Cookie Preferences' })).toBeTruthy();
       expect(screen.queryByText(/©/)).toBeNull();
-      // And no orphaned trademark with nothing after it.
-      expect(screen.queryByText(/™/)).toBeNull();
 
       vi.doMock('@/lib/app/footer', () => ({ footerCopyright: null }));
       vi.resetModules();
@@ -207,7 +205,7 @@ describe('SiteFooter', () => {
     });
   });
 
-  it('prints the copyright year, the trademark and the studio credit, in that order', async () => {
+  it('prints the copyright year, the name and the studio credit, in that order', async () => {
     await renderWithLinks([]);
 
     // The NAMES on this line come from the brand seam, which tests/setup.ts
@@ -215,6 +213,8 @@ describe('SiteFooter', () => {
     // site-footer-brand.test.tsx, which fills the seam with a hoisted mock.
     // What is checked here is the SHAPE the design specifies.
     const legal = screen.getByText(/©/);
-    expect(legal.textContent).toMatch(/^© \d{4} .+™ · Built by HCE Studio$/);
+    expect(legal.textContent).toMatch(/^© \d{4} .+ · Built by HCE Studio$/);
+    // Not yet a registered trademark (owner, 19 Nov 2026).
+    expect(legal.textContent).not.toContain('™');
   });
 });

@@ -5,7 +5,7 @@
  *
  * ## What this catches that `site-footer-brand.test.tsx` cannot
  *
- * That file pins the legal LINE — `Lelanea™ · © 2026 All Too Human Ltd` — and
+ * That file pins the legal LINE — `© 2026 Lelanea · Built by HCE Studio` — and
  * its "no hardcoded name" assertion is scoped to the element containing `©`.
  * The wordmarks are elsewhere: the header's `<span>` and its link's
  * `aria-label`, and the footer's matching pair. All four were literals while

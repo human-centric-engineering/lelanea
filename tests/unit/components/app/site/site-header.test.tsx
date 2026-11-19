@@ -115,7 +115,7 @@ describe('SiteHeader', () => {
       const nav = screen.getByRole('navigation', { name: 'Main' });
       expect(nav).toBeTruthy();
 
-      for (const label of ['Lelañea', 'The mission', 'Your data']) {
+      for (const label of ['Lelanea', 'The mission', 'Your data']) {
         expect(within(nav).getByRole('link', { name: label })).toBeTruthy();
       }
     });
@@ -169,7 +169,7 @@ describe('SiteHeader', () => {
       // Establish the population first — an "is absent" assertion passes for
       // free on an empty result set.
       const others = [
-        screen.getByRole('link', { name: 'Lelañea' }),
+        screen.getByRole('link', { name: 'Lelanea' }),
         screen.getByRole('link', { name: 'Your data' }),
       ];
       expect(others).toHaveLength(2);

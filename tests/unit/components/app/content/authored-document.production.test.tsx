@@ -57,7 +57,7 @@ describe('placeholder marking in production', () => {
     const text = container.textContent ?? '';
 
     expect(container.querySelectorAll('article > :not(header)')).toHaveLength(doc.blocks.length);
-    expect(container.querySelector('h1')?.textContent).toBe('Lelanea™');
+    expect(container.querySelector('h1')?.textContent).toBe('Lelanea');
     expect(container.querySelector('article > h2')?.textContent).toBe('1. About Lelanea');
     expect(Array.from(container.querySelectorAll('strong')).map((el) => el.textContent)).toContain(
       'Effective Date:'
