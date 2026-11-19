@@ -76,7 +76,7 @@ async function getFirstPage(): Promise<{
  *
  * `/admin/**` is the `admin` surface (`lib/app/surface.ts`), which the brand
  * theme deliberately does not reach — so this page keeps Sunrise's admin chrome
- * and carries no Lelañea styling of its own.
+ * and carries no Lelanea styling of its own.
  */
 export default async function KnowledgeDesignationPage() {
   const { documents, meta, loadError } = await getFirstPage();

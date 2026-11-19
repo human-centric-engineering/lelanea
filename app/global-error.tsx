@@ -94,7 +94,7 @@ export default function GlobalError({
               </button>
             </div>
 
-            {/* LELAÑEA divergence (t-5): the production block here offered
+            {/* LELANEA divergence (t-5): the production block here offered
                 "contact support" at `/contact`. That page was Sunrise's
                 placeholder and is gone; the design has no contact route and
                 there is no support channel to name yet. D3 — nothing rather

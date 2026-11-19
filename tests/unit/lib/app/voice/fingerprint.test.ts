@@ -31,7 +31,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * The assertions walk Lelañea's authored core and require each of its beats to
+ * The assertions walk Lelanea's authored core and require each of its beats to
  * survive into the composed prompt. A fork with its own core still passes
  * unchanged — nothing here pins her words — but a fork with NO voice fingerprint
  * has nothing for `getVoiceFingerprint()` to return and should delete this file

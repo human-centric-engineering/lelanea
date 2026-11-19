@@ -1,6 +1,6 @@
 ---
 name: local-dev
-description: Running Lelañea locally, including alongside a Daybreak checkout.
+description: Running Lelanea locally, including alongside a Daybreak checkout.
 parent: README.md
 ---
 
@@ -19,7 +19,7 @@ callbacks are checked against it.
 
 ## The dev-proxy
 
-Lelañea is registered in the dev-proxy at `~/code/dev-proxy` — slug
+Lelanea is registered in the dev-proxy at `~/code/dev-proxy` — slug
 `lelanea`, port `3014` — which uses Laravel Herd to serve
 `https://lelanea.test` → `127.0.0.1:3014` over a trusted local CA.
 
@@ -74,7 +74,7 @@ it shipped. The warning string exists only in React's `.development.js` bundles
 became `sunrise#769` on the strength of the second, not the first.
 
 **Why `lelanea.test` and not a subdomain of something shared:** the dev hostname
-mirrors the _production site boundary_, not just the name. Lelañea has its own
+mirrors the _production site boundary_, not just the name. Lelanea has its own
 production domain, so it gets its own registrable domain in dev too — which keeps
 it cross-site from the other apps in dev exactly as it will be in production.
 Nest apps that are siblings in production; keep apps that aren't, flat. Getting
@@ -110,7 +110,7 @@ wrong name in both footers. Ours lives in `lib/app/leaf-brand.ts`. A boot warnin
 names any of the three left set.
 
 Provider keys (OpenAI, Resend, Google OAuth) are deliberately **not** inherited
-from Daybreak — add Lelañea's own when a feature first needs one.
+from Daybreak — add Lelanea's own when a feature first needs one.
 
 ## The first account on an empty database
 
@@ -141,11 +141,11 @@ cosmetic gain.
 So if you need both running at once:
 
 - **Ports: already solved, and not by us.** The dev-proxy registry gives every
-  app its own loopback port — Lelañea 3014, Sunrise's default 3010 — each pinned
+  app its own loopback port — Lelanea 3014, Sunrise's default 3010 — each pinned
   in that app's committed `.env.development`. Nothing collides and nothing needs
   a `-p` flag. That is precisely why the port is committed rather than left to
   whoever runs `npm run dev`.
-- **Separate databases already.** Lelañea uses `hce-lelanea-dev`, Daybreak uses
+- **Separate databases already.** Lelanea uses `hce-lelanea-dev`, Daybreak uses
   `hce-daybreak-dev`, both on the local Postgres. Nothing to do.
 - **Docker is the one case still unhandled.** `docker-compose.yml` is
   Sunrise-owned and hardcodes `container_name: sunrise-dev` / `sunrise-db-dev`

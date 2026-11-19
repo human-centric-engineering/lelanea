@@ -1,8 +1,8 @@
 {
   "app": {
-    "name": "Lelañea",
+    "name": "Lelanea",
     "url": "lelanea.com",
-    "journeyTitle": "The Lelañea App Journey",
+    "journeyTitle": "The Lelanea App Journey",
     "journeySubtitle": "A guided path from inner foundations to expanded consciousness",
     "version": "1.0",
     "sources": [
@@ -87,14 +87,14 @@
           "number": 1,
           "displayNumber": "01",
           "title": "The Initiation",
-          "description": "The welcome statement. Frames Lelañea as an invitation rather than an app, and introduces the guide.",
+          "description": "The welcome statement. Frames Lelanea as an invitation rather than an app, and introduces the guide.",
           "contentRef": "the_initiation",
           "personalized": true
         },
         {
           "number": 2,
           "displayNumber": "02",
-          "title": "The Heart Behind Lelañea",
+          "title": "The Heart Behind Lelanea",
           "description": "The intent and philosophy: remembering rather than improving; lowercase self and capital Self.",
           "contentRef": "the_heart_behind_lelanea"
         },
@@ -115,7 +115,7 @@
         {
           "number": 5,
           "displayNumber": "05",
-          "title": "The Lineage of Lelañea",
+          "title": "The Lineage of Lelanea",
           "description": "Acknowledgement of the traditions, teachers, and research the work draws on.",
           "contentRef": "the_lineage_of_lelanea"
         },

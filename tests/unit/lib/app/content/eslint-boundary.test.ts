@@ -22,7 +22,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/eslint.config.mjs` seam
  * ---------------------------------------------------------------------------
- * The wiring cases at the bottom assert that Lelañea's leaf ESLint seam still
+ * The wiring cases at the bottom assert that Lelanea's leaf ESLint seam still
  * carries this one block. A fork that adds blocks of its own to that seam will
  * still pass (the rule is looked up by name, not by position), but a fork that
  * removes the content boundary should delete this file rather than loosen it —

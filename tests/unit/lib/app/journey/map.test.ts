@@ -10,7 +10,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real journey seed and `leaf-bootstrap` seams
  * ---------------------------------------------------------------------------
- * The counts are Lelañea's. A fork with a different journey pins its own.
+ * The counts are Lelanea's. A fork with a different journey pins its own.
  *
  * @see lib/app/journey/map.ts
  */

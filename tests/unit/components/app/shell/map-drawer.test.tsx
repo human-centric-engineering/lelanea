@@ -15,7 +15,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real journey seed, not a hand-written fixture
  * ---------------------------------------------------------------------------
- * The five tier labels and seventeen rows are Lelañea's. A fork with a
+ * The five tier labels and seventeen rows are Lelanea's. A fork with a
  * different journey pins its own counts and names; a fork with no `content/`
  * has no map to draw and should delete this file with `map-drawer.tsx`.
  */

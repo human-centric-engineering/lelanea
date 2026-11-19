@@ -22,7 +22,7 @@
  * proxy runtime.
  */
 /**
- * `/app` is Lelañea's product — the four-column shell and every view inside it
+ * `/app` is Lelanea's product — the four-column shell and every view inside it
  * (§04). It sits outside the platform's own protected trio, so without this
  * entry the proxy never bounces a signed-out visitor to login and each page
  * under it would have to guard itself.

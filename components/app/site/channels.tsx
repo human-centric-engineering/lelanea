@@ -101,7 +101,7 @@ export function ChannelsSection({ className }: { className?: string }) {
  */
 export function CreatorLinks() {
   return (
-    <nav aria-label="Where to find Lelañea" className={styles.creatorLinks}>
+    <nav aria-label="Where to find Lelanea" className={styles.creatorLinks}>
       <Eyebrow as="p">where to find her</Eyebrow>
       <ul>
         {CREATOR_LINKS.map((link) => (

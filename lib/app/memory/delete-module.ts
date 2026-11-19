@@ -77,7 +77,7 @@ export async function deleteModuleExchanges(input: ModuleDeletion): Promise<Dele
   });
   if (turns.length === 0) {
     throw new NotFoundError(
-      'There is nothing you said in this module to delete. Conversations from before Lelañea noted which module you were in can be deleted by session, or one exchange at a time from your notes.'
+      'There is nothing you said in this module to delete. Conversations from before Lelanea noted which module you were in can be deleted by session, or one exchange at a time from your notes.'
     );
   }
   return deleteOwnedExchanges(userId, turns, { timeout: SESSION_DELETION_TIMEOUT_MS });

@@ -40,7 +40,7 @@ const { stops, store, routeLog } = vi.hoisted(() => {
         async ({ userId, key, stop }: { userId: string; key: string; stop: number }) => {
           if (key === 'pace') {
             const { ConflictError } = await import('@/lib/api/errors');
-            throw new ConflictError('Lelañea keeps this one where it is.', {
+            throw new ConflictError('Lelanea keeps this one where it is.', {
               reason: 'leaning_locked',
             });
           }
@@ -148,6 +148,6 @@ describe('PATCH /api/v1/app/leanings', () => {
     const body = (await response.json()) as { error: { message: string } };
 
     expect(response.status).toBe(409);
-    expect(body.error.message).toBe('Lelañea keeps this one where it is.');
+    expect(body.error.message).toBe('Lelanea keeps this one where it is.');
   });
 });

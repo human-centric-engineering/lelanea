@@ -1,5 +1,5 @@
 /**
- * Leaf-app erasure cleanup hooks and stale writers — FILLED by Lelañea.
+ * Leaf-app erasure cleanup hooks and stale writers — FILLED by Lelanea.
  *
  * A leaf app (a fork of Daybreak) registers here what Sunrise's `lib/app/erasure.ts` scaffold is
  * for: cleanup for the leaf's own data that the FK cascade cannot reach (object-storage blobs,

@@ -259,7 +259,7 @@ const unit: SeedUnit = {
     if (!existingAgent) {
       await prisma.aiAgent.create({
         data: {
-          name: 'Lelañea',
+          name: 'Lelanea',
           slug: VOICE_AGENT_SLUG,
           description:
             'The guide a person meets inside the app — her voice, her material, her boundaries.',

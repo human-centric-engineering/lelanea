@@ -33,7 +33,7 @@
  * row keyed on it, on every path. Never unscoped deletes.
  *
  * FORK NOTE — this runs the real `lib/app/leaf-bootstrap` seam (`initLeafApp()`)
- * and asserts Lelañea's map and slot taxonomy; a fork should replace it.
+ * and asserts Lelanea's map and slot taxonomy; a fork should replace it.
  *
  * Usage: `npm run smoke:app-recap` (reads `.env.local`). Exit 0 on every
  * assertion passing, 1 otherwise.

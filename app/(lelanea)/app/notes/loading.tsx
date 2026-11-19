@@ -28,8 +28,8 @@ export default function NotesLoading() {
   return (
     <View
       column
-      eyebrow="lelañea’s notes"
-      title="What Lelañea has written down about you"
+      eyebrow="lelanea’s notes"
+      title="What Lelanea has written down about you"
       lede={NOTES_LEDE}
       note={NOTES_NOTE}
     >

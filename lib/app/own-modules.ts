@@ -57,9 +57,9 @@
  * ```
  */
 export const appOwnModules: readonly string[] = [
-  // LELAÑEA — our own modules, not seams (Daybreak 0.9.0 sync, t-174). Until
+  // LELANEA — our own modules, not seams (Daybreak 0.9.0 sync, t-174). Until
   // then each was a row in VERSIONING.md's Covered list, carried as a
-  // divergence; nobody forks Lelañea, so none of them is anyone's public surface.
+  // divergence; nobody forks Lelanea, so none of them is anyone's public surface.
   // the one agent's pins: the model she runs on and its rate, the two seats she holds
   'lib/app/agent/',
   // the authored content loader: foundational documents, discovery questions, journey structure

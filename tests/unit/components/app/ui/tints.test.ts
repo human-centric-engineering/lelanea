@@ -3,7 +3,7 @@
  * (f-prism t-180; deleted with the picker by t-181).
  *
  * A tint is a candidate set of token values, and the picker offers it to
- * Lelañea as a choice for the brand. So each one is held to what the palette
+ * Lelanea as a choice for the brand. So each one is held to what the palette
  * itself is held to: body text, secondary text, links and destructive text
  * clear 4.5:1 over the light it makes, and the control boundary and the focus
  * ring clear 3:1, measured the way `tests/unit/app/brand-theme.test.ts`

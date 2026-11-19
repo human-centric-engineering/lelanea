@@ -16,10 +16,10 @@ import { emailLotusSize } from '@/components/app/ui/lotus-sizes';
 import { BRAND } from '@/lib/brand';
 
 /**
- * Lelañea's email chrome — the frame every leaf-owned auth email renders inside.
+ * Lelanea's email chrome — the frame every leaf-owned auth email renders inside.
  *
  * The lotus, the wordmark, the ground and the legal line, so a message
- * from Lelañea looks like one wherever it lands. Templates put their own words
+ * from Lelanea looks like one wherever it lands. Templates put their own words
  * in `children`; this file owns nothing but the surround, which is what keeps
  * two templates from drifting into two brands.
  *

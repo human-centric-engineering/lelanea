@@ -324,7 +324,7 @@ describe('the eleven leanings', () => {
 
   it('goes back, and says why, when the save fails', async () => {
     patch.mockRejectedValue(
-      new APIClientError('Lelañea keeps this one where it is.', 'CONFLICT', 409)
+      new APIClientError('Lelanea keeps this one where it is.', 'CONFLICT', 409)
     );
     renderSettings();
     const pace = dial('Energetic', 'Slow and spacious');
@@ -332,7 +332,7 @@ describe('the eleven leanings', () => {
     await userEvent.click(stop(pace, 'Toward Slow and spacious'));
 
     expect((await screen.findByRole('alert')).textContent).toBe(
-      'Lelañea keeps this one where it is.'
+      'Lelanea keeps this one where it is.'
     );
     expect((stop(pace, 'At rest') as HTMLInputElement).checked).toBe(true);
   });
@@ -363,7 +363,7 @@ describe('the eleven leanings', () => {
       true
     );
     expect((stop(questions, 'Toward Guidance-led') as HTMLInputElement).disabled).toBe(false);
-    expect(within(questions).getByText('Lelañea keeps this from going all the way.')).toBeTruthy();
+    expect(within(questions).getByText('Lelanea keeps this from going all the way.')).toBeTruthy();
   });
 
   it('locks a locked dial whole, and says so', () => {
@@ -374,7 +374,7 @@ describe('the eleven leanings', () => {
     for (const radio of within(pace).getAllByRole('radio')) {
       expect((radio as HTMLInputElement).disabled).toBe(true);
     }
-    expect(within(pace).getByText('Lelañea keeps this one where it is.')).toBeTruthy();
+    expect(within(pace).getByText('Lelanea keeps this one where it is.')).toBeTruthy();
   });
 
   it('says plainly when they can’t be changed at all', () => {

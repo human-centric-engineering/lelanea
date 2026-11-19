@@ -490,7 +490,7 @@ function noted(
 /** Wipe a version in place, as `wipe.ts` does: the row stays, its words go. */
 function wipe(row: SlotValueRow): void {
   row.value = 'This note was removed.';
-  row.reasoningNote = 'The person removed this note in Lelañea’s notes.';
+  row.reasoningNote = 'The person removed this note in Lelanea’s notes.';
   row.sourceType = REMOVED;
 }
 

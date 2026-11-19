@@ -24,7 +24,7 @@ describe('DAYBREAK_VERSION', () => {
   //
   // Upstream this file carries a case asserting
   // `DAYBREAK_VERSION === packageJson.version`, which is the parity that makes
-  // bumping BOTH files mandatory when Daybreak cuts a release. In Lelañea that
+  // bumping BOTH files mandatory when Daybreak cuts a release. In Lelanea that
   // assertion is not merely inconvenient, it is false by design: `package.json`
   // carries OUR version (0.1.0) while `DAYBREAK_VERSION` keeps reporting the
   // framework's (0.2.0). Those two numbers are supposed to diverge — it is the
@@ -38,7 +38,7 @@ describe('DAYBREAK_VERSION', () => {
   //
   // Deliberately NOT replaced with the inverse assertion (`!==`). Divergence
   // today is a fact about where the two version lines happen to sit, not an
-  // invariant: Lelañea climbing to 0.2.0 while Daybreak sits there would fail a
+  // invariant: Lelanea climbing to 0.2.0 while Daybreak sits there would fail a
   // test that nothing had broken. Same reasoning the case below gives for not
   // asserting DAYBREAK_VERSION !== SUNRISE_VERSION.
 

@@ -66,7 +66,7 @@ describe('PageGuide', () => {
 
 describe('headingAnchor', () => {
   it('makes a stable, url-safe fragment from a heading', () => {
-    expect(headingAnchor('What Lelañea Is Not')).toBe('what-lelanea-is-not');
+    expect(headingAnchor('What Lelanea Is Not')).toBe('what-lelanea-is-not');
     expect(headingAnchor('**Crisis** Situations')).toBe('crisis-situations');
   });
 

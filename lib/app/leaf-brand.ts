@@ -1,14 +1,14 @@
 /**
- * Leaf-app brand identity — Lelañea.
+ * Leaf-app brand identity — Lelanea.
  *
- * **This is the leaf's brand seam, and the file Lelañea fills.** Daybreak ships
+ * **This is the leaf's brand seam, and the file Lelanea fills.** Daybreak ships
  * every value `null` here and sets its own identity in `lib/app/brand.ts`, the
  * bridge one tier up; Sunrise sets its own in `lib/brand.ts`, one tier above
  * that. A non-`null` value here wins over both.
  *
  * **Override, not append — this is the one seam that works that way.** Every
  * other `lib/app/*` bridge composes the tiers (the framework registers, then the
- * leaf registers, and both survive). Brand identity is single-valued: Lelañea
+ * leaf registers, and both survive). Brand identity is single-valued: Lelanea
  * does not compose with "Daybreak", it replaces it. `lib/app/brand.ts` reads
  * these with `??` rather than `||`, so an empty string is a deliberate choice and
  * only `null` falls through.
@@ -44,11 +44,11 @@
  * is the only place the product is *named* for a human reader, so it is the one
  * place the accent belongs.
  */
-export const leafBrandName: string | null = 'Lelañea';
+export const leafBrandName: string | null = 'Lelanea';
 
 /**
  * Copyright holder, which differs from the product here: the product is
- * "Lelañea", the legal entity behind it is All Too Human Ltd. This is a
+ * "Lelanea", the legal entity behind it is All Too Human Ltd. This is a
  * legal-attribution surface (both footers' copyright line), not a cosmetic one.
  */
 export const leafBrandLegalName: string | null = 'All Too Human Ltd';
@@ -60,4 +60,4 @@ export const leafBrandLegalName: string | null = 'All Too Human Ltd';
  * worse than a spare one (Sunrise #519).
  */
 export const leafBrandDescription: string | null =
-  'Lelañea — an application built on the Daybreak framework.';
+  'Lelanea — an application built on the Daybreak framework.';

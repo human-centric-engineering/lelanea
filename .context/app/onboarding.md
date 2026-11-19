@@ -41,7 +41,7 @@ the seed unit `021-activate-onboarding` moves a fresh one, each only from
 ## The first run: welcome, then the reads (t-103)
 
 On `/app`, a person who has not been through it meets the Initiation, read
-with their first name, and then each read in turn: the heart behind Lelañea,
+with their first name, and then each read in turn: the heart behind Lelanea,
 the mission, the creator, the lineage. Each read is offered, and can be read
 there or skipped. It covers the conversation until the last beat is behind
 them, then hands on to the discovery questions (below).
@@ -65,7 +65,7 @@ them, then hands on to the discovery questions (below).
   itself: that belongs to passing the gate.
 - **Offered once, then kept.** Owner ruling at claim: a read is not pushed
   again. The resources drawer lists every read permanently under "about
-  lelañea", and each opens in the workspace at `/app/read/<id>`, as does an
+  lelanea", and each opens in the workspace at `/app/read/<id>`, as does an
   article that names one of them.
 - **Existing accounts** had nothing recorded before this, so each sees the
   first run once on its next visit to `/app`.

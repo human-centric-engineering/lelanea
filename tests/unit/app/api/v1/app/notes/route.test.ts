@@ -208,7 +208,7 @@ describe('POST /api/v1/app/notes', () => {
 
   it('passes a refusal’s own message through, because it names the remedy', async () => {
     notes.correctNote.mockRejectedValueOnce(
-      new ConflictError('Ask Lelañea about it instead.', { reason: 'kept_out_of_the_record' })
+      new ConflictError('Ask Lelanea about it instead.', { reason: 'kept_out_of_the_record' })
     );
 
     const response = await POST(correct({ slotSlug: 'life_physical_health', value: 'anything' }));
@@ -217,7 +217,7 @@ describe('POST /api/v1/app/notes', () => {
     expect(await response.json()).toMatchObject({
       success: false,
       error: {
-        message: 'Ask Lelañea about it instead.',
+        message: 'Ask Lelanea about it instead.',
         details: { reason: 'kept_out_of_the_record' },
       },
     });

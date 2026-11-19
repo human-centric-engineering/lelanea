@@ -39,7 +39,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * The seed under test projects Lelañea's authored core, so this file needs that
+ * The seed under test projects Lelanea's authored core, so this file needs that
  * seam populated. A fork without one should delete this file with the seed.
  *
  * A fork that keeps the shape should pin the LAST describe block above all
@@ -394,12 +394,12 @@ describe('a re-run', () => {
 
   it('leaves the operator-owned columns alone', async () => {
     await runSeed();
-    world.agents[0].name = 'Lelañea (renamed by an operator)';
+    world.agents[0].name = 'Lelanea (renamed by an operator)';
     world.agents[0].knowledgeAccessMode = 'full';
 
     await runSeed();
 
-    expect(world.agents[0].name).toBe('Lelañea (renamed by an operator)');
+    expect(world.agents[0].name).toBe('Lelanea (renamed by an operator)');
   });
 });
 

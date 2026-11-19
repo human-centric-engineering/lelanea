@@ -311,7 +311,7 @@ export async function retrieveVoiceExemplars(
  * The same, but never throwing — and `null` when it could not look.
  *
  * A retrieval failure — the embedding provider down, a dimension mismatch, a
- * transient database error — must not cost the person Lelañea's register. The
+ * transient database error — must not cost the person Lelanea's register. The
  * overlay and the always-on core are the reliable half of this feature, and throwing out
  * to `buildContext`'s contributor-catch would blank the whole block and lose them
  * both over something retrieval did. The same degrade-rather-than-throw shape the

@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoginForm } from '@/components/forms/login-form';
 import { WaitlistLoginNotice } from '@/components/waitlist/waitlist-login-notice';
-// LELAÑEA divergence (row 15): what to say when signup is closed. Upstream's
+// LELANEA divergence (row 15): what to say when signup is closed. Upstream's
 // notice speaks only for its own waitlist, which we do not use — see the
 // notice's docblock and the divergence ledger.
 import { InviteOnlyNotice } from '@/components/app/site/invite-only-notice';

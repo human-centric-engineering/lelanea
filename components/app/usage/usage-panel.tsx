@@ -51,7 +51,7 @@ import { cn } from '@/lib/utils';
 
 /** The lede, on the page and on its loading boundary — one source, no drift. */
 export const USAGE_LEDE =
-  'Every reply costs something to produce. This is what yours have come to, and what is left before Lelañea pauses until next month.';
+  'Every reply costs something to produce. This is what yours have come to, and what is left before Lelanea pauses until next month.';
 
 /** The honest caveat under it: the limit is ours, and nothing is billed. */
 export const USAGE_NOTE =
@@ -208,7 +208,7 @@ export function UsagePanel({ fetchImpl }: UsagePanelProps) {
 
       {stats.nothingAllowed ? (
         <p className="text-muted-foreground text-[12.5px] leading-[1.55]">
-          Your limit is set to nothing at the moment, so Lelañea will not start a reply that costs
+          Your limit is set to nothing at the moment, so Lelanea will not start a reply that costs
           anything. Everything you can read and write still works.
         </p>
       ) : null}

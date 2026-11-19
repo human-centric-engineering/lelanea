@@ -93,7 +93,7 @@ depend on a model. Both hold because of what the check may do
 ## The resource
 
 **Where it lives (f-safety t-63; owner ruling 19 Sept 2026).** In two tables an
-admin edits at **`/admin/app/safety`** (Lelañea → Crisis helplines), with no
+admin edits at **`/admin/app/safety`** (Lelanea → Crisis helplines), with no
 deploy:
 
 - `app_crisis_copy` (`AppCrisisCopy`, one row, `slug = 'global'`) — both

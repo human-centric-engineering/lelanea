@@ -68,7 +68,7 @@ export const appMediaSrc: string[] = [...AUDIO_MEDIA_ORIGINS];
 /**
  * Extra `frame-src` origins. Empty = platform default (`'self'` only).
  *
- * Lelañea: the resources drawer's video lightbox (f-resources t-119). Its
+ * Lelanea: the resources drawer's video lightbox (f-resources t-119). Its
  * iframe `src` is built only from a YouTube id validated in
  * `lib/app/content/video-hosts.ts`, never from the stored link. A second
  * video host adds its player's origin here, and nothing broader.

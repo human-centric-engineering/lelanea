@@ -1,9 +1,9 @@
 ---
 name: app-docs
-description: Index for Lelañea's own documentation — the leaf tier's substrate.
+description: Index for Lelanea's own documentation — the leaf tier's substrate.
 ---
 
-# Lelañea documentation
+# Lelanea documentation
 
 This is the **leaf tier's** documentation tree. Daybreak and Sunrise both reserve
 `.context/app/` and ship nothing into it, which is exactly why everything we put
@@ -13,7 +13,7 @@ here survives every upgrade without a conflict.
 
 | Tree                           | Owner    | You                         |
 | ------------------------------ | -------- | --------------------------- |
-| `.context/app/`                | Lelañea  | write freely — this is ours |
+| `.context/app/`                | Lelanea  | write freely — this is ours |
 | `.context/framework/`          | Daybreak | read; it merges through     |
 | everything else in `.context/` | Sunrise  | read; it merges through     |
 
@@ -25,12 +25,12 @@ the platform beneath. The `CLAUDE.md` banner is the short version of both.
 
 | Doc                                                        | Covers                                                                                                                        |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| [`building-with-daybreak.md`](./building-with-daybreak.md) | **Read first.** Daybreak's elements are what Lelañea is made of: name the element before designing                            |
+| [`building-with-daybreak.md`](./building-with-daybreak.md) | **Read first.** Daybreak's elements are what Lelanea is made of: name the element before designing                            |
 | [`syncing.md`](./syncing.md)                               | Pulling a Daybreak release, and the three traps around it                                                                     |
 | [`local-dev.md`](./local-dev.md)                           | Running locally alongside a Daybreak checkout                                                                                 |
 | [`platform-divergences.md`](./platform-divergences.md)     | Every edit we carry to a Daybreak- or Sunrise-owned file, and why                                                             |
 | [`brand-theme.md`](./brand-theme.md)                       | The palette, the three typefaces, and how a surface gets branded                                                              |
-| [`content.md`](./content.md)                               | Lelañea's authored words: seed input, the stores, the API, the renderer                                                       |
+| [`content.md`](./content.md)                               | Lelanea's authored words: seed input, the stores, the API, the renderer                                                       |
 | [`waitlist.md`](./waitlist.md)                             | The public waitlist: the model, the routes, the admin list, Art. 15 / Art. 17                                                 |
 | [`shell.md`](./shell.md)                                   | The four-column app shell at `/app`: panes, state, and adding a view                                                          |
 | [`journey.md`](./journey.md)                               | The seventeen modules in the registry, the published map, and the seed                                                        |
@@ -81,7 +81,7 @@ rediscovered. Re-checked against the tree and the repo settings at t-19.
   an open review note. See `app/(public)/privacy/page.tsx` and
   [`platform-divergences.md`](./platform-divergences.md) row 10.
 - **No provider keys are configured.** OpenAI, Resend and Google OAuth were
-  deliberately not inherited from Daybreak; add Lelañea's own when a feature
+  deliberately not inherited from Daybreak; add Lelanea's own when a feature
   first needs one. Still true: `.env.local` carries only the database, the
   auth secret and the app URL, and the repository has no Actions secrets.
 - **Two of the three CI variables are still unset.** `CI_TEST_SCOPE` is set to

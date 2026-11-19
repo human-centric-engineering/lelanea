@@ -6,7 +6,7 @@
  *
  * - A route listed here that does not exist hands crawlers a 404 and, on the
  *   two entries this task deleted, advertised Sunrise's placeholder marketing
- *   pages as Lelañea's own.
+ *   pages as Lelanea's own.
  * - A route the site links to but omits here is discoverable by crawl and
  *   absent from the map, which is the state that quietly persists because
  *   nothing renders it.

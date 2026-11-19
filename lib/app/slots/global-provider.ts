@@ -1,5 +1,5 @@
 /**
- * Every global slot definition Lelañea hands Daybreak: the authored taxonomy
+ * Every global slot definition Lelanea hands Daybreak: the authored taxonomy
  * and the eleven voice leanings (f-leanings t-135).
  *
  * Daybreak takes ONE global provider (`registerGlobalSlotDefinitionProvider`,

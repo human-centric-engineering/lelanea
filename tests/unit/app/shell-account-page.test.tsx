@@ -115,7 +115,7 @@ describe('the loading state it is replaced from', () => {
     // is what puts them there. Two hardcoded copies would drift the first time
     // one was edited, silently.
     const loading = render(AccountLoading());
-    const ledeWhileLoading = screen.getByText(/What Lelañea knows about you here/);
+    const ledeWhileLoading = screen.getByText(/What Lelanea knows about you here/);
     expect(ledeWhileLoading).toBeTruthy();
     loading.unmount();
 

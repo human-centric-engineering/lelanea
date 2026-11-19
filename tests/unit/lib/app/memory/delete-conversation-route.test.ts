@@ -1,7 +1,7 @@
 /**
  * The person's own conversation delete tells the app (f-memory t-128).
  *
- * Sunrise's `DELETE /api/v1/chat/conversations/:id` carries one Lelañea line:
+ * Sunrise's `DELETE /api/v1/chat/conversations/:id` carries one Lelanea line:
  * once the conversation is deleted, it calls `onConversationsDeleted` so what
  * our turns left behind goes at once rather than at the next sweep. That line
  * is a divergence (`.context/app/platform-divergences.md`), and a sync that resolves
@@ -72,7 +72,7 @@ beforeEach(() => {
   } as never);
 });
 
-describe('DELETE /api/v1/chat/conversations/:id — the Lelañea line', () => {
+describe('DELETE /api/v1/chat/conversations/:id — the Lelanea line', () => {
   it('tells the app which conversation went, and whose, after it is deleted', async () => {
     vi.mocked(prisma.aiConversation.findFirst).mockResolvedValue({ id: CONVERSATION } as never);
 

@@ -11,7 +11,7 @@
  * render time from a module, so a `vi.mock` at the top of a shared file would
  * apply to the stand-in case too and quietly delete the coverage it has.
  *
- * FORK NOTE: this reads no `lib/app/*` seam — `lib/site/config.ts` is Lelañea's
+ * FORK NOTE: this reads no `lib/app/*` seam — `lib/site/config.ts` is Lelanea's
  * own, born full, and is mocked here rather than read. A fork with no creator
  * portrait should delete this file along with the page section it covers.
  */

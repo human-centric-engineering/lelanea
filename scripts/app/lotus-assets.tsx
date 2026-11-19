@@ -98,7 +98,7 @@ function animStills(measured: ReturnType<typeof measureLotusFrames>, paint: (c: 
       {
         viewBox: (water ? measured.animated.water : measured.animated.tight).box.join(' '),
         role: 'img',
-        'aria-label': 'Lelañea lotus',
+        'aria-label': 'Lelanea lotus',
       },
       lotusSvgElements(stillLotus(state, water), 'l', paint)
     );
@@ -129,16 +129,16 @@ export function lotusAssets(stylesheet: string): LotusAssets {
         width: og.width,
         height: og.height,
         role: 'img',
-        'aria-label': 'Lelañea lotus',
+        'aria-label': 'Lelanea lotus',
       },
       lotusSvgElements(stillLotus('open', true), 'l', paint)
     ),
     'public/lotus-bloom.svg': svg(
-      { viewBox: frames.tight.box.join(' '), role: 'img', 'aria-label': 'Lelañea lotus' },
+      { viewBox: frames.tight.box.join(' '), role: 'img', 'aria-label': 'Lelanea lotus' },
       lotusSvgElements(stillLotus('open', false), 'l', paint)
     ),
     'public/lotus-glyph.svg': svg(
-      { viewBox: frames.glyph.box.join(' '), role: 'img', 'aria-label': 'Lelañea lotus' },
+      { viewBox: frames.glyph.box.join(' '), role: 'img', 'aria-label': 'Lelanea lotus' },
       lotusSvgElements(stillLotus('glyph', false), 'l', paint)
     ),
     ...animStills(measured, paint),
@@ -147,7 +147,7 @@ export function lotusAssets(stylesheet: string): LotusAssets {
       lotusSvgElements(stillLotus('open', false), 'l', paint)
     ),
     'app/icon.svg': svg(
-      { viewBox: square(frames.glyph, 0.04), role: 'img', 'aria-label': 'Lelañea' },
+      { viewBox: square(frames.glyph, 0.04), role: 'img', 'aria-label': 'Lelanea' },
       lotusSvgElements(stillLotus('glyph', false), 'l', paint)
     ),
     'apple-icon.svg': svg(

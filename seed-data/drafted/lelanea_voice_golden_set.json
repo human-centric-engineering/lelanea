@@ -1,7 +1,7 @@
 {
   "goldenSet": {
     "id": "lelanea_voice_golden_set",
-    "title": "Lelañea — Voice Fingerprint · the golden set",
+    "title": "Lelanea — Voice Fingerprint · the golden set",
     "layer": "golden-set",
     "version": "1.1",
     "locale": "en-US",
@@ -17,7 +17,7 @@
     ]
   },
   "dataset": {
-    "name": "Lelañea voice golden set",
+    "name": "Lelanea voice golden set",
     "description": "The fixed prompts every change to her voice is heard through, before it ships. Seeded from seed-data/drafted/lelanea_voice_golden_set.json and reconciled by prisma/seeds/app-lelanea/004-voice-golden-set.ts — cases edited here are overwritten.",
     "tags": ["lelanea", "voice", "golden-set"]
   },

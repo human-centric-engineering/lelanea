@@ -1,5 +1,5 @@
 /**
- * Leaf-app org-export sources — FILLED by Lelañea.
+ * Leaf-app org-export sources — FILLED by Lelanea.
  *
  * A leaf app (a fork of Daybreak) declares here the models of its own that carry `orgId`, so an
  * organisation's data export includes them (Sunrise §109; guide: `.context/privacy/org-export.md`,
@@ -52,7 +52,7 @@ import { listMemoryEntriesForOrg } from '@/lib/app/memory/memory-index';
 import { listJourneyEntriesForOrg } from '@/lib/app/journey-record/record';
 
 /**
- * Every Lelañea table is the org's own data (t-112): its content, its members'
+ * Every Lelanea table is the org's own data (t-112): its content, its members'
  * records and the history of both. None is left out, and none holds a secret
  * to omit. A module constant, as Daybreak's manifest is, so every registration
  * hands over the same sources.

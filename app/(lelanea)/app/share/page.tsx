@@ -3,13 +3,13 @@ import type { Metadata } from 'next';
 import { PlaceholderCard } from '@/components/app/views/placeholder-view';
 import { View } from '@/components/app/views/view';
 
-export const metadata: Metadata = { title: 'Share with Lelañea' };
+export const metadata: Metadata = { title: 'Share with Lelanea' };
 
 export default function SharePage() {
   return (
     <View
-      eyebrow="share with lelañea"
-      title="Lelañea would love to hear about your experiences"
+      eyebrow="share with lelanea"
+      title="Lelanea would love to hear about your experiences"
       lede="Tell us how you are finding it."
       note="What helped and what got in the way are equally useful."
     >

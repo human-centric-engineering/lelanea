@@ -9,7 +9,7 @@
  * frames, and named on the `done` frame and the transcript read alike. Nor can
  * they say whether every dial pushed to its extreme still sounds like her, and
  * whether a refusal or a decline holds there. That last is a human judgement,
- * so every reply is printed in full, for the owner at ship and Lelañea at
+ * so every reply is printed in full, for the owner at ship and Lelanea at
  * project end (idea #46).
  *
  * Four configurations, each in Values (which starts at teaching):
@@ -51,7 +51,7 @@
  * it found it. Never unscoped deletes.
  *
  * FORK NOTE — this runs the real `lib/app/leaf-bootstrap` seam, and asserts
- * Lelañea's map, its Values module and its leaning rows; a fork should replace
+ * Lelanea's map, its Values module and its leaning rows; a fork should replace
  * it rather than pin ours.
  *
  * Usage: `npm run smoke:app-leanings` (reads `.env.local`). Exit 0 on every

@@ -17,7 +17,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real resources seed
  * ---------------------------------------------------------------------------
- * The keys and passages in section 1 are Lelañea's content. A fork replacing
+ * The keys and passages in section 1 are Lelanea's content. A fork replacing
  * `content/` should rewrite them against its own file, not delete them; the
  * verbatim check in section 2 is content-independent and should be kept.
  *
@@ -443,7 +443,7 @@ describe('the selection', () => {
       videos: [expect.objectContaining({ id: 'general-a' })],
     });
     expect(selectResources(file, MODULES, 'situations')?.title).toBe('Life situations');
-    expect(selectResources(file, MODULES, 'default')?.title).toBe('Lelañea');
+    expect(selectResources(file, MODULES, 'default')?.title).toBe('Lelanea');
   });
 
   it('returns null for a key that is nothing, so the route can 404', () => {

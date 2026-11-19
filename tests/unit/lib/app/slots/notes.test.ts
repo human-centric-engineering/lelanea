@@ -151,7 +151,7 @@ describe('what a person is shown', () => {
     expect(mint?.group).toBeNull();
     expect(mint?.asking).toBeNull();
     expect(view.own).toBe(1);
-    // Lelañea's own headings come after every taxonomy group, however fresh.
+    // Lelanea's own headings come after every taxonomy group, however fresh.
     expect(view.notes.at(-1)?.slotSlug).toBe('family_communication');
   });
 
@@ -192,7 +192,7 @@ describe('what a person is shown', () => {
     // The read and the write agree: the route refuses the same slot.
     await expect(
       correctNote({ userId: ME, slotSlug: 'life_physical_health', value: 'x' })
-    ).rejects.toThrow(/ask Lelañea about it/i);
+    ).rejects.toThrow(/ask Lelanea about it/i);
   });
 
   it('says an Art. 9 note was never written down, rather than printing the sentinel', async () => {
@@ -378,7 +378,7 @@ describe('a correction is a new version, never an overwrite', () => {
 
     await expect(
       correctNote({ userId: ME, slotSlug: 'life_work', value: 'raw health prose' })
-    ).rejects.toThrow(/ask Lelañea about it/i);
+    ).rejects.toThrow(/ask Lelanea about it/i);
     expect(JSON.stringify(world.values)).not.toContain('raw health prose');
   });
 
@@ -401,7 +401,7 @@ describe('a correction is a new version, never an overwrite', () => {
 
     await expect(
       correctNote({ userId: ME, slotSlug: 'life_work', value: 'raw health prose' })
-    ).rejects.toThrow(/ask Lelañea about it/i);
+    ).rejects.toThrow(/ask Lelanea about it/i);
     // The words the guard exists to keep out are not at rest.
     expect(world.values).toHaveLength(1);
     expect(JSON.stringify(world.values)).not.toContain('raw health prose');

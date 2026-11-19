@@ -1,11 +1,11 @@
 ---
 name: brand-theme
-description: How Lelañea's palette and typefaces reach the page, which tokens exist, and the three ways to consume them.
+description: How Lelanea's palette and typefaces reach the page, which tokens exist, and the three ways to consume them.
 ---
 
 # Brand theme — palette and type
 
-Lelañea's colours and typefaces reach the page through **one fork-owned
+Lelanea's colours and typefaces reach the page through **one fork-owned
 stylesheet and one font module**, with no platform layout or page rewritten to
 carry them.
 
@@ -42,7 +42,7 @@ from `@theme` at build time, and `@theme` lives in Sunrise's `globals.css`.
 1. **A token that already exists upstream** — `--color-primary`,
    `--color-background`, `--color-border`, `--color-muted-foreground`, the
    radius scale. We redeclare the value, so `bg-primary`, `rounded-lg` and the
-   rest come out in Lelañea's colours with no markup change. **This is why the
+   rest come out in Lelanea's colours with no markup change. **This is why the
    existing shadcn components re-skin without being touched.**
 
 2. **A brand-only token** — `--color-heading`, `--color-accent-ink`,

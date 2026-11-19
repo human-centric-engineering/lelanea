@@ -249,7 +249,7 @@ export async function setLeaning(input: SetLeaningInput): Promise<SetLeaningResu
   const limits = dialBounds(bounds, input.key);
   if (isLocked(limits)) {
     // Printed by the settings view, so it names her rather than "she".
-    throw new ConflictError('Lelañea keeps this one where it is.', { reason: 'leaning_locked' });
+    throw new ConflictError('Lelanea keeps this one where it is.', { reason: 'leaning_locked' });
   }
 
   const dimension = leaningDimension(input.key);

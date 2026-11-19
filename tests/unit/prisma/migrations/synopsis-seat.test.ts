@@ -43,6 +43,7 @@ import {
 } from '@/lib/app/journey-record/synopsis/agent';
 import { SYNOPSIS_SEAT } from '@/lib/app/agent/pins';
 import { VOICE_AGENT_SLUG, VOICE_PROFILE_SLUG } from '@/lib/app/voice/fingerprint';
+import { renameAppName } from '@/tests/helpers/app-name-rename';
 
 const MIGRATIONS = join(process.cwd(), 'prisma/migrations');
 
@@ -85,9 +86,11 @@ describe('the synopsis seat migration', () => {
     expect(dollarQuoted(sql, 'instructions')).toBe(SYNOPSIS_AGENT_SYSTEM_INSTRUCTIONS);
   });
 
+  // Renamed as `20261119100000_app_name_lelanea` renames them: this migration
+  // is frozen, and still names the app "Lelañea".
   it('writes the name and description the seed writes', () => {
-    expect(dollarQuoted(sql, 'desc')).toBe(SYNOPSIS_AGENT_DESCRIPTION);
-    expect(statements(sql)).toContain(`'${SYNOPSIS_AGENT_NAME}'`);
+    expect(renameAppName(dollarQuoted(sql, 'desc'))).toBe(SYNOPSIS_AGENT_DESCRIPTION);
+    expect(renameAppName(statements(sql))).toContain(`'${SYNOPSIS_AGENT_NAME}'`);
   });
 
   it('wears her voice profile, in her guide’s org, restricted and with no model of its own', () => {

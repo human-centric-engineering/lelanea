@@ -1,7 +1,7 @@
 /**
  * The agent's search results say whose material each passage is (f-safety t-60).
  *
- * **What it fixes.** The agent's instructions tell it to answer from Lelañea's
+ * **What it fixes.** The agent's instructions tell it to answer from Lelanea's
  * material and to search it first. But `search_knowledge_base` does not return
  * only Lelañea's material. The platform's access resolver always lets
  * `system`-scoped documents through to a restricted agent. On an install that

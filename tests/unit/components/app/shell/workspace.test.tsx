@@ -103,7 +103,7 @@ describe('a click on the page never parks the conversation', () => {
     renderWorkspace('medium');
 
     await userEvent.click(screen.getByText('the module'));
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message Lelanea' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open the conversation' })).toBeNull();
   });
 });
@@ -233,7 +233,7 @@ describe('at medium the conversation sits beside the page, not over it', () => {
     // The stored default is 440; medium caps it.
     expect(chat().style.flexBasis).toBe(`${CHAT_MEDIUM}px`);
     // Open, not parked: the page opening no longer folds the conversation.
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message Lelanea' })).toBeTruthy();
   });
 
   it('keeps a width the reader chose that is already narrower than the cap', () => {
@@ -263,7 +263,7 @@ describe('at medium the conversation sits beside the page, not over it', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Collapse the conversation' }));
     expect(screen.queryByLabelText('Conversation')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }));
-    expect(screen.getByRole('textbox', { name: 'Message Lelañea' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message Lelanea' })).toBeTruthy();
   });
 
   it('offers the resize handle at large only', () => {

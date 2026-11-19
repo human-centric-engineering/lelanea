@@ -175,7 +175,7 @@ export const GRANTED_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['search_k
 export const SLOT_CAPABILITY_SLUGS: readonly HerCapabilitySlug[] = ['get_state', 'fill_slot'];
 
 /**
- * What the resources seed grants: the agent may hand a person one of Lelañea
+ * What the resources seed grants: the agent may hand a person one of Lelanea
  * Fulton's videos, audio or articles (f-resources t-77).
  *
  * Its own list because its own seed grants it

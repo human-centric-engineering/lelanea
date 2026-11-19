@@ -52,12 +52,12 @@ import { cn } from '@/lib/utils';
  * first read is the mount rather than a reaction to the counter, a mount is
  * never counted as a refresh.
  *
- * ## The register: Lelañea by name, and the reader as "you"
+ * ## The register: Lelanea by name, and the reader as "you"
  *
  * Owner corrections, 21 September 2026. Nothing on this surface says "she" or
  * "her" where a name would do, and nothing calls the reader "they". The one
  * third-person wording that survives is the taxonomy's own `description`, shown
- * inside a card's disclosure as a quotation of what Lelañea was looking for —
+ * inside a card's disclosure as a quotation of what Lelanea was looking for —
  * see `note-card.tsx`, where both rules and their reasons are set out.
  *
  * ## An in-turn refresh must not blank the page
@@ -80,7 +80,7 @@ import { cn } from '@/lib/utils';
  * view is only how this page draws the same response. Switching between cards
  * and a list therefore re-reads nothing — one fetch, two renderings.
  *
- * @see .context/app/slots.md — "Lelañea's notes"
+ * @see .context/app/slots.md — "Lelanea's notes"
  * @see .context/app/conversation.md — "What a turn changes on the other side"
  */
 export interface NotesPanelProps {
@@ -96,10 +96,10 @@ export interface NotesPanelProps {
  * edited, silently, with nothing failing.
  */
 export const NOTES_LEDE =
-  'Everything Lelañea holds about you, where each of it came from, and how certain it is.';
+  'Everything Lelanea holds about you, where each of it came from, and how certain it is.';
 
 export const NOTES_NOTE =
-  'These are Lelañea’s readings, not your words back. They can be wrong, and nothing here is fixed: correct one and both versions are kept, or ask Lelañea about it and take it up in the conversation.';
+  'These are Lelanea’s readings, not your words back. They can be wrong, and nothing here is fixed: correct one and both versions are kept, or ask Lelanea about it and take it up in the conversation.';
 
 /** How long typing rests before the search is sent and the URL updated. */
 export const SEARCH_PAUSE_MS = 300;
@@ -179,7 +179,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
         })
         .catch((error: unknown) => {
           if (stale()) return;
-          logger.warn('Lelañea’s notes could not be read', {
+          logger.warn('Lelanea’s notes could not be read', {
             error: error instanceof Error ? error.message : String(error),
           });
           setUnreadable(true);
@@ -415,7 +415,7 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
         <Banner tone="warning" lead={notes ? 'Not refreshed.' : 'Not readable.'}>
           {notes
             ? 'This page is as it stood a moment ago — the last read did not get through.'
-            : 'Lelañea’s notes could not be read just now. Nothing has been lost; try again shortly.'}
+            : 'Lelanea’s notes could not be read just now. Nothing has been lost; try again shortly.'}
         </Banner>
       ) : null}
 
@@ -428,8 +428,8 @@ export function NotesPanel({ fetchImpl }: NotesPanelProps) {
           And it gets no controls: there is nothing yet to find.
         */
         <p className="text-muted-foreground max-w-[52ch] text-[14px] leading-[1.7]">
-          Lelañea has written nothing down yet. As you talk, anything worth remembering appears here
-          while you are still in the conversation — with where it came from, and how sure Lelañea is
+          Lelanea has written nothing down yet. As you talk, anything worth remembering appears here
+          while you are still in the conversation — with where it came from, and how sure Lelanea is
           of it.
         </p>
       ) : null}
@@ -491,7 +491,7 @@ const LIST = {
 } as const;
 
 /**
- * The run key for Lelañea's own headings. A symbol, so it cannot equal any
+ * The run key for Lelanea's own headings. A symbol, so it cannot equal any
  * real group key; `reactKey` turns it into a string only for React.
  */
 const OWN_RUN = Symbol('own');
@@ -501,7 +501,7 @@ function reactKey(key: string | typeof OWN_RUN): string {
 }
 
 const OWN_NOTE =
-  'Things that came up in conversation and add to the picture, though nothing on Lelañea’s own list covered them — so Lelañea named them.';
+  'Things that came up in conversation and add to the picture, though nothing on Lelanea’s own list covered them — so Lelanea named them.';
 
 /**
  * Consecutive notes under one heading. The server has already put them in
@@ -534,7 +534,7 @@ function NoMatches({ onClear }: { onClear: () => void }) {
   return (
     <div className="flex flex-col items-start gap-3" aria-labelledby={id}>
       <p id={id} className="text-muted-foreground max-w-[52ch] text-[14px] leading-[1.7]">
-        Nothing in Lelañea’s notes matches that. Try fewer words, or look under every heading.
+        Nothing in Lelanea’s notes matches that. Try fewer words, or look under every heading.
       </p>
       <Button
         size="sm"
@@ -608,7 +608,7 @@ export function NotesSkeleton() {
   return (
     <div className="flex flex-col gap-2.5">
       <p className="sr-only" role="status">
-        Reading Lelañea’s notes.
+        Reading Lelanea’s notes.
       </p>
       {[0, 1, 2].map((row) => (
         <div

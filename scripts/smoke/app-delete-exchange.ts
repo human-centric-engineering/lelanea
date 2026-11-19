@@ -123,7 +123,7 @@ async function main(): Promise<void> {
     );
     await prisma.aiConversation.update({
       where: { id: conversation.id },
-      data: { summary: `They told Lelañea: ${SAID_FIRST}.`, summaryUpToMessageId: m2.id },
+      data: { summary: `They told Lelanea: ${SAID_FIRST}.`, summaryUpToMessageId: m2.id },
     });
 
     const session = (seconds: number) =>

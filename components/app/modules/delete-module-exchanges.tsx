@@ -11,18 +11,18 @@ import { logger } from '@/lib/logging';
 
 /** What the offer says before it is opened. */
 export const MODULE_DELETE_OFFER =
-  'You can delete everything you said while you were in this module, and Lelañea’s replies to it.';
+  'You can delete everything you said while you were in this module, and Lelanea’s replies to it.';
 
 /** What deleting a module's worth takes, said before it happens. */
 export const MODULE_DELETE_CONFIRM =
-  'This deletes what you said while you were in this module and Lelañea’s replies, from the conversation and from everything Lelañea keeps. The notes Lelañea made from it are removed, and so is any recap Lelañea gave of those sessions. An account you kept of one of them stays, marked as written from a conversation you have since deleted. This can’t be undone.';
+  'This deletes what you said while you were in this module and Lelanea’s replies, from the conversation and from everything Lelanea keeps. The notes Lelanea made from it are removed, and so is any recap Lelanea gave of those sessions. An account you kept of one of them stays, marked as written from a conversation you have since deleted. This can’t be undone.';
 
 /**
  * The plain limit of what it covers (t-155). Turns were not stamped with their
  * module before t-152, so anything older is not part of any module's worth.
  */
 export const MODULE_DELETE_COVERS =
-  'It covers only conversations since Lelañea began noting which module you were in. Anything you said before that can be deleted by session from your journey, or one exchange at a time from your notes.';
+  'It covers only conversations since Lelanea began noting which module you were in. Anything you said before that can be deleted by session from your journey, or one exchange at a time from your notes.';
 
 /** What stays, said so the person does not think their place was lost. */
 export const MODULE_DELETE_KEEPS = 'Where you are in the module stays as it is.';

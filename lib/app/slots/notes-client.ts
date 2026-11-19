@@ -1,5 +1,5 @@
 /**
- * The browser's side of Lelañea's notes (f-slots t-73).
+ * The browser's side of Lelanea's notes (f-slots t-73).
  *
  * Read the page, send a correction, remove a note. Kept apart from the store for the
  * reason `notes-view.ts` gives — the panel is a client component and the store
@@ -19,7 +19,7 @@ import { notesSearch, type NotesQuery } from '@/lib/app/slots/notes-query';
 import type { NotesView } from '@/lib/app/slots/notes-view';
 
 /**
- * Lelañea's notes: `GET` reads them, `POST { slotSlug, value }` corrects one,
+ * Lelanea's notes: `GET` reads them, `POST { slotSlug, value }` corrects one,
  * `DELETE { slotSlug }` removes one.
  */
 export const NOTES_ENDPOINT = '/api/v1/app/notes';
@@ -142,7 +142,7 @@ export async function fetchNotes(options: Options = {}): Promise<NotesView> {
   if (!response.ok) throw await refusalOf(response);
   const parsed = notesEnvelopeSchema.safeParse(await response.json());
   if (!parsed.success) {
-    throw new NotesRefused(response.status, 'malformed', 'Lelañea’s notes could not be read.');
+    throw new NotesRefused(response.status, 'malformed', 'Lelanea’s notes could not be read.');
   }
   return parsed.data.data;
 }

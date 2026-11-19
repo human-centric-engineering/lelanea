@@ -197,7 +197,7 @@ describe('GET /api/v1/app/content/resources/:key', () => {
     for (const [key, title] of [
       ['journey', 'The journey'],
       ['situations', 'Life situations'],
-      ['default', 'Lelañea'],
+      ['default', 'Lelanea'],
     ] as const) {
       const { request, context } = selectionRequest(key);
       const response = await getSelection(request, context);

@@ -24,7 +24,7 @@
  */
 
 import { z } from 'zod';
-// Lelañea divergence (Row 18): `after` keeps a turn alive past its reader.
+// Lelanea divergence (Row 18): `after` keeps a turn alive past its reader.
 import { after } from 'next/server';
 import { withAuth } from '@/lib/auth/guards';
 import { sseResponse } from '@/lib/api/sse';
@@ -42,7 +42,7 @@ import {
   resolveFacilitationSurface,
   FACILITATION_SURFACE_CONTEXT_TYPE,
 } from '@/lib/framework/facilitation/agents/surface';
-// Lelañea divergence (.context/app/platform-divergences.md Row 18; daybreak#265): a leaf-fillable turn hook.
+// Lelanea divergence (.context/app/platform-divergences.md Row 18; daybreak#265): a leaf-fillable turn hook.
 import { runFacilitationTurn } from '@/lib/framework/facilitation/agents/turn-hook';
 
 const surfaceChatRequestSchema = z.object({

@@ -21,7 +21,7 @@
  * ---------------------------------------------------------------------------
  * Reading them unmocked is the entire point: the question is what the PLATFORM
  * does with this fork's values, and a mock answers a different one. But it does
- * make this file yours to maintain, so if you have forked Lelañea and these are
+ * make this file yours to maintain, so if you have forked Lelanea and these are
  * failing, they are telling you your seams say something else — not that
  * anything is broken.
  *
@@ -130,7 +130,7 @@ describe('every door into the app lands at the shell', () => {
   it('names the destination in the product’s own words', () => {
     // A route without its label is how users end up at `/app` behind a button
     // still reading "Dashboard".
-    expect(AUTH_LANDING_LABEL).toBe('Lelañea');
+    expect(AUTH_LANDING_LABEL).toBe('Lelanea');
   });
 
   it('does not reuse a label the shell nav already means differently', () => {

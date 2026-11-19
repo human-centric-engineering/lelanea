@@ -6,7 +6,7 @@
  * so every new surface that printed a kind, and every session reading the code,
  * picked them up again. The kinds are renamed now
  * (`20261001100000_app_resource_kinds`), and this file is what keeps them
- * gone: it reads the Lelañea-owned tree off disk and fails on the old words.
+ * gone: it reads the Lelanea-owned tree off disk and fails on the old words.
  *
  * ## What it bans, and where
  *
@@ -38,7 +38,7 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
 
-/** The trees Lelañea owns. Framework and platform trees are not ours to police. */
+/** The trees Lelanea owns. Framework and platform trees are not ours to police. */
 const SCANNED = [
   'app/(lelanea)',
   'app/admin/app',

@@ -1,5 +1,5 @@
 /**
- * Leaf-app owner classification — FILLED by Lelañea.
+ * Leaf-app owner classification — FILLED by Lelanea.
  *
  * A leaf app (a fork of Daybreak) classifies its own user-linked models here: `personal` for a row
  * private to one person, `not-personal` (with the reason) for one that records who did something
@@ -45,7 +45,7 @@ const EDITOR =
   'A revision of the org’s content; editorId is the admin who made the edit, null for the seed or once that admin is erased.';
 
 /**
- * Every Lelañea model that links to a person (Daybreak 0.9.0 sync, t-174).
+ * Every Lelanea model that links to a person (Daybreak 0.9.0 sync, t-174).
  *
  * **Classified, not enforced**, as Daybreak's own are: no row carries
  * `enforced: true`, so the data layer does not yet refuse a narrowed caller's

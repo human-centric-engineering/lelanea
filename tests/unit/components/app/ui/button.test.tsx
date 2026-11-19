@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 /**
- * Lelañea's Button — and the two defects t-18 could not reach from the palette.
+ * Lelanea's Button — and the two defects t-18 could not reach from the palette.
  *
  * Both are invisible to type-checking and to a screenshot of a resting page, and
  * both come from the same place: this component COMPOSES shadcn's Button, so

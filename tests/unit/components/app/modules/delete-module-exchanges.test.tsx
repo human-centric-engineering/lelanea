@@ -143,7 +143,7 @@ describe('the confirmation', () => {
     world.nextResponse = refusal(
       409,
       'CONFLICT',
-      'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
+      'Lelanea is still answering that. Try again in a moment, once the reply has finished.',
       { reason: 'still_answering' }
     );
     render(<DeleteModuleExchanges slug="values" exchanges={2} />);

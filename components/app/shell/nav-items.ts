@@ -12,7 +12,7 @@ import { NOTES_PAGE } from '@/lib/app/slots/notes-client';
 
 /**
  * The six destinations of the left nav — the prototype's five, in its order,
- * plus Lelañea's notes.
+ * plus Lelanea's notes.
  *
  * The prototype has seven: "Usage and billing" and "Settings" sat at the foot,
  * pinned down by a flexible spacer. Both moved into the account menu
@@ -32,7 +32,7 @@ import { NOTES_PAGE } from '@/lib/app/slots/notes-client';
  *
  * ## The sixth is not in the prototype, and is not a person-thing either
  *
- * `Lelañea's notes` (f-slots t-73). The 15 September ruling sent everything
+ * `Lelanea's notes` (f-slots t-73). The 15 September ruling sent everything
  * about the PERSON — account, settings, usage — into the account menu, and this
  * looked like one of those. It is not: §3.3 makes the workspace the place where
  * "the profile assembling" becomes visible, and says the pairing should provoke
@@ -72,7 +72,7 @@ export const SHELL_NAV: readonly ShellNavEntry[] = [
   { href: '/app/journey', label: 'Your journey', hint: 'Where you have been', icon: Map },
   {
     href: NOTES_PAGE,
-    label: 'Lelañea’s notes',
+    label: 'Lelanea’s notes',
     hint: 'What is written down about you, and why',
     icon: NotebookPen,
   },
@@ -84,7 +84,7 @@ export const SHELL_NAV: readonly ShellNavEntry[] = [
   },
   {
     href: '/app/share',
-    label: 'Share with Lelañea',
+    label: 'Share with Lelanea',
     hint: 'Tell us what is working, and what is not',
     icon: Send,
   },

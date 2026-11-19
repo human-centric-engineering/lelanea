@@ -125,7 +125,7 @@ describe('DELETE /api/v1/app/sessions/:id', () => {
 
   it('passes a still-answering refusal through as a 409 with its message', async () => {
     store.deleteSession.mockRejectedValueOnce(
-      new ConflictError('Lelañea is still answering that. Try again in a moment.', {
+      new ConflictError('Lelanea is still answering that. Try again in a moment.', {
         reason: 'still_answering',
       })
     );

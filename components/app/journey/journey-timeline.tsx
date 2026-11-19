@@ -329,7 +329,7 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
 
       {record.drafts > 0 && !filtering ? (
         <Banner tone="info" lead="Waiting for you.">
-          Lelañea has written an account of a session. Open it to keep it, change it, ask for
+          Lelanea has written an account of a session. Open it to keep it, change it, ask for
           another or discard it. It is not in your journey until you do.
         </Banner>
       ) : null}
@@ -445,7 +445,7 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
             Nothing is recorded here yet
           </h2>
           <p className="text-muted-foreground mt-2 text-[14px] leading-[1.65]">
-            After a conversation of substance, Lelañea writes an account of what was discussed and
+            After a conversation of substance, Lelanea writes an account of what was discussed and
             leaves it here for you to keep, change or discard. Nothing goes into your journey
             without you seeing it first. You can also write here yourself, whenever you want to.
           </p>
@@ -467,7 +467,7 @@ export function JourneyTimeline({ record, query, next, moduleLabels }: JourneyTi
 
       {empty ? null : (
         <p className="text-muted-foreground text-[12.5px] leading-[1.6]">
-          Nothing on this page was concluded for you. Each account is Lelañea’s until you keep it,
+          Nothing on this page was concluded for you. Each account is Lelanea’s until you keep it,
           and you can change or remove anything here.
         </p>
       )}

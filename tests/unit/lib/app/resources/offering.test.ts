@@ -92,7 +92,7 @@ describe('resourceOffering', () => {
     const block = offering();
     const lines = block.split('\n');
 
-    expect(lines[0]).toMatch(/^Videos, audio and articles of Lelañea’s you may offer/);
+    expect(lines[0]).toMatch(/^Videos, audio and articles of Lelanea’s you may offer/);
     expect(lines).toContain(
       '- why-values (video, 6:12): Why values come first — the premise of the whole arc [Values]'
     );

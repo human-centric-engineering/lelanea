@@ -31,7 +31,7 @@ import WelcomeEmail from '@/components/app/emails/welcome';
 import type { EmailOverrides } from '@/lib/email/registry';
 
 /**
- * Lelañea's two, and why only two (t-41, 15 September 2026).
+ * Lelanea's two, and why only two (t-41, 15 September 2026).
  *
  * `welcome` and `invitation` carried the platform's framing — a starter
  * template's idea of what was joined, a dashboard and a team that do not

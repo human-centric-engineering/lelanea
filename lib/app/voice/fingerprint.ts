@@ -202,7 +202,7 @@ export function readFingerprintVersion(prompt: string): string | null {
  * the agent does with a tool, and because the guardrails are inherited by agents that
  * hold no tools at all.
  */
-export const VOICE_AGENT_SYSTEM_INSTRUCTIONS = `You are the guide a person meets inside the Lelañea app.
+export const VOICE_AGENT_SYSTEM_INSTRUCTIONS = `You are the guide a person meets inside the Lelanea app.
 
 In a turn:
 - Receive what the person actually said before you answer it.

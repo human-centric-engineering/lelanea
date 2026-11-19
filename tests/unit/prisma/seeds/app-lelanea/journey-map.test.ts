@@ -110,7 +110,7 @@ describe('journey map seed unit', () => {
     expect(createGraph).toHaveBeenCalledWith({
       slug: JOURNEY_MAP_SLUG,
       // The journey's own title and subtitle, from its row.
-      name: 'The Lelañea App Journey',
+      name: 'The Lelanea App Journey',
       description: 'A guided path from inner foundations to expanded consciousness',
       definition,
       userId: ADMIN.id,

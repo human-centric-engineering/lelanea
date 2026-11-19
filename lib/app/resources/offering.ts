@@ -49,7 +49,7 @@ import type { ResourcesLibrary } from '@/lib/app/content/resources';
  * in the tool's description because this is where a model weighing "does
  * anything here fit?" is looking.
  */
-const HEADING = 'Videos, audio and articles of Lelañea’s you may offer this person, by id:';
+const HEADING = 'Videos, audio and articles of Lelanea’s you may offer this person, by id:';
 
 const RULE = [
   'Offer one of these only when it genuinely fits what the person is working',

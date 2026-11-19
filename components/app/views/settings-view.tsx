@@ -85,7 +85,7 @@ function Panel({
  * midday, sees Light marked as theirs, and finds it dark at sunset.
  *
  * `useTheme` publishes `choice` for exactly this, and `clearTheme` for the way
- * back. Both are Lelañea additions to a Sunrise file, divergence row 2 in
+ * back. Both are Lelanea additions to a Sunrise file, divergence row 2 in
  * `.context/app/platform-divergences.md`, and both were forced by this panel: t-11 first
  * reached for the stored value by reading `localStorage` here, which put this
  * file's idea of the storage key in a second place with only a test holding the
@@ -152,8 +152,8 @@ function LeaningsPanel({ initial }: { initial: LeaningsView }) {
     <Panel heading="Leanings" sub="Dials, none of them absolute.">
       <p id={noteId} className="text-muted-foreground mb-4 text-[13.5px] leading-[1.65]">
         {initial.configured
-          ? 'Each one moves how the replies lean, not who is speaking. The middle is Lelañea’s own voice; your choice is saved as you make it, and you can always come back to the middle.'
-          : 'These can’t be changed just now, so the replies use Lelañea’s own voice. Try again later.'}
+          ? 'Each one moves how the replies lean, not who is speaking. The middle is Lelanea’s own voice; your choice is saved as you make it, and you can always come back to the middle.'
+          : 'These can’t be changed just now, so the replies use Lelanea’s own voice. Try again later.'}
       </p>
       <div>
         {initial.dials.map((dial) => (
@@ -252,11 +252,11 @@ function LeaningDial({ initial, describedBy }: { initial: LeaningDialView; descr
       </div>
       {dial.locked ? (
         <p className="text-muted-foreground mt-2 text-[12.5px]">
-          Lelañea keeps this one where it is.
+          Lelanea keeps this one where it is.
         </p>
       ) : dial.min > -2 || dial.max < 2 ? (
         <p className="text-muted-foreground mt-2 text-[12.5px]">
-          Lelañea keeps this from going all the way.
+          Lelanea keeps this from going all the way.
         </p>
       ) : null}
       {save.failure ? (

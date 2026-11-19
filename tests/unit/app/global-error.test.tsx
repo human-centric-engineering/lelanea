@@ -367,7 +367,7 @@ describe('app/global-error', () => {
       expect(screen.queryByText('abc123')).not.toBeInTheDocument();
     });
 
-    // LELAÑEA divergence (t-5) — ADJUSTED, NOT DELETED.
+    // LELANEA divergence (t-5) — ADJUSTED, NOT DELETED.
     //
     // Upstream, these two cases assert that production shows a "contact
     // support" link pointing at `/contact`. This fork deleted that page: it was
@@ -466,7 +466,7 @@ describe('app/global-error', () => {
       expect(screen.getByRole('button', { name: /go home/i })).toBeInTheDocument();
     });
 
-    // LELAÑEA divergence (t-5) — see the production-mode block above. The
+    // LELANEA divergence (t-5) — see the production-mode block above. The
     // accessible route out of a fatal error is now the two buttons; there is no
     // third destination to name until a support channel exists.
     it('leaves the visitor two working ways out, and no dead third', () => {

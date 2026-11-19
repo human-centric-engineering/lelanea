@@ -6,7 +6,7 @@ import { ogLotusSize } from '@/components/app/ui/lotus-sizes';
 import { BRAND } from '@/lib/brand';
 import { STRAPLINE } from '@/lib/site/config';
 
-export const alt = 'Lelañea — an invitation into conscious living';
+export const alt = 'Lelanea — an invitation into conscious living';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 

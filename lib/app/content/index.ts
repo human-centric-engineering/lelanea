@@ -1,5 +1,5 @@
 /**
- * The one way in to Lelañea's authored content — the shapes, and the reads that
+ * The one way in to Lelanea's authored content — the shapes, and the reads that
  * do not touch a file.
  *
  * Twelve JSON files hold the words this app is built from. Six, under

@@ -6,7 +6,7 @@
  *
  * ## It is mounted beside the real conversation pane, on purpose
  *
- * "Ask Lelañea about this" crosses from one pane to the other through
+ * "Ask Lelanea about this" crosses from one pane to the other through
  * `ShellLayoutProvider`, and the only assertion worth making about it is that
  * the words end up in the box a person would then press send on. Mounting a
  * spy on `setAsk` instead would prove the panel called a setter and nothing
@@ -152,7 +152,7 @@ function note(overrides: Partial<Note> = {}): Note {
 }
 
 /**
- * A person's whole record: `notes` under "Life areas", `own` under Lelañea's
+ * A person's whole record: `notes` under "Life areas", `own` under Lelanea's
  * own headings. The fake server answers each read by running the REAL
  * `queryNotes` over it with the query the panel sent, so a filter here behaves
  * as the route's does.
@@ -305,7 +305,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('how sure Lelañea is', () => {
+describe('how sure Lelanea is', () => {
   it("bands the stored 1-10 on the AGENT's bands, and clamps rather than throwing", () => {
     // 8 is where "said it plainly about themselves" starts in the agent's instructions
     // (`.context/app/voice.md`), so an 8 must read as Confident. The first cut
@@ -343,14 +343,14 @@ describe('what the panel shows', () => {
     expect(await screen.findByText(/Work is going badly/)).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'Life areas' })).toBeTruthy();
     // The slug is the card's tag; the taxonomy's own third-person wording is
-    // quoted inside the disclosure, where it is plainly Lelañea's words rather
+    // quoted inside the disclosure, where it is plainly Lelanea's words rather
     // than the panel calling the reader "this person".
     expect(screen.getByText('life work')).toBeTruthy();
-    expect(screen.getByText(/What Lelañea was looking for/)).toBeTruthy();
+    expect(screen.getByText(/What Lelanea was looking for/)).toBeTruthy();
     expect(screen.getByText(/How work stands for this person right now/)).toBeTruthy();
     // §3.19: how it was known, how sure, and when — the three facts that now
     // live in the aside, each on its own line rather than run together.
-    expect(screen.getByText('Lelañea inferred it')).toBeTruthy();
+    expect(screen.getByText('Lelanea inferred it')).toBeTruthy();
     // A 6 is "clearly meant without saying it outright" in the agent's own bands, so
     // it reads Fairly sure — not the Not certain the first cut of the bands
     // gave it.
@@ -388,7 +388,7 @@ describe('what the panel shows', () => {
     // can decide whether to open it without opening it.
     const fold = screen.getByText('Before this').closest('summary') as HTMLElement;
     expect(fold.textContent?.replace(/\s+/g, ' ')).toMatch(
-      /Before this · Lelañea inferred it, 20 September/
+      /Before this · Lelanea inferred it, 20 September/
     );
     // §3.12: a door, not a fault. Nothing on the card interrupts a reader.
     expect(screen.queryByRole('alert')).toBeNull();
@@ -510,7 +510,7 @@ describe('what the panel shows', () => {
     expect(screen.getAllByRole('button', { name: /ask lela.*about this/i })).toHaveLength(2);
   });
 
-  it('keeps a slug Lelañea invented under a heading of its own', async () => {
+  it('keeps a slug Lelanea invented under a heading of its own', async () => {
     world.reads = [
       view(
         [note()],
@@ -528,7 +528,7 @@ describe('what the panel shows', () => {
     // The heading now sits in a row beside the rule and the count, so the
     // section is two levels up rather than one.
     const section = (
-      await screen.findByRole('heading', { level: 2, name: 'Lelañea’s own headings' })
+      await screen.findByRole('heading', { level: 2, name: 'Lelanea’s own headings' })
     ).closest('section') as HTMLElement;
     expect(within(section).getByText('Has not called his brother.')).toBeTruthy();
     expect(within(section).queryByText(/Work is going badly/)).toBeNull();
@@ -538,7 +538,7 @@ describe('what the panel shows', () => {
     world.reads = [view([])];
     renderBoth();
 
-    expect(await screen.findByText(/Lelañea has written nothing down yet/)).toBeTruthy();
+    expect(await screen.findByText(/Lelanea has written nothing down yet/)).toBeTruthy();
   });
 });
 
@@ -678,7 +678,7 @@ describe('answering back', () => {
       status: 409,
       reason: 'kept_out_of_the_record',
       message:
-        'Lelañea keeps what you say about health, feeling and belief out of these notes. Ask Lelañea about it instead.',
+        'Lelanea keeps what you say about health, feeling and belief out of these notes. Ask Lelanea about it instead.',
     };
     renderBoth();
     await screen.findByText(/Work is going badly/);
@@ -688,7 +688,7 @@ describe('answering back', () => {
     await userEvent.click(screen.getByRole('button', { name: /save this instead/i }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Ask Lelañea about it instead.');
+    expect(alert.textContent).toContain('Ask Lelanea about it instead.');
     // Still editable, with the words the person typed still in the box.
     expect(screen.getByRole('textbox', { name: /your correction/i })).toBeTruthy();
   });
@@ -1134,7 +1134,7 @@ describe('finding your way around', () => {
     const [pending] = world.hold;
     await act(async () => pending(record()));
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
-    expect(headings).toEqual(['Life areas', 'The person', 'Lelañea’s own headings']);
+    expect(headings).toEqual(['Life areas', 'The person', 'Lelanea’s own headings']);
   });
 
   it('labels each note with its heading when sorted by recency, freshest first', async () => {
@@ -1150,7 +1150,7 @@ describe('finding your way around', () => {
     ]);
     // No group sections: the heading rides on each card instead.
     expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
-    expect(screen.getByText('Lelañea’s own headings · family communication')).toBeTruthy();
+    expect(screen.getByText('Lelanea’s own headings · family communication')).toBeTruthy();
     expect(screen.getByText('The person · the person disposition')).toBeTruthy();
   });
 
@@ -1160,8 +1160,8 @@ describe('finding your way around', () => {
 
     await userEvent.type(search(), 'zebra');
 
-    expect(await screen.findByText(/Nothing in Lelañea’s notes matches that/)).toBeTruthy();
-    expect(screen.queryByText(/Lelañea has written nothing down yet/)).toBeNull();
+    expect(await screen.findByText(/Nothing in Lelanea’s notes matches that/)).toBeTruthy();
+    expect(screen.queryByText(/Lelanea has written nothing down yet/)).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: /clear the search/i }));
 

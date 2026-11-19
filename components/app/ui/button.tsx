@@ -108,7 +108,7 @@ export interface AppButtonProps
     VariantProps<typeof appButtonVariants> {}
 
 /**
- * Lelañea's pill button.
+ * Lelanea's pill button.
  *
  * It COMPOSES `components/ui/button.tsx` rather than replacing it, so `asChild`,
  * the disabled behaviour, the icon sizing and anything upstream fixes later all

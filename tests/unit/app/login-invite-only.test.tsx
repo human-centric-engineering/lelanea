@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 /**
- * The login page under `SIGNUP_MODE=invite_only` — Lelañea's half.
+ * The login page under `SIGNUP_MODE=invite_only` — Lelanea's half.
  *
  * The platform's own test (`tests/unit/app/(auth)/login/page.test.tsx`) proves
  * the sign-up link is GONE under invite-only. This proves something is there

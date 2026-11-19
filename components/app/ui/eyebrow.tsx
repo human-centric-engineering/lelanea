@@ -33,7 +33,7 @@ export interface EyebrowProps extends React.ComponentPropsWithoutRef<'span'> {
  *
  * CASING IS NOT FORCED, which matches the stylesheet's own reasoning. §6.10 says
  * eyebrows *may* be lowercase, and `text-transform: lowercase` would strip the
- * capital from Lelañea's name wherever an eyebrow carries it. Write the label in
+ * capital from Lelanea's name wherever an eyebrow carries it. Write the label in
  * the case you want it.
  *
  * @see .context/app/planning/lelanea-product-description.md §6.3, §6.10

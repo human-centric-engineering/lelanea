@@ -1,5 +1,5 @@
 /**
- * The wire contract for Lelañea's notes — what a member reads back about
+ * The wire contract for Lelanea's notes — what a member reads back about
  * themselves, free of Prisma (f-slots t-73).
  *
  * Its own module, not the store's, for the reason Daybreak states at
@@ -18,7 +18,7 @@
  * invitation to revisit, not for a changelog.
  *
  * @see lib/app/slots/notes.ts — the read and the correction
- * @see .context/app/slots.md — "Lelañea's notes"
+ * @see .context/app/slots.md — "Lelanea's notes"
  */
 
 /**
@@ -39,7 +39,7 @@ export const SLOT_WRITE_CAPABILITY = 'fill_slot';
  *
  * ## Two rules of register, both owner corrections (21 September 2026)
  *
- * **Lelañea is named, never pronouned.** Every line says *Lelañea*, not *she*
+ * **Lelanea is named, never pronouned.** Every line says *Lelanea*, not *she*
  * or *her*. The persona is Lelañea Fulton's and the product gives it to the
  * agent, but a panel that pronouns the agent throughout starts to read as
  * though somebody else were describing it to you — and this is the one surface
@@ -57,13 +57,13 @@ export const SLOT_WRITE_CAPABILITY = 'fill_slot';
  * broken into pieces rather than as three separate facts.
  */
 export const NOTE_SOURCES: Readonly<Record<string, string>> = {
-  direct: 'You told Lelañea directly',
+  direct: 'You told Lelanea directly',
   unprompted: 'You brought it up yourself',
   emerged_naturally: 'It came up in passing',
-  built_across_turns: 'Lelañea put it together over several things you said',
-  inferred: 'Lelañea inferred it',
+  built_across_turns: 'Lelanea put it together over several things you said',
+  inferred: 'Lelanea inferred it',
   user_confirmed: 'You corrected this yourself',
-  synthesised: 'Lelañea drew it together from other things already noted',
+  synthesised: 'Lelanea drew it together from other things already noted',
   // `REMOVED_SOURCE_TYPE` (`removed.ts`), spelled out here because this module
   // imports nothing. A removed note's card says this itself; the line is for the
   // "Before this" fold, where a removed earlier version is named this way.
@@ -176,7 +176,7 @@ export interface Note {
   previous: NoteHistory | null;
   /**
    * The taxonomy group it is filed under — `life_areas` — or `null` for a
-   * heading Lelañea made up, which has no definition and so no group.
+   * heading Lelanea made up, which has no definition and so no group.
    *
    * Carried on the note since t-79 flattened the response: the panel groups by
    * this, and the `recent` sort labels each note with it.
@@ -201,7 +201,7 @@ export interface NoteGroupCount {
 }
 
 /**
- * The `group` value that asks for Lelañea's own headings.
+ * The `group` value that asks for Lelanea's own headings.
  *
  * It cannot collide with a real group: group keys are slugs, and a slug starts
  * with a letter (`slotSlugSchema`). It is a **query** value only — on a note the
@@ -210,8 +210,8 @@ export interface NoteGroupCount {
  */
 export const NOTES_OWN_GROUP = '_own';
 
-/** The heading Lelañea's own headings are filed under. One spelling, both views. */
-export const NOTES_OWN_TITLE = 'Lelañea’s own headings';
+/** The heading Lelanea's own headings are filed under. One spelling, both views. */
+export const NOTES_OWN_TITLE = 'Lelanea’s own headings';
 
 /**
  * `grouped` is by taxonomy group, freshest first within each, and is the
@@ -247,7 +247,7 @@ export interface NotesView {
   notes: Note[];
   /** Taxonomy groups with notes in them, before filtering. Ordered by title. */
   groups: NoteGroupCount[];
-  /** How many notes are under Lelañea's own headings, before filtering. */
+  /** How many notes are under Lelanea's own headings, before filtering. */
   own: number;
   /** Every note, however filed and whatever the filter — so "a new account" is one test. */
   total: number;

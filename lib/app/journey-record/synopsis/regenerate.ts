@@ -48,13 +48,13 @@ import type { SynopsisReply } from '@/lib/app/journey-record/synopsis/prompt';
 import { openSeat, type SeatRefusal } from '@/lib/app/journey-record/synopsis/seat';
 
 /**
- * Why the seat would not draft, in words the person reads. Lelañea by name,
+ * Why the seat would not draft, in words the person reads. Lelanea by name,
  * as the notes panel's refusals are.
  */
 const REFUSALS: Record<SeatRefusal, string> = {
-  paused: 'Lelañea isn’t writing anything new just now. Try again later.',
-  ceiling_reached: 'You’ve used this month’s allowance, so Lelañea can’t write another draft yet.',
-  no_agent: 'Lelañea can’t write another draft just now. Try again later.',
+  paused: 'Lelanea isn’t writing anything new just now. Try again later.',
+  ceiling_reached: 'You’ve used this month’s allowance, so Lelanea can’t write another draft yet.',
+  no_agent: 'Lelanea can’t write another draft just now. Try again later.',
 };
 
 /**
@@ -76,7 +76,7 @@ export async function regenerateSynopsis(
   }
   if (stored.regenerations >= MAX_SYNOPSIS_REGENERATIONS) {
     throw new ConflictError(
-      'That’s as many drafts as Lelañea writes of one session. Change this one in your own words.',
+      'That’s as many drafts as Lelanea writes of one session. Change this one in your own words.',
       { reason: 'no_more_drafts' }
     );
   }
@@ -96,7 +96,7 @@ export async function regenerateSynopsis(
     }
     if (current.regenerations >= MAX_SYNOPSIS_REGENERATIONS) {
       throw new ConflictError(
-        'That’s as many drafts as Lelañea writes of one session. Change this one in your own words.',
+        'That’s as many drafts as Lelanea writes of one session. Change this one in your own words.',
         { reason: 'no_more_drafts' }
       );
     }
@@ -143,7 +143,7 @@ export async function regenerateSynopsis(
       error: err instanceof Error ? err.message : String(err),
     });
     throw new APIError(
-      'Lelañea couldn’t write another draft just now. Try again.',
+      'Lelanea couldn’t write another draft just now. Try again.',
       'SERVICE_UNAVAILABLE',
       503,
       { reason: 'failed' }

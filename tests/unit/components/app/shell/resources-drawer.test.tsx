@@ -17,7 +17,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — the last section reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * `DOCUMENT_PAGES` is pinned against Lelañea's foundational documents, and the
+ * `DOCUMENT_PAGES` is pinned against Lelanea's foundational documents, and the
  * welcome (`the_initiation`) is named as the one with no page. A fork with a
  * different collection should rewrite that section against its own document
  * ids and its own pages; everything above it runs on fixtures and can be kept.
@@ -319,7 +319,7 @@ describe('what the drawer asks the API', () => {
   });
 
   it('asks for the default on the clean conversation', async () => {
-    serve({ default: emptySelection({ key: 'default', title: 'Lelañea', tier: null }) });
+    serve({ default: emptySelection({ key: 'default', title: 'Lelanea', tier: null }) });
     renderDrawers('/app');
     await openResources();
     expect(get).toHaveBeenCalledWith(`${RESOURCES_ENDPOINT}/default`);
@@ -1257,10 +1257,10 @@ describe('the reads, always there', () => {
       ONBOARDING_READS.map((id) => readPath(id))
     );
     expect(links.map((link) => link.textContent)).toEqual([
-      expect.stringContaining('The Heart Behind Lelañea'),
+      expect.stringContaining('The Heart Behind Lelanea'),
       expect.stringContaining('The Mission'),
       expect.stringContaining('About the Creator'),
-      expect.stringContaining('The Lineage of Lelañea'),
+      expect.stringContaining('The Lineage of Lelanea'),
     ]);
     for (const link of links) {
       expect(link).not.toHaveAttribute('target');
@@ -1271,7 +1271,7 @@ describe('the reads, always there', () => {
 
   it('is there whatever is open, even when the selection has nothing to read', async () => {
     serve(
-      { default: emptySelection({ key: 'default', title: 'Lelañea', tier: null }) },
+      { default: emptySelection({ key: 'default', title: 'Lelanea', tier: null }) },
       documentIndex()
     );
     renderDrawers('/app/settings');

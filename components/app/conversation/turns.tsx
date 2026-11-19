@@ -113,7 +113,7 @@ export function ReplyTurn({
   }, [done, animate, onRevealed]);
   return (
     <article
-      aria-label="Lelañea said"
+      aria-label="Lelanea said"
       className={cn('flex gap-3', rise && !reducedMotion && styles.rise)}
     >
       <HerMark />

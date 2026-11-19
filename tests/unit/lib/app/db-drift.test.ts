@@ -26,7 +26,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 /**
- * LELAÑEA — the leaf probe runs a real query, so the client is stubbed.
+ * LELANEA — the leaf probe runs a real query, so the client is stubbed.
  *
  * `constraintExists` closes over the module-level `prisma`. Stubbing it lets the
  * leaf cases below EXECUTE the probe against a chosen `pg_get_constraintdef`
@@ -59,7 +59,7 @@ describe('registerAppDriftProbes (framework drift-probe wiring)', () => {
   });
 
   /**
-   * LELAÑEA — the leaf's own probe, pinned BESIDE the framework's rather than
+   * LELANEA — the leaf's own probe, pinned BESIDE the framework's rather than
    * replacing it, exactly as the fork note above says.
    *
    * `app_waitlist_entry_userId_fkey` is a hand-written FK (a fork table must not

@@ -7,7 +7,7 @@
  * `BRAND` is pinned to "unconfigured" for every test file (`tests/setup.ts`,
  * #661), so `BRAND.name` reads "Sunrise" here and the product's name is
  * asserted through `BRAND.name` rather than as a literal. The authored beats
- * are different: "Welcome to Lelañea." is in the JSON, not the seam, and is
+ * are different: "Welcome to Lelanea." is in the JSON, not the seam, and is
  * asserted literally — that is the point of the test.
  *
  * @see components/app/emails/welcome.tsx
@@ -51,7 +51,7 @@ describe('WelcomeEmail — the greeting is the Initiation, by position', () => {
     // marks the passage the email was written around.
     const beats = selectSectionText(await requireDocument('the_initiation'), WELCOME_SECTION);
     expect(beats[0]).toBe('Welcome, {{first_name}}.');
-    expect(beats[beats.length - 1]).toBe('Welcome to Lelañea.');
+    expect(beats[beats.length - 1]).toBe('Welcome to Lelanea.');
     expect(beats).toHaveLength(7);
   });
 

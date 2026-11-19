@@ -81,7 +81,7 @@
  */
 
 /**
- * The slug prefix marking an agent as one of Lelañea's own.
+ * The slug prefix marking an agent as one of Lelanea's own.
  *
  * Vocabulary, so it lives here beside the tag slugs rather than in
  * `corpus-access.ts` — which re-exports it, and which was its first home.

@@ -231,7 +231,7 @@ describe('the confirmation', () => {
     expect(await screen.findByText('Not deleted.')).toBeTruthy();
     expect(
       screen.getByText(
-        'Lelañea is still answering in this session. Try again once the reply has finished.'
+        'Lelanea is still answering in this session. Try again once the reply has finished.'
       )
     ).toBeTruthy();
     expect(onDeleted).not.toHaveBeenCalled();

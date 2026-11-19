@@ -239,11 +239,11 @@ describe('Eyebrow', () => {
 
   it('does not force casing', () => {
     // §6.10 says eyebrows MAY be lowercase, and `text-transform: lowercase`
-    // would strip the capital from Lelañea's name wherever one carries it.
-    render(<Eyebrow>About Lelañea</Eyebrow>);
+    // would strip the capital from Lelanea's name wherever one carries it.
+    render(<Eyebrow>About Lelanea</Eyebrow>);
 
-    expect(screen.getByText('About Lelañea').textContent).toBe('About Lelañea');
-    expect(screen.getByText('About Lelañea').className).not.toContain('lowercase');
+    expect(screen.getByText('About Lelanea').textContent).toBe('About Lelanea');
+    expect(screen.getByText('About Lelanea').className).not.toContain('lowercase');
   });
 
   it('renders as the element the layout needs', () => {

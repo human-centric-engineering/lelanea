@@ -1,5 +1,5 @@
 /**
- * A person removes one of Lelañea's notes, and every version of it goes (f-memory
+ * A person removes one of Lelanea's notes, and every version of it goes (f-memory
  * t-78; product description §3.19, §12 "Deletion is real").
  *
  * ## This writes to Daybreak's table directly, and it is a stopgap

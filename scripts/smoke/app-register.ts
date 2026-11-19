@@ -31,7 +31,7 @@
  *
  * FORK NOTE — this runs the real `lib/app/leaf-bootstrap` seam (`initLeafApp()`),
  * because the journey and the module config it reads come from the module
- * registry that seam fills. It asserts Lelañea's map, its Values module and the
+ * registry that seam fills. It asserts Lelanea's map, its Values module and the
  * guiding and teaching overlays; a fork with other modules or no registers
  * should replace this script rather than pin ours.
  *

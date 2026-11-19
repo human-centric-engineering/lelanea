@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
  * hardcoded copies would drift the first time one was edited, silently, with
  * nothing failing.
  */
-export const ACCOUNT_LEDE = 'What Lelañea knows about you here, and where to change it.';
+export const ACCOUNT_LEDE = 'What Lelanea knows about you here, and where to change it.';
 
 export interface AccountViewProps {
   /**
@@ -156,7 +156,7 @@ export function AccountView({ name, email, joined }: AccountViewProps) {
 
       <Section label="identity and sign-in">
         <RowLink href="/profile" title="Your profile">
-          The name and details other parts of Lelañea use.
+          The name and details other parts of Lelanea use.
         </RowLink>
         {/*
           `?tab=security` and not a bare `/settings`. `DEFAULT_SETTINGS_TAB` is

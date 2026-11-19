@@ -243,7 +243,7 @@ describe('the swipe, and what must NOT trigger it', () => {
 
     // Now drag LEFT from inside the composer — the direction that WOULD move to
     // the workspace if the guard were not there. The conversation must stay.
-    const composer = screen.getByRole('textbox', { name: 'Message Lelañea' });
+    const composer = screen.getByRole('textbox', { name: 'Message Lelanea' });
     swipe(-120, 0, 'touch', composer);
     expect(chat()?.getAttribute('aria-hidden')).toBeNull();
     expect(workspace()?.getAttribute('aria-hidden')).toBe('true');

@@ -7,7 +7,7 @@
  * `app/(lelanea)/app/layout.tsx` checks the session, and a layout is NOT
  * re-rendered when the router moves between sibling pages inside it. So that
  * check gates entry to the shell rather than each view, and this view renders
- * every reading Lelañea holds about a person — the most personal surface in the
+ * every reading Lelanea holds about a person — the most personal surface in the
  * app. The property pinned here is that it asks for the session ITSELF rather
  * than inheriting a check that may have been made under a session since
  * revoked (`.context/app/shell.md`, "A view that reads about the reader must
@@ -77,7 +77,7 @@ describe('with a session', () => {
     render(await NotesPage());
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-      'What Lelañea has written down about you'
+      'What Lelanea has written down about you'
     );
     expect(screen.getByTestId('panel')).toBeTruthy();
     expect(clearInvalidSession).not.toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('with a session', () => {
   });
 
   it('names itself in the tab with the words the nav item uses', () => {
-    expect(metadata.title).toBe('Lelañea’s notes');
+    expect(metadata.title).toBe('Lelanea’s notes');
   });
 });
 
@@ -108,7 +108,7 @@ describe('the loading boundary', () => {
     render(<NotesLoading />);
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-      'What Lelañea has written down about you'
+      'What Lelanea has written down about you'
     );
     // From the shared export rather than a copy — the drift this exists to stop.
     expect(screen.getByText(NOTES_LEDE)).toBeTruthy();
@@ -116,6 +116,6 @@ describe('the loading boundary', () => {
 
   it('tells a screen reader it is loading rather than only drawing bars', () => {
     render(<NotesLoading />);
-    expect(screen.getByRole('status').textContent).toMatch(/Reading Lelañea’s notes/);
+    expect(screen.getByRole('status').textContent).toMatch(/Reading Lelanea’s notes/);
   });
 });

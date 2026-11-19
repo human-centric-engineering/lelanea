@@ -186,7 +186,7 @@ export function leaningSlotDefinitions(): SlotDefinitionInput[] {
   return LEANING_DIMENSIONS.map((dimension) => ({
     slug: leaningSlotSlug(dimension.key),
     group: LEANING_SLOT_GROUP,
-    description: `The person's own setting for how Lelañea's voice leans between "${dimension.left}" and "${dimension.right}", from -2 (fully toward the first) to 2 (fully toward the second), 0 being her voice unshaded. Set by the person in Settings or by asking; never inferred.`,
+    description: `The person's own setting for how Lelanea's voice leans between "${dimension.left}" and "${dimension.right}", from -2 (fully toward the first) to 2 (fully toward the second), 0 being her voice unshaded. Set by the person in Settings or by asking; never inferred.`,
     visibility: 'hidden',
     mode: 'targeted',
     dataType: 'number',

@@ -1,9 +1,9 @@
 # The slot taxonomy — what the app aims to learn, as data
 
-What Lelañea learns about a person is a **slot value**; what it is looking for
+What Lelanea learns about a person is a **slot value**; what it is looking for
 is a **slot definition**. This document covers both: where the taxonomy lives
 and how it changes, how the agent fills it, and — since t-73 — how the person it
-is about reads it back, corrects it, or argues with it ("Lelañea's notes",
+is about reads it back, corrects it, or argues with it ("Lelanea's notes",
 below).
 
 **Locations:** `seed-data/drafted/lelanea_slot_taxonomy.json` (the v1 draft) ·
@@ -88,7 +88,7 @@ decision** — the file ships `provenance.status: draft`.
 §12: _"Development is a tuning signal, never a grade. It must never rank, score,
 or display that as a level."_ `visibility: hidden` is the mechanism — the value
 never leaves the server to a member. The content test asserts it **in both
-directions**: a development slot that became `open` would reach Lelañea's notes
+directions**: a development slot that became `open` would reach Lelanea's notes
 (`/app/notes`), and an unrelated slot that became `hidden` would be withheld
 from the person it is about for no reason.
 
@@ -696,7 +696,7 @@ it is the agent seeing the taxonomy; what would remove it is the admin setting.
 ### What proves the write
 
 `HB9`: a value written where nobody can read it is indistinguishable from one
-not written. t-73 closed that — "Lelañea's notes" below is the read surface, and
+not written. t-73 closed that — "Lelanea's notes" below is the read surface, and
 it is where a person sees the write happen inside the turn that made it. The
 smoke stays, because it proves a different thing: the write itself, end to end.
 
@@ -716,7 +716,7 @@ server restarted** (`sunrise.mcp-reseed`). The dispatcher also caches an agent's
 bindings for five minutes, so a fresh grant can be invisible for that long on a
 process that had already resolved the agent.
 
-## Lelañea's notes — the member surface (t-73)
+## Lelanea's notes — the member surface (t-73)
 
 **Locations:** `lib/app/slots/notes.ts` (the read and the correction) ·
 `lib/app/slots/notes-query.ts` (search, filter and sort — pure, t-79) ·
@@ -730,12 +730,12 @@ This is the other half of §3.3's pairing, and the answer to `HB9`: until it
 landed, a value written where nobody could read it was indistinguishable from
 one not written, and the only proof was a smoke script.
 
-**Owner rulings, 21 September 2026.** It is **Lelañea's notes**, not a profile —
+**Owner rulings, 21 September 2026.** It is **Lelanea's notes**, not a profile —
 `/app/notes`, a **sixth nav destination** after "Your journey". The 15 September
 ruling sent person-things to the account menu and this looked like one; it is
 not, because a note appearing inside the turn that wrote it is the whole
 demonstration and nobody witnesses that from inside a popover. And a note has
-**two** doors: correct it, or take it back to Lelañea.
+**two** doors: correct it, or take it back to Lelanea.
 
 ### The route
 
@@ -784,7 +784,7 @@ with a sentinel _at capture_. A correction runs through `appendSlotValue`, which
 engine and masks nothing — so "let them fix it" would put raw health and belief
 prose at rest through the one door built to keep it out, and masking the
 correction instead would tell someone their words were kept when they were
-discarded. Refused, with the remedy shipped beside it (`HB10`): _ask Lelañea about
+discarded. Refused, with the remedy shipped beside it (`HB10`): _ask Lelanea about
 it_, which routes the words back through the capture path where the masking
 applies. The panel says what happened in a sentence rather than printing
 `<redacted: special_category>`.
@@ -794,7 +794,7 @@ Masking covers `value` and nothing else — Daybreak's `fill_slot` passes the
 reasoning note straight to `appendSlotValue` — and the agent's instructions ask
 for that line as a paraphrase of what the person said
 ([`voice.md`](./voice.md)). The card used to say nothing was kept, then print
-the gist under "How Lelañea came to this". The ruling was to keep the gist
+the gist under "How Lelanea came to this". The ruling was to keep the gist
 rather than hide it — the exact words are gone, the summary is not, and a note
 with neither is worth nothing — so the card now says exactly that: _a summary
 rather than your exact words_, and where to find it. Nothing on the page may say
@@ -811,7 +811,7 @@ that rule the correction surface would double as an unbounded self-write.
 
 `GET` carries `previous` — the version immediately before the head, or `null`.
 The card shows it in a **fold**, closed by default, whose head carries the
-previous reading's provenance — _"Before this · Lelañea inferred it, 20
+previous reading's provenance — _"Before this · Lelanea inferred it, 20
 September at 12:51"_ — so a reader can decide whether to open it without opening
 it. Deliberately not a banner, a tone or an alert: the app has no opinion about
 whether someone changed their mind, and dressing a second reading as a problem
@@ -838,13 +838,13 @@ Delete `readPreviousVersions()` when one lands.
 Four rules, each from a screenshot of the running page, and each easy to undo
 by someone reading the prototype or the persona doc instead of this.
 
-- **Lelañea by name, never "she" or "her".** A panel that says "she"
-  throughout reads as somebody else describing Lelañea to you, and this is the one
+- **Lelanea by name, never "she" or "her".** A panel that says "she"
+  throughout reads as somebody else describing Lelanea to you, and this is the one
   surface where the reader needs to know exactly who is making each claim. (The
   admin surfaces have the opposite rule — "the AI" — for the opposite reason.)
 - **The reader is "you", never "they".** Which is why the taxonomy's own
   `description` — third person, written for a model — is not the card's head.
-  It is quoted inside "How Lelañea came to this" as _what Lelañea was looking
+  It is quoted inside "How Lelanea came to this" as _what Lelanea was looking
   for_, where being third person is honest rather than the panel addressing the
   reader as "this person". The slug, humanised, is the card's tag instead.
 - **Certainty is humble at every rung** — _Confident · Fairly sure · Not certain
@@ -864,7 +864,7 @@ reasoning a paraphrase of what they did with the act named — said, mentioned,
 noticed, wondered. See
 [`voice.md`](./voice.md#the-instructions-are-where-when-to-note-something-lives-t-72).
 
-**"How Lelañea came to this" is a line of text, not a panel** (owner ruling, t-79):
+**"How Lelanea came to this" is a line of text, not a panel** (owner ruling, t-79):
 a chevron and muted words, and when opened the detail sits beside a plain left
 rule. "Before this" keeps its panel and its purple edge.
 
@@ -903,7 +903,7 @@ only, so both ride on the provider for `modulePlace`'s reason
   no refresh. A counter rather than a boolean (nowhere to go after the first
   turn) or a clock (two turns in one millisecond). The panel's first read is its
   mount, so a mount is never a refresh.
-- **`ask` / `takeAsk`** — "Ask Lelañea about this" hands the note's question to
+- **`ask` / `takeAsk`** — "Ask Lelanea about this" hands the note's question to
   the composer through the **same `insertAtCaret`** the microphone uses. Three
   rounds of review went into where those words land and whether focus is taken;
   a second path would get one of them wrong. `takeAsk` clearing to `null` is
@@ -926,7 +926,7 @@ note the agent has just written at the top of its group.
 **Slugs the agent invented have `group: null`, not a magic key.** A mint has no
 definition and therefore no group; a key standing in for "none" is a value that
 eventually gets compared against a real one. They sort after every taxonomy
-group, under "Lelañea's own headings". (The one place a stand-in exists is the
+group, under "Lelanea's own headings". (The one place a stand-in exists is the
 _query_ value `group=_own` — see below — and it is never stored or returned.)
 
 #### A minted heading is permanent, and there is no suggestion step
@@ -940,7 +940,7 @@ three and is deliberately not built here.
 There **is** a path, and it is an admin's: adding a definition in the editor
 whose `slug` is exactly the minted one. The slug is the join key, so every value
 already captured under it resolves to that definition on the next read — the
-notes leave "Lelañea's own headings" and appear under the group the admin chose,
+notes leave "Lelanea's own headings" and appear under the group the admin chose,
 with its wording, retrospectively. Nothing is migrated and nothing is rewritten.
 
 The trap is the near miss. A definition added as `weekly_rhythms` leaves every
@@ -951,8 +951,8 @@ them.
 
 ### Finding your way around (t-79)
 
-A full profile is 50 open targeted slots across five groups plus Lelañea's own
-headings — long enough that "where did Lelañea write down the thing about my
+A full profile is 50 open targeted slots across five groups plus Lelanea's own
+headings — long enough that "where did Lelanea write down the thing about my
 brother" means scrolling. So the page gains a search, a group filter, a sort and
 a list view. One PR, owner ruling 21 September 2026.
 
@@ -961,8 +961,8 @@ a list view. One PR, owner ruling 21 September 2026.
 
 | Parameter | Accepts                                           | Notes                                                                     |
 | --------- | ------------------------------------------------- | ------------------------------------------------------------------------- |
-| `q`       | trimmed, ≤ 200 characters                         | every word must appear; case and accents folded ("lelanea" → "Lelañea")   |
-| `group`   | a group key, or `_own` for Lelañea's own headings | `_own` cannot collide: a group key is a slug and starts with a letter     |
+| `q`       | trimmed, ≤ 200 characters                         | every word must appear; case and accents folded ("lelanea" → "Lelanea")   |
+| `group`   | a group key, or `_own` for Lelanea's own headings | `_own` cannot collide: a group key is a slug and starts with a letter     |
 | `sort`    | `grouped` (default) · `recent`                    | `recent` is one list, freshest first, each note labelled with its heading |
 
 A malformed value is a 400. A well-formed `group` nobody has notes under —
@@ -989,7 +989,7 @@ a few kilobytes already in memory. **Revisit if one person passes a few hundred
 notes.** No pagination either: hiding half someone's record behind a control is
 a worse answer to §3.19 than a long page.
 
-**What a search matches.** The reading, how Lelañea came to it, what Lelañea was
+**What a search matches.** The reading, how Lelanea came to it, what Lelanea was
 looking for, the tag and the heading. **A blanked-out note never matches on its
 reading**, which is a sentinel — a search for "redacted" would find all of them.
 Its summary is searched like any other since t-80, because the card shows it;
@@ -1033,7 +1033,7 @@ wrap to three lines at 320px.
 **A list row (owner ruling)** is the full reading plus one line of details —
 heading (when sorted by recency), tag, certainty, date — and no buttons. The
 whole row is the control: it opens the full card in place, where correcting and
-"Ask Lelañea about this" work as ever.
+"Ask Lelanea about this" work as ever.
 
 **Every note folds and opens by a chevron, in both views (owner ruling).** A row
 carries one pointing down; a card's whole header — the eyebrow row, run out to
@@ -1052,15 +1052,15 @@ screen are still the old response; grouping a `recent` list split each heading
 into several runs — the same heading twice, and duplicate React keys. Found by
 the owner looking at the page.
 
-**No matches is its own message** — _"Nothing in Lelañea's notes matches that"_
-with a clear — distinct from a new account's _"Lelañea has written nothing down
+**No matches is its own message** — _"Nothing in Lelanea's notes matches that"_
+with a clear — distinct from a new account's _"Lelanea has written nothing down
 yet"_, which gets no controls at all.
 
 **To look at it with a real record**, `npx tsx --env-file=.env.local
 scripts/db/seed-dev-notes.ts <email>` replaces that account's slot values with a
 fortnight's worth: every visible group, a corrected and a twice-revised note,
 two blanked-out notes (sentinel value, the summary shown beside it), two of
-Lelañea's own headings and one hidden development note that must never appear.
+Lelanea's own headings and one hidden development note that must never appear.
 Dev only; nothing runs it.
 
 ### What a person is not shown
@@ -1095,7 +1095,7 @@ reasons, both in `lib/app/slots/removed.ts`:
   next reading of that slug a second version 1. `npm run smoke:app-delete-note`
   proves the next capture lands as N+1 against the real unique index.
 
-**A heading Lelañea made up goes too.** A slug with no definition in either
+**A heading Lelanea made up goes too.** A slug with no definition in either
 tier was coined by the AI from what the person said (`leaving_my_husband`), so
 keeping it would leave the note's gist on the head, beside the marker. Its
 versions move together to an opaque `removed_<random>` slug, and the person's
@@ -1328,7 +1328,7 @@ journal entry "A session is deleted in one transaction, not in batches".
 (`app/(lelanea)/app/modules/[slug]/page.tsx`,
 `components/app/modules/delete-module-exchanges.tsx`), only when the person has
 a turn stamped with it. The confirmation says plainly that it covers only
-conversations since Lelañea began noting which module they were in.
+conversations since Lelanea began noting which module they were in.
 
 `npm run smoke:app-delete-session` proves it on the dev database, after the
 session case.

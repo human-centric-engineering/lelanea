@@ -25,7 +25,7 @@
  * other's section, which is the failure mode that costs a data subject rows.
  *
  * ---------------------------------------------------------------------------
- * LELAÑEA — the seam is filled, and these cases are pinned exactly as told
+ * LELANEA — the seam is filled, and these cases are pinned exactly as told
  * ---------------------------------------------------------------------------
  * §03 t-7 fills `leaf-data-export.ts` with `AppWaitlistEntry` → the `waitlist`
  * section. Three consequences, all handled below rather than by deleting a case:
@@ -71,7 +71,7 @@ const findMany = {
   // The eval source reaches the subject by JOIN: conversations first, then evals.
   aiConversation: vi.fn(),
   frameworkConversationEval: vi.fn(),
-  // LELAÑEA — the leaf tier's own tables, reached through the real leaf seam.
+  // LELANEA — the leaf tier's own tables, reached through the real leaf seam.
   appWaitlistEntry: vi.fn(),
   appAcknowledgement: vi.fn(),
   appUserBudget: vi.fn(),
@@ -117,7 +117,7 @@ const { collectAppSubjectData } = await import('@/lib/app/data-export');
 
 const SUBJECT = { userId: 'user-1', email: 'subject@example.com' };
 
-/** LELAÑEA — what `lib/app/leaf-data-export.ts` contributes to the bridge. */
+/** LELANEA — what `lib/app/leaf-data-export.ts` contributes to the bridge. */
 const LEAF_SECTIONS = [
   'waitlist',
   'acknowledgements',
@@ -136,7 +136,7 @@ const LEAF_MODELS = [
   'AppMemoryEmbedding',
   'AppJourneyEntry',
 ];
-/** LELAÑEA — leaf tables declared to the registry as excluded rather than exported. */
+/** LELANEA — leaf tables declared to the registry as excluded rather than exported. */
 const LEAF_EXCLUDED_MODELS = [
   'AppKnowledgeDesignation',
   'AppVoiceComparison',
@@ -186,7 +186,7 @@ const LEAF_EXCLUDED_MODELS = [
 const NOW = new Date('2026-01-01T00:00:00.000Z');
 
 beforeEach(() => {
-  // LELAÑEA — the leaf collector runs for real, so its query needs an answer.
+  // LELANEA — the leaf collector runs for real, so its query needs an answer.
   // Empty rather than a marker row: what the bridge cases below assert is the
   // section KEY, and a leaf row here would only prove the stub returned it.
   findMany.appWaitlistEntry.mockResolvedValue([]);
@@ -457,7 +457,7 @@ describe('collectAppSubjectData bridge', () => {
     const result = await collectAppSubjectData(SUBJECT);
 
     expect(result).not.toHaveProperty('framework');
-    // LELAÑEA: framework sections PLUS the leaf's, flat and side by side. The
+    // LELANEA: framework sections PLUS the leaf's, flat and side by side. The
     // property this holds either way is that neither tier shadows the other.
     expect(Object.keys(result).sort()).toEqual(
       [...FRAMEWORK_SUBJECT_DATA_SOURCES.map((source) => source.section), ...LEAF_SECTIONS].sort()
@@ -469,7 +469,7 @@ describe('collectAppSubjectData bridge', () => {
   it('contributes exactly the leaf sections this fork declares, and no others', async () => {
     // PINNED, not deleted. Upstream this reads "contributes nothing leaf-owned
     // by default", because Daybreak keeps `leaf-data-export.ts` reserved-empty.
-    // Lelañea filled it, so emptiness is no longer the property — what is still
+    // Lelanea filled it, so emptiness is no longer the property — what is still
     // worth holding is that the leaf adds ONLY what it declared, and that a
     // stray section cannot appear without someone deciding on it.
     const result = await collectAppSubjectData(SUBJECT);
@@ -509,7 +509,7 @@ describe('collectAppSubjectData bridge', () => {
     ).toEqual(
       [...FRAMEWORK_SUBJECT_DATA_SOURCES.map((source) => source.model), ...LEAF_MODELS].sort()
     );
-    // LELAÑEA: the framework's exclusions PLUS the leaf's. Ours by model (the
+    // LELANEA: the framework's exclusions PLUS the leaf's. Ours by model (the
     // reason is `leaf-data-export.ts`'s wording), the framework's verbatim — so
     // a framework row losing or changing its reason still fails here.
     expect(

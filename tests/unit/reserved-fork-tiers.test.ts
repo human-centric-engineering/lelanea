@@ -207,7 +207,7 @@ describe('reserved fork tiers', () => {
   it('prisma/schema/app.prisma declares only what this fork decided on', () => {
     // The same promise, in the file the docs single out as "ships empty".
     //
-    // LELAÑEA — PINNED, not deleted. Upstream this asserts `[]`, and §03 t-7 put
+    // LELANEA — PINNED, not deleted. Upstream this asserts `[]`, and §03 t-7 put
     // the first leaf model in the file, so a leaf necessarily violates it. Two
     // things are worth noticing about that:
     //

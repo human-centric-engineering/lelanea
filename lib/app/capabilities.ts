@@ -13,7 +13,7 @@
  *
  * Full guide + example: CUSTOMIZATION.md §4 · .context/orchestration/capabilities.md
  *
- * ## What Lelañea registers
+ * ## What Lelanea registers
  *
  * Two capabilities mounted OVER an upstream one rather than beside it — same
  * slug, same schema, same function definition, because a new slug would lose

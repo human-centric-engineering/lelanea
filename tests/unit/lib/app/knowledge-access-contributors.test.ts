@@ -21,7 +21,7 @@
  * FORK NOTE — this reads the real `lib/app/knowledge-access-contributors.ts`
  * ---------------------------------------------------------------------------
  * The registry is mocked; the SEAM is not. That is the point of the file — it
- * asserts what Lelañea's own seam registers — but it means the expectations
+ * asserts what Lelanea's own seam registers — but it means the expectations
  * below are ours, not the platform's.
  *
  * **What a fork should expect.** Upstream that seam is empty: `initApp…()`

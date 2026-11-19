@@ -106,7 +106,7 @@ describe('SiteFooter', () => {
         { label: 'YouTube', href: 'https://youtube.com/@lelanea' },
       ]);
 
-      const elsewhere = screen.getByRole('navigation', { name: 'Lelañea elsewhere' });
+      const elsewhere = screen.getByRole('navigation', { name: 'Lelanea elsewhere' });
       const site = within(elsewhere).getByRole('link', { name: /Integrating Consciousness/ });
       const youtube = within(elsewhere).getByRole('link', { name: 'YouTube' });
 

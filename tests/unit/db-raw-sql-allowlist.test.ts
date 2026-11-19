@@ -95,7 +95,7 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     calls: 2,
     why: 'knowledge-graph adjacency aggregation',
   },
-  // LELAÑEA — the meter (§08 t-56). A leaf edit to a test Daybreak carries from
+  // LELANEA — the meter (§08 t-56). A leaf edit to a test Daybreak carries from
   // Sunrise, for the reason the DAYBREAK block below gives: no seam (Sunrise
   // #799). Ledger: .context/app/platform-divergences.md Row 19.
   {
@@ -103,13 +103,13 @@ const ALLOWLIST: ReadonlyArray<{ file: string; calls: number; why: string }> = [
     calls: 3,
     why: 'read-only SUM/COUNT over ai_cost_log grouped by a CASE-picked dimension (JSON seat with an ai_conversation fallback, UTC day) that Prisma groupBy cannot express; every value bound — the person, when scoped, filters ai_cost_log.userId',
   },
-  // LELAÑEA — deleting a conversation (f-memory t-128), same ledger row.
+  // LELANEA — deleting a conversation (f-memory t-128), same ledger row.
   {
     file: 'lib/app/memory/delete-conversation.ts',
     calls: 1,
     why: 'read-only anti-join: our app_turn rows whose ai_conversation is gone, which Prisma cannot express without a relation the turn deliberately does not carry; binds the org, returns conversation ids only',
   },
-  // LELAÑEA — the memory index (f-memory t-129, t-107 notes; f-journey-record
+  // LELANEA — the memory index (f-memory t-129, t-107 notes; f-journey-record
   // t-149 journey entries), same ledger row.
   {
     file: 'lib/app/memory/memory-index.ts',

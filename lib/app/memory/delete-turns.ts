@@ -225,7 +225,7 @@ export async function planTurnDeletion(
   const answering = await stillAnswering();
   if (turns.some(answering)) {
     throw new ConflictError(
-      'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
+      'Lelanea is still answering that. Try again in a moment, once the reply has finished.',
       { reason: 'still_answering' }
     );
   }

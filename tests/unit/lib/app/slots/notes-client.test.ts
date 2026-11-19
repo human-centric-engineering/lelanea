@@ -209,7 +209,7 @@ describe('deleting the exchanges a note came from (t-127)', () => {
       success: false,
       error: {
         code: 'CONFLICT',
-        message: 'Lelañea is still answering that. Try again in a moment.',
+        message: 'Lelanea is still answering that. Try again in a moment.',
         details: { reason: 'still_answering' },
       },
     });
@@ -220,7 +220,7 @@ describe('deleting the exchanges a note came from (t-127)', () => {
       name: 'NotesRefused',
       status: 409,
       code: 'still_answering',
-      message: 'Lelañea is still answering that. Try again in a moment.',
+      message: 'Lelanea is still answering that. Try again in a moment.',
     });
   });
 
@@ -251,7 +251,7 @@ describe('a refusal that is not the envelope', () => {
       success: false,
       error: {
         code: 'CONFLICT',
-        message: 'Ask Lelañea about it instead.',
+        message: 'Ask Lelanea about it instead.',
         details: { reason: 'kept_out_of_the_record' },
       },
     });
@@ -265,7 +265,7 @@ describe('a refusal that is not the envelope', () => {
     // so the reason is the thing a caller can branch on.
     await expect(failed).rejects.toMatchObject({
       code: 'kept_out_of_the_record',
-      message: 'Ask Lelañea about it instead.',
+      message: 'Ask Lelanea about it instead.',
     });
   });
 
@@ -295,7 +295,7 @@ describe('putting a stored classifier into words', () => {
     // The table is the one thing standing between a stored classifier and a
     // sentence somebody reads about themselves; a value dropping out of it
     // would degrade silently to the fallback below.
-    expect(noteSourceWords('inferred')).toBe('Lelañea inferred it');
+    expect(noteSourceWords('inferred')).toBe('Lelanea inferred it');
     expect(noteSourceWords('user_confirmed')).toBe('You corrected this yourself');
     // Every classifier the framework ships, plus the one this app writes when a
     // person removes a note (t-78) — and nothing else.

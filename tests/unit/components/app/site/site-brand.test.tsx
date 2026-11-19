@@ -5,18 +5,18 @@
  *
  * ## What this catches that `site-footer-brand.test.tsx` cannot
  *
- * That file pins the legal LINE — `Lelañea™ · © 2026 All Too Human Ltd` — and
+ * That file pins the legal LINE — `Lelanea™ · © 2026 All Too Human Ltd` — and
  * its "no hardcoded name" assertion is scoped to the element containing `©`.
  * The wordmarks are elsewhere: the header's `<span>` and its link's
  * `aria-label`, and the footer's matching pair. All four were literals while
  * the legal line beside them read from the seam, so changing `leafBrandName`
- * would have renamed the copyright and left four "Lelañea"s behind — including
+ * would have renamed the copyright and left four "Lelanea"s behind — including
  * two accessible names, which nobody looks at.
  *
  * ## The fixture is deliberately not our own brand
  *
  * "Acme" is used because it is nothing like the real value: filling the seam
- * with `Lelañea` would let a hardcoded name pass every assertion here, which is
+ * with `Lelanea` would let a hardcoded name pass every assertion here, which is
  * the one failure this file exists to catch. That the real values are the ones
  * we intend is pinned separately by the `lib/app/leaf-brand.ts` row in
  * `tests/unit/lib/app/defaults.test.ts`.
@@ -62,11 +62,11 @@ describe('the wordmarks', () => {
     // page called "Lelañea" — the one about her philosophy — and that label is
     // authored copy in `lib/site/config.ts`, not a brand field: a fork renaming
     // the product would rewrite the nav entry, not interpolate into it. A
-    // container-wide "contains no Lelañea" assertion fails on that, correctly,
+    // container-wide "contains no Lelanea" assertion fails on that, correctly,
     // which is how this ended up scoped.
     const wordmark = screen.getByRole('link', { name: `${FORK.name}, home` });
     expect(wordmark.textContent).toContain(FORK.name);
-    expect(wordmark.textContent).not.toContain('Lelañea');
+    expect(wordmark.textContent).not.toContain('Lelanea');
   });
 
   it('the header link is announced with the seam name', () => {
@@ -81,7 +81,7 @@ describe('the wordmarks', () => {
 
     const wordmark = screen.getByRole('link', { name: `${FORK.name}, home` });
     expect(wordmark.textContent).toContain(FORK.name);
-    expect(wordmark.textContent).not.toContain('Lelañea');
+    expect(wordmark.textContent).not.toContain('Lelanea');
   });
 
   it('the footer link is announced with the seam name', () => {
@@ -96,8 +96,8 @@ describe('the wordmarks', () => {
     // The "not a crisis service" paragraph is authored copy that happens to
     // contain the name. It is NOT a brand field: a fork renaming the product
     // would rewrite that sentence, not interpolate into it. So it legitimately
-    // still says Lelañea here, and this case records that as intended rather
+    // still says Lelanea here, and this case records that as intended rather
     // than leaving the next reader to wonder.
-    expect(container.textContent).toContain('Lelañea is an educational');
+    expect(container.textContent).toContain('Lelanea is an educational');
   });
 });

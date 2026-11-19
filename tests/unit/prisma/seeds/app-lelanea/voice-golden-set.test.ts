@@ -37,7 +37,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * The seed under test projects Lelañea's authored golden set, so this file needs
+ * The seed under test projects Lelanea's authored golden set, so this file needs
  * that seam populated. A fork without one should delete this file with the seed.
  *
  * @see prisma/seeds/app-lelanea/004-voice-golden-set.ts
@@ -451,7 +451,7 @@ describe('a re-run', () => {
 
   it('puts the control instructions back when somebody edited them', async () => {
     await runSeed();
-    control().systemInstructions = 'You are Lelañea.';
+    control().systemInstructions = 'You are Lelanea.';
 
     await runSeed();
 

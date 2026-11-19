@@ -34,12 +34,12 @@ export const DOCUMENT_READERS: Readonly<Record<string, readonly string[]>> = {
   ],
   the_heart_behind_lelanea: [
     'the home page (/)',
-    'the Lelañea page (/lelanea)',
+    'the Lelanea page (/lelanea)',
     PUBLIC_DOCUMENTS_API,
   ],
   the_mission: ['the mission page (/mission)', PUBLIC_DOCUMENTS_API],
-  about_the_creator: ['the Lelañea page (/lelanea)', PUBLIC_DOCUMENTS_API],
-  the_lineage_of_lelanea: ['the Lelañea page (/lelanea)', PUBLIC_DOCUMENTS_API],
+  about_the_creator: ['the Lelanea page (/lelanea)', PUBLIC_DOCUMENTS_API],
+  the_lineage_of_lelanea: ['the Lelanea page (/lelanea)', PUBLIC_DOCUMENTS_API],
   disclaimer: [
     'the acknowledgement gate (/app/begin)',
     'the disclaimer page (/disclaimer)',

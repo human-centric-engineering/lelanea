@@ -230,7 +230,7 @@ export function MapDrawerBody() {
               `.tierlab`. `lowercase` is safe HERE specifically, which is the
               caveat `Eyebrow` refuses to force on every eyebrow: these five
               labels are common nouns, so nothing loses a capital that meant
-              something. An eyebrow carrying Lelañea's name would.
+              something. An eyebrow carrying Lelanea's name would.
 
               The colour comes from `TIER_INKS` — see the table at its
               declaration for what each arc was measured at, and why the orange

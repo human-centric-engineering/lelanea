@@ -147,7 +147,7 @@ the judgement is `meterReading()` beside the page's own in `usage-view.ts`.
 
 ## The admin cost view (t-97)
 
-`/admin/app/cost`, in the Lelañea admin nav as **Cost** — its own page beside
+`/admin/app/cost`, in the Lelanea admin nav as **Cost** — its own page beside
 "Deadlines & budgets" rather than a tab on it (owner, 22 Sept 2026): that page is
 settings you write; this is a reading you interrogate. Sunrise's
 `/admin/orchestration/costs` is per agent and per model, and with one agent it

@@ -11,7 +11,7 @@
  * and "chose light" were the same stored state, and switching the OS to dark
  * afterwards did nothing. The cases for that stay as a regression guard.
  *
- * Against Sunrise's near-greyscale pair that is invisible. Against Lelañea's
+ * Against Sunrise's near-greyscale pair that is invisible. Against Lelanea's
  * oyster white and near-black charcoal it is the whole first impression, which
  * is why decision D4 says the system preference is the default and only the
  * toggle persists.
@@ -248,7 +248,7 @@ describe('ThemeProvider', () => {
 });
 
 /**
- * LELAÑEA divergence (row 2), second half: `choice` and `clearTheme`.
+ * LELANEA divergence (row 2), second half: `choice` and `clearTheme`.
  *
  * The first half made the system preference a default rather than a stored
  * choice. That left the app with three states and the hook publishing two, so

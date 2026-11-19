@@ -15,7 +15,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real roster and journey seed, not a fixture
  * ---------------------------------------------------------------------------
- * The slug list, the count and the descriptions below are Lelañea's seventeen
+ * The slug list, the count and the descriptions below are Lelanea's seventeen
  * modules.
  * A fork of THIS leaf with a different journey should rewrite the pinned
  * values, not the derivation — and a fork with no `content/` at all has no

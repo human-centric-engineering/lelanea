@@ -11,7 +11,7 @@ import type { JourneyEntry } from '@/lib/app/journey-record/entry';
 
 /** What deleting a session takes, said before it happens. */
 export const SESSION_DELETE_CONFIRM =
-  'This deletes what you said in this session and Lelañea’s replies, from the conversation and from everything Lelañea keeps. The notes Lelañea made in it are removed, and so is any recap Lelañea gave of it. This can’t be undone.';
+  'This deletes what you said in this session and Lelanea’s replies, from the conversation and from everything Lelanea keeps. The notes Lelanea made in it are removed, and so is any recap Lelanea gave of it. This can’t be undone.';
 
 /** Said after {@link SESSION_DELETE_CONFIRM} on a draft, which always goes (owner ruling 1). */
 export const SESSION_DELETE_DRAFT = 'This draft account goes with it.';

@@ -1,5 +1,5 @@
 /**
- * Leaf-app capability seed pairs — FILLED by Lelañea.
+ * Leaf-app capability seed pairs — FILLED by Lelanea.
  *
  * A leaf app (a fork of Daybreak) that seeds capabilities names the class for each slug here, and
  * lists any seed of its own the strict mock client cannot run (Sunrise #1013; the contract is the

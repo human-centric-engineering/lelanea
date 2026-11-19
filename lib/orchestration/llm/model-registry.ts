@@ -249,7 +249,7 @@ function pickNumber(
 let lastRegistered: ModelInfo[] = [];
 
 /**
- * LELAÑEA DIVERGENCE (ledger row 30; sunrise#984). Models a fork registered
+ * LELANEA DIVERGENCE (ledger row 30; sunrise#984). Models a fork registered
  * from code with `{ source: 'code' }`, kept so a catalogue rebuild can put them
  * back. They stand where the static map and OpenRouter do — a registry figure a
  * matrix row never replaces — rather than where a hydrate's rows do.

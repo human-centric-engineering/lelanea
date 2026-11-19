@@ -74,9 +74,9 @@ const WRITE_CAPABILITY_SLUGS = [
   'request_transition',
   'record_feedback',
   'submit_proposal',
-  // Lelañea (f-registers t-126): a person's own lean on their own journey node.
+  // Lelanea (f-registers t-126): a person's own lean on their own journey node.
   'set_register',
-  // Lelañea (f-leanings t-137): a person's own lasting leaning, a new version.
+  // Lelanea (f-leanings t-137): a person's own lasting leaning, a new version.
   'set_leaning',
 ];
 

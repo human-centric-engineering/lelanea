@@ -4,7 +4,7 @@
  * GET /api/v1/app/content/documents — every foundational document in the
  * collection's authored reading order, without its prose.
  *
- * Authentication: none. The welcome statement, the three pieces about Lelañea,
+ * Authentication: none. The welcome statement, the three pieces about Lelanea,
  * the Disclaimer and the Terms of Use are what a person reads *before* they
  * decide to sign up; putting them behind auth would make the app impossible to
  * evaluate honestly.

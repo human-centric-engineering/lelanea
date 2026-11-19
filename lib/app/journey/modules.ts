@@ -33,7 +33,7 @@ export interface RegisteredModuleView {
  * A module's operator-controlled row. `status` is the framework's free-form
  * lifecycle vocabulary (`draft | active | scheduled | retired`); this phase
  * reads it for display only — every module is open regardless, because
- * per-user gating is the facilitation engine's job and Lelañea has not
+ * per-user gating is the facilitation engine's job and Lelanea has not
  * switched it on.
  */
 export interface ModuleRowView {

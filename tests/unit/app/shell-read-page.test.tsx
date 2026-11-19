@@ -4,7 +4,7 @@
  * `/app/read/[id]`: each read in the workspace, her words as the seed stores
  * them, and the shell's 404 for any other document (t-103).
  *
- * FORK NOTE — the titles asserted are Lelañea's documents, read from the real
+ * FORK NOTE — the titles asserted are Lelanea's documents, read from the real
  * seed so the page and the content cannot drift apart.
  */
 
@@ -30,10 +30,10 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('/app/read/[id]', () => {
   it.each([
-    ['the_heart_behind_lelanea', 'The Heart Behind Lelañea'],
+    ['the_heart_behind_lelanea', 'The Heart Behind Lelanea'],
     ['the_mission', 'The Mission'],
     ['about_the_creator', 'About the Creator'],
-    ['the_lineage_of_lelanea', 'The Lineage of Lelañea'],
+    ['the_lineage_of_lelanea', 'The Lineage of Lelanea'],
   ])('renders %s whole, under its own title', async (id, title) => {
     expect(ONBOARDING_READS).toContain(id);
     render(await ReadPage(params(id)));

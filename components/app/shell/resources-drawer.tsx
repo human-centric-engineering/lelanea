@@ -79,7 +79,7 @@ export const DOCUMENTS_ENDPOINT = '/api/v1/app/content/documents';
  * labels it (`CATEGORY_LABEL.about`). Restated rather than imported, because
  * that module reads the server environment; the test pins the two together.
  */
-export const READS_EYEBROW = 'about lelañea';
+export const READS_EYEBROW = 'about lelanea';
 
 /** One read as the drawer lists it: its title and subtitle from the index. */
 export interface ReadLink {
@@ -492,7 +492,7 @@ function ResourcesSelectionBody({ selection }: { selection: ResourcesSelection }
 }
 
 /**
- * The reads, always: the heart behind Lelañea, the mission, the creator, the
+ * The reads, always: the heart behind Lelanea, the mission, the creator, the
  * lineage. The first run offers each once and does not push them again (owner
  * ruling at claim), so this is where they stay. They open in the workspace.
  *

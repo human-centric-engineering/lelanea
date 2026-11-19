@@ -515,9 +515,9 @@ describe('a kept own entry', () => {
     );
   }
 
-  it('says Lelañea can read it when it is not withheld', () => {
+  it('says Lelanea can read it when it is not withheld', () => {
     renderOwn();
-    expect(screen.getByText(/Lelañea can read this/)).toBeTruthy();
+    expect(screen.getByText(/Lelanea can read this/)).toBeTruthy();
   });
 
   it('edits the words, which PATCHes only what the form sends', async () => {
@@ -540,11 +540,11 @@ describe('a kept own entry', () => {
     expect(router.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps it from Lelañea with one click — no confirm step for a toggle', async () => {
+  it('keeps it from Lelanea with one click — no confirm step for a toggle', async () => {
     const e = own();
     renderOwn();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Keep this from Lelañea' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Keep this from Lelanea' }));
 
     expect(world.calls).toEqual([
       {
@@ -555,11 +555,11 @@ describe('a kept own entry', () => {
     ]);
   });
 
-  it('offers to let Lelañea read it again once it is withheld', () => {
+  it('offers to let Lelanea read it again once it is withheld', () => {
     renderOwn({ withheldFromAgent: true });
 
     expect(screen.getByText(/it never reads this entry/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Let Lelañea read this' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Let Lelanea read this' })).toBeTruthy();
   });
 
   it('removes in two steps, and DELETEs only after the second click', async () => {
@@ -715,7 +715,7 @@ describe('deleting a session (t-154)', () => {
     world.nextResponse = refusal(
       409,
       'CONFLICT',
-      'Lelañea is still answering that. Try again in a moment, once the reply has finished.',
+      'Lelanea is still answering that. Try again in a moment, once the reply has finished.',
       { reason: 'still_answering' }
     );
     renderStop({});
@@ -726,7 +726,7 @@ describe('deleting a session (t-154)', () => {
     const alerts = await screen.findAllByRole('alert');
     expect(alerts).toHaveLength(1);
     expect(alerts[0].textContent).toBe(
-      'Not deleted. Lelañea is still answering in this session. Try again once the reply has finished.'
+      'Not deleted. Lelanea is still answering in this session. Try again once the reply has finished.'
     );
     expect(world.calls).toHaveLength(1);
     expect(router.refresh).not.toHaveBeenCalled();

@@ -1,7 +1,7 @@
 {
   "name": "lelanea",
   "version": "0.1.0",
-  "description": "Lelañea — an application built on the Daybreak framework.",
+  "description": "Lelanea — an application built on the Daybreak framework.",
   "private": true,
   "engines": {
     "node": ">=24",

@@ -63,7 +63,7 @@ vi.mock('@/lib/utils/invitation-token', () => ({
   getValidInvitation,
 }));
 vi.mock('@/lib/email/send', () => ({ sendEmail }));
-// The real registry would render Lelañea's invitation email, which its own
+// The real registry would render Lelanea's invitation email, which its own
 // test covers; here the props handed to it are what matter.
 vi.mock('@/lib/email/registry', () => ({
   resolveEmailTemplate: vi.fn((kind: string, props: unknown) => ({ kind, props })),

@@ -215,7 +215,7 @@ export class SetLeaningCapability extends BaseCapability<SetLeaningArgs, SetLean
       if (!dial) return this.error('There is no such leaning.', 'unknown_leaning');
       if (dial.locked) {
         return this.error(
-          'This leaning stays where Lelañea keeps it and cannot be moved. Tell the person so, plainly, and answer them as well as you can.',
+          'This leaning stays where Lelanea keeps it and cannot be moved. Tell the person so, plainly, and answer them as well as you can.',
           'leaning_locked'
         );
       }

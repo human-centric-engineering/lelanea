@@ -9,12 +9,12 @@
  *
  * It deliberately reads the real files rather than fixtures. A fixture would
  * test the schema against itself; the whole value is the coupling to what
- * Lelañea actually authored.
+ * Lelanea actually authored.
  *
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/content` seam
  * ---------------------------------------------------------------------------
- * The counts and ids below are Lelañea's authored content, not a platform
+ * The counts and ids below are Lelanea's authored content, not a platform
  * contract. A fork of this app that replaces `content/` with its own material
  * should expect every case here to fail, and should REWRITE them against its own
  * files rather than delete them — the coupling to real content is the entire
@@ -292,7 +292,7 @@ describe('authored content schemas', () => {
 function journeyFileForMutation() {
   return {
     app: {
-      name: 'Lelañea',
+      name: 'Lelanea',
       url: 'https://lelanea.app',
       journeyTitle: 'The Journey',
       journeySubtitle: 'A subtitle',

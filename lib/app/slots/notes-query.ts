@@ -1,5 +1,5 @@
 /**
- * Finding your way around Lelañea's notes — search, a group filter and a sort,
+ * Finding your way around Lelanea's notes — search, a group filter and a sort,
  * as one pure function over a list that has already been cleaned (f-slots t-79).
  *
  * ## Why this is not SQL
@@ -20,7 +20,7 @@
  * ## What a search can match, and what it never can
  *
  * A note matches when **every** word of the search appears somewhere in what
- * the card shows about it: the reading, how Lelañea came to it, what was being
+ * the card shows about it: the reading, how Lelanea came to it, what was being
  * looked for, and the heading it is filed under.
  *
  * **A withheld note never matches on its reading**, which is a sentinel:
@@ -134,7 +134,7 @@ function byRecency(a: Note, b: Note): number {
  * "12 of 57" stay put as someone narrows.
  *
  * Order: `recent` is freshest first across everything. `grouped` is by heading,
- * alphabetically, with Lelañea's own headings last, and freshest first inside
+ * alphabetically, with Lelanea's own headings last, and freshest first inside
  * each — the order the page has always read in.
  */
 export function queryNotes(notes: Note[], query: NotesQuery = {}): NotesView {

@@ -2,7 +2,7 @@
 
 /**
  * What the person writes into their journey themselves (f-journey-record
- * t-148): the words, the optional line, and keeping it from Lelañea.
+ * t-148): the words, the optional line, and keeping it from Lelanea.
  *
  * @see components/app/journey/own-entry-form.tsx
  */
@@ -29,10 +29,10 @@ function setup(initial?: Parameters<typeof OwnEntryForm>[0]['initial']) {
 }
 
 describe('OwnEntryForm', () => {
-  it('starts empty and readable by Lelañea, and refuses to keep nothing', () => {
+  it('starts empty and readable by Lelanea, and refuses to keep nothing', () => {
     setup();
     expect(screen.getByLabelText(/In a line/)).toHaveProperty('value', '');
-    expect(screen.getByLabelText('Keep this from Lelañea')).toHaveProperty('checked', false);
+    expect(screen.getByLabelText('Keep this from Lelanea')).toHaveProperty('checked', false);
     expect(screen.getByRole('button', { name: 'Keep this entry' })).toHaveProperty(
       'disabled',
       true
@@ -43,7 +43,7 @@ describe('OwnEntryForm', () => {
     const { onSubmit, user } = setup();
     await user.type(screen.getByLabelText(/In a line/), '  After the walk ');
     await user.type(screen.getByLabelText('Your words'), '  I felt lighter.  ');
-    await user.click(screen.getByLabelText('Keep this from Lelañea'));
+    await user.click(screen.getByLabelText('Keep this from Lelanea'));
     await user.click(screen.getByRole('button', { name: 'Keep this entry' }));
 
     expect(onSubmit).toHaveBeenCalledWith({
@@ -59,8 +59,8 @@ describe('OwnEntryForm', () => {
       body: 'Old words',
       withheldFromAgent: true,
     });
-    expect(screen.getByLabelText('Keep this from Lelañea')).toHaveProperty('checked', true);
-    await user.click(screen.getByLabelText('Keep this from Lelañea'));
+    expect(screen.getByLabelText('Keep this from Lelanea')).toHaveProperty('checked', true);
+    await user.click(screen.getByLabelText('Keep this from Lelanea'));
     await user.click(screen.getByRole('button', { name: 'Keep this entry' }));
     expect(onSubmit).toHaveBeenCalledWith({
       summary: 'Old line',

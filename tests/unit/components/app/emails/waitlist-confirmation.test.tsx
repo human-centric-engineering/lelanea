@@ -53,7 +53,7 @@ describe('WaitlistConfirmationEmail — what they have joined, in her words', ()
     expect(html).toContain('It is an invitation.');
     expect(html).toContain('An invitation to explore');
     // The line before the range greets someone who has arrived. A joiner has not.
-    expect(html).not.toContain('Welcome to Lelañea.');
+    expect(html).not.toContain('Welcome to Lelanea.');
     expect(html).not.toContain('{{first_name}}');
   });
 

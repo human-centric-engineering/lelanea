@@ -31,7 +31,7 @@
  * ---------------------------------------------------------------------------
  * FORK NOTE — this reads the real `lib/app/llm-providers` seam, on purpose
  * ---------------------------------------------------------------------------
- * It asserts what LELAÑEA's fill of that seam does: register one pinned model's
+ * It asserts what LELANEA's fill of that seam does: register one pinned model's
  * rate and no eligibility rule. A fork that fills the seam differently — or
  * registers an eligibility rule there — will see "still registers no eligibility
  * rule" fail, correctly. A fork without the agent's pinned model should delete this file

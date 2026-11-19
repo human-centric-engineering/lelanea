@@ -1,5 +1,5 @@
 /**
- * Leaf-app boot hook — Lelañea's one-time startup steps.
+ * Leaf-app boot hook — Lelanea's one-time startup steps.
  *
  * Runs at server startup after the framework is initialised (called by
  * `lib/app/bootstrap.ts`'s `initApp()`) — nodejs runtime, production and

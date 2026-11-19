@@ -126,9 +126,9 @@ describe('DotLotus', () => {
   describe('what assistive technology is given', () => {
     it('keeps a labelled flower in the accessibility tree once the canvas paints', () => {
       stubCanvas();
-      render(<DotLotus label="Lelañea" />);
+      render(<DotLotus label="Lelanea" />);
       expect(host().dataset.lit).toBe('true');
-      const image = screen.getByRole('img', { name: 'Lelañea' });
+      const image = screen.getByRole('img', { name: 'Lelanea' });
       expect(image).toHaveAttribute('src', '/dot-lotus.svg');
       // Transparent, not removed: still in the tree, still named.
       expect(image).not.toHaveAttribute('aria-hidden');
@@ -136,7 +136,7 @@ describe('DotLotus', () => {
 
     it('hides the canvas from assistive technology', () => {
       stubCanvas();
-      render(<DotLotus label="Lelañea" />);
+      render(<DotLotus label="Lelanea" />);
       expect(document.querySelector('canvas')).toHaveAttribute('aria-hidden', 'true');
     });
 

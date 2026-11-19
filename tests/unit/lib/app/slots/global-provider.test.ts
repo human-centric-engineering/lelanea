@@ -1,5 +1,5 @@
 /**
- * What Lelañea hands Daybreak as its global slot definitions: the taxonomy and
+ * What Lelanea hands Daybreak as its global slot definitions: the taxonomy and
  * the eleven voice leanings (f-leanings t-135).
  *
  * @see lib/app/slots/global-provider.ts

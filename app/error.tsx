@@ -35,7 +35,7 @@ export default function Error({
         navigate: 'reload',
         icon: <Home className="mr-2 h-4 w-4" />,
       }}
-      // LELAÑEA divergence (t-5): the production footer offered "contact
+      // LELANEA divergence (t-5): the production footer offered "contact
       // support", linking to `/contact`. That page was Sunrise's placeholder
       // and is gone — the design has no contact route, and pre-launch there is
       // no support channel to point at, only the waitlist. D3's ruling for this

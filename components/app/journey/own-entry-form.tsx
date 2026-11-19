@@ -86,10 +86,10 @@ export function OwnEntryForm({
           className="size-4 accent-[var(--color-accent-ink)]"
         />
         <label htmlFor={ids.withheld} className="text-[13px] text-[var(--color-heading)]">
-          Keep this from Lelañea
+          Keep this from Lelanea
         </label>
-        <FieldHelp title="Keeping an entry from Lelañea">
-          Lelañea reads what is in your journey, so a conversation can pick up where you left off.
+        <FieldHelp title="Keeping an entry from Lelanea">
+          Lelanea reads what is in your journey, so a conversation can pick up where you left off.
           Tick this and it never reads this entry. It stays here for you, and you can change your
           mind at any time.
         </FieldHelp>

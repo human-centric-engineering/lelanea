@@ -342,7 +342,7 @@ function SteerForm({
           What should be different? <span className="text-muted-foreground">(optional)</span>
         </label>
         <FieldHelp title="Asking for another draft">
-          Lelañea writes the account again from the same session, with what you say here in mind:
+          Lelanea writes the account again from the same session, with what you say here in mind:
           shorter, warmer, or something it missed. It replaces this draft, which is still a draft
           until you keep it.
         </FieldHelp>
@@ -465,7 +465,7 @@ function SynopsisBody({
       {draft ? (
         <p className="text-muted-foreground mb-2 text-[12.5px]">
           A draft of what this session was about. It is not in your journey until you keep it, and
-          Lelañea does not read it.
+          Lelanea does not read it.
         </p>
       ) : null}
       {entry.sourceRemoved ? (
@@ -480,7 +480,7 @@ function SynopsisBody({
       {draft ? ticks : <ConfirmedNotes notes={notes} />}
       {entry.notesPending ? (
         <Banner tone="warning" className="mt-3" role="status">
-          Your account is kept, but Lelañea has not yet confirmed the notes listed with it, so they
+          Your account is kept, but Lelanea has not yet confirmed the notes listed with it, so they
           are as they were.{' '}
           <button
             type="button"
@@ -608,8 +608,8 @@ function OwnBody({ entry }: { entry: JourneyEntry }) {
       <Said text={entry.body} />
       <p className="text-muted-foreground mt-3 text-[12.5px]">
         {entry.withheldFromAgent
-          ? 'Kept from Lelañea: it never reads this entry.'
-          : 'Lelañea can read this, so a conversation can pick it up.'}
+          ? 'Kept from Lelanea: it never reads this entry.'
+          : 'Lelanea can read this, so a conversation can pick it up.'}
       </p>
       {mode === 'removing' ? (
         <ConfirmRemove
@@ -639,7 +639,7 @@ function OwnBody({ entry }: { entry: JourneyEntry }) {
               )
             }
           >
-            {entry.withheldFromAgent ? 'Let Lelañea read this' : 'Keep this from Lelañea'}
+            {entry.withheldFromAgent ? 'Let Lelanea read this' : 'Keep this from Lelanea'}
           </Button>
           <Button
             size="sm"

@@ -14,8 +14,8 @@ import styles from '@/app/(public)/document-page.module.css';
 import bandStyles from '@/components/app/site/bands.module.css';
 
 export const metadata: Metadata = {
-  // `absolute` opts out of the group template `%s - Lelañea`, which would
-  // otherwise render this page's tab and search result as "Lelañea - Lelañea".
+  // `absolute` opts out of the group template `%s - Lelanea`, which would
+  // otherwise render this page's tab and search result as "Lelañea - Lelanea".
   title: { absolute: 'Lelañea' },
   description: 'Her philosophy, the lineage she draws on, and the person behind the work.',
   alternates: { canonical: '/lelanea' },
@@ -109,12 +109,12 @@ export default async function LelaneaPage() {
     <div className={styles.page}>
       <section className={`${styles.opening} ${styles.withGuide}`}>
         <div>
-          {/* The category, not the prototype's "the heart behind lelañea": the
-            document is titled "The Heart Behind Lelañea", so the prototype's
+          {/* The category, not the prototype's "the heart behind lelanea": the
+            document is titled "The Heart Behind Lelanea", so the prototype's
             eyebrow would print the page's own `h1` above it in a smaller face.
             The inner sections take no eyebrow at all for the same reason —
             all three documents share this category, so a repeated "about
-            lelañea" would label nothing. */}
+            lelanea" would label nothing. */}
           <Eyebrow as="p">{CATEGORY_LABEL[philosophy.category]}</Eyebrow>
           <h1
             id="heart"
