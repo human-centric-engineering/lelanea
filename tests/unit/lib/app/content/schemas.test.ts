@@ -100,7 +100,7 @@ describe('authored content schemas', () => {
           id: 'c',
           title: 'T',
           version: '1.0',
-          app: { name: 'n', trademarkedName: 't', url: 'u', nameNote: 'note' },
+          app: { name: 'n', url: 'u', nameNote: 'note' },
           creator: { name: 'Lelañea Fulton', titles: ['author'] },
           textFormat: 'plain',
           formatNotes: [],

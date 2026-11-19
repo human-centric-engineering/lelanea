@@ -5,7 +5,6 @@
     "version": "1.1",
     "app": {
       "name": "Lelanea",
-      "trademarkedName": "Lelanea™",
       "url": "lelanea.com",
       "nameNote": "The app is called Lelanea, without a tilde, in all display copy (owner ruling, 19 Nov 2026). The person, Lelañea Fulton, keeps the tilde."
     },
@@ -974,7 +973,7 @@
     },
     {
       "id": "terms_of_use",
-      "title": "Lelanea™",
+      "title": "Lelanea",
       "subtitle": "Terms of Use",
       "category": "legal",
       "surface": "legal_terms",

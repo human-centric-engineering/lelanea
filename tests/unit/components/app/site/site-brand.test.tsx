@@ -5,7 +5,7 @@
  *
  * ## What this catches that `site-footer-brand.test.tsx` cannot
  *
- * That file pins the legal LINE — `Lelanea™ · © 2026 All Too Human Ltd` — and
+ * That file pins the legal LINE — `© 2026 Lelanea · Built by HCE Studio` — and
  * its "no hardcoded name" assertion is scoped to the element containing `©`.
  * The wordmarks are elsewhere: the header's `<span>` and its link's
  * `aria-label`, and the footer's matching pair. All four were literals while
@@ -59,7 +59,7 @@ describe('the wordmarks', () => {
     renderHeader();
 
     // Scoped to the wordmark link, NOT the whole header. `SITE_NAV` carries a
-    // page called "Lelañea" — the one about her philosophy — and that label is
+    // page labelled "Lelanea" — the one about her philosophy — and that label is
     // authored copy in `lib/site/config.ts`, not a brand field: a fork renaming
     // the product would rewrite the nav entry, not interpolate into it. A
     // container-wide "contains no Lelanea" assertion fails on that, correctly,

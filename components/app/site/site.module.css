@@ -383,6 +383,18 @@
   margin-top: 18px;
 }
 
+/* "HCE Studio": reads as the line's own text until hovered. */
+.footLegal a {
+  color: inherit;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.footLegal a:hover,
+.footLegal a:focus-visible {
+  text-decoration: underline;
+}
+
 @media (max-width: 620px) {
   .foot {
     padding: 32px 20px 30px;

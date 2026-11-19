@@ -190,7 +190,6 @@ const foundationalDocumentsFileBase = z.strictObject({
     app: z
       .strictObject({
         name: z.string().min(1),
-        trademarkedName: z.string().min(1),
         url: z.string().min(1),
         nameNote: z.string().min(1),
       })
