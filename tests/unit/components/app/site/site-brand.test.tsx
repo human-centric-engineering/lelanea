@@ -59,7 +59,7 @@ describe('the wordmarks', () => {
     renderHeader();
 
     // Scoped to the wordmark link, NOT the whole header. `SITE_NAV` carries a
-    // page called "Lelañea" — the one about her philosophy — and that label is
+    // page labelled "Lelanea" — the one about her philosophy — and that label is
     // authored copy in `lib/site/config.ts`, not a brand field: a fork renaming
     // the product would rewrite the nav entry, not interpolate into it. A
     // container-wide "contains no Lelanea" assertion fails on that, correctly,

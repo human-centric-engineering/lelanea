@@ -90,7 +90,7 @@ describe('SiteFooter legal line', () => {
   it('does not reinstate the personal name or the placeholder year from the design file', () => {
     render(<SiteFooter />);
 
-    // The prototype's own line is `Lelanea™ · © [YEAR] Lelañea Fulton`.
+    // The prototype's own line is `Lelañea™ · © [YEAR] Lelañea Fulton`.
     const text = screen.getByText(/©/).textContent ?? '';
     expect(text).not.toContain('Fulton');
     expect(text).not.toContain('[YEAR]');
