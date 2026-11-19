@@ -43,9 +43,11 @@ describe('CREATOR_LINKS', () => {
       ...SITE_LINKS.map((link) => link.href),
       ...SITE_CHANNELS.flatMap((channel) => channel.links.map((link) => link.href)),
     ];
-    expect(hrefs.filter((href) => /spotify\.com|podcasts\.apple\.com/.test(href ?? ''))).toEqual(
-      []
-    );
+    const hosts = hrefs.flatMap((href) => (href ? [new URL(href).hostname] : []));
+    expect(hosts.length).toBeGreaterThan(0);
+    const dropped = (host: string) =>
+      ['spotify.com', 'apple.com'].some((domain) => host === domain || host.endsWith(`.${domain}`));
+    expect(hosts.filter(dropped)).toEqual([]);
     const podcast = SITE_CHANNELS.find((channel) => channel.name === 'The podcast');
     expect(podcast?.links.map((link) => link.label)).toEqual(['YouTube']);
   });
