@@ -24,7 +24,7 @@
  *
  * `message` is the whole resource as plain text, so a client that knows nothing
  * of `resource` — or a validator that strips unknown keys — still shows every
- * name and number. f-conversation renders `resource` in Lelanea's register.
+ * name and number. f-conversation renders `resource` in Lelañea's register.
  *
  * **A hard frame ends the turn the way every ending does:** no model turn is
  * written and what the person typed stays in the box (`endings.ts`).

@@ -38,11 +38,9 @@
 /**
  * Product name — page titles, header/footer brand, emails.
  *
- * The `ñ` is intentional and is the real name. It lives here rather than in the
- * repository or package name, which stay ASCII (`lelanea`) because those end up
- * in URLs, container names, database identifiers and shell paths. This constant
- * is the only place the product is *named* for a human reader, so it is the one
- * place the accent belongs.
+ * Lelanea, with a plain n (owner ruling, 19 Nov 2026). The ñ belongs to the
+ * person, Lelañea Fulton, and stays wherever the words are about her; the
+ * product, and the AI that speaks in it, never carries it.
  */
 export const leafBrandName: string | null = 'Lelanea';
 

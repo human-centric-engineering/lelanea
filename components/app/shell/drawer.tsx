@@ -88,7 +88,7 @@ function drawers(resources: ResourcesLoad): DrawerSpec[] {
     },
     {
       id: 'resources',
-      eyebrow: 'in lelanea’s own words',
+      eyebrow: 'in lelañea’s own words',
       title: 'Resources',
       // "On Values. This follows whatever you have open in the workspace." once
       // the selection has arrived; the general line until then.

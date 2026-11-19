@@ -296,7 +296,7 @@ export function initLeafSubjectSources(): void {
       {
         model: 'AppResourceWords',
         reason:
-          'Short passages of Lelanea\u2019s own words shown beside each part of the journey. They are the same for everyone and hold no information about any person.',
+          'Short passages of Lelañea\u2019s own words shown beside each part of the journey. They are the same for everyone and hold no information about any person.',
       },
       {
         model: 'AppResourceWordsRevision',
@@ -310,7 +310,7 @@ export function initLeafSubjectSources(): void {
         // to. The two revision tables keep an editing admin's id, and say so.
         model: 'AppVoiceOverlaySet',
         reason:
-          'The name and version of the register Lelanea’s voice shifts into for a given moment, and whether Lelañea Fulton has signed it off. It is the same for everyone and holds no information about any person.',
+          'The name and version of the register Lelañea’s voice shifts into for a given moment, and whether she has signed it off. It is the same for everyone and holds no information about any person.',
       },
       {
         model: 'AppVoiceOverlaySetRevision',
@@ -333,7 +333,7 @@ export function initLeafSubjectSources(): void {
         // orchestration dataset, not one of ours.
         model: 'AppVoiceGoldenSet',
         reason:
-          'Which version of the standard set of test questions is used to check that Lelanea\u2019s voice still sounds like Lelañea Fulton, and whether she has approved it. It is the same for everyone and holds no information about any person.',
+          'Which version of the standard set of test questions is used to check that Lelañea\u2019s voice still sounds like her, and whether she has approved it. It is the same for everyone and holds no information about any person.',
       },
       {
         model: 'AppVoiceGoldenSetRevision',

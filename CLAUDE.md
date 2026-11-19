@@ -230,7 +230,8 @@
 > Owner ruling, 19 Nov 2026. The product, and the AI that speaks in it, is
 > **Lelanea** with a plain n: "Lelanea's notes", "Lelanea's replies". The
 > person keeps the ñ: **Lelañea Fulton**, and "Lelañea" wherever the words are
-> about her (her writing, her videos, audio and articles, what she believes).
+> about her (her writing, her videos, audio and articles, her voice and the
+> bounds she keeps on it, what she believes).
 > Code markers are `LELANEA`. Existing databases were moved by
 > `20261119100000_app_name_lelanea`.
 >

@@ -174,7 +174,7 @@ export function BeginView({ initialStatus, documents }: BeginViewProps) {
       .then(setStatus)
       .catch((caught: unknown) => {
         logger.warn('Acknowledgement did not land', { kind, error: String(caught) });
-        // Our words, not the server's: this step speaks in Lelanea's voice.
+        // Our words, not the server's: this step speaks in Lelañea's voice.
         save.show(DID_NOT_LAND);
       })
       .finally(() => setBusy(false));

@@ -121,7 +121,7 @@ export function SiteFooter() {
           Seven more names in the link row above would have buried the page
           links among them. A link with a `detail` is the one that leads. */}
       {outbound.length === 0 ? null : (
-        <nav className={styles.footElsewhere} aria-label="Lelanea elsewhere">
+        <nav className={styles.footElsewhere} aria-label="Lelañea elsewhere">
           <span className="brand-eyebrow">elsewhere</span>
           {primary.map((link) => (
             <a

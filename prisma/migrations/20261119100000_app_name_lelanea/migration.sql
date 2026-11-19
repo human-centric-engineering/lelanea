@@ -3,10 +3,11 @@
 --
 -- The AI that speaks in the app is the app, so its name follows the rename:
 -- "Lelanea's notes", "Lelanea's replies". What is hers keeps the ñ: her name,
--- her writing, her videos, audio and articles, her material, what she says
--- and believes. The phrases below in `keep` are exactly those, as the seed
--- content now writes them; `tests/unit/prisma/migrations/app-name-lelanea.test.ts`
--- fails if the content files gain a ñ this list does not cover.
+-- her writing, her videos, audio and articles, her material, her voice and
+-- the bounds she keeps on it, what she says and believes. The phrases below
+-- in `keep` are exactly those, as the seed content and the code now write
+-- them; `tests/unit/prisma/migrations/app-name-lelanea.test.ts` fails if
+-- either gains a ñ this list does not cover.
 --
 -- WHAT IT MOVES, on every database that already exists
 -- (`.context/app/database-changes.md`):
@@ -58,9 +59,14 @@ DECLARE
     'Lelañea understands both',
     'Lelañea describes herself',
     'Lelañea holds',
+    'Lelañea is none of those',
     'Lelañea herself',
     'Lelañea reads',
     'Lelañea can choose',
+    'Lelañea keeps',
+    'Lelañea’s own voice', 'Lelañea''s own voice',
+    'Lelañea’s voice', 'Lelañea''s voice',
+    'Lelañea’s register', 'Lelañea''s register',
     'Lelañea’s own original', 'Lelañea''s own original',
     'Lelañea’s own writing', 'Lelañea''s own writing',
     'Lelañea’s own words', 'Lelañea''s own words',

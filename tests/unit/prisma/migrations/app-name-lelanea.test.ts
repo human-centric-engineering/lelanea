@@ -28,6 +28,20 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  SYNOPSIS_AGENT_DESCRIPTION,
+  SYNOPSIS_AGENT_NAME,
+} from '@/lib/app/journey-record/synopsis/agent';
+import { SEARCH_PERSON_MEMORY_DEFINITION } from '@/lib/app/memory/search-capability';
+import { SUGGEST_RESOURCE_DEFINITION } from '@/lib/app/resources/suggest';
+import { VOICE_AGENT_SYSTEM_INSTRUCTIONS } from '@/lib/app/voice/fingerprint';
+import { SET_LEANING_DEFINITION } from '@/lib/app/voice/leaning-capability';
+import { leaningSlotDefinitions } from '@/lib/app/voice/leanings';
+import { SET_REGISTER_DEFINITION } from '@/lib/app/voice/register-capability';
+import { SEARCH_PERSON_MEMORY_IMPL } from '@/prisma/seeds/app-lelanea/024-search-person-memory';
+import { SET_REGISTER_IMPL } from '@/prisma/seeds/app-lelanea/023-set-register';
+import { SET_LEANING_IMPL } from '@/prisma/seeds/app-lelanea/025-set-leaning';
+import { SUGGEST_RESOURCE_IMPL } from '@/prisma/seeds/app-lelanea/014-suggest-resource';
 import { appNameKeepPhrases, renameAppName as rename } from '@/tests/helpers/app-name-rename';
 
 const ROOT = process.cwd();
@@ -67,6 +81,25 @@ describe('20261119100000_app_name_lelanea', () => {
 
   it.each(seedContentFiles())('agrees with %s about which ñ are hers', (file) => {
     const text = readFileSync(path.join(ROOT, file), 'utf8');
+    expect(rename(text, keep)).toBe(text);
+  });
+
+  // The migration also rewrites text the seed takes from code, not from a
+  // content file: the guide's instructions, the synopsis seat, the capability
+  // rows and the leaning data slots. The same agreement holds for each.
+  it.each([
+    ['VOICE_AGENT_SYSTEM_INSTRUCTIONS', VOICE_AGENT_SYSTEM_INSTRUCTIONS],
+    ['SYNOPSIS_AGENT_NAME', SYNOPSIS_AGENT_NAME],
+    ['SYNOPSIS_AGENT_DESCRIPTION', SYNOPSIS_AGENT_DESCRIPTION],
+    ['SUGGEST_RESOURCE', JSON.stringify([SUGGEST_RESOURCE_DEFINITION, SUGGEST_RESOURCE_IMPL])],
+    [
+      'SEARCH_PERSON_MEMORY',
+      JSON.stringify([SEARCH_PERSON_MEMORY_DEFINITION, SEARCH_PERSON_MEMORY_IMPL]),
+    ],
+    ['SET_REGISTER', JSON.stringify([SET_REGISTER_DEFINITION, SET_REGISTER_IMPL])],
+    ['SET_LEANING', JSON.stringify([SET_LEANING_DEFINITION, SET_LEANING_IMPL])],
+    ['leaningSlotDefinitions()', JSON.stringify(leaningSlotDefinitions())],
+  ])('agrees with %s about which ñ are hers', (_name, text) => {
     expect(rename(text, keep)).toBe(text);
   });
 });
