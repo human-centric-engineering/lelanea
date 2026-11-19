@@ -15,8 +15,9 @@ import bandStyles from '@/components/app/site/bands.module.css';
 
 export const metadata: Metadata = {
   // `absolute` opts out of the group template `%s - Lelanea`, which would
-  // otherwise render this page's tab and search result as "Lelañea - Lelanea".
-  title: { absolute: 'Lelañea' },
+  // otherwise render this page's tab and search result as "Lelanea - Lelanea".
+  // Plain n, matching the nav label that opens it (owner, 19 Nov 2026).
+  title: { absolute: 'Lelanea' },
   description: 'Her philosophy, the lineage she draws on, and the person behind the work.',
   alternates: { canonical: '/lelanea' },
 };
