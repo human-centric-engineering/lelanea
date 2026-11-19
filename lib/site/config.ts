@@ -193,10 +193,11 @@ export const SITE_CHANNELS: ReadonlyArray<{
   {
     name: 'Conversations with Aya',
     art: {
-      // The series' first episode, "Introduction, Homage, and Prayer": the
-      // show's own frame, cut at the file to leave the episode's caption out.
-      src: '/lelanea/channels/conversations-with-aya-intro.webp',
-      position: '40% 35%',
+      // The series' own cover art (owner, 19 Nov 2026). Square, like the
+      // podcast's: the landscape frame keeps her face and the title and crops
+      // away the tagline strip along the foot.
+      src: '/lelanea/channels/conversations-with-aya.webp',
+      position: '50% 40%',
     },
     links: [{ label: 'YouTube', href: CHANNEL_URL.ayaOnYouTube, mark: 'youtube' }],
   },
